@@ -32,3 +32,6 @@ coverage
 # Playwright (solo pruebas locales)
 test-results
 playwright-report
+
+# Volcado de variables para Vercel (contiene secretos)
+vercel-env*.txt
