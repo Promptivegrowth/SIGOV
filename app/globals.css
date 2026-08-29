@@ -1,0 +1,313 @@
+@import 'tailwindcss';
+@import 'tw-animate-css';
+
+@custom-variant dark (&:where(.dark, .dark *));
+
+/* ═══════════════════════════════════════════════════════════════════════
+   SIGOV · Sistema de diseño
+   Identidad: azul institucional profundo (ingeniería) + ámbar de
+   señalización vial (campo). Neutros fríos de sala de control.
+   ═══════════════════════════════════════════════════════════════════════ */
+
+:root {
+  --radius: 0.75rem;
+
+  /* Superficies */
+  --background: oklch(0.985 0.003 250);
+  --foreground: oklch(0.19 0.02 258);
+  --card: oklch(1 0 0);
+  --card-foreground: oklch(0.19 0.02 258);
+  --popover: oklch(1 0 0);
+  --popover-foreground: oklch(0.19 0.02 258);
+
+  /* Marca */
+  --primary: oklch(0.47 0.19 264);
+  --primary-foreground: oklch(0.99 0.005 250);
+  --brand-deep: oklch(0.24 0.07 262);
+
+  /* Ámbar de señalización */
+  --accent: oklch(0.78 0.16 74);
+  --accent-foreground: oklch(0.22 0.04 70);
+
+  --secondary: oklch(0.955 0.008 255);
+  --secondary-foreground: oklch(0.28 0.03 258);
+  --muted: oklch(0.958 0.006 255);
+  --muted-foreground: oklch(0.53 0.02 257);
+
+  --destructive: oklch(0.58 0.22 27);
+  --destructive-foreground: oklch(0.99 0.005 250);
+  --success: oklch(0.6 0.15 152);
+  --warning: oklch(0.77 0.16 71);
+  --info: oklch(0.62 0.14 235);
+
+  --border: oklch(0.9 0.008 255);
+  --input: oklch(0.9 0.008 255);
+  --ring: oklch(0.47 0.19 264);
+
+  /* Semáforo PCI · el color ES el dato */
+  --sem-verde: oklch(0.62 0.16 150);
+  --sem-ambar: oklch(0.79 0.16 76);
+  --sem-rojo: oklch(0.6 0.22 27);
+  --sem-vencido: oklch(0.42 0.14 20);
+  --sem-ok: oklch(0.58 0.09 200);
+
+  /* Gráficos · paleta categórica validada (banda de luminosidad, piso de croma,
+     separación CVD, piso de visión normal y contraste ≥ 3:1 sobre la superficie).
+     El orden es FIJO: nunca se cicla ni se reasigna al filtrar. */
+  --chart-1: oklch(0.51 0.19 264);  /* #2b5bd1 azul   */
+  --chart-2: oklch(0.64 0.15 68);   /* #c67700 ámbar  */
+  --chart-3: oklch(0.55 0.20 320);  /* #a23db8 morado */
+  --chart-4: oklch(0.56 0.15 148);  /* #1d8b3d verde  */
+  --chart-5: oklch(0.52 0.03 258);  /* neutro "Otros" */
+
+  --sidebar: oklch(0.22 0.045 262);
+  --sidebar-foreground: oklch(0.9 0.015 255);
+  --sidebar-muted: oklch(0.68 0.025 258);
+  --sidebar-accent: oklch(0.3 0.06 262);
+  --sidebar-border: oklch(0.3 0.05 262);
+}
+
+.dark {
+  --background: oklch(0.16 0.02 260);
+  --foreground: oklch(0.95 0.008 255);
+  --card: oklch(0.2 0.024 260);
+  --card-foreground: oklch(0.95 0.008 255);
+  --popover: oklch(0.21 0.026 260);
+  --popover-foreground: oklch(0.95 0.008 255);
+
+  --primary: oklch(0.66 0.17 264);
+  --primary-foreground: oklch(0.15 0.03 262);
+  --brand-deep: oklch(0.18 0.03 262);
+
+  --accent: oklch(0.79 0.16 74);
+  --accent-foreground: oklch(0.2 0.04 70);
+
+  --secondary: oklch(0.26 0.028 260);
+  --secondary-foreground: oklch(0.94 0.008 255);
+  --muted: oklch(0.26 0.025 260);
+  --muted-foreground: oklch(0.68 0.018 257);
+
+  --destructive: oklch(0.64 0.21 26);
+  --destructive-foreground: oklch(0.98 0.005 250);
+  --success: oklch(0.68 0.15 152);
+  --warning: oklch(0.8 0.15 71);
+  --info: oklch(0.68 0.13 235);
+
+  --border: oklch(0.31 0.026 260);
+  --input: oklch(0.31 0.026 260);
+  --ring: oklch(0.66 0.17 264);
+
+  --sem-verde: oklch(0.68 0.16 150);
+  --sem-ambar: oklch(0.82 0.15 76);
+  --sem-rojo: oklch(0.67 0.21 27);
+  --sem-vencido: oklch(0.52 0.16 20);
+  --sem-ok: oklch(0.66 0.09 200);
+
+  /* Pasos propios para oscuro — validados contra la superficie oscura,
+     no una inversión automática de los claros. */
+  --chart-1: oklch(0.66 0.17 264);  /* #5b8df9 */
+  --chart-2: oklch(0.66 0.14 70);   /* #c8800d */
+  --chart-3: oklch(0.63 0.19 320);  /* #ba5bcf */
+  --chart-4: oklch(0.65 0.16 148);  /* #37a953 */
+  --chart-5: oklch(0.62 0.03 258);  /* neutro "Otros" */
+
+  --sidebar: oklch(0.18 0.028 262);
+  --sidebar-foreground: oklch(0.92 0.012 255);
+  --sidebar-muted: oklch(0.65 0.022 258);
+  --sidebar-accent: oklch(0.26 0.045 262);
+  --sidebar-border: oklch(0.27 0.04 262);
+}
+
+@theme inline {
+  --color-background: var(--background);
+  --color-foreground: var(--foreground);
+  --color-card: var(--card);
+  --color-card-foreground: var(--card-foreground);
+  --color-popover: var(--popover);
+  --color-popover-foreground: var(--popover-foreground);
+  --color-primary: var(--primary);
+  --color-primary-foreground: var(--primary-foreground);
+  --color-brand-deep: var(--brand-deep);
+  --color-secondary: var(--secondary);
+  --color-secondary-foreground: var(--secondary-foreground);
+  --color-muted: var(--muted);
+  --color-muted-foreground: var(--muted-foreground);
+  --color-accent: var(--accent);
+  --color-accent-foreground: var(--accent-foreground);
+  --color-destructive: var(--destructive);
+  --color-destructive-foreground: var(--destructive-foreground);
+  --color-success: var(--success);
+  --color-warning: var(--warning);
+  --color-info: var(--info);
+  --color-border: var(--border);
+  --color-input: var(--input);
+  --color-ring: var(--ring);
+
+  --color-sem-verde: var(--sem-verde);
+  --color-sem-ambar: var(--sem-ambar);
+  --color-sem-rojo: var(--sem-rojo);
+  --color-sem-vencido: var(--sem-vencido);
+  --color-sem-ok: var(--sem-ok);
+
+  --color-chart-1: var(--chart-1);
+  --color-chart-2: var(--chart-2);
+  --color-chart-3: var(--chart-3);
+  --color-chart-4: var(--chart-4);
+  --color-chart-5: var(--chart-5);
+
+  --color-sidebar: var(--sidebar);
+  --color-sidebar-foreground: var(--sidebar-foreground);
+  --color-sidebar-muted: var(--sidebar-muted);
+  --color-sidebar-accent: var(--sidebar-accent);
+  --color-sidebar-border: var(--sidebar-border);
+
+  --radius-sm: calc(var(--radius) - 4px);
+  --radius-md: calc(var(--radius) - 2px);
+  --radius-lg: var(--radius);
+  --radius-xl: calc(var(--radius) + 4px);
+
+  --font-sans: var(--font-geist-sans), ui-sans-serif, system-ui, -apple-system, 'Segoe UI', sans-serif;
+  --font-mono: var(--font-geist-mono), ui-monospace, 'SF Mono', Menlo, monospace;
+}
+
+@layer base {
+  * {
+    @apply border-border;
+  }
+  html {
+    -webkit-tap-highlight-color: transparent;
+    scroll-behavior: smooth;
+  }
+  body {
+    @apply bg-background text-foreground antialiased;
+    font-feature-settings: 'cv02', 'cv03', 'cv04', 'cv11';
+    overscroll-behavior-y: none;
+  }
+  /* La barra de scroll no debe romper la estética de sala de control */
+  ::-webkit-scrollbar { width: 10px; height: 10px; }
+  ::-webkit-scrollbar-track { background: transparent; }
+  ::-webkit-scrollbar-thumb {
+    background: color-mix(in oklch, var(--muted-foreground) 28%, transparent);
+    border-radius: 9999px;
+    border: 3px solid transparent;
+    background-clip: content-box;
+  }
+  ::-webkit-scrollbar-thumb:hover {
+    background: color-mix(in oklch, var(--muted-foreground) 48%, transparent);
+    background-clip: content-box;
+  }
+  :focus-visible {
+    @apply outline-2 outline-offset-2 outline-ring;
+  }
+  /* En campo se usa con guantes: nada de selección accidental */
+  .field-mode button, .field-mode a {
+    -webkit-user-select: none;
+    user-select: none;
+  }
+}
+
+@layer utilities {
+  /* ── Superficies de marca ─────────────────────────────────────────── */
+  .bg-brand-gradient {
+    background-image: linear-gradient(135deg,
+      oklch(0.28 0.08 264) 0%,
+      oklch(0.22 0.06 262) 45%,
+      oklch(0.18 0.04 258) 100%);
+  }
+  .bg-mesh {
+    background-image:
+      radial-gradient(at 12% 18%, color-mix(in oklch, var(--primary) 22%, transparent) 0px, transparent 55%),
+      radial-gradient(at 88% 8%, color-mix(in oklch, var(--accent) 16%, transparent) 0px, transparent 50%),
+      radial-gradient(at 72% 92%, color-mix(in oklch, var(--chart-2) 18%, transparent) 0px, transparent 55%);
+  }
+  .glass {
+    background: color-mix(in oklch, var(--card) 72%, transparent);
+    backdrop-filter: blur(14px) saturate(150%);
+  }
+
+  /* ── Cinta reflectiva: sello visual de SIGOV ──────────────────────── */
+  .hazard-stripe {
+    background-image: repeating-linear-gradient(
+      45deg,
+      var(--accent) 0px, var(--accent) 12px,
+      transparent 12px, transparent 24px
+    );
+  }
+
+  /* ── Texto numérico tabular para tablas de metrados ───────────────── */
+  .tnum { font-variant-numeric: tabular-nums; }
+
+  /* ── Skeleton con brillo direccional ──────────────────────────────── */
+  .skeleton {
+    position: relative;
+    overflow: hidden;
+    background: color-mix(in oklch, var(--muted) 90%, transparent);
+  }
+  .skeleton::after {
+    content: '';
+    position: absolute;
+    inset: 0;
+    transform: translateX(-100%);
+    background-image: linear-gradient(90deg,
+      transparent 0%,
+      color-mix(in oklch, var(--foreground) 6%, transparent) 50%,
+      transparent 100%);
+    animation: shimmer 1.6s infinite;
+  }
+  @keyframes shimmer { 100% { transform: translateX(100%); } }
+
+  .no-scrollbar::-webkit-scrollbar { display: none; }
+  .no-scrollbar { -ms-overflow-style: none; scrollbar-width: none; }
+
+  .safe-bottom { padding-bottom: env(safe-area-inset-bottom, 0px); }
+  .safe-top { padding-top: env(safe-area-inset-top, 0px); }
+
+  /* ── Animación de entrada escalonada de listas ────────────────────── */
+  .stagger > * {
+    animation: rise 0.4s cubic-bezier(0.22, 1, 0.36, 1) backwards;
+  }
+  .stagger > *:nth-child(1) { animation-delay: 0.02s }
+  .stagger > *:nth-child(2) { animation-delay: 0.06s }
+  .stagger > *:nth-child(3) { animation-delay: 0.1s }
+  .stagger > *:nth-child(4) { animation-delay: 0.14s }
+  .stagger > *:nth-child(5) { animation-delay: 0.18s }
+  .stagger > *:nth-child(6) { animation-delay: 0.22s }
+  .stagger > *:nth-child(7) { animation-delay: 0.26s }
+  .stagger > *:nth-child(8) { animation-delay: 0.3s }
+  @keyframes rise {
+    from { opacity: 0; transform: translateY(10px) }
+    to { opacity: 1; transform: none }
+  }
+
+  @keyframes pulse-ring {
+    0% { box-shadow: 0 0 0 0 color-mix(in oklch, var(--destructive) 55%, transparent) }
+    70% { box-shadow: 0 0 0 12px transparent }
+    100% { box-shadow: 0 0 0 0 transparent }
+  }
+  .pulse-ring { animation: pulse-ring 2s infinite; }
+}
+
+/* MapLibre: adaptar controles al tema */
+.maplibregl-ctrl-group {
+  background: var(--card) !important;
+  border: 1px solid var(--border) !important;
+  box-shadow: 0 4px 16px rgb(0 0 0 / 0.12) !important;
+}
+.maplibregl-ctrl-group button + button { border-top-color: var(--border) !important; }
+.maplibregl-ctrl-icon { filter: var(--map-icon-filter, none); }
+.dark .maplibregl-ctrl-icon { --map-icon-filter: invert(1) hue-rotate(180deg); }
+.maplibregl-popup-content {
+  background: var(--popover) !important;
+  color: var(--popover-foreground) !important;
+  border-radius: var(--radius) !important;
+  padding: 0 !important;
+  box-shadow: 0 10px 38px rgb(0 0 0 / 0.22) !important;
+  border: 1px solid var(--border);
+}
+.maplibregl-popup-tip { border-top-color: var(--popover) !important; border-bottom-color: var(--popover) !important; }
+.maplibregl-popup-close-button { color: var(--muted-foreground); font-size: 18px; padding: 4px 8px; }
+
+@media print {
+  .no-print { display: none !important; }
+  body { background: white; }
+}
