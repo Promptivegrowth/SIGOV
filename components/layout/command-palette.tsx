@@ -4,13 +4,22 @@ import * as React from 'react'
 import { useRouter } from 'next/navigation'
 import { Command } from 'cmdk'
 import { useQuery } from '@tanstack/react-query'
-import { Search, CornerDownLeft, TriangleAlert, Boxes, MapPin } from 'lucide-react'
+import {
+  Search, CornerDownLeft, TriangleAlert, Boxes, MapPin, ListChecks,
+  Truck, Users, FolderOpen, Loader2,
+} from 'lucide-react'
 import { Dialog, DialogContent } from '@/components/ui/dialog'
 import { createClient } from '@/lib/supabase/client'
 import { useSession } from '@/lib/hooks/use-session'
-import { NAV, SEMAFORO, type Semaforo } from '@/lib/constants'
-import { cn, fmtProgresiva, truncate } from '@/lib/utils'
+import { NAV, SEMAFORO, ROLES, type Semaforo, type Role } from '@/lib/constants'
+import { cn, truncate, fmtDate } from '@/lib/utils'
 
+/**
+ * Buscador global (⌘K).
+ * Una sola llamada a la función `buscar` recorre PCIs, inventario, actividades,
+ * cuadrillas, personas y documentos con índices trigram, de modo que responde
+ * igual de rápido con 300 ítems que con 30 000.
+ */
 export function CommandPalette({
   open,
   onOpenChange,
@@ -24,32 +33,27 @@ export function CommandPalette({
   const [debounced, setDebounced] = React.useState('')
 
   React.useEffect(() => {
-    const t = setTimeout(() => setDebounced(query), 220)
+    const t = setTimeout(() => setDebounced(query.trim()), 220)
     return () => clearTimeout(t)
   }, [query])
 
-  const { data: results, isFetching } = useQuery({
-    queryKey: ['cmd-search', service.id, debounced],
-    enabled: open && debounced.trim().length >= 2,
+  React.useEffect(() => {
+    if (!open) setQuery('')
+  }, [open])
+
+  const { data, isFetching } = useQuery({
+    queryKey: ['buscar', service.id, debounced],
+    enabled: open && debounced.length >= 2,
     staleTime: 30_000,
     queryFn: async () => {
       const sb = createClient()
-      const q = debounced.trim()
-      const [pci, assets] = await Promise.all([
-        sb
-          .from('v_pci_items')
-          .select('id, pci_id, item_number, description, pci_code, semaforo, section_name, prog_start_m')
-          .eq('service_id', service.id)
-          .ilike('description', `%${q}%`)
-          .limit(6),
-        sb
-          .from('v_road_assets')
-          .select('id, code, name, type_name, section_name, progresiva_m, condition')
-          .eq('service_id', service.id)
-          .or(`code.ilike.%${q}%,name.ilike.%${q}%`)
-          .limit(6),
-      ])
-      return { pci: pci.data ?? [], assets: assets.data ?? [] }
+      const { data, error } = await sb.rpc('buscar', {
+        p_service_id: service.id,
+        p_q: debounced,
+        p_limit: 6,
+      })
+      if (error) throw error
+      return data as any
     },
   })
 
@@ -60,82 +64,172 @@ export function CommandPalette({
   }
 
   const navItems = NAV.filter((n) => n.roles.includes(role) && (!n.module || hasModule(n.module)))
+  const filteredNav = navItems.filter(
+    (n) => !query || n.label.toLowerCase().includes(query.toLowerCase())
+  )
+
+  type Rendered = { href: string; title: string; subtitle: string; badge?: React.ReactNode }
+  const groups: {
+    key: string; heading: string; icon: any; show: boolean
+    rows: any[]; render: (r: any) => Rendered
+  }[] = [
+    {
+      key: 'pci',
+      heading: 'Ítems de PCI',
+      icon: TriangleAlert,
+      show: hasModule('pci'),
+      rows: data?.pci ?? [],
+      render: (r: any) => ({
+        href: `/pci/${r.pci_id}`,
+        title: `${r.pci_code} · ítem ${r.item_number}`,
+        subtitle: truncate(r.description, 70),
+        badge: <span className="size-2 shrink-0 rounded-full" style={{ background: `var(--sem-${r.semaforo})` }} />,
+      }),
+    },
+    {
+      key: 'inventario',
+      heading: 'Inventario vial',
+      icon: Boxes,
+      show: hasModule('inventario'),
+      rows: data?.inventario ?? [],
+      render: (r: any) => ({
+        href: `/inventario?focus=${r.id}`,
+        title: `${r.code} · ${r.type_name}`,
+        subtitle: `${r.section_name ?? '—'} · ${r.progresiva ?? '—'}`,
+      }),
+    },
+    {
+      key: 'actividades',
+      heading: 'Catálogo de actividades',
+      icon: ListChecks,
+      show: true,
+      rows: data?.actividades ?? [],
+      render: (r: any) => ({
+        href: '/configuracion',
+        title: `${r.code} · ${r.name}`,
+        subtitle: r.category,
+        badge: <span className="size-2 shrink-0 rounded-full" style={{ background: r.color }} />,
+      }),
+    },
+    {
+      key: 'cuadrillas',
+      heading: 'Cuadrillas',
+      icon: Truck,
+      show: true,
+      rows: data?.cuadrillas ?? [],
+      render: (r: any) => ({
+        href: '/configuracion',
+        title: r.name,
+        subtitle: r.code,
+        badge: <span className="size-2 shrink-0 rounded-full" style={{ background: r.color }} />,
+      }),
+    },
+    {
+      key: 'personas',
+      heading: 'Personas',
+      icon: Users,
+      show: ['admin', 'supervisor'].includes(role),
+      rows: data?.personas ?? [],
+      render: (r: any) => ({
+        href: '/configuracion',
+        title: r.full_name,
+        subtitle: `${ROLES[r.role as Role]?.label ?? r.role} · ${r.email}`,
+      }),
+    },
+    {
+      key: 'documentos',
+      heading: 'Archivo documental',
+      icon: FolderOpen,
+      show: true,
+      rows: data?.documentos ?? [],
+      render: (r: any) => ({
+        href: '/archivo',
+        title: r.title,
+        subtitle: `${r.file_name}${r.doc_date ? ` · ${fmtDate(r.doc_date)}` : ''}`,
+      }),
+    },
+  ].filter((g) => g.show && g.rows.length > 0)
+
+  const hasResults = filteredNav.length > 0 || groups.length > 0
 
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
       <DialogContent showClose={false} className="max-w-2xl gap-0 overflow-hidden p-0" size="lg">
-        <Command shouldFilter={false} className="[&_[cmdk-group-heading]]:text-muted-foreground">
+        <Command shouldFilter={false}>
           <div className="flex items-center gap-3 border-b border-border px-4">
             <Search className="text-muted-foreground size-4 shrink-0" />
             <Command.Input
               value={query}
               onValueChange={setQuery}
-              placeholder="Buscar módulos, PCIs, elementos del inventario…"
+              placeholder="Buscar PCIs, inventario, actividades, personas, documentos…"
               className="placeholder:text-muted-foreground/70 h-12 w-full bg-transparent text-sm outline-none"
               autoFocus
             />
-            {isFetching && <span className="text-muted-foreground text-[10px]">buscando…</span>}
+            {isFetching && <Loader2 className="text-muted-foreground size-3.5 animate-spin" />}
             <kbd className="bg-muted text-muted-foreground rounded px-1.5 py-0.5 font-mono text-[10px]">ESC</kbd>
           </div>
 
           <Command.List className="max-h-[62vh] overflow-y-auto p-2">
-            <Command.Empty className="text-muted-foreground py-10 text-center text-sm">
-              {debounced.length >= 2 ? 'Sin resultados.' : 'Escribe al menos 2 caracteres.'}
-            </Command.Empty>
+            {!hasResults && (
+              <Command.Empty className="text-muted-foreground py-10 text-center text-sm">
+                {debounced.length >= 2
+                  ? `Sin resultados para "${debounced}".`
+                  : 'Escribe al menos 2 caracteres para buscar en todo el servicio.'}
+              </Command.Empty>
+            )}
 
-            <Command.Group heading="Navegación" className="[&_[cmdk-group-heading]]:px-2 [&_[cmdk-group-heading]]:py-1.5 [&_[cmdk-group-heading]]:text-[11px] [&_[cmdk-group-heading]]:font-medium">
-              {navItems
-                .filter((n) => !query || n.label.toLowerCase().includes(query.toLowerCase()))
-                .map((n) => (
+            {filteredNav.length > 0 && (
+              <Group heading="Ir a">
+                {filteredNav.map((n) => (
                   <Item key={n.href} onSelect={() => go(n.href)}>
-                    <n.icon className="text-muted-foreground size-4" />
+                    <n.icon className="text-muted-foreground size-4 shrink-0" />
                     <span className="flex-1">{n.label}</span>
                     <CornerDownLeft className="text-muted-foreground/50 size-3" />
                   </Item>
                 ))}
-            </Command.Group>
-
-            {!!results?.pci.length && (
-              <Command.Group heading="Ítems de PCI" className="[&_[cmdk-group-heading]]:px-2 [&_[cmdk-group-heading]]:py-1.5 [&_[cmdk-group-heading]]:text-[11px] [&_[cmdk-group-heading]]:font-medium">
-                {results.pci.map((p: any) => (
-                  <Item key={p.id} onSelect={() => go(`/pci/${p.pci_id}?item=${p.id}`)}>
-                    <TriangleAlert className="text-muted-foreground size-4 shrink-0" />
-                    <span className="min-w-0 flex-1">
-                      <span className="block truncate text-[13px]">
-                        {p.pci_code} · ítem {p.item_number}
-                      </span>
-                      <span className="text-muted-foreground block truncate text-[11px]">
-                        {truncate(p.description, 70)}
-                      </span>
-                    </span>
-                    <span
-                      className={cn('size-2 shrink-0 rounded-full', SEMAFORO[p.semaforo as Semaforo]?.className)}
-                    />
-                  </Item>
-                ))}
-              </Command.Group>
+              </Group>
             )}
 
-            {!!results?.assets.length && (
-              <Command.Group heading="Inventario vial" className="[&_[cmdk-group-heading]]:px-2 [&_[cmdk-group-heading]]:py-1.5 [&_[cmdk-group-heading]]:text-[11px] [&_[cmdk-group-heading]]:font-medium">
-                {results.assets.map((a: any) => (
-                  <Item key={a.id} onSelect={() => go(`/inventario?focus=${a.id}`)}>
-                    <Boxes className="text-muted-foreground size-4 shrink-0" />
-                    <span className="min-w-0 flex-1">
-                      <span className="block truncate text-[13px]">{a.code} · {a.type_name}</span>
-                      <span className="text-muted-foreground flex items-center gap-1 truncate text-[11px]">
-                        <MapPin className="size-2.5" />
-                        {a.section_name} · {fmtProgresiva(a.progresiva_m)}
+            {groups.map((g) => (
+              <Group key={g.key} heading={g.heading}>
+                {g.rows.map((r: any) => {
+                  const v = g.render(r)
+                  return (
+                    <Item key={`${g.key}-${r.id}`} onSelect={() => go(v.href)}>
+                      <g.icon className="text-muted-foreground size-4 shrink-0" />
+                      <span className="min-w-0 flex-1">
+                        <span className="block truncate text-[13px]">{v.title}</span>
+                        <span className="text-muted-foreground block truncate text-[11px]">{v.subtitle}</span>
                       </span>
-                    </span>
-                  </Item>
-                ))}
-              </Command.Group>
-            )}
+                      {v.badge}
+                    </Item>
+                  )
+                })}
+              </Group>
+            ))}
           </Command.List>
+
+          <div className="text-muted-foreground flex items-center justify-between border-t border-border px-4 py-2 text-[10.5px]">
+            <span>Busca en todo el servicio activo</span>
+            <span className="flex items-center gap-2">
+              <kbd className="bg-muted rounded px-1 py-0.5 font-mono">↑↓</kbd> navegar
+              <kbd className="bg-muted rounded px-1 py-0.5 font-mono">↵</kbd> abrir
+            </span>
+          </div>
         </Command>
       </DialogContent>
     </Dialog>
+  )
+}
+
+function Group({ heading, children }: { heading: string; children: React.ReactNode }) {
+  return (
+    <Command.Group
+      heading={heading}
+      className="[&_[cmdk-group-heading]]:text-muted-foreground [&_[cmdk-group-heading]]:px-2 [&_[cmdk-group-heading]]:py-1.5 [&_[cmdk-group-heading]]:text-[11px] [&_[cmdk-group-heading]]:font-medium"
+    >
+      {children}
+    </Command.Group>
   )
 }
 

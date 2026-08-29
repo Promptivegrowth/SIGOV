@@ -21,12 +21,14 @@ import { SkeletonTable } from '@/components/ui/skeleton'
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select'
 import { EmptyState, SemaforoBadge, Progresiva, ProgressBar } from '@/components/shared/misc'
 import { SuspensionDialog } from '@/components/pci/suspension-dialog'
+import { PciItemSheet } from '@/components/pci/pci-item-sheet'
+import { descargarPdf, descargarExcel, type ReportMeta } from '@/lib/reports'
 import { PCI_PRIORITY, PCI_ITEM_STATUS, SEMAFORO, type Semaforo } from '@/lib/constants'
 import { cn, fmtDate, fmtNumber, truncate } from '@/lib/utils'
 import { toast } from 'sonner'
 
 export function PciDetailClient({ pciId }: { pciId: string }) {
-  const { service, can } = useSession()
+  const { service, can, profile } = useSession()
   const params = useSearchParams()
   const qc = useQueryClient()
   const sb = React.useMemo(() => createClient(), [])
@@ -36,6 +38,8 @@ export function PciDetailClient({ pciId }: { pciId: string }) {
   const [statusFilter, setStatusFilter] = React.useState<string>('todos')
   const [selected, setSelected] = React.useState<Set<string>>(new Set())
   const [suspOpen, setSuspOpen] = React.useState(params.get('suspension') === '1')
+  const [sheetItem, setSheetItem] = React.useState<any>(null)
+  const [exporting, setExporting] = React.useState<string | null>(null)
 
   const scrollRef = React.useRef<HTMLDivElement>(null)
 
@@ -110,6 +114,66 @@ export function PciDetailClient({ pciId }: { pciId: string }) {
     qc.invalidateQueries({ queryKey: ['pci-items', pciId] })
   }
 
+  const exportar = async (format: 'pdf' | 'excel') => {
+    setExporting(format)
+    try {
+      const rows = filtered.map((i: any) => ({
+        item: i.item_number,
+        descripcion: truncate(i.description, 120),
+        tramo: i.section_name ?? '-',
+        progresiva: i.prog_start_txt ?? '-',
+        plazo: i.term_days + ' d',
+        vence: fmtDate(i.due_date),
+        semaforo: SEMAFORO[i.semaforo as Semaforo]?.label ?? i.semaforo,
+        estado: PCI_ITEM_STATUS[i.status as keyof typeof PCI_ITEM_STATUS]?.label ?? i.status,
+        cuadrilla: i.crew_name ?? '-',
+        fotos: i.evidence_count,
+      }))
+      const cols = [
+        { header: 'Item', key: 'item', align: 'right' as const, width: 8 },
+        { header: 'Descripcion', key: 'descripcion', width: 62 },
+        { header: 'Tramo', key: 'tramo', width: 24 },
+        { header: 'Progresiva', key: 'progresiva', width: 14 },
+        { header: 'Plazo', key: 'plazo', align: 'right' as const, width: 10 },
+        { header: 'Vence', key: 'vence', width: 13 },
+        { header: 'Semaforo', key: 'semaforo', width: 14 },
+        { header: 'Estado', key: 'estado', width: 14 },
+        { header: 'Cuadrilla', key: 'cuadrilla', width: 20 },
+        { header: 'Fotos', key: 'fotos', align: 'center' as const, width: 8 },
+      ]
+      const meta: ReportMeta = {
+        titulo: 'PCI ' + (p?.code ?? ''),
+        subtitulo: p?.title,
+        servicio: service.name,
+        cliente: service.client_name,
+        contrato: service.contract_code,
+        periodo: 'Notificado el ' + fmtDate(p?.notified_on) + ' - plazo base ' + (p?.default_days ?? 0) + ' dias',
+        generadoPor: profile.full_name,
+      }
+      const stamp = new Date().toISOString().slice(0, 10)
+      if (format === 'pdf') {
+        await descargarPdf('SIGOV_' + (p?.code ?? 'PCI') + '_' + stamp, meta, cols, rows, {
+          landscape: true,
+          kpis: [
+            { label: 'Items', value: fmtNumber(filtered.length) },
+            { label: 'Levantados', value: fmtNumber(counts.ok ?? 0) },
+            { label: 'Vencidos', value: fmtNumber(counts.vencido ?? 0) },
+            { label: 'Criticos', value: fmtNumber(counts.rojo ?? 0) },
+          ],
+        })
+      } else {
+        await descargarExcel('SIGOV_' + (p?.code ?? 'PCI') + '_' + stamp, meta, [
+          { name: 'Items PCI', columns: cols, rows },
+        ])
+      }
+      toast.success('Reporte generado')
+    } catch (e: any) {
+      toast.error(e?.message ?? 'No se pudo generar el reporte')
+    } finally {
+      setExporting(null)
+    }
+  }
+
   const crews = useQuery({
     queryKey: ['crews', service.id],
     queryFn: async () => {
@@ -144,9 +208,13 @@ export function PciDetailClient({ pciId }: { pciId: string }) {
                 {p?.suspension_applied_at ? 'Ver reprogramación' : 'Reprogramar semana'}
               </Button>
             )}
-            <Button variant="outline">
+            <Button variant="outline" loading={exporting === 'pdf'} onClick={() => exportar('pdf')}>
               <Download className="size-4" />
-              Exportar
+              PDF
+            </Button>
+            <Button variant="outline" loading={exporting === 'excel'} onClick={() => exportar('excel')}>
+              <Download className="size-4" />
+              Excel
             </Button>
           </>
         }
@@ -296,21 +364,23 @@ export function PciDetailClient({ pciId }: { pciId: string }) {
                     <div
                       key={r.id}
                       className={cn(
-                        'absolute inset-x-0 flex items-center gap-3 border-b border-border px-4 text-[12.5px] transition-colors',
+                        'absolute inset-x-0 flex cursor-pointer items-center gap-3 border-b border-border px-4 text-[12.5px] transition-colors',
                         isSel ? 'bg-primary/6' : 'hover:bg-secondary/50'
                       )}
                       style={{ height: v.size, transform: `translateY(${v.start}px)` }}
                     >
                       {can.manage && (
-                        <Checkbox
-                          checked={isSel}
-                          onCheckedChange={() => {
-                            const next = new Set(selected)
-                            isSel ? next.delete(r.id) : next.add(r.id)
-                            setSelected(next)
-                          }}
-                          aria-label={`Seleccionar ítem ${r.item_number}`}
-                        />
+                        <span className="relative z-10">
+                          <Checkbox
+                            checked={isSel}
+                            onCheckedChange={() => {
+                              const next = new Set(selected)
+                              isSel ? next.delete(r.id) : next.add(r.id)
+                              setSelected(next)
+                            }}
+                            aria-label={'Seleccionar item ' + r.item_number}
+                          />
+                        </span>
                       )}
                       <span className="text-muted-foreground w-10 font-mono text-[11.5px] tabular-nums">
                         {r.item_number}
@@ -337,7 +407,12 @@ export function PciDetailClient({ pciId }: { pciId: string }) {
                       <span className="hidden w-24 truncate text-[11.5px] xl:block">
                         {r.crew_name ?? <span className="text-muted-foreground">—</span>}
                       </span>
-                      <span className="w-16 text-center">
+                      <button
+                        onClick={() => setSheetItem(r)}
+                        className="absolute inset-0 z-0"
+                        aria-label={'Abrir item ' + r.item_number}
+                      />
+                      <span className="relative z-10 w-16 text-center">
                         {r.evidence_count > 0 ? (
                           <span className="text-success inline-flex items-center gap-1 text-[11.5px] font-semibold">
                             <Camera className="size-3" />
@@ -357,6 +432,12 @@ export function PciDetailClient({ pciId }: { pciId: string }) {
           </Card>
         )}
       </PageBody>
+
+      <PciItemSheet
+        item={sheetItem}
+        onClose={() => setSheetItem(null)}
+        crews={crews.data ?? []}
+      />
 
       {p && (
         <SuspensionDialog

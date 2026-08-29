@@ -1,40 +1,52 @@
 import type { LucideIcon } from 'lucide-react'
 import {
   LayoutDashboard, CalendarRange, TriangleAlert, HardHat, MapPinned,
-  Boxes, ShieldCheck, FileBarChart, Upload, Settings, Map,
+  Boxes, ShieldCheck, FileBarChart, Upload, Settings, Map, FolderOpen,
 } from 'lucide-react'
 
 export type Role = 'admin' | 'supervisor' | 'jefe_cuadrilla' | 'ing_seguridad' | 'visor'
 
-export const ROLES: Record<Role, { label: string; short: string; description: string; color: string }> = {
+export const ROLES: Record<Role, {
+  label: string
+  short: string
+  /** Como lo llama el cliente en su operación diaria */
+  alias: string
+  description: string
+  color: string
+}> = {
   admin: {
     label: 'Administrador',
     short: 'Admin',
+    alias: 'Coordinador de contrato',
     description: 'Control total del sistema, servicios, usuarios y configuración',
     color: 'oklch(0.47 0.19 264)',
   },
   supervisor: {
     label: 'Supervisor',
     short: 'Supervisor',
+    alias: 'Inspector',
     description: 'Valida partes, programa, gestiona PCIs y emite reportes',
     color: 'oklch(0.62 0.14 235)',
   },
   jefe_cuadrilla: {
     label: 'Jefe de cuadrilla',
     short: 'Cuadrilla',
+    alias: 'Capataz',
     description: 'Registra ejecución en campo, evidencias y SSOMA. Modo offline',
     color: 'oklch(0.72 0.16 74)',
   },
   ing_seguridad: {
     label: 'Ing. de seguridad',
     short: 'SSOMA',
+    alias: 'Ingeniero SSOMA',
     description: 'Gestiona charlas, checklists, ATS/IPERC y cumplimiento SSOMA',
     color: 'oklch(0.6 0.15 152)',
   },
   visor: {
     label: 'Visor',
     short: 'Visor',
-    description: 'Solo lectura: dashboard, mapa y reportes',
+    alias: 'Cliente / COVINCA · solo lectura',
+    description: 'Solo lectura: dashboard, mapa y reportes. Sin ninguna escritura',
     color: 'oklch(0.55 0.02 258)',
   },
 }
@@ -58,6 +70,7 @@ export const NAV: NavItem[] = [
   { href: '/inventario',   label: 'Inventario',    icon: Boxes,           roles: ['admin','supervisor','jefe_cuadrilla','visor'], module: 'inventario' },
   { href: '/ssoma',        label: 'SSOMA',         icon: ShieldCheck,     roles: ['admin','supervisor','ing_seguridad','jefe_cuadrilla','visor'], module: 'ssoma', field: true },
   { href: '/reportes',     label: 'Reportes',      icon: FileBarChart,    roles: ['admin','supervisor','ing_seguridad','visor'], module: 'reportes' },
+  { href: '/archivo',      label: 'Archivo',       icon: FolderOpen,      roles: ['admin','supervisor','ing_seguridad','visor'] },
   { href: '/importar',     label: 'Importación',   icon: Upload,          roles: ['admin','supervisor'] },
   { href: '/configuracion',label: 'Configuración', icon: Settings,        roles: ['admin','supervisor'] },
 ]

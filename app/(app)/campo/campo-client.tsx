@@ -16,7 +16,7 @@ import { Badge } from '@/components/ui/badge'
 import { Card, CardContent } from '@/components/ui/card'
 import { Input } from '@/components/ui/input'
 import { SkeletonList, SkeletonKpi } from '@/components/ui/skeleton'
-import { EmptyState } from '@/components/shared/misc'
+import { EmptyState, DateRangeTabs, rangeFromPreset, type DatePresetKey } from '@/components/shared/misc'
 import { StatCard } from '@/components/shared/stat-card'
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select'
 import { WORK_ORDER_STATUS } from '@/lib/constants'
@@ -29,21 +29,35 @@ export function CampoClient() {
   const sb = React.useMemo(() => createClient(), [])
   const [status, setStatus] = React.useState('todos')
   const [q, setQ] = React.useState('')
+  const [crewFilter, setCrewFilter] = React.useState('todas')
+  const [preset, setPreset] = React.useState<DatePresetKey>('30d')
+  const range = React.useMemo(() => rangeFromPreset(preset), [preset])
 
   const isField = role === 'jefe_cuadrilla'
   const today = toISODate(new Date())
 
+  const crews = useQuery({
+    queryKey: ['crews', service.id],
+    enabled: !isField,
+    queryFn: async () => (await sb.from('crews').select('id, code, name, color')
+      .eq('service_id', service.id).is('deleted_at', null).order('code')).data ?? [],
+    staleTime: 5 * 60_000,
+  })
+
   const orders = useQuery({
-    queryKey: ['work-orders', service.id, crew?.id, isField],
+    queryKey: ['work-orders', service.id, crew?.id, isField, range.from, range.to, crewFilter],
     queryFn: async () => {
       let query = sb
         .from('work_orders')
         .select('*, crews(id, name, color), work_entries(count), profiles:created_by(full_name)')
         .eq('service_id', service.id)
         .is('deleted_at', null)
+        .gte('work_date', range.from)
+        .lte('work_date', range.to)
         .order('work_date', { ascending: false })
-        .limit(60)
+        .limit(150)
       if (isField && crew) query = query.eq('crew_id', crew.id)
+      else if (crewFilter !== 'todas') query = query.eq('crew_id', crewFilter)
       const { data } = await query
       return data ?? []
     },
@@ -181,7 +195,26 @@ export function CampoClient() {
               ))}
             </SelectContent>
           </Select>
-          <span className="text-muted-foreground ml-auto text-[12px]">{filtered.length} partes</span>
+          {!isField && (
+            <Select value={crewFilter} onValueChange={setCrewFilter}>
+              <SelectTrigger className="w-48"><SelectValue placeholder="Cuadrilla" /></SelectTrigger>
+              <SelectContent>
+                <SelectItem value="todas">Todas las cuadrillas</SelectItem>
+                {(crews.data ?? []).map((c: any) => (
+                  <SelectItem key={c.id} value={c.id}>
+                    <span className="flex items-center gap-2">
+                      <span className="size-2 rounded-full" style={{ background: c.color }} />
+                      {c.name}
+                    </span>
+                  </SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
+          )}
+          <DateRangeTabs value={preset} onChange={setPreset} />
+          <span className="text-muted-foreground ml-auto text-[12px] tabular-nums">
+            {filtered.length} de {orders.data?.length ?? 0} partes
+          </span>
         </div>
 
         {/* Lista de partes */}

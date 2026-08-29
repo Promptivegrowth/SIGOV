@@ -2,7 +2,7 @@
 
 import * as React from 'react'
 import Link from 'next/link'
-import { useQuery } from '@tanstack/react-query'
+import { useQuery, useQueryClient } from '@tanstack/react-query'
 import { motion } from 'motion/react'
 import {
   TriangleAlert, Plus, FileText, Calendar, ChevronRight,
@@ -19,14 +19,59 @@ import { Badge } from '@/components/ui/badge'
 import { Input } from '@/components/ui/input'
 import { SkeletonKpi, SkeletonList } from '@/components/ui/skeleton'
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select'
+import { FormDialog, type FormField } from '@/components/forms/form-dialog'
 import { PCI_PRIORITY, SEMAFORO } from '@/lib/constants'
-import { cn, fmtDate, fmtNumber, truncate } from '@/lib/utils'
+import { cn, fmtDate, fmtNumber, truncate, toISODate } from '@/lib/utils'
+import { toast } from 'sonner'
 
 export function PciListClient() {
-  const { service, can } = useSession()
+  const { service, can, profile } = useSession()
+  const qc = useQueryClient()
   const sb = React.useMemo(() => createClient(), [])
   const [q, setQ] = React.useState('')
   const [priority, setPriority] = React.useState<string>('todas')
+  const [newOpen, setNewOpen] = React.useState(false)
+
+  const pciFields: FormField[] = [
+    { name: 'code', label: 'Código del PCI', type: 'text', required: true, placeholder: 'PCI-2026-048' },
+    {
+      name: 'source', label: 'Fuente', type: 'select', required: true, defaultValue: 'OSITRAN',
+      options: ['OSITRAN', 'Concesionario', 'Interno', 'Supervisión'].map((o) => ({ value: o, label: o })),
+    },
+    { name: 'title', label: 'Título', type: 'text', required: true, span: 2, placeholder: 'Deficiencias en el sistema de drenaje transversal' },
+    { name: 'description', label: 'Descripción del incumplimiento', type: 'textarea', span: 2, placeholder: 'Detalle de lo observado, alcance y exigencia del regulador…' },
+    { name: 'notified_on', label: 'Fecha de notificación', type: 'date', required: true, defaultValue: toISODate(new Date()) },
+    { name: 'received_on', label: 'Fecha de recepción', type: 'date' },
+    {
+      name: 'priority', label: 'Prioridad', type: 'select', required: true, defaultValue: 'media',
+      options: Object.entries(PCI_PRIORITY).map(([k, v]) => ({ value: k, label: v.label })),
+    },
+    { name: 'default_days', label: 'Plazo base (días)', type: 'number', required: true, defaultValue: 15, min: 1, max: 365,
+      hint: 'Se aplica a los ítems que no traigan plazo propio' },
+  ]
+
+  const createPci = async (v: any) => {
+    const { data, error } = await sb.from('pcis').insert({
+      service_id: service.id,
+      code: v.code,
+      title: v.title,
+      description: v.description || null,
+      source: v.source,
+      notified_on: v.notified_on,
+      received_on: v.received_on || null,
+      priority: v.priority,
+      default_days: Number(v.default_days) || 15,
+      status: 'abierto',
+      created_by: profile.id,
+    }).select('id').single()
+
+    if (error) {
+      toast.error(error.message.includes('duplicate') ? 'Ya existe un PCI con ese código' : error.message)
+      return
+    }
+    toast.success('PCI creado', { description: 'Ahora importa sus ítems desde Excel o agrégalos a mano.' })
+    qc.invalidateQueries()
+  }
 
   const { data, isLoading } = useQuery({
     queryKey: ['pcis', service.id],
@@ -100,7 +145,7 @@ export function PciListClient() {
                   Importar Excel
                 </Link>
               </Button>
-              <Button>
+              <Button onClick={() => setNewOpen(true)}>
                 <Plus className="size-4" />
                 Nuevo PCI
               </Button>
@@ -197,6 +242,17 @@ export function PciListClient() {
           </ul>
         )}
       </PageBody>
+
+      <FormDialog
+        open={newOpen}
+        onOpenChange={setNewOpen}
+        title="Nuevo PCI"
+        description="Registra la cabecera del Pedido de Corrección de Incumplimiento. Sus ítems se cargan después desde el Excel de OSITRAN o uno a uno."
+        fields={pciFields}
+        submitLabel="Crear PCI"
+        onSubmit={createPci}
+        footerNote="Si la prioridad es alta o crítica, al abrir el PCI podrás reprogramar automáticamente la semana en curso."
+      />
     </>
   )
 }

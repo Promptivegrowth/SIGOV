@@ -101,6 +101,7 @@ export interface SealedPhoto {
 }
 
 const MAX_EDGE = 1600
+const MIN_EDGE = 640      // por debajo de esto la marca de agua no es legible
 const THUMB_EDGE = 360
 
 /**
@@ -113,9 +114,16 @@ export async function sealPhoto(source: Blob | HTMLVideoElement, data: Watermark
       ? await createImageBitmap(source)
       : await createImageBitmap(source as any)
 
-  const scale = Math.min(1, MAX_EDGE / Math.max(bitmap.width, bitmap.height))
-  const w = Math.round(bitmap.width * scale)
-  const h = Math.round(bitmap.height * scale)
+  // Se reduce lo grande y se amplia lo diminuto: la marca de agua necesita un
+  // lienzo minimo para ser legible y para que el texto tenga tamano valido.
+  const maxSide = Math.max(bitmap.width, bitmap.height) || 1
+  const scale = maxSide > MAX_EDGE
+    ? MAX_EDGE / maxSide
+    : maxSide < MIN_EDGE
+      ? MIN_EDGE / maxSide
+      : 1
+  const w = Math.max(1, Math.round(bitmap.width * scale))
+  const h = Math.max(1, Math.round(bitmap.height * scale))
 
   const canvas = document.createElement('canvas')
   canvas.width = w
@@ -126,9 +134,7 @@ export async function sealPhoto(source: Blob | HTMLVideoElement, data: Watermark
 
   drawWatermark(ctx, w, h, data)
 
-  const blob = await new Promise<Blob>((res) =>
-    canvas.toBlob((b) => res(b!), 'image/webp', 0.82)
-  )
+  const blob = await toBlobSafe(canvas, 'image/webp', 0.82)
 
   // Miniatura para listados y para el mapa
   const tScale = THUMB_EDGE / Math.max(w, h)
@@ -136,9 +142,7 @@ export async function sealPhoto(source: Blob | HTMLVideoElement, data: Watermark
   tCanvas.width = Math.round(w * tScale)
   tCanvas.height = Math.round(h * tScale)
   tCanvas.getContext('2d')!.drawImage(canvas, 0, 0, tCanvas.width, tCanvas.height)
-  const thumb = await new Promise<Blob>((res) =>
-    tCanvas.toBlob((b) => res(b!), 'image/webp', 0.7)
-  )
+  const thumb = await toBlobSafe(tCanvas, 'image/webp', 0.7)
 
   return {
     blob,
@@ -151,16 +155,40 @@ export async function sealPhoto(source: Blob | HTMLVideoElement, data: Watermark
   }
 }
 
+/**
+ * `toBlob` puede devolver null si el formato no esta soportado. Se reintenta en
+ * PNG y, como ultimo recurso, se falla explicitamente en vez de quedar colgado.
+ */
+async function toBlobSafe(canvas: HTMLCanvasElement, type: string, quality: number): Promise<Blob> {
+  const attempt = (t: string, q?: number) =>
+    new Promise<Blob | null>((res) => {
+      try {
+        canvas.toBlob((b) => res(b), t, q)
+      } catch {
+        res(null)
+      }
+    })
+
+  const timeout = <T,>(p: Promise<T>, ms: number) =>
+    Promise.race([p, new Promise<T | null>((res) => setTimeout(() => res(null), ms))])
+
+  const webp = await timeout(attempt(type, quality), 15000)
+  if (webp) return webp
+  const png = await timeout(attempt('image/png'), 15000)
+  if (png) return png
+  throw new Error('El navegador no pudo convertir la imagen')
+}
+
 function drawWatermark(
   ctx: CanvasRenderingContext2D,
   w: number,
   h: number,
   d: WatermarkData
 ) {
-  const scale = w / 1600
-  const pad = Math.round(22 * scale)
-  const lineH = Math.round(30 * scale)
-  const fontBase = Math.round(23 * scale)
+  const scale = Math.max(0.35, w / 1600)
+  const pad = Math.max(8, Math.round(22 * scale))
+  const lineH = Math.max(12, Math.round(30 * scale))
+  const fontBase = Math.max(9, Math.round(23 * scale))
 
   const left = [
     `${d.gps.lat.toFixed(6)}, ${d.gps.lng.toFixed(6)}`,

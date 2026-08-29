@@ -16,7 +16,12 @@ export interface ReportMeta {
   contrato?: string | null
   periodo: string
   generadoPor: string
+  /** Datos de la organizacion emisora, para la portada */
+  organizacion?: string
+  ruc?: string
 }
+
+export const ORG_DEFAULT = { nombre: 'ETS VALERIA', ruc: '20600222393' }
 
 const BRAND = { r: 27, g: 49, b: 160 }
 const ACCENT = { r: 245, g: 163, b: 20 }
@@ -27,6 +32,131 @@ async function jspdf() {
     import('jspdf-autotable').then((m) => m.default),
   ])
   return { jsPDF, autoTable }
+}
+
+/**
+ * Portada del informe. Marca SIGOV, el contrato, el periodo y quien lo emite:
+ * es lo primero que ve el cliente y lo que hace que el PDF se lea como un
+ * entregable formal y no como un volcado de tabla.
+ */
+function cover(doc: any, meta: ReportMeta, kpis?: { label: string; value: string }[]) {
+  const W = doc.internal.pageSize.getWidth()
+  const H = doc.internal.pageSize.getHeight()
+
+  // Fondo superior de marca
+  doc.setFillColor(BRAND.r, BRAND.g, BRAND.b)
+  doc.rect(0, 0, W, H * 0.42, 'F')
+  doc.setFillColor(ACCENT.r, ACCENT.g, ACCENT.b)
+  doc.rect(0, H * 0.42, W, 2, 'F')
+
+  // Marca SIGOV: escudo con la calzada en perspectiva
+  const cx = W / 2
+  const top = H * 0.11
+  doc.setFillColor(255, 255, 255)
+  doc.setDrawColor(255, 255, 255)
+  // calzada (trapecio)
+  doc.triangle(cx - 4, top + 34, cx + 4, top + 34, cx + 1.6, top + 8, 'F')
+  doc.triangle(cx - 4, top + 34, cx - 1.6, top + 8, cx + 1.6, top + 8, 'F')
+  // marcas centrales ambar
+  doc.setFillColor(ACCENT.r, ACCENT.g, ACCENT.b)
+  doc.roundedRect(cx - 0.55, top + 12, 1.1, 3.2, 0.5, 0.5, 'F')
+  doc.roundedRect(cx - 0.7, top + 19, 1.4, 4, 0.6, 0.6, 'F')
+  doc.roundedRect(cx - 0.9, top + 27, 1.8, 5, 0.8, 0.8, 'F')
+  // horizonte
+  doc.roundedRect(cx - 6, top + 5.6, 12, 1.8, 0.9, 0.9, 'F')
+
+  doc.setTextColor(255, 255, 255)
+  doc.setFont('helvetica', 'bold')
+  doc.setFontSize(30)
+  doc.text('SIGOV', cx, top + 52, { align: 'center' })
+  doc.setFont('helvetica', 'normal')
+  doc.setFontSize(8.5)
+  doc.setTextColor(255, 255, 255)
+  doc.text('SISTEMA INTEGRAL DE GESTION OPERATIVA VIAL', cx, top + 59, { align: 'center' })
+
+  // Titulo del informe
+  let y = H * 0.42 + 22
+  doc.setTextColor(20, 26, 48)
+  doc.setFont('helvetica', 'bold')
+  doc.setFontSize(20)
+  const titleLines = doc.splitTextToSize(meta.titulo, W - 50)
+  doc.text(titleLines, cx, y, { align: 'center' })
+  y += titleLines.length * 8
+
+  if (meta.subtitulo) {
+    doc.setFont('helvetica', 'normal')
+    doc.setFontSize(11)
+    doc.setTextColor(90, 96, 112)
+    const subLines = doc.splitTextToSize(meta.subtitulo, W - 60)
+    doc.text(subLines, cx, y + 2, { align: 'center' })
+    y += subLines.length * 5.5
+  }
+
+  // Linea ambar decorativa
+  y += 8
+  doc.setDrawColor(ACCENT.r, ACCENT.g, ACCENT.b)
+  doc.setLineWidth(1.2)
+  doc.line(cx - 18, y, cx + 18, y)
+  doc.setLineWidth(0.2)
+
+  // Ficha del contrato
+  y += 14
+  const rows: [string, string][] = [
+    ['Servicio', meta.servicio],
+    ['Cliente', meta.cliente || '-'],
+    ['Contrato', meta.contrato || '-'],
+    ['Periodo', meta.periodo],
+    ['Emitido por', meta.organizacion || ORG_DEFAULT.nombre],
+    ['Elaborado por', meta.generadoPor],
+    ['Fecha de emision', new Date().toLocaleString('es-PE')],
+  ]
+  const boxW = W - 60
+  doc.setFillColor(246, 248, 252)
+  doc.roundedRect(30, y - 6, boxW, rows.length * 8 + 10, 3, 3, 'F')
+  for (const [k, v] of rows) {
+    doc.setFont('helvetica', 'normal')
+    doc.setFontSize(8.5)
+    doc.setTextColor(120, 126, 142)
+    doc.text(k.toUpperCase(), 36, y)
+    doc.setFont('helvetica', 'bold')
+    doc.setFontSize(9.5)
+    doc.setTextColor(28, 34, 56)
+    doc.text(doc.splitTextToSize(String(v), boxW - 60)[0] ?? '-', 78, y)
+    y += 8
+  }
+
+  // KPIs de portada
+  if (kpis?.length) {
+    y += 12
+    const cardW = (W - 60 - (kpis.length - 1) * 5) / kpis.length
+    kpis.forEach((kp, i) => {
+      const x = 30 + i * (cardW + 5)
+      doc.setFillColor(BRAND.r, BRAND.g, BRAND.b)
+      doc.roundedRect(x, y, cardW, 20, 2.5, 2.5, 'F')
+      doc.setTextColor(255, 255, 255)
+      doc.setFontSize(6.5)
+      doc.setFont('helvetica', 'normal')
+      doc.text(kp.label.toUpperCase(), x + 4, y + 7)
+      doc.setFontSize(13)
+      doc.setFont('helvetica', 'bold')
+      doc.text(kp.value, x + 4, y + 15.5)
+    })
+  }
+
+  // Pie de portada
+  doc.setFont('helvetica', 'normal')
+  doc.setFontSize(7.5)
+  doc.setTextColor(140, 146, 160)
+  doc.text(
+    'Documento generado automaticamente por SIGOV. Los datos provienen de los registros de campo',
+    cx, H - 22, { align: 'center' }
+  )
+  doc.text(
+    'con evidencia georreferenciada e inmutable. Desarrollado por Promptive.',
+    cx, H - 18, { align: 'center' }
+  )
+
+  doc.addPage()
 }
 
 function header(doc: any, meta: ReportMeta) {
@@ -76,7 +206,8 @@ function footer(doc: any, meta: ReportMeta) {
   const pages = doc.internal.getNumberOfPages()
   const W = doc.internal.pageSize.getWidth()
   const H = doc.internal.pageSize.getHeight()
-  for (let i = 1; i <= pages; i++) {
+  // La portada no lleva pie ni numeracion
+  for (let i = 2; i <= pages; i++) {
     doc.setPage(i)
     doc.setDrawColor(215, 218, 226)
     doc.line(14, H - 14, W - 14, H - 14)
@@ -87,7 +218,7 @@ function footer(doc: any, meta: ReportMeta) {
       14,
       H - 9
     )
-    doc.text(`Página ${i} de ${pages}`, W - 14, H - 9, { align: 'right' })
+    doc.text(`Pagina ${i - 1} de ${pages - 1}`, W - 14, H - 9, { align: 'right' })
   }
 }
 
@@ -96,10 +227,19 @@ export async function reportePdf(
   meta: ReportMeta,
   columns: { header: string; key: string; align?: 'left' | 'right' | 'center'; width?: number }[],
   rows: any[],
-  options?: { kpis?: { label: string; value: string }[]; landscape?: boolean }
+  options?: {
+    kpis?: { label: string; value: string }[]
+    landscape?: boolean
+    /** false para omitir la portada (informes de una sola hoja) */
+    cover?: boolean
+    /** Nota al pie del cuerpo, antes de la tabla */
+    intro?: string
+  }
 ) {
   const { jsPDF, autoTable } = await jspdf()
   const doc = new jsPDF({ orientation: options?.landscape ? 'landscape' : 'portrait', unit: 'mm', format: 'a4' })
+
+  if (options?.cover !== false) cover(doc, meta, options?.kpis)
 
   let y = header(doc, meta)
 
@@ -121,6 +261,15 @@ export async function reportePdf(
       doc.setFont('helvetica', 'normal')
     })
     y += 22
+  }
+
+  if (options?.intro) {
+    doc.setFont('helvetica', 'normal')
+    doc.setFontSize(8.5)
+    doc.setTextColor(90, 96, 112)
+    const lines = doc.splitTextToSize(options.intro, doc.internal.pageSize.getWidth() - 28)
+    doc.text(lines, 14, y)
+    y += lines.length * 4.5 + 4
   }
 
   autoTable(doc, {
@@ -168,6 +317,54 @@ export async function descargarExcel(
   const wb = new (ExcelJS as any).Workbook()
   wb.creator = 'SIGOV'
   wb.created = new Date()
+
+  // Hoja de portada con la identidad del informe
+  const portada = wb.addWorksheet('Portada', { views: [{ showGridLines: false }] })
+  portada.columns = [{ width: 26 }, { width: 62 }]
+  portada.mergeCells('A1:B2')
+  const t0 = portada.getCell('A1')
+  t0.value = 'SIGOV'
+  t0.font = { bold: true, size: 26, color: { argb: 'FFFFFFFF' } }
+  t0.alignment = { vertical: 'middle', horizontal: 'center' }
+  t0.fill = { type: 'pattern', pattern: 'solid', fgColor: { argb: 'FF1B31A0' } }
+  portada.getRow(1).height = 26
+  portada.getRow(2).height = 20
+
+  portada.mergeCells('A3:B3')
+  const t1 = portada.getCell('A3')
+  t1.value = 'SISTEMA INTEGRAL DE GESTION OPERATIVA VIAL'
+  t1.font = { size: 8.5, color: { argb: 'FFFFFFFF' } }
+  t1.alignment = { horizontal: 'center' }
+  t1.fill = { type: 'pattern', pattern: 'solid', fgColor: { argb: 'FF1B31A0' } }
+
+  portada.addRow([])
+  const tt = portada.addRow(['', meta.titulo])
+  tt.getCell(2).font = { bold: true, size: 16, color: { argb: 'FF141A30' } }
+  if (meta.subtitulo) {
+    const ss = portada.addRow(['', meta.subtitulo])
+    ss.getCell(2).font = { size: 10, color: { argb: 'FF6B7280' } }
+  }
+  portada.addRow([])
+
+  const ficha: [string, string][] = [
+    ['Servicio', meta.servicio],
+    ['Cliente', meta.cliente || '-'],
+    ['Contrato', meta.contrato || '-'],
+    ['Periodo', meta.periodo],
+    ['Emitido por', meta.organizacion || ORG_DEFAULT.nombre],
+    ['Elaborado por', meta.generadoPor],
+    ['Fecha de emision', new Date().toLocaleString('es-PE')],
+  ]
+  for (const [k, v] of ficha) {
+    const r = portada.addRow([k.toUpperCase(), v])
+    r.getCell(1).font = { size: 8.5, bold: true, color: { argb: 'FF787E8E' } }
+    r.getCell(2).font = { size: 10, color: { argb: 'FF1C2238' } }
+    r.height = 16
+  }
+  portada.addRow([])
+  const hojas = portada.addRow(['HOJAS', sheets.map((x) => x.name).join(' - ')])
+  hojas.getCell(1).font = { size: 8.5, bold: true, color: { argb: 'FF787E8E' } }
+  hojas.getCell(2).font = { size: 10, color: { argb: 'FF1C2238' } }
 
   for (const s of sheets) {
     const ws = wb.addWorksheet(s.name.slice(0, 31), {

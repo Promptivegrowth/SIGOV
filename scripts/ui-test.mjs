@@ -241,7 +241,7 @@ section('2 · Recorrido del Supervisor (escritorio)')
     await page.goto(`${BASE}/dashboard`, { waitUntil: 'networkidle' })
     await page.waitForTimeout(1200)
     await page.keyboard.press('Control+k')
-    await page.waitForSelector('input[placeholder*="Buscar módulos"]', { timeout: 8000 })
+    await page.waitForSelector('input[placeholder*="Buscar PCIs"]', { timeout: 10000 })
     await page.keyboard.press('Escape')
     return 'abre y cierra'
   })

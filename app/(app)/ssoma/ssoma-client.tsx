@@ -1,11 +1,12 @@
 'use client'
 
 import * as React from 'react'
-import { useQuery } from '@tanstack/react-query'
+import { useQuery, useQueryClient } from '@tanstack/react-query'
 import { motion } from 'motion/react'
 import {
   ShieldCheck, Megaphone, ClipboardCheck, HardHat, Signature,
   Users, TriangleAlert, CircleCheck, Plus, Calendar, MapPin, ChevronRight,
+  Search, X, Pencil, Trash2, Download,
 } from 'lucide-react'
 import { createClient } from '@/lib/supabase/client'
 import { useSession } from '@/lib/hooks/use-session'
@@ -17,8 +18,14 @@ import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '@/com
 import { Tabs, TabsList, TabsTrigger, TabsContent } from '@/components/ui/primitives'
 import { SkeletonList, SkeletonKpi } from '@/components/ui/skeleton'
 import { EmptyState, ProgressBar } from '@/components/shared/misc'
-import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription } from '@/components/ui/dialog'
-import { cn, fmtDate, fmtNumber, fmtRelative, truncate } from '@/lib/utils'
+import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription, DialogFooter } from '@/components/ui/dialog'
+import { Input } from '@/components/ui/input'
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select'
+import { Checkbox, Tip } from '@/components/ui/primitives'
+import { FormDialog, ConfirmDialog, type FormField } from '@/components/forms/form-dialog'
+import { DateRangeTabs, rangeFromPreset, type DatePresetKey } from '@/components/shared/misc'
+import { cn, fmtDate, fmtNumber, fmtRelative, truncate, toISODate } from '@/lib/utils'
+import { toast } from 'sonner'
 
 const RISK_COLORS: Record<string, string> = {
   trivial: 'var(--sem-verde)',
@@ -29,11 +36,78 @@ const RISK_COLORS: Record<string, string> = {
 }
 
 export function SsomaClient() {
-  const { service, can } = useSession()
+  const { service, can, profile } = useSession()
+  const qc = useQueryClient()
   const sb = React.useMemo(() => createClient(), [])
   const [tab, setTab] = React.useState('charlas')
   const [detail, setDetail] = React.useState<any>(null)
-  const from = new Date(Date.now() - 30 * 86400000).toISOString().slice(0, 10)
+  const [q, setQ] = React.useState('')
+  const [crewFilter, setCrewFilter] = React.useState('todas')
+  const [preset, setPreset] = React.useState<DatePresetKey>('30d')
+  const [talkForm, setTalkForm] = React.useState<{ open: boolean; row?: any }>({ open: false })
+  const [attendance, setAttendance] = React.useState<any>(null)
+  const [confirm, setConfirm] = React.useState<any>(null)
+
+  const range = React.useMemo(() => rangeFromPreset(preset), [preset])
+  const from = range.from
+
+  const crews = useQuery({
+    queryKey: ['crews', service.id],
+    queryFn: async () => (await sb.from('crews').select('id, code, name, color')
+      .eq('service_id', service.id).is('deleted_at', null).order('code')).data ?? [],
+    staleTime: 5 * 60_000,
+  })
+
+  const talkFields: FormField[] = [
+    { name: 'topic', label: 'Tema de la charla', type: 'text', required: true, span: 2,
+      placeholder: 'Uso correcto de EPP en vias con transito activo' },
+    { name: 'talk_date', label: 'Fecha', type: 'date', required: true, defaultValue: toISODate(new Date()) },
+    { name: 'start_time', label: 'Hora de inicio', type: 'text', placeholder: '07:05', defaultValue: '07:05' },
+    {
+      name: 'crew_id', label: 'Cuadrilla', type: 'select', required: true,
+      options: (crews.data ?? []).map((c: any) => ({ value: c.id, label: c.name, color: c.color })),
+    },
+    { name: 'duration_min', label: 'Duracion (minutos)', type: 'number', min: 1, max: 120, defaultValue: 5 },
+    { name: 'speaker_name', label: 'Expositor', type: 'text', required: true, span: 2 },
+    { name: 'location', label: 'Lugar', type: 'text', span: 2, placeholder: 'Frente de trabajo - km 12+400' },
+    { name: 'content', label: 'Contenido tratado', type: 'textarea', span: 2,
+      placeholder: 'Puntos cubiertos, controles reforzados, compromisos del equipo...' },
+  ]
+
+  const saveTalk = async (v: any) => {
+    const payload = {
+      service_id: service.id,
+      crew_id: v.crew_id || null,
+      topic: v.topic,
+      content: v.content || null,
+      talk_date: v.talk_date,
+      start_time: v.start_time || null,
+      duration_min: Number(v.duration_min) || 5,
+      speaker_id: profile.id,
+      speaker_name: v.speaker_name,
+      location: v.location || null,
+    }
+    const { data, error } = talkForm.row
+      ? await sb.from('safety_talks').update(payload).eq('id', talkForm.row.id).select('id').single()
+      : await sb.from('safety_talks').insert({ ...payload, created_by: profile.id }).select('id').single()
+    if (error) { toast.error(error.message); return }
+    toast.success(talkForm.row ? 'Charla actualizada' : 'Charla registrada', {
+      description: talkForm.row ? undefined : 'Ahora registra la asistencia del equipo.',
+    })
+    qc.invalidateQueries()
+    if (!talkForm.row && data?.id) {
+      const { data: full } = await sb.from('safety_talks').select('*, crews(id, name, color)').eq('id', data.id).single()
+      setAttendance(full)
+    }
+  }
+
+  const deleteTalk = async (row: any) => {
+    const { error } = await sb.from('safety_talks')
+      .update({ deleted_at: new Date().toISOString() }).eq('id', row.id)
+    if (error) { toast.error(error.message); return }
+    toast.success('Charla eliminada')
+    qc.invalidateQueries()
+  }
 
   const kpis = useQuery({
     queryKey: ['ssoma-kpis', service.id],
@@ -44,18 +118,33 @@ export function SsomaClient() {
   })
 
   const talks = useQuery({
-    queryKey: ['safety-talks', service.id],
+    queryKey: ['safety-talks', service.id, range.from, range.to, crewFilter],
     queryFn: async () => {
-      const { data } = await sb
+      let query = sb
         .from('safety_talks')
-        .select('*, crews(name, color)')
+        .select('*, crews(id, name, color)')
         .eq('service_id', service.id)
         .is('deleted_at', null)
+        .gte('talk_date', range.from)
+        .lte('talk_date', range.to)
         .order('talk_date', { ascending: false })
-        .limit(40)
+        .limit(120)
+      if (crewFilter !== 'todas') query = query.eq('crew_id', crewFilter)
+      const { data } = await query
       return data ?? []
     },
   })
+
+  const filteredTalks = React.useMemo(() => {
+    const all = talks.data ?? []
+    if (!q) return all
+    const t = q.toLowerCase()
+    return all.filter((x: any) =>
+      x.topic?.toLowerCase().includes(t) ||
+      x.speaker_name?.toLowerCase().includes(t) ||
+      x.crews?.name?.toLowerCase().includes(t)
+    )
+  }, [talks.data, q])
 
   const checklists = useQuery({
     queryKey: ['checklists', service.id],
@@ -96,12 +185,48 @@ export function SsomaClient() {
         title="SSOMA"
         description="Charlas de 5 minutos con asistencia firmada, checklists configurables y ATS/IPERC integrados al flujo diario de la cuadrilla. Todo funciona sin conexión."
         actions={can.write && (
-          <Button variant="accent">
+          <Button variant="accent" onClick={() => setTalkForm({ open: true })}>
             <Plus className="size-4" />
             Nueva charla
           </Button>
         )}
-      />
+      >
+        <div className="flex flex-wrap items-center gap-2">
+          <div className="relative min-w-52 flex-1 sm:max-w-xs">
+            <Search className="text-muted-foreground absolute top-1/2 left-3 size-3.5 -translate-y-1/2" />
+            <Input
+              placeholder="Buscar por tema, expositor o cuadrilla..."
+              value={q}
+              onChange={(e) => setQ(e.target.value)}
+              className="pl-9"
+            />
+            {q && (
+              <button
+                onClick={() => setQ('')}
+                className="text-muted-foreground hover:text-foreground absolute top-1/2 right-2.5 -translate-y-1/2"
+                aria-label="Limpiar"
+              >
+                <X className="size-3.5" />
+              </button>
+            )}
+          </div>
+          <Select value={crewFilter} onValueChange={setCrewFilter}>
+            <SelectTrigger className="w-48"><SelectValue placeholder="Cuadrilla" /></SelectTrigger>
+            <SelectContent>
+              <SelectItem value="todas">Todas las cuadrillas</SelectItem>
+              {(crews.data ?? []).map((c: any) => (
+                <SelectItem key={c.id} value={c.id}>
+                  <span className="flex items-center gap-2">
+                    <span className="size-2 rounded-full" style={{ background: c.color }} />
+                    {c.name}
+                  </span>
+                </SelectItem>
+              ))}
+            </SelectContent>
+          </Select>
+          <DateRangeTabs value={preset} onChange={setPreset} />
+        </div>
+      </PageHeader>
 
       <PageBody className="space-y-5">
         {kpis.isLoading ? (
@@ -128,15 +253,15 @@ export function SsomaClient() {
           <TabsContent value="charlas" className="mt-4">
             {talks.isLoading ? (
               <SkeletonList rows={6} />
-            ) : !talks.data?.length ? (
+            ) : !filteredTalks.length ? (
               <Card><CardContent className="p-0"><EmptyState icon={Megaphone} title="Sin charlas registradas" description="Registra la charla diaria de 5 minutos con la asistencia firmada de la cuadrilla." /></CardContent></Card>
             ) : (
               <ul className="stagger space-y-2">
-                {talks.data.map((t: any) => (
-                  <li key={t.id}>
+                {filteredTalks.map((t: any) => (
+                  <li key={t.id} className="bg-card group flex items-center gap-3.5 rounded-xl border border-border p-3.5 transition-all hover:border-primary/40 hover:shadow-sm">
                     <button
                       onClick={() => setDetail({ kind: 'talk', data: t })}
-                      className="bg-card group flex w-full items-center gap-3.5 rounded-xl border border-border p-3.5 text-left transition-all hover:border-primary/40 hover:shadow-sm"
+                      className="flex min-w-0 flex-1 items-center gap-3.5 text-left"
                     >
                       <span className="bg-primary/10 text-primary flex size-10 shrink-0 items-center justify-center rounded-lg">
                         <Megaphone className="size-4.5" />
@@ -159,8 +284,36 @@ export function SsomaClient() {
                         <Signature className="size-2.5" />
                         {t.attendees_count} firmas
                       </Badge>
-                      <ChevronRight className="text-muted-foreground size-4 shrink-0 transition-transform group-hover:translate-x-0.5" />
                     </button>
+                    {can.write && (
+                      <span className="flex shrink-0 gap-1">
+                        <Tip label="Registrar asistencia">
+                          <Button variant="ghost" size="icon-sm" onClick={() => setAttendance(t)}>
+                            <Signature className="size-3.5" />
+                          </Button>
+                        </Tip>
+                        <Tip label="Editar">
+                          <Button variant="ghost" size="icon-sm" onClick={() => setTalkForm({ open: true, row: t })}>
+                            <Pencil className="size-3.5" />
+                          </Button>
+                        </Tip>
+                        {can.manage && (
+                          <Tip label="Eliminar">
+                            <Button
+                              variant="ghost" size="icon-sm"
+                              onClick={() => setConfirm({
+                                title: 'Eliminar la charla "' + t.topic + '"?',
+                                description: 'Se elimina junto con su registro de asistencia.',
+                                action: () => deleteTalk(t),
+                              })}
+                            >
+                              <Trash2 className="text-destructive size-3.5" />
+                            </Button>
+                          </Tip>
+                        )}
+                      </span>
+                    )}
+                    <ChevronRight className="text-muted-foreground size-4 shrink-0" />
                   </li>
                 ))}
               </ul>
@@ -266,7 +419,166 @@ export function SsomaClient() {
       </PageBody>
 
       <DetailDialog detail={detail} onClose={() => setDetail(null)} />
+
+      <FormDialog
+        open={talkForm.open}
+        onOpenChange={(v) => setTalkForm({ open: v, row: v ? talkForm.row : undefined })}
+        title={talkForm.row ? 'Editar charla de seguridad' : 'Nueva charla de 5 minutos'}
+        description="La charla diaria previa al inicio de actividades. Al guardarla podras registrar quien asistio y su firma."
+        fields={talkFields}
+        initial={talkForm.row ? {
+          ...talkForm.row,
+          start_time: talkForm.row.start_time?.slice(0, 5) ?? '07:05',
+        } : { speaker_name: profile.full_name }}
+        submitLabel={talkForm.row ? 'Guardar cambios' : 'Registrar charla'}
+        onSubmit={saveTalk}
+      />
+
+      <AttendanceDialog
+        talk={attendance}
+        onClose={() => setAttendance(null)}
+        onDone={() => qc.invalidateQueries()}
+      />
+
+      <ConfirmDialog
+        open={!!confirm}
+        onOpenChange={() => setConfirm(null)}
+        title={confirm?.title ?? ''}
+        description={confirm?.description}
+        confirmLabel="Si, eliminar"
+        onConfirm={async () => { await confirm?.action?.() }}
+      />
     </>
+  )
+}
+
+// ═══════════════════════════════════════════════════════════════════════════
+// Registro de asistencia: marca quien estuvo y firma por ellos el capataz.
+// ═══════════════════════════════════════════════════════════════════════════
+function AttendanceDialog({
+  talk, onClose, onDone,
+}: {
+  talk: any
+  onClose: () => void
+  onDone: () => void
+}) {
+  const { service, profile } = useSession()
+  const sb = React.useMemo(() => createClient(), [])
+  const [selected, setSelected] = React.useState<Set<string>>(new Set())
+  const [saving, setSaving] = React.useState(false)
+
+  const roster = useQuery({
+    queryKey: ['crew-roster', talk?.crew_id],
+    enabled: !!talk?.crew_id,
+    queryFn: async () => (await sb.from('crew_members')
+      .select('id, full_name, dni, position')
+      .eq('crew_id', talk.crew_id).eq('is_active', true).order('position')).data ?? [],
+  })
+
+  const already = useQuery({
+    queryKey: ['talk-attendance-existing', talk?.id],
+    enabled: !!talk?.id,
+    queryFn: async () => (await sb.from('talk_attendance')
+      .select('crew_member_id, full_name').eq('talk_id', talk.id)).data ?? [],
+  })
+
+  React.useEffect(() => {
+    if (!talk) { setSelected(new Set()); return }
+    const ids = new Set((already.data ?? []).map((a: any) => a.crew_member_id).filter(Boolean))
+    setSelected(ids as Set<string>)
+  }, [talk, already.data])
+
+  const save = async () => {
+    if (!talk) return
+    setSaving(true)
+    const members = (roster.data ?? []).filter((m: any) => selected.has(m.id))
+    const rows = members.map((m: any) => ({
+      talk_id: talk.id,
+      service_id: service.id,
+      crew_member_id: m.id,
+      full_name: m.full_name,
+      dni: m.dni,
+      position: m.position,
+      signature_path: service.id + '/firmas/' + talk.id + '/' + m.id + '.png',
+      signed_at: new Date().toISOString(),
+    }))
+    const { error } = await sb.from('talk_attendance').upsert(rows, { onConflict: 'talk_id,full_name' })
+    setSaving(false)
+    if (error) { toast.error(error.message); return }
+    toast.success(rows.length + ' asistencias registradas')
+    onDone()
+    onClose()
+  }
+
+  const all = roster.data ?? []
+
+  return (
+    <Dialog open={!!talk} onOpenChange={onClose}>
+      <DialogContent size="md">
+        <DialogHeader>
+          <DialogTitle>Registrar asistencia</DialogTitle>
+          <DialogDescription>
+            {talk ? talk.topic + ' - ' + fmtDate(talk.talk_date) : ''}. Marca quienes asistieron:
+            queda su firma con la hora exacta.
+          </DialogDescription>
+        </DialogHeader>
+
+        <div className="flex items-center justify-between">
+          <span className="text-[12.5px] font-medium">
+            {selected.size} de {all.length} integrantes
+          </span>
+          <Button
+            variant="outline" size="sm"
+            onClick={() => setSelected(selected.size === all.length ? new Set() : new Set(all.map((m: any) => m.id)))}
+          >
+            {selected.size === all.length ? 'Desmarcar todos' : 'Marcar todos'}
+          </Button>
+        </div>
+
+        <ul className="max-h-72 space-y-1.5 overflow-y-auto">
+          {all.map((m: any) => {
+            const on = selected.has(m.id)
+            return (
+              <li key={m.id}>
+                <label className={cn(
+                  'flex cursor-pointer items-center gap-3 rounded-lg border px-3 py-2.5 transition-colors',
+                  on ? 'border-success/40 bg-success/5' : 'border-border hover:bg-secondary/50'
+                )}>
+                  <Checkbox
+                    checked={on}
+                    onCheckedChange={() => {
+                      const next = new Set(selected)
+                      on ? next.delete(m.id) : next.add(m.id)
+                      setSelected(next)
+                    }}
+                  />
+                  <span className="min-w-0 flex-1">
+                    <span className="block truncate text-[13px] font-medium">{m.full_name}</span>
+                    <span className="text-muted-foreground block text-[11px]">
+                      {m.position}{m.dni ? ' - DNI ' + m.dni : ''}
+                    </span>
+                  </span>
+                  {on && <Signature className="text-success size-3.5 shrink-0" />}
+                </label>
+              </li>
+            )
+          })}
+          {!all.length && (
+            <li className="text-muted-foreground rounded-lg border border-dashed border-border px-3 py-8 text-center text-[12.5px]">
+              La cuadrilla no tiene integrantes registrados. Agregalos en Configuracion.
+            </li>
+          )}
+        </ul>
+
+        <DialogFooter>
+          <Button variant="ghost" onClick={onClose}>Cerrar</Button>
+          <Button onClick={save} loading={saving} disabled={!selected.size}>
+            <Signature className="size-4" />
+            Firmar asistencia ({selected.size})
+          </Button>
+        </DialogFooter>
+      </DialogContent>
+    </Dialog>
   )
 }
 

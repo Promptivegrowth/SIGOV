@@ -797,6 +797,215 @@ export type Database = {
           },
         ]
       }
+      documents: {
+        Row: {
+          created_at: string
+          created_by: string | null
+          deleted_at: string | null
+          description: string | null
+          doc_date: string | null
+          file_name: string
+          id: string
+          kind: Database["public"]["Enums"]["document_kind"]
+          mime_type: string | null
+          pci_id: string | null
+          section_id: string | null
+          service_id: string
+          size_bytes: number | null
+          storage_path: string
+          tags: string[]
+          title: string
+          updated_at: string
+          work_order_id: string | null
+        }
+        Insert: {
+          created_at?: string
+          created_by?: string | null
+          deleted_at?: string | null
+          description?: string | null
+          doc_date?: string | null
+          file_name: string
+          id?: string
+          kind?: Database["public"]["Enums"]["document_kind"]
+          mime_type?: string | null
+          pci_id?: string | null
+          section_id?: string | null
+          service_id: string
+          size_bytes?: number | null
+          storage_path: string
+          tags?: string[]
+          title: string
+          updated_at?: string
+          work_order_id?: string | null
+        }
+        Update: {
+          created_at?: string
+          created_by?: string | null
+          deleted_at?: string | null
+          description?: string | null
+          doc_date?: string | null
+          file_name?: string
+          id?: string
+          kind?: Database["public"]["Enums"]["document_kind"]
+          mime_type?: string | null
+          pci_id?: string | null
+          section_id?: string | null
+          service_id?: string
+          size_bytes?: number | null
+          storage_path?: string
+          tags?: string[]
+          title?: string
+          updated_at?: string
+          work_order_id?: string | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "documents_created_by_fkey"
+            columns: ["created_by"]
+            isOneToOne: false
+            referencedRelation: "profiles"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "documents_pci_id_fkey"
+            columns: ["pci_id"]
+            isOneToOne: false
+            referencedRelation: "pcis"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "documents_section_id_fkey"
+            columns: ["section_id"]
+            isOneToOne: false
+            referencedRelation: "road_sections"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "documents_service_id_fkey"
+            columns: ["service_id"]
+            isOneToOne: false
+            referencedRelation: "services"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "documents_work_order_id_fkey"
+            columns: ["work_order_id"]
+            isOneToOne: false
+            referencedRelation: "work_orders"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      evidence_links: {
+        Row: {
+          asset_id: string | null
+          created_at: string
+          created_by: string | null
+          evidence_id: string
+          id: string
+          note: string | null
+          pci_item_id: string | null
+          service_id: string
+          talk_id: string | null
+          work_entry_id: string | null
+        }
+        Insert: {
+          asset_id?: string | null
+          created_at?: string
+          created_by?: string | null
+          evidence_id: string
+          id?: string
+          note?: string | null
+          pci_item_id?: string | null
+          service_id: string
+          talk_id?: string | null
+          work_entry_id?: string | null
+        }
+        Update: {
+          asset_id?: string | null
+          created_at?: string
+          created_by?: string | null
+          evidence_id?: string
+          id?: string
+          note?: string | null
+          pci_item_id?: string | null
+          service_id?: string
+          talk_id?: string | null
+          work_entry_id?: string | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "evidence_links_asset_id_fkey"
+            columns: ["asset_id"]
+            isOneToOne: false
+            referencedRelation: "road_assets"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "evidence_links_asset_id_fkey"
+            columns: ["asset_id"]
+            isOneToOne: false
+            referencedRelation: "v_road_assets"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "evidence_links_created_by_fkey"
+            columns: ["created_by"]
+            isOneToOne: false
+            referencedRelation: "profiles"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "evidence_links_evidence_id_fkey"
+            columns: ["evidence_id"]
+            isOneToOne: false
+            referencedRelation: "evidences"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "evidence_links_pci_item_id_fkey"
+            columns: ["pci_item_id"]
+            isOneToOne: false
+            referencedRelation: "pci_items"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "evidence_links_pci_item_id_fkey"
+            columns: ["pci_item_id"]
+            isOneToOne: false
+            referencedRelation: "v_pci_items"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "evidence_links_service_id_fkey"
+            columns: ["service_id"]
+            isOneToOne: false
+            referencedRelation: "services"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "evidence_links_talk_id_fkey"
+            columns: ["talk_id"]
+            isOneToOne: false
+            referencedRelation: "safety_talks"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "evidence_links_work_entry_id_fkey"
+            columns: ["work_entry_id"]
+            isOneToOne: false
+            referencedRelation: "v_work_entries"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "evidence_links_work_entry_id_fkey"
+            columns: ["work_entry_id"]
+            isOneToOne: false
+            referencedRelation: "work_entries"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       evidences: {
         Row: {
           accuracy_m: number | null
@@ -2913,6 +3122,10 @@ export type Database = {
         }
         Returns: Json
       }
+      buscar: {
+        Args: { p_limit?: number; p_q: string; p_service_id: string }
+        Returns: Json
+      }
       can_manage: { Args: { sid: string }; Returns: boolean }
       can_write: { Args: { sid: string }; Returns: boolean }
       dashboard_activity_production: {
@@ -2956,6 +3169,32 @@ export type Database = {
         Returns: Json
       }
       evaluate_pci_deadlines: { Args: never; Returns: Json }
+      evidence_gallery: {
+        Args: {
+          p_from?: string
+          p_limit?: number
+          p_search?: string
+          p_service_id: string
+          p_to?: string
+        }
+        Returns: {
+          accuracy_m: number
+          activity_name: string
+          caption: string
+          crew_name: string
+          id: string
+          lat: number
+          lng: number
+          phase: Database["public"]["Enums"]["evidence_phase"]
+          progresiva_txt: string
+          section_name: string
+          sha256: string
+          size_bytes: number
+          storage_path: string
+          taken_at: string
+          usos: number
+        }[]
+      }
       evidences_geojson: {
         Args: {
           p_from?: string
@@ -3009,6 +3248,17 @@ export type Database = {
     }
     Enums: {
       asset_condition: "bueno" | "regular" | "malo" | "critico" | "no_evaluado"
+      document_kind:
+        | "contrato"
+        | "pci"
+        | "programacion"
+        | "reporte"
+        | "ssoma"
+        | "plano"
+        | "acta"
+        | "fotografico"
+        | "normativa"
+        | "otro"
       evidence_phase: "antes" | "durante" | "despues" | "general"
       pci_item_status:
         | "pendiente"
@@ -3174,6 +3424,18 @@ export const Constants = {
   public: {
     Enums: {
       asset_condition: ["bueno", "regular", "malo", "critico", "no_evaluado"],
+      document_kind: [
+        "contrato",
+        "pci",
+        "programacion",
+        "reporte",
+        "ssoma",
+        "plano",
+        "acta",
+        "fotografico",
+        "normativa",
+        "otro",
+      ],
       evidence_phase: ["antes", "durante", "despues", "general"],
       pci_item_status: [
         "pendiente",

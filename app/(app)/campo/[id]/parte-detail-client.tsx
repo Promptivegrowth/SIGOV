@@ -6,7 +6,7 @@ import { useQuery, useQueryClient } from '@tanstack/react-query'
 import { motion, AnimatePresence } from 'motion/react'
 import {
   ArrowLeft, Plus, Camera, Send, CircleCheck, CircleX, MapPin,
-  Trash2, Clock, CloudUpload, TriangleAlert, ChevronDown, Ruler,
+  Trash2, Clock, CloudUpload, TriangleAlert, ChevronDown, Ruler, Pencil,
 } from 'lucide-react'
 import { createClient } from '@/lib/supabase/client'
 import { useSession } from '@/lib/hooks/use-session'
@@ -19,6 +19,8 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter, DialogDescription } from '@/components/ui/dialog'
 import { SkeletonList } from '@/components/ui/skeleton'
 import { EmptyState, Progresiva } from '@/components/shared/misc'
+import { ConfirmDialog } from '@/components/forms/form-dialog'
+import { Tip } from '@/components/ui/primitives'
 import { CameraCapture } from '@/components/campo/camera-capture'
 import { EvidenceGrid } from '@/components/campo/evidence-grid'
 import { WORK_ORDER_STATUS, EVIDENCE_PHASE } from '@/lib/constants'
@@ -35,6 +37,16 @@ export function ParteDetailClient({ orderId }: { orderId: string }) {
   const [entryOpen, setEntryOpen] = React.useState(false)
   const [cameraFor, setCameraFor] = React.useState<any>(null)
   const [reviewOpen, setReviewOpen] = React.useState(false)
+  const [editEntry, setEditEntry] = React.useState<any>(null)
+  const [confirm, setConfirm] = React.useState<any>(null)
+
+  const deleteEntry = async (entry: any) => {
+    const { error } = await sb.from('work_entries')
+      .update({ deleted_at: new Date().toISOString() }).eq('id', entry.id)
+    if (error) { toast.error(error.message); return }
+    toast.success('Registro eliminado')
+    qc.invalidateQueries({ queryKey: ['work-entries', orderId] })
+  }
 
   const order = useQuery({
     queryKey: ['work-order', orderId],
@@ -241,6 +253,27 @@ export function ParteDetailClient({ orderId }: { orderId: string }) {
                         </div>
                         <div className="text-muted-foreground text-[10.5px]">{e.unit_symbol}</div>
                       </div>
+                      {editable && isOwner && (
+                        <div className="flex shrink-0 gap-1">
+                          <Tip label="Editar registro">
+                            <Button variant="ghost" size="icon-sm" onClick={() => setEditEntry(e)}>
+                              <Pencil className="size-3.5" />
+                            </Button>
+                          </Tip>
+                          <Tip label="Eliminar registro">
+                            <Button
+                              variant="ghost" size="icon-sm"
+                              onClick={() => setConfirm({
+                                title: 'Eliminar el registro de ' + e.activity_name + '?',
+                                description: 'Se retira del parte. Las evidencias asociadas se conservan en el archivo.',
+                                action: () => deleteEntry(e),
+                              })}
+                            >
+                              <Trash2 className="text-destructive size-3.5" />
+                            </Button>
+                          </Tip>
+                        </div>
+                      )}
                     </div>
 
                     <EvidenceGrid
@@ -248,6 +281,14 @@ export function ParteDetailClient({ orderId }: { orderId: string }) {
                       count={e.evidence_count}
                       canAdd={editable && isOwner}
                       onAdd={() => setCameraFor(e)}
+                      label={e.activity_name + ' en ' + e.section_name}
+                      context={{
+                        actividad: e.activity_name,
+                        tramo: e.section_name,
+                        progresivaM: e.prog_start_m,
+                        sectionId: e.section_id,
+                        cuadrilla: o?.crews?.name,
+                      }}
                     />
                   </CardContent>
                 </Card>
@@ -325,6 +366,29 @@ export function ParteDetailClient({ orderId }: { orderId: string }) {
         }}
       />
 
+      {/* ── Edición de un registro ───────────────────────────────────── */}
+      <EntryDialog
+        open={!!editEntry}
+        onOpenChange={(v) => !v && setEditEntry(null)}
+        orderId={orderId}
+        serviceId={service.id}
+        catalogs={catalogs.data}
+        editing={editEntry}
+        onCreated={() => {
+          qc.invalidateQueries({ queryKey: ['work-entries', orderId] })
+          setEditEntry(null)
+        }}
+      />
+
+      <ConfirmDialog
+        open={!!confirm}
+        onOpenChange={() => setConfirm(null)}
+        title={confirm?.title ?? ''}
+        description={confirm?.description}
+        confirmLabel="Si, eliminar"
+        onConfirm={async () => { await confirm?.action?.() }}
+      />
+
       {/* ── Revisión del supervisor ──────────────────────────────────── */}
       <ReviewDialog open={reviewOpen} onOpenChange={setReviewOpen} onReview={review} />
     </>
@@ -333,7 +397,7 @@ export function ParteDetailClient({ orderId }: { orderId: string }) {
 
 // ═══════════════════════════════════════════════════════════════════════════
 function EntryDialog({
-  open, onOpenChange, orderId, serviceId, catalogs, onCreated,
+  open, onOpenChange, orderId, serviceId, catalogs, onCreated, editing,
 }: {
   open: boolean
   onOpenChange: (v: boolean) => void
@@ -341,6 +405,7 @@ function EntryDialog({
   serviceId: string
   catalogs?: { activities: any[]; sections: any[]; units: any[] }
   onCreated: () => void
+  editing?: any
 }) {
   const { profile } = useSession()
   const sb = React.useMemo(() => createClient(), [])
@@ -353,6 +418,23 @@ function EntryDialog({
   const [obs, setObs] = React.useState('')
   const [saving, setSaving] = React.useState(false)
   const [gpsBusy, setGpsBusy] = React.useState(false)
+
+  // Al abrir en modo edicion se precargan los valores del registro
+  React.useEffect(() => {
+    if (!open) return
+    if (editing) {
+      setActivityId(editing.activity_id ?? '')
+      setSectionId(editing.section_id ?? '')
+      setProgIni(fmtProgresiva(editing.prog_start_m))
+      setProgFin(editing.prog_end_m ? fmtProgresiva(editing.prog_end_m) : '')
+      setSide(editing.side ?? 'derecho')
+      setQty(String(editing.quantity ?? ''))
+      setObs(editing.observation ?? '')
+    } else {
+      setActivityId(''); setSectionId(''); setProgIni('')
+      setProgFin(''); setSide('derecho'); setQty(''); setObs('')
+    }
+  }, [open, editing])
 
   const activity = catalogs?.activities.find((a) => a.id === activityId)
   const section = catalogs?.sections.find((s) => s.id === sectionId)
@@ -386,16 +468,29 @@ function EntryDialog({
       return toast.error('Completa actividad, tramo, progresiva y metrado')
     }
     setSaving(true)
-    const clientId = uuid()
-    let lat: number | null = null
-    let lng: number | null = null
-    try {
-      const fix = await getGpsFix({ timeout: 8000 })
-      lat = fix.lat
-      lng = fix.lng
-    } catch {
-      /* el registro puede guardarse sin punto exacto; la evidencia sí lo exige */
+
+    // Edicion: va directo al servidor, no pasa por la cola offline
+    if (editing) {
+      const { error } = await sb.from('work_entries').update({
+        activity_id: activityId,
+        section_id: sectionId,
+        prog_start_m: parseProgresiva(progIni) ?? 0,
+        prog_end_m: progFin ? (parseProgresiva(progFin) ?? undefined) : undefined,
+        side: side as any,
+        quantity: Number(qty),
+        unit_id: activity?.unit_id ?? null,
+        observation: obs || null,
+      }).eq('id', editing.id)
+      setSaving(false)
+      if (error) { toast.error(error.message); return }
+      haptic(40)
+      toast.success('Registro actualizado')
+      onCreated()
+      onOpenChange(false)
+      return
     }
+
+    const clientId = uuid()
 
     const payload: any = {
       client_id: clientId,
@@ -441,9 +536,11 @@ function EntryDialog({
     <Dialog open={open} onOpenChange={onOpenChange}>
       <DialogContent size="md">
         <DialogHeader>
-          <DialogTitle>Registrar actividad ejecutada</DialogTitle>
+          <DialogTitle>{editing ? 'Editar registro' : 'Registrar actividad ejecutada'}</DialogTitle>
           <DialogDescription>
-            Se guarda primero en el dispositivo. Si no hay señal, se envía automáticamente al recuperarla.
+            {editing
+              ? 'Corrige los datos del registro. Las evidencias ya capturadas se conservan.'
+              : 'Se guarda primero en el dispositivo. Si no hay señal, se envía automáticamente al recuperarla.'}
           </DialogDescription>
         </DialogHeader>
 
@@ -536,7 +633,7 @@ function EntryDialog({
           <Button variant="ghost" onClick={() => onOpenChange(false)}>Cancelar</Button>
           <Button onClick={save} loading={saving}>
             <CircleCheck className="size-4" />
-            Guardar registro
+            {editing ? 'Guardar cambios' : 'Guardar registro'}
           </Button>
         </DialogFooter>
       </DialogContent>
