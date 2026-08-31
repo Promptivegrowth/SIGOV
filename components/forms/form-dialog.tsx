@@ -60,15 +60,24 @@ export function FormDialog({
   const [errors, setErrors] = React.useState<Record<string, string>>({})
   const [saving, setSaving] = React.useState(false)
 
+  // `fields` e `initial` se crean nuevos en cada render del padre. Si el efecto
+  // dependiera de ellos, cualquier refresco en segundo plano borraría lo que el
+  // usuario está escribiendo: el formulario solo se rellena al abrirse o al
+  // cambiar el registro que se edita.
+  const fieldsRef = React.useRef(fields)
+  const initialRef = React.useRef(initial)
+  fieldsRef.current = fields
+  initialRef.current = initial
+
   React.useEffect(() => {
     if (!open) return
     const base: Record<string, any> = {}
-    for (const f of fields) {
-      base[f.name] = initial?.[f.name] ?? f.defaultValue ?? (f.type === 'switch' ? true : '')
+    for (const f of fieldsRef.current) {
+      base[f.name] = initialRef.current?.[f.name] ?? f.defaultValue ?? (f.type === 'switch' ? true : '')
     }
     setValues(base)
     setErrors({})
-  }, [open, initial, fields])
+  }, [open, initial?.id])
 
   const set = (name: string, v: any) => {
     setValues((prev) => ({ ...prev, [name]: v }))

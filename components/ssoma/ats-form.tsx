@@ -17,6 +17,7 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@
 import { Checkbox } from '@/components/ui/primitives'
 import { SignaturePadDialog } from '@/components/shared/signature-pad'
 import { enqueue, enqueueBlob } from '@/lib/offline/db'
+import { conRespaldoLocal, espejo } from '@/lib/offline/catalogos'
 import { syncNow } from '@/lib/offline/sync'
 import { getGpsFix } from '@/lib/camera'
 import { cn, uuid, toISODate, parseProgresiva, fmtProgresiva } from '@/lib/utils'
@@ -107,30 +108,48 @@ export function AtsForm({
   const catalogos = useQuery({
     queryKey: ['ats-catalogos', service.id],
     enabled: open,
-    queryFn: async () => {
-      const [crews, sections, members] = await Promise.all([
-        sb.from('crews').select('id, name, color').eq('service_id', service.id).is('deleted_at', null).order('code'),
-        sb.from('road_sections').select('id, code, name').eq('service_id', service.id).is('deleted_at', null).order('code'),
-        sb.from('service_members').select('profile_id, role, profiles(id, full_name)').eq('service_id', service.id),
-      ])
-      return {
-        crews: crews.data ?? [],
-        sections: sections.data ?? [],
-        supervisores: (members.data ?? [])
-          .filter((m: any) => ['admin', 'coordinador', 'ingeniero', 'inspector'].includes(m.role))
-          .map((m: any) => ({ id: m.profiles?.id, name: m.profiles?.full_name }))
-          .filter((m: any) => m.id),
-      }
-    },
+    // El ATS se llena al pie del frente, muchas veces sin señal: los catálogos
+    // caen al espejo local y el supervisor pasa a ser quien está ahí firmando.
+    queryFn: () => conRespaldoLocal(
+      async () => {
+        const [crews, sections, members] = await Promise.all([
+          sb.from('crews').select('id, name, color').eq('service_id', service.id).is('deleted_at', null).order('code'),
+          sb.from('road_sections').select('id, code, name').eq('service_id', service.id).is('deleted_at', null).order('code'),
+          sb.from('service_members').select('profile_id, role, profiles(id, full_name)').eq('service_id', service.id),
+        ])
+        if (crews.error) throw crews.error
+        return {
+          crews: crews.data ?? [],
+          sections: sections.data ?? [],
+          supervisores: (members.data ?? [])
+            .filter((m: any) => ['admin', 'coordinador', 'ingeniero', 'inspector'].includes(m.role))
+            .map((m: any) => ({ id: m.profiles?.id, name: m.profiles?.full_name }))
+            .filter((m: any) => m.id),
+        }
+      },
+      async () => ({
+        crews: await espejo('crews', service.id),
+        sections: await espejo('road_sections', service.id),
+        supervisores: [{ id: profile.id, name: profile.full_name }],
+      })
+    ),
     staleTime: 5 * 60_000,
   })
 
   const roster = useQuery({
     queryKey: ['crew-roster', crewId],
     enabled: !!crewId,
-    queryFn: async () => (await sb.from('crew_members')
-      .select('id, full_name, dni, position')
-      .eq('crew_id', crewId).eq('is_active', true).order('position')).data ?? [],
+    queryFn: () => conRespaldoLocal(
+      async () => {
+        const { data, error } = await sb.from('crew_members')
+          .select('id, full_name, dni, position')
+          .eq('crew_id', crewId).eq('is_active', true).order('position')
+        if (error) throw error
+        return data ?? []
+      },
+      async () => (await espejo<any>('crew_members', service.id, 'position'))
+        .filter((m: any) => m.crew_id === crewId && m.is_active !== false)
+    ),
   })
 
   React.useEffect(() => {

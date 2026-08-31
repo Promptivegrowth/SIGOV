@@ -98,7 +98,15 @@ const shot = (page, name) => page.screenshot({ path: path.join(SHOTS, `${name}.p
 /** Espera un toast de éxito de sonner (no de error). */
 async function expectToast(page, re, timeout = 20000) {
   const toast = page.locator('[data-sonner-toast]').filter({ hasText: re }).first()
-  await toast.waitFor({ state: 'visible', timeout })
+  try {
+    await toast.waitFor({ state: 'visible', timeout })
+  } catch {
+    // Saber QUÉ avisó la app vale más que un timeout pelado
+    const vistos = await page.locator('[data-sonner-toast]').allInnerTexts().catch(() => [])
+    throw new Error(
+      `No salió el aviso ${re}. Avisos en pantalla: ${vistos.length ? vistos.map((t) => t.replace(/\s+/g, ' ')).join(' // ') : 'ninguno'}`
+    )
+  }
   const type = await toast.getAttribute('data-type')
   assert(type !== 'error', `El aviso salió como error: ${(await toast.innerText()).slice(0, 120)}`)
   return (await toast.innerText()).replace(/\n/g, ' · ').slice(0, 90)
@@ -201,22 +209,44 @@ async function main() {
   let ctx = null
   let page = null
 
-  /** Abre una sesión limpia con el rol pedido (sin arrastrar la anterior). */
-  async function entrar(email, label) {
+  // Supabase limita los intentos de acceso seguidos, y esta suite cambia de
+  // rol muchas veces. Se guarda la sesión de cada usuario y se reutiliza.
+  const sesiones = new Map()
+
+  /** Abre una ventana limpia con el rol pedido, sin arrastrar la anterior. */
+  async function entrar(email, label, extra = {}) {
     if (ctx) await ctx.close()
     ctx = await browser.newContext({
       viewport: { width: 1440, height: 900 },
       locale: 'es-PE',
       permissions: ['geolocation'],
       geolocation: { latitude: -10.6712, longitude: -77.7902 },
+      ...(sesiones.has(email) ? { storageState: sesiones.get(email) } : {}),
+      ...extra,
     })
     page = await ctx.newPage()
     watch(page, label)
+
+    if (sesiones.has(email)) {
+      // 'networkidle' no sirve aquí: el dashboard mantiene una conexión viva
+      await page.goto(`${BASE}/dashboard`, { waitUntil: 'domcontentloaded' })
+      await page.waitForTimeout(2500)
+      if (!/\/login/.test(page.url())) return page
+    }
     await login(page, email)
+    sesiones.set(email, await ctx.storageState())
     return page
   }
 
   const FOTO = fotoDePrueba()
+
+  // El servidor de desarrollo compila cada ruta la primera vez que se visita:
+  // se recorren antes para que los tiempos de espera midan la app, no al bundler.
+  await entrar('admin@sigov.dev', 'calentamiento')
+  for (const ruta of ['/ssoma', '/inventario', '/configuracion', '/campo']) {
+    await page.goto(`${BASE}${ruta}`, { waitUntil: 'networkidle' }).catch(() => {})
+    await page.waitForTimeout(500)
+  }
 
   // ─── 1 · CHECKLIST ──────────────────────────────────────────────────────
   section('1 · Responder un checklist desde la interfaz')
@@ -509,11 +539,18 @@ async function main() {
   await step('La ficha del elemento ofrece registrar intervención', async () => {
     await buscarElemento(page, assetCode, { abrir: true })
     const d = page.getByRole('dialog')
-    const t = await d.innerText()
-    assert(/Historial de intervenciones/i.test(t), 'La ficha no muestra el historial')
-    assert(/Todavía no se ha registrado/i.test(t), 'El historial debería estar vacío')
+    assert(/Historial de intervenciones/i.test(await d.innerText()), 'La ficha no muestra el historial')
+
+    // El historial se consulta al abrir: se espera a que termine de cargar
+    let t = ''
+    for (let i = 0; i < 15; i++) {
+      t = await d.innerText()
+      if (!/Cargando…/.test(t)) break
+      await page.waitForTimeout(700)
+    }
+    assert(/Todavía no se ha registrado/i.test(t), `El historial debería estar vacío: ${t.slice(-160)}`)
     await d.getByRole('button', { name: /Registrar intervención/i }).click()
-    await page.waitForTimeout(800)
+    await page.waitForTimeout(900)
   })
 
   await step('La intervención pide qué se hizo y en qué estado queda', async () => {
@@ -537,7 +574,13 @@ async function main() {
   await step('El historial del elemento ya muestra la intervención', async () => {
     await page.waitForTimeout(2500)
     await buscarElemento(page, assetCode, { abrir: true })
-    const t = await page.getByRole('dialog').innerText()
+    const d = page.getByRole('dialog')
+    let t = ''
+    for (let i = 0; i < 15; i++) {
+      t = await d.innerText()
+      if (!/Cargando…/.test(t) && /Limpieza/i.test(t)) break
+      await page.waitForTimeout(700)
+    }
     assert(/Limpieza/i.test(t), 'La intervención no figura en el historial')
     assert(/Bueno/i.test(t), 'El estado no se actualizó a bueno')
     await shot(page, '09-historial-intervenciones')
@@ -608,7 +651,15 @@ async function main() {
     await d.getByPlaceholder('356+000').fill('0+000')
     await d.getByPlaceholder('392+500').fill('9+000')
     await d.getByRole('button', { name: /Crear|Guardar/i }).last().click()
-    const msg = await expectToast(page, /Tramo creado/i, 20000)
+    let msg
+    try {
+      msg = await expectToast(page, /Tramo creado/i, 20000)
+    } catch (e) {
+      // Si no guardó, lo útil es ver qué quedó en pantalla
+      await shot(page, '_fallo-tramo-nuevo')
+      const dlg = await page.getByRole('dialog').first().innerText().catch(() => '(sin diálogo)')
+      throw new Error(`${e.message} · diálogo: ${dlg.replace(/\s+/g, ' ').slice(0, 300)}`)
+    }
     await page.waitForTimeout(1800)
     const t = await page.locator('tbody').innerText()
     assert(t.includes(tramoPrueba), 'El tramo nuevo no aparece en la tabla')
@@ -708,19 +759,12 @@ async function main() {
 
   // ─── 8 · EN EL CELULAR ──────────────────────────────────────────────────
   section('8 · Los formularios nuevos en un celular de 390 px')
-  if (ctx) await ctx.close()
-  ctx = await browser.newContext({
+  await entrar('cuadrilla1@sigov.dev', 'movil', {
     viewport: { width: 390, height: 844 },
     deviceScaleFactor: 3,
     isMobile: true,
     hasTouch: true,
-    locale: 'es-PE',
-    permissions: ['geolocation'],
-    geolocation: { latitude: -10.6712, longitude: -77.7902 },
   })
-  page = await ctx.newPage()
-  watch(page, 'movil')
-  await login(page, 'cuadrilla1@sigov.dev')
 
   /** Comprueba que ni la página ni el diálogo se salgan de la pantalla. */
   async function sinDesborde(nombre) {
@@ -743,8 +787,9 @@ async function main() {
     const t = await page.locator('main').innerText()
     assert(/ATS/i.test(t) && /Checklist/i.test(t), 'faltan los accesos a ATS y checklist')
     await page.getByRole('link', { name: /^ATS$/i }).click()
-    await page.waitForURL(/ssoma/, { timeout: 20000 })
-    await page.getByRole('dialog').waitFor({ state: 'visible', timeout: 20000 })
+    // Basta con esperar el formulario: la navegación es del lado del cliente
+    await page.getByRole('dialog').waitFor({ state: 'visible', timeout: 25000 })
+    await page.waitForTimeout(700)
     await shot(page, '13-movil-ats')
     return await sinDesborde('ATS')
   })
@@ -753,9 +798,8 @@ async function main() {
     await page.goto(`${BASE}/campo`, { waitUntil: 'networkidle' })
     await page.waitForTimeout(1200)
     await page.getByRole('link', { name: /^Checklist$/i }).click()
-    await page.waitForURL(/ssoma/, { timeout: 20000 })
-    await page.getByRole('dialog').waitFor({ state: 'visible', timeout: 20000 })
-    await page.waitForTimeout(800)
+    await page.getByRole('dialog').waitFor({ state: 'visible', timeout: 25000 })
+    await page.waitForTimeout(900)
     await shot(page, '14-movil-checklist')
     return await sinDesborde('checklist')
   })
@@ -789,24 +833,135 @@ async function main() {
     return desborde
   })
 
+  // ─── 9 · SIN SEÑAL ──────────────────────────────────────────────────────
+  // Lo que más se promete de esta app: que en el kilómetro 40, sin Starlink,
+  // no se pierda nada. Aquí se corta la red de verdad y se comprueba.
+  section('9 · Checklist y ATS sin señal')
+  await entrar('cuadrilla1@sigov.dev', 'offline')
+  await page.goto(`${BASE}/ssoma`, { waitUntil: 'networkidle' })
+  // Se le da tiempo a la primera sincronización: es la que deja los catálogos
+  // (plantillas, cuadrillas, personal) copiados en el dispositivo.
+  await page.waitForTimeout(8000)
+
+  const tareaOffline = `Prueba ATS offline ${SELLO}`
+
+  await step('Se corta la red y el checklist igual se llena', async () => {
+    await page.getByRole('tab', { name: /Checklists/i }).click()
+    await page.waitForTimeout(1200)
+    await page.getByRole('button', { name: /Responder checklist/i }).click()
+    const d = page.getByRole('dialog')
+    await d.waitFor({ state: 'visible', timeout: 10000 })
+    await pickSelect(page, d.getByRole('combobox').first(), /Verificación de EPP/i)
+    await page.waitForTimeout(800)
+
+    // A partir de aquí no hay internet
+    await ctx.setOffline(true)
+
+    const btns = d.getByRole('button', { name: /^Conforme$/i })
+    const n = await btns.count()
+    for (let i = 0; i < n - 1; i++) await btns.nth(i).click()
+    await d.getByRole('button', { name: /^No conforme$/i }).last().click()
+    await page.waitForTimeout(300)
+
+    const foto = d.getByRole('button', { name: /Tomar o subir foto/i })
+    if (await foto.count()) {
+      await d.locator('input[type="file"][accept="image/*"]').first().setInputFiles(FOTO)
+      await expectToast(page, /Foto sellada/i, 30000)
+    }
+    const libres = d.locator('textarea')
+    for (let i = 0; i < (await libres.count()); i++) {
+      await libres.nth(i).fill(`Sin novedad · offline ${SELLO}`)
+    }
+    return 'sin conexión, la foto se sella igual en el equipo'
+  })
+
+  await step('Al enviarlo, se guarda en el celular y avisa que espera señal', async () => {
+    const d = page.getByRole('dialog')
+    await d.locator('textarea[placeholder^="Puntos no conformes"]')
+      .fill(`Prueba offline ${SELLO}: se detectó un punto sin conformidad.`)
+    await page.getByRole('button', { name: /^Firmar$/i }).click()
+    await firmar(page)
+    await expectToast(page, /Firma registrada/i)
+    await page.getByRole('button', { name: /Enviar checklist/i }).click()
+    const msg = await expectToast(page, /guardado en el equipo/i, 25000)
+    await shot(page, '18-offline-checklist')
+    return msg
+  })
+
+  await step('El ATS también se arma y se encola sin conexión', async () => {
+    await page.getByRole('tab', { name: /ATS/i }).click()
+    await page.waitForTimeout(1000)
+    await page.getByRole('button', { name: /Nuevo ATS/i }).click()
+    const d = page.getByRole('dialog')
+    await d.waitFor({ state: 'visible', timeout: 10000 })
+    await d.getByPlaceholder(/Limpieza de cunetas/i).fill(tareaOffline)
+    await pickSelect(page, d.getByRole('combobox').nth(0), /Cuadrilla/i)
+    await page.waitForTimeout(1200)
+    await d.getByRole('button', { name: /Tránsito vehicular en la vía/i }).click()
+    await page.waitForTimeout(400)
+    await d.getByRole('button', { name: /^Firmar$/i }).first().click()
+    await firmar(page)
+    await expectToast(page, /Firma registrada/i)
+    await d.getByRole('button', { name: /Registrar ATS/i }).click()
+    const msg = await expectToast(page, /guardado en el equipo/i, 25000)
+    await shot(page, '19-offline-ats')
+    return msg
+  })
+
+  await step('Vuelve el Starlink y la cola se vacía sola', async () => {
+    await ctx.setOffline(false)
+    // El navegador dispara `online` y la app sincroniza sin que nadie toque nada
+    await page.evaluate(() => window.dispatchEvent(new Event('online')))
+
+    // Se espera a que las dos filas aparezcan en la base
+    const consulta = `select
+        (select count(*) from public.checklist_responses where findings like 'Prueba offline ${SELLO}%') chk,
+        (select count(*) from public.ats_iperc where task = '${tareaOffline}') ats`
+    let r = { chk: 0, ats: 0 }
+    for (let i = 0; i < 20; i++) {
+      await page.waitForTimeout(3000)
+      const out = execFileSync(process.execPath, ['scripts/sql.mjs', 'query', consulta], { encoding: 'utf8' })
+      const m = out.match(/"chk":\s*(\d+)[\s\S]*?"ats":\s*(\d+)/)
+      if (m) r = { chk: Number(m[1]), ats: Number(m[2]) }
+      if (r.chk && r.ats) break
+    }
+    assert(r.chk === 1, `el checklist no llegó a la nube (${r.chk} filas)`)
+    assert(r.ats === 1, `el ATS no llegó a la nube (${r.ats} filas)`)
+    return 'checklist y ATS subidos sin que el usuario hiciera nada'
+  })
+
+  await step('Las firmas del ATS quedaron colgadas de su documento', async () => {
+    const consulta = `select
+        (select count(*) from public.ats_signatures sg
+          join public.ats_iperc a on a.id = sg.ats_id
+         where a.task = '${tareaOffline}') firmas,
+        (select count(*) from storage.objects
+          where bucket_id = 'firmas' and name like '%/ats/%'
+            and created_at > now() - interval '30 minutes') archivos,
+        (select count(*) from storage.objects
+          where bucket_id = 'evidencias' and name like '%/checklists/%'
+            and created_at > now() - interval '30 minutes') fotos`
+    let r = { firmas: 0, archivos: 0, fotos: 0 }
+    for (let i = 0; i < 10; i++) {
+      const out = execFileSync(process.execPath, ['scripts/sql.mjs', 'query', consulta], { encoding: 'utf8' })
+      const m = out.match(/"firmas":\s*(\d+)[\s\S]*?"archivos":\s*(\d+)[\s\S]*?"fotos":\s*(\d+)/)
+      if (m) r = { firmas: Number(m[1]), archivos: Number(m[2]), fotos: Number(m[3]) }
+      if (r.firmas && r.archivos && r.fotos) break
+      await page.waitForTimeout(3000)
+    }
+    assert(r.firmas > 0, 'las firmas del equipo no se enlazaron al ATS')
+    assert(r.archivos > 0, 'la firma del supervisor no se subió al bucket')
+    assert(r.fotos > 0, 'la foto del checklist no se subió al bucket')
+    return `${r.firmas} firmas enlazadas · ${r.archivos} archivos de firma · ${r.fotos} fotos`
+  })
+
   // ─── Limpieza ───────────────────────────────────────────────────────────
   // Estas pruebas escriben en la base real: hay que dejarla como estaba.
-  section('9 · Limpieza de los datos de prueba')
-  await step('Se borran ATS, checklists, elementos y contratos de prueba', () => {
-    const sql = [
-      `delete from public.ats_signatures where ats_id in (select id from public.ats_iperc where task like 'Prueba ATS %')`,
-      `delete from public.ats_iperc where task like 'Prueba ATS %'`,
-      `delete from public.checklist_responses where findings like 'Prueba %'`,
-      `delete from public.evidences where storage_path like '%/checklists/%' and created_at > now() - interval '3 hours'`,
-      `delete from public.asset_interventions where notes like 'Descolmatación de prueba %'`,
-      `delete from public.road_assets where name like '%de prueba %'`,
-      `delete from public.checklist_templates where code like 'TST-%'`,
-      `delete from public.services where name like 'Contrato de prueba %'`,
-      `delete from public.road_sections where name like 'Tramo de prueba %'`,
-    ].join('; ')
-    const out = execFileSync(process.execPath, ['scripts/sql.mjs', 'query', sql], { encoding: 'utf8' })
-    assert(!/error/i.test(out), out.slice(0, 200))
-    return 'base devuelta a su estado original'
+  section('10 · Limpieza de los datos de prueba')
+  await step('Se borran ATS, checklists, elementos, contratos y archivos', () => {
+    const out = execFileSync(process.execPath, ['scripts/limpiar-pruebas.mjs'], { encoding: 'utf8' })
+    assert(/base limpia/.test(out), out.slice(0, 200))
+    return out.replace(/\[\d+m/g, '').replace('✓ ', '').trim()
   })
 
   // ─── Cierre ─────────────────────────────────────────────────────────────

@@ -1,6 +1,9 @@
 'use client'
 
 import * as React from 'react'
+// Import estático a propósito: cargarlo bajo demanda dejaba al capataz sin
+// poder firmar cuando no había señal, que es justo cuando más se usa.
+import SignaturePad from 'signature_pad'
 import { Eraser, Check, PenLine } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import {
@@ -39,15 +42,22 @@ export function SignaturePadDialog({
 
   React.useEffect(() => {
     if (!open) return
-    let cancelled = false
 
-    ;(async () => {
-      const { default: SignaturePad } = await import('signature_pad')
-      if (cancelled || !canvasRef.current) return
+    // Hay que esperar a que el diálogo tenga tamaño real: si se mide durante
+    // la animación de entrada, el canvas nace de 0 px y no se puede firmar.
+    let raf = 0
+    const montar = () => {
       const canvas = canvasRef.current
+      if (!canvas) return
+      const ancho = canvas.offsetWidth || canvas.getBoundingClientRect().width
+      const alto = canvas.offsetHeight || canvas.getBoundingClientRect().height
+      if (!ancho || !alto) { raf = requestAnimationFrame(montar); return }
+
+      // Se escala al devicePixelRatio: sin esto, en el celular la firma sale
+      // pixelada y con el trazo desplazado del dedo.
       const ratio = Math.max(window.devicePixelRatio || 1, 1)
-      canvas.width = canvas.offsetWidth * ratio
-      canvas.height = canvas.offsetHeight * ratio
+      canvas.width = ancho * ratio
+      canvas.height = alto * ratio
       canvas.getContext('2d')?.scale(ratio, ratio)
 
       const pad = new SignaturePad(canvas, {
@@ -59,10 +69,11 @@ export function SignaturePadDialog({
       pad.addEventListener('endStroke', () => setEmpty(pad.isEmpty()))
       padRef.current = pad
       setEmpty(true)
-    })()
+    }
+    raf = requestAnimationFrame(montar)
 
     return () => {
-      cancelled = true
+      cancelAnimationFrame(raf)
       padRef.current?.off?.()
       padRef.current = null
     }

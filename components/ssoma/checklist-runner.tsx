@@ -20,6 +20,7 @@ import { ConfirmDialog } from '@/components/forms/form-dialog'
 import { SignaturePadDialog } from '@/components/shared/signature-pad'
 import { EmptyState } from '@/components/shared/misc'
 import { enqueue, enqueueBlob, getDeviceId } from '@/lib/offline/db'
+import { conRespaldoLocal, espejo } from '@/lib/offline/catalogos'
 import { syncNow } from '@/lib/offline/sync'
 import { getGpsFix, sealPhoto } from '@/lib/camera'
 import { cn, uuid, toISODate, fmtDate } from '@/lib/utils'
@@ -64,16 +65,25 @@ export function ChecklistRunner({
   const catalogos = useQuery({
     queryKey: ['checklist-runner-catalogos', service.id],
     enabled: open,
-    queryFn: async () => {
-      const [tpls, crews] = await Promise.all([
-        sb.from('checklist_templates')
-          .select('id, code, name, category, description, questions, frequency')
-          .eq('service_id', service.id).eq('is_active', true).is('deleted_at', null).order('name'),
-        sb.from('crews').select('id, name, color')
-          .eq('service_id', service.id).is('deleted_at', null).order('code'),
-      ])
-      return { tpls: tpls.data ?? [], crews: crews.data ?? [] }
-    },
+    // Sin señal se leen del espejo del dispositivo: el checklist se llena
+    // igual en el frente y se envía cuando vuelve el Starlink.
+    queryFn: () => conRespaldoLocal(
+      async () => {
+        const [tpls, crews] = await Promise.all([
+          sb.from('checklist_templates')
+            .select('id, code, name, category, description, questions, frequency')
+            .eq('service_id', service.id).eq('is_active', true).is('deleted_at', null).order('name'),
+          sb.from('crews').select('id, name, color')
+            .eq('service_id', service.id).is('deleted_at', null).order('code'),
+        ])
+        if (tpls.error) throw tpls.error
+        return { tpls: tpls.data ?? [], crews: crews.data ?? [] }
+      },
+      async () => ({
+        tpls: await espejo('checklist_templates', service.id, 'name'),
+        crews: await espejo('crews', service.id),
+      })
+    ),
     staleTime: 5 * 60_000,
   })
 

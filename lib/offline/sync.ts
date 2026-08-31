@@ -195,6 +195,10 @@ async function pullMirror(scope: PullScope): Promise<number> {
     ['work_orders', sb.from('work_orders').select('*').eq('service_id', serviceId)
       .gte('work_date', weekAgo).is('deleted_at', null)],
     ['checklist_templates', sb.from('checklist_templates').select('*').eq('service_id', serviceId).eq('is_active', true)],
+    // El personal de cada cuadrilla: hace falta para firmar el ATS y la
+    // asistencia a la charla estando sin señal.
+    ['crew_members', sb.from('crew_members').select('*, crews!inner(service_id)').eq('is_active', true)
+      .eq('crews.service_id', serviceId)],
   ]
 
   const queries = [...catalogs, ...operational]

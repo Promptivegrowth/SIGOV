@@ -174,15 +174,17 @@ contra la base real.
 | Cargar el trazo de un tramo | Configuración › Tramos › icono de ruta | KML, KMZ, GeoJSON y GPX con vista previa; 60 puntos = 9,93 km sobre el mapa |
 | Firma manuscrita | Checklists, ATS y asistencia a charlas | trazo con el dedo en pantalla de 390 px, guardado en el bucket privado |
 | Borrar cuadrilla, tramo y actividad | Configuración | baja lógica: dejan de ofrecerse y el historial se conserva |
+| Checklist y ATS sin señal | Frente de trabajo | se cortó la red de verdad: se llenan, se encolan y suben solos al volver la conexión |
 
 Todo se comprueba con:
 
 ```bash
-node scripts/altas-test.mjs http://localhost:3100     # 48 pruebas
+node scripts/altas-test.mjs http://localhost:3100     # 53 pruebas
 ```
 
 El script crea de verdad cada registro contra la base de producción y **borra
-al final** lo que creó, dejando la base como estaba.
+al final** lo que creó —filas y archivos— dejando la base como estaba
+(`scripts/limpiar-pruebas.mjs`).
 
 ### Defectos encontrados en esta ronda (y corregidos)
 
@@ -203,6 +205,30 @@ al final** lo que creó, dejando la base como estaba.
 4. **Los tramos, cuadrillas y actividades no se podían eliminar**, solo
    desactivar. Se añadió la baja lógica con su confirmación.
 
+### Tercera pasada: probar de verdad el modo sin señal
+
+Se afirmaba que el checklist y el ATS funcionaban sin conexión, pero eso no se
+había ejercitado. Al cortar la red en el navegador aparecieron dos defectos que
+habrían salido recién en obra:
+
+5. **La firma no cargaba sin señal.** El componente traía `signature_pad` bajo
+   demanda; sin internet el trozo de código nunca llegaba y el capataz no podía
+   firmar. Ahora va dentro del paquete de la página.
+6. **El ATS no se podía llenar sin señal**: sus catálogos (cuadrillas, tramos,
+   personal) solo venían de la nube y el formulario salía vacío. Ahora caen al
+   espejo local que la sincronización ya deja en el dispositivo, y se agregó
+   `crew_members` a ese espejo para poder firmar el ATS en el frente.
+7. **Los formularios se vaciaban solos.** `FormDialog` reconstruía sus valores
+   cada vez que el componente padre volvía a dibujarse — algo que pasa con
+   cualquier refresco en segundo plano —, así que a un usuario escribiendo un
+   tramo nuevo se le podía borrar todo lo tipeado. El formulario ahora solo se
+   rellena al abrirse o al cambiar el registro que edita.
+
+El recorrido sin señal quedó cubierto por la suite: se corta la red, se llenan
+checklist y ATS con foto y firmas, vuelve la conexión y se comprueba en la base
+que llegaron ambos documentos, que las firmas quedaron colgadas de su ATS y que
+los archivos subieron al bucket.
+
 ---
 
 ## 6. Cómo reproducir
@@ -214,7 +240,7 @@ node scripts/e2e.mjs
 # Interfaz en navegador real (servidor levantado)
 node scripts/ui-test.mjs http://localhost:3100        # 46 pruebas
 node scripts/flow-test.mjs http://localhost:3100      # 40 pasos
-node scripts/altas-test.mjs http://localhost:3100     # 48 pruebas
+node scripts/altas-test.mjs http://localhost:3100     # 53 pruebas
 node scripts/responsive-test.mjs http://localhost:3100
 node scripts/audit-ui.mjs                             # navegación y botones muertos
 ```
