@@ -230,11 +230,11 @@ export function SsomaClient() {
 
       <PageBody className="space-y-5">
         {kpis.isLoading ? (
-          <div className="grid gap-3 sm:grid-cols-2 xl:grid-cols-4">
+          <div className="grid grid-cols-1 gap-3 sm:grid-cols-2 xl:grid-cols-4">
             {Array.from({ length: 4 }).map((_, i) => <SkeletonKpi key={i} />)}
           </div>
         ) : (
-          <div className="grid gap-3 sm:grid-cols-2 xl:grid-cols-4">
+          <div className="grid grid-cols-1 gap-3 sm:grid-cols-2 xl:grid-cols-4">
             <StatCard index={0} label="Charlas (30 días)" value={Number(k?.charlas ?? 0)} icon={Megaphone} tone="primary" hint={`${fmtNumber(k?.asistentes ?? 0)} asistencias firmadas`} />
             <StatCard index={1} label="Checklists" value={Number(k?.checklists ?? 0)} icon={ClipboardCheck} tone="info" hint="EPP, vehículo, zona de trabajo" />
             <StatCard index={2} label="Con hallazgos" value={Number(k?.hallazgos ?? 0)} icon={TriangleAlert} tone={Number(k?.hallazgos ?? 0) ? 'warning' : 'success'} hint="requieren seguimiento" />

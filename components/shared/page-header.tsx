@@ -18,7 +18,7 @@ export function PageHeader({
   return (
     <div className={cn('border-b border-border', className)}>
       <div className="px-4 py-5 lg:px-6 lg:py-6">
-        <div className="flex flex-wrap items-start justify-between gap-4">
+        <div className="flex min-w-0 flex-wrap items-start justify-between gap-4">
           <div className="flex min-w-0 items-start gap-3.5">
             {Icon && (
               <span className="bg-primary/10 text-primary hidden size-11 shrink-0 items-center justify-center rounded-xl sm:flex">
@@ -34,7 +34,7 @@ export function PageHeader({
               )}
             </div>
           </div>
-          {actions && <div className="flex shrink-0 flex-wrap items-center gap-2">{actions}</div>}
+          {actions && <div className="flex w-full flex-wrap items-center gap-2 sm:w-auto sm:shrink-0">{actions}</div>}
         </div>
         {children && <div className="mt-5">{children}</div>}
       </div>

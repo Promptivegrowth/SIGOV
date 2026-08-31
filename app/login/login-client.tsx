@@ -230,7 +230,7 @@ export function LoginClient() {
                 <code className="bg-muted rounded px-1 py-0.5 text-[10px]">NEXT_PUBLIC_DEMO_MODE=false</code>
               </p>
 
-              <div className="mt-4 grid gap-2 sm:grid-cols-2">
+              <div className="mt-4 grid grid-cols-1 gap-2 sm:grid-cols-2">
                 {DEMO_USERS.map((u, i) => {
                   const role = ROLES[u.role]
                   const isLoading = loading === u.email

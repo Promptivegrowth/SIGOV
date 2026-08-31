@@ -100,14 +100,17 @@ export function CrewChart({
         {/* Detalle por cuadrilla: identidad por nombre + color, nunca solo color */}
         <ul className="mt-4 space-y-2.5">
           {rows.map((r) => (
-            <li key={r.crew_id} className="flex items-center gap-3">
+            <li key={r.crew_id} className="flex items-center gap-2.5">
               <span className="size-2.5 shrink-0 rounded-full" style={{ background: r.crew_color }} />
-              <span className="w-40 shrink-0 truncate text-[12px] font-medium">{r.crew_name}</span>
-              <ProgressBar value={r.cumplimiento} className="flex-1" showValue={false} />
-              <span className="w-12 shrink-0 text-right text-[12px] font-semibold tabular-nums">
+              <span className="min-w-0 flex-1 truncate text-[12px] font-medium sm:w-40 sm:flex-none">
+                {r.crew_name}
+              </span>
+              {/* La barra solo cabe a partir de tablet; en celular manda la cifra */}
+              <ProgressBar value={r.cumplimiento} className="hidden flex-1 sm:block" showValue={false} />
+              <span className="w-11 shrink-0 text-right text-[12px] font-semibold tabular-nums">
                 {r.cumplimiento.toFixed(0)}%
               </span>
-              <span className="text-muted-foreground w-24 shrink-0 text-right text-[11px] tabular-nums">
+              <span className="text-muted-foreground hidden w-24 shrink-0 text-right text-[11px] tabular-nums sm:block">
                 {fmtNumber(r.registros)} reg · {r.dias}d
               </span>
             </li>

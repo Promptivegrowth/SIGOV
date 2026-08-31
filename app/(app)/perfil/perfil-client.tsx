@@ -69,7 +69,7 @@ export function PerfilClient() {
           </CardContent>
         </Card>
 
-        <div className="grid gap-4 lg:grid-cols-2">
+        <div className="grid grid-cols-1 gap-4 lg:grid-cols-2">
           <Card>
             <CardContent className="p-5">
               <h3 className="text-[14px] font-semibold">Datos de contacto</h3>
@@ -126,7 +126,7 @@ export function PerfilClient() {
           </Card>
         </div>
 
-        <div className="grid gap-4 lg:grid-cols-2">
+        <div className="grid grid-cols-1 gap-4 lg:grid-cols-2">
           <Card>
             <CardContent className="p-5">
               <h3 className="flex items-center gap-2 text-[14px] font-semibold">

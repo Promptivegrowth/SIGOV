@@ -157,11 +157,11 @@ export function PciListClient() {
       <PageBody className="space-y-5">
         {/* KPIs */}
         {isLoading ? (
-          <div className="grid gap-3 sm:grid-cols-2 xl:grid-cols-4">
+          <div className="grid grid-cols-1 gap-3 sm:grid-cols-2 xl:grid-cols-4">
             {Array.from({ length: 4 }).map((_, i) => <SkeletonKpi key={i} />)}
           </div>
         ) : (
-          <div className="grid gap-3 sm:grid-cols-2 xl:grid-cols-4">
+          <div className="grid grid-cols-1 gap-3 sm:grid-cols-2 xl:grid-cols-4">
             <StatCard index={0} label="PCIs abiertos" value={totals.abiertos} icon={FileText} tone="primary" hint={`${data?.length ?? 0} en total`} />
             <StatCard index={1} label="Ítems totales" value={totals.items} icon={Filter} hint={`${fmtNumber(totals.levantados)} levantados`} />
             <StatCard index={2} label="Ítems críticos" value={totals.criticos} icon={Timer} tone="warning" hint="20% o menos del plazo" />

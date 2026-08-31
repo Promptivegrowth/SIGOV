@@ -15,7 +15,7 @@ function Card({ className, ...props }: React.ComponentProps<'div'>) {
 }
 
 function CardHeader({ className, ...props }: React.ComponentProps<'div'>) {
-  return <div data-slot="card-header" className={cn('flex flex-col gap-1 p-5 pb-3', className)} {...props} />
+  return <div data-slot="card-header" className={cn('flex min-w-0 flex-col gap-1 p-5 pb-3', className)} {...props} />
 }
 
 function CardTitle({ className, ...props }: React.ComponentProps<'h3'>) {
@@ -27,7 +27,7 @@ function CardDescription({ className, ...props }: React.ComponentProps<'p'>) {
 }
 
 function CardAction({ className, ...props }: React.ComponentProps<'div'>) {
-  return <div data-slot="card-action" className={cn('ml-auto', className)} {...props} />
+  return <div data-slot="card-action" className={cn('ml-auto shrink-0', className)} {...props} />
 }
 
 function CardContent({ className, ...props }: React.ComponentProps<'div'>) {

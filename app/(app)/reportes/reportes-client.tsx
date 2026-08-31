@@ -321,7 +321,7 @@ export function ReportesClient() {
       />
 
       <PageBody>
-        <div className="grid gap-3 md:grid-cols-2 xl:grid-cols-3">
+        <div className="grid grid-cols-1 gap-3 md:grid-cols-2 xl:grid-cols-3">
           {available.map((r, i) => (
             <motion.div
               key={r.key}

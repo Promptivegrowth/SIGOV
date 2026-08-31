@@ -166,11 +166,11 @@ export function CampoClient() {
 
         {/* KPIs */}
         {stats.isLoading ? (
-          <div className="grid gap-3 sm:grid-cols-2 xl:grid-cols-4">
+          <div className="grid grid-cols-1 gap-3 sm:grid-cols-2 xl:grid-cols-4">
             {Array.from({ length: 4 }).map((_, i) => <SkeletonKpi key={i} />)}
           </div>
         ) : (
-          <div className="grid gap-3 sm:grid-cols-2 xl:grid-cols-4">
+          <div className="grid grid-cols-1 gap-3 sm:grid-cols-2 xl:grid-cols-4">
             <StatCard index={0} label="Registros (30 días)" value={stats.data?.registros ?? 0} icon={HardHat} tone="primary" />
             <StatCard index={1} label="Metrado ejecutado" value={stats.data?.metrado ?? 0} decimals={0} icon={CircleCheck} tone="success" />
             <StatCard index={2} label="Evidencias" value={stats.data?.evidencias ?? 0} icon={Camera} tone="info" />

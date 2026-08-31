@@ -415,7 +415,7 @@ export function ConfiguracionClient() {
                   El control de accesos se aplica en tres capas: políticas RLS en la base de datos,
                   middleware de rutas y guardas en la interfaz. La base de datos es la fuente de verdad.
                 </p>
-                <ul className="mt-4 grid gap-2.5 md:grid-cols-2">
+                <ul className="mt-4 grid grid-cols-1 gap-2.5 md:grid-cols-2">
                   {(Object.keys(ROLES) as Role[]).map((k) => {
                     const r = ROLES[k]
                     const n = (members.data ?? []).filter((m: any) => m.role === k).length
@@ -492,7 +492,7 @@ export function ConfiguracionClient() {
                         </div>
                       )}
                     </div>
-                    <ul className="mt-3.5 grid gap-1.5 sm:grid-cols-2 lg:grid-cols-3">
+                    <ul className="mt-3.5 grid grid-cols-1 gap-1.5 sm:grid-cols-2 lg:grid-cols-3">
                       {c.crew_members?.map((m: any) => (
                         <li key={m.id} className="bg-muted/40 flex items-center gap-2.5 rounded-lg px-3 py-2 text-[12px]">
                           <span className="bg-card flex size-7 shrink-0 items-center justify-center rounded-full text-[9.5px] font-bold">
@@ -695,7 +695,7 @@ export function ConfiguracionClient() {
                     <p className="text-muted-foreground mb-2 text-[11px] font-medium tracking-wide uppercase">
                       Módulos habilitados en este servicio
                     </p>
-                    <div className="grid gap-2 sm:grid-cols-2 lg:grid-cols-4">
+                    <div className="grid grid-cols-1 gap-2 sm:grid-cols-2 lg:grid-cols-4">
                       {Object.entries(s.modules).map(([k, v]) => (
                         <div
                           key={k}
@@ -727,7 +727,7 @@ export function ConfiguracionClient() {
           {/* ═══ SEGURIDAD ═════════════════════════════════════════════════ */}
           {can.manage && (
             <TabsContent value="seguridad" className="mt-4 space-y-4">
-              <div className="grid gap-3 md:grid-cols-3">
+              <div className="grid grid-cols-1 gap-3 md:grid-cols-3">
                 {[
                   { icon: ShieldCheck, title: 'RLS activo', body: 'Todas las tablas tienen políticas de seguridad a nivel de fila. Nadie ve datos de un servicio al que no pertenece.' },
                   { icon: Database, title: 'Evidencia inmutable', body: 'Un trigger bloquea la edición de GPS, fecha y hash. Storage no permite UPDATE ni DELETE sobre las fotos.' },
@@ -911,7 +911,7 @@ function DeviceSettings() {
   }, [])
 
   return (
-    <div className="grid gap-3 md:grid-cols-2">
+    <div className="grid grid-cols-1 gap-3 md:grid-cols-2">
       <Card>
         <CardContent className="p-5">
           <h3 className="flex items-center gap-2 text-[14px] font-semibold">

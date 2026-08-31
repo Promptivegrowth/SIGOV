@@ -147,7 +147,7 @@ export function SuspensionDialog({
               )}
             </div>
 
-            <div className="grid gap-4 lg:grid-cols-2">
+            <div className="grid grid-cols-1 gap-4 lg:grid-cols-2">
               {/* ── Se suspende ─────────────────────────────────────── */}
               <section>
                 <h4 className="mb-2 flex items-center gap-2 text-[13px] font-semibold">

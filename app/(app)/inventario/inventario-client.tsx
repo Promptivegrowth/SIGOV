@@ -124,11 +124,11 @@ export function InventarioClient() {
 
       <PageBody className="space-y-4">
         {assets.isLoading ? (
-          <div className="grid gap-3 sm:grid-cols-2 xl:grid-cols-4">
+          <div className="grid grid-cols-1 gap-3 sm:grid-cols-2 xl:grid-cols-4">
             {Array.from({ length: 4 }).map((_, i) => <SkeletonKpi key={i} />)}
           </div>
         ) : (
-          <div className="grid gap-3 sm:grid-cols-2 xl:grid-cols-4">
+          <div className="grid grid-cols-1 gap-3 sm:grid-cols-2 xl:grid-cols-4">
             <StatCard index={0} label="Elementos registrados" value={stats.total} icon={Boxes} tone="primary" hint={`${types.data?.length ?? 0} tipos distintos`} />
             <StatCard index={1} label="En estado malo" value={stats.malo} icon={Wrench} tone="warning" hint="requieren intervención" />
             <StatCard index={2} label="En estado crítico" value={stats.critico} icon={TriangleAlert} tone={stats.critico ? 'danger' : 'success'} hint="atención prioritaria" />

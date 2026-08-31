@@ -376,7 +376,7 @@ export function ProgramacionClient() {
         </div>
 
         {/* Resumen de la semana */}
-        <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-4">
+        <div className="grid grid-cols-1 gap-3 sm:grid-cols-2 lg:grid-cols-4">
           {[
             { label: 'Actividades programadas', value: fmtNumber(stats.items), sub: `${stats.ejecutados} ejecutadas` },
             { label: 'Meta de la semana', value: fmtNumber(stats.meta), sub: 'unidades' },

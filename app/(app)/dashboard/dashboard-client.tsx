@@ -94,11 +94,11 @@ export function DashboardClient() {
         {/* ═══ KPIs principales ═════════════════════════════════════════ */}
         <section aria-label="Indicadores principales">
           {kpis.isLoading ? (
-            <div className="grid gap-3 sm:grid-cols-2 xl:grid-cols-4">
+            <div className="grid grid-cols-1 gap-3 sm:grid-cols-2 xl:grid-cols-4">
               {Array.from({ length: 4 }).map((_, i) => <SkeletonKpi key={i} />)}
             </div>
           ) : (
-            <div className="grid gap-3 sm:grid-cols-2 xl:grid-cols-4">
+            <div className="grid grid-cols-1 gap-3 sm:grid-cols-2 xl:grid-cols-4">
               <StatCard
                 index={0}
                 label="Metrado ejecutado"
@@ -146,7 +146,7 @@ export function DashboardClient() {
         {k && <AlertStrip kpis={k} />}
 
         {/* ═══ Gráficos ═════════════════════════════════════════════════ */}
-        <div className="grid gap-4 xl:grid-cols-3">
+        <div className="grid grid-cols-1 gap-4 xl:grid-cols-3">
           <div className="xl:col-span-2">
             {series.isLoading ? (
               <SkeletonChart />
@@ -165,7 +165,7 @@ export function DashboardClient() {
           </div>
         </div>
 
-        <div className="grid gap-4 xl:grid-cols-3">
+        <div className="grid grid-cols-1 gap-4 xl:grid-cols-3">
           <div className="xl:col-span-2">
             <CrewChart serviceId={service.id} from={range.from} to={range.to} />
           </div>
@@ -176,17 +176,17 @@ export function DashboardClient() {
         </div>
 
         {/* ═══ Mapa + actividad reciente ════════════════════════════════ */}
-        <div className="grid gap-4 xl:grid-cols-3">
+        <div className="grid grid-cols-1 gap-4 xl:grid-cols-3">
           {hasModule('mapa') && (
             <Card className="overflow-hidden xl:col-span-2">
-              <CardHeader className="flex-row items-center justify-between">
-                <div>
+              <CardHeader className="flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+                <div className="min-w-0">
                   <CardTitle className="text-[15px]">Actividad georreferenciada</CardTitle>
                   <CardDescription className="text-[12px]">
                     Registros de campo del periodo sobre los tramos del servicio
                   </CardDescription>
                 </div>
-                <CardAction>
+                <CardAction className="ml-0 shrink-0 sm:ml-auto">
                   <Button variant="outline" size="sm" asChild>
                     <Link href="/mapa">
                       Ver mapa completo
@@ -266,24 +266,25 @@ function AlertStrip({ kpis }: { kpis: any }) {
   }
 
   return (
-    <div className="stagger grid gap-3 md:grid-cols-2">
+    <div className="stagger grid grid-cols-1 gap-3 md:grid-cols-2">
       {alerts.map((a) => (
         <Link
           key={a.title}
           href={a.href}
           className={cn(
-            'group flex items-center gap-3 rounded-xl border px-4 py-3 transition-all hover:shadow-sm',
+            'group flex min-w-0 items-center gap-3 rounded-xl border px-3.5 py-3 transition-all hover:shadow-sm sm:px-4',
             tones[a.tone]
           )}
         >
           <a.icon className="size-5 shrink-0" />
           <div className="min-w-0 flex-1">
-            <p className="text-foreground truncate text-[13px] font-semibold">{a.title}</p>
+            <p className="text-foreground text-[13px] font-semibold leading-snug">{a.title}</p>
             <p className="text-muted-foreground truncate text-[11.5px]">{a.body}</p>
           </div>
           <span className="flex shrink-0 items-center gap-1 text-[11.5px] font-semibold">
-            {a.cta}
-            <ArrowRight className="size-3 transition-transform group-hover:translate-x-0.5" />
+            {/* En celular basta la flecha: el texto ya dice que hacer */}
+            <span className="hidden sm:inline">{a.cta}</span>
+            <ArrowRight className="size-4 transition-transform group-hover:translate-x-0.5" />
           </span>
         </Link>
       ))}
@@ -328,7 +329,7 @@ function PendingReviewCard({ serviceId }: { serviceId: string }) {
               <li key={w.id}>
                 <Link
                   href={`/campo/${w.id}`}
-                  className="hover:bg-secondary flex items-center gap-3 rounded-lg px-2 py-2.5 transition-colors"
+                  className="hover:bg-secondary flex min-w-0 items-center gap-2.5 rounded-lg px-2 py-2.5 transition-colors"
                 >
                   <span
                     className="size-2 shrink-0 rounded-full"
@@ -373,12 +374,12 @@ function SsomaCard({ data }: { data: any }) {
       </CardHeader>
       <CardContent className="space-y-2.5">
         {items.map((i) => (
-          <div key={i.label} className="flex items-center justify-between">
-            <span className="text-muted-foreground flex items-center gap-2 text-[12.5px]">
-              <i.icon className="size-3.5" />
-              {i.label}
+          <div key={i.label} className="flex items-center justify-between gap-3">
+            <span className="text-muted-foreground flex min-w-0 items-center gap-2 text-[12.5px]">
+              <i.icon className="size-3.5 shrink-0" />
+              <span className="truncate">{i.label}</span>
             </span>
-            <span className="text-[14px] font-bold tabular-nums">{fmtNumber(i.value)}</span>
+            <span className="shrink-0 text-[14px] font-bold tabular-nums">{fmtNumber(i.value)}</span>
           </div>
         ))}
         {findings > 0 && (
