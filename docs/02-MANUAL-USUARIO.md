@@ -174,6 +174,23 @@ Haz clic en cualquier elemento para ver su ficha. Los círculos con números son
 agrupaciones: haz clic para acercarte. Arriba puedes cambiar entre **Calles**,
 **Satélite** y **Relieve**.
 
+### Inventario vial
+
+**Inventario** lista todos los elementos del corredor: alcantarillas,
+guardavías, señales, postes SOS, badenes, puentes. Se filtra por tipo y por
+estado de conservación, y el buscador encuentra por código, tramo o progresiva.
+
+- **Nuevo elemento** — eliges el tipo y el tramo, y el sistema **sugiere el
+  código correlativo**. Cada tipo pide sus propios datos técnicos (una
+  alcantarilla su diámetro y su porcentaje de obstrucción; una señal su código
+  MTC y su retroreflectividad). El pin toma tu ubicación y calcula la
+  progresiva; si escribes una progresiva fuera del tramo, te avisa.
+- **Ficha del elemento** — al tocarlo se abre con sus datos, sus atributos y el
+  **historial de intervenciones**.
+- **Registrar intervención** — qué se hizo (limpieza, descolmatación,
+  reposición…), qué cuadrilla, y en qué estado queda. El estado del elemento se
+  actualiza solo con esa última intervención.
+
 ### Reportes
 
 **Reportes** genera cinco salidas, cada una en **PDF** con formato o **Excel**
@@ -202,9 +219,31 @@ completa con DNI, cargo y hora de firma.
 (EPP, vehículo, señalización de zona de trabajo, herramientas). Las que tienen
 **hallazgos** aparecen marcadas en ámbar con la observación a la vista.
 
+> **Responder uno**: botón *Responder checklist*. Eliges la plantilla y marcas
+> punto por punto: **Conforme**, **No conforme** o **No aplica**. Si algo sale
+> no conforme, el sistema te obliga a describir el hallazgo antes de enviar.
+> Las preguntas de foto abren la cámara o la galería y la imagen queda sellada
+> con GPS, fecha y hash. Al final firmas con el dedo. Sin señal se guarda en el
+> equipo y se envía solo cuando vuelve el Starlink.
+
+> **Crear tus propias listas**: botón *Plantillas* (solo administrador y
+> supervisor). Cada punto puede ser conforme/no conforme, texto, número o foto,
+> y se marca si es obligatorio.
+
 **ATS / IPERC** — el Análisis de Trabajo Seguro con su **matriz de riesgos**:
 cada peligro con su riesgo, probabilidad, severidad, nivel y medidas de control,
 más el EPP exigido y las firmas del equipo.
+
+> **Registrar uno**: botón *Nuevo ATS*. Escribes la tarea, eliges cuadrilla,
+> tramo y progresiva (o tocas el pin para que la tome del GPS) y agregas los
+> peligros. Los cinco peligros típicos de un frente vial están como atajo: un
+> toque y entran con sus controles ya redactados. El nivel de riesgo se calcula
+> solo al cruzar probabilidad y severidad, y el riesgo máximo del documento sale
+> del peor de todos. Después marcas el EPP obligatorio y firman el supervisor y
+> cada integrante.
+
+El capataz llega a ambos formularios desde **Campo**, con los botones *ATS* y
+*Checklist*: es lo que se llena antes de empezar el frente.
 
 ---
 
@@ -215,9 +254,13 @@ más el EPP exigido y las firmas del equipo.
 - **Usuarios** — quién pertenece al servicio, con qué rol, su estado y última
   actividad. Abajo, la explicación de los 5 roles del sistema.
 - **Servicios** — los contratos y **qué módulos tiene encendido cada uno**. Así
-  conviven un contrato completo (con PCI y SSOMA) y otro más simple.
+  conviven un contrato completo (con PCI y SSOMA) y otro más simple. Con *Nuevo
+  servicio* se da de alta otro contrato eligiendo sus módulos; quien lo crea
+  queda dentro como administrador.
 - **Tramos** — código, nombre, ruta, progresivas, longitud, superficie, carriles
-  y si tiene geometría trazada.
+  y si tiene geometría trazada. El icono de ruta permite **cargar el trazo**
+  desde un KML, KMZ, GeoJSON o GPX: se ve la vista previa y la longitud antes de
+  guardar, y avisa si no cuadra con las progresivas declaradas.
 - **Actividades** — el catálogo con su unidad, rendimiento por día y cuántas
   fotos exige cada partida.
 - **Cuadrillas** — composición completa de cada cuadrilla con sus integrantes.

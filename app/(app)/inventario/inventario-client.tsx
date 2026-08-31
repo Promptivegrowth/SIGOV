@@ -2,13 +2,14 @@
 
 import * as React from 'react'
 import Link from 'next/link'
-import { useQuery } from '@tanstack/react-query'
+import { useQuery, useQueryClient } from '@tanstack/react-query'
 import { useVirtualizer } from '@tanstack/react-virtual'
 import {
   Boxes, Search, Upload, Plus, MapPin, Wrench, Calendar,
-  TriangleAlert, Download, ChevronRight,
+  TriangleAlert, Download, ChevronRight, Pencil, Trash2, History,
 } from 'lucide-react'
-import { createClient } from '@/lib/supabase/client'
+import { toast } from 'sonner'
+import { createClient, fetchAll } from '@/lib/supabase/client'
 import { useSession } from '@/lib/hooks/use-session'
 import { PageHeader, PageBody } from '@/components/shared/page-header'
 import { Button } from '@/components/ui/button'
@@ -20,16 +21,23 @@ import { EmptyState, Progresiva } from '@/components/shared/misc'
 import { StatCard } from '@/components/shared/stat-card'
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select'
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription } from '@/components/ui/dialog'
+import { ConfirmDialog } from '@/components/forms/form-dialog'
+import { AssetForm, InterventionForm } from '@/components/inventario/asset-form'
 import { ASSET_CONDITION } from '@/lib/constants'
 import { cn, fmtDate, fmtNumber } from '@/lib/utils'
 
 export function InventarioClient() {
   const { service, can } = useSession()
   const sb = React.useMemo(() => createClient(), [])
+  const qc = useQueryClient()
   const [q, setQ] = React.useState('')
   const [type, setType] = React.useState('todos')
   const [condition, setCondition] = React.useState('todos')
   const [detail, setDetail] = React.useState<any>(null)
+  const [formOpen, setFormOpen] = React.useState(false)
+  const [editing, setEditing] = React.useState<any>(null)
+  const [intervening, setIntervening] = React.useState<any>(null)
+  const [deleting, setDeleting] = React.useState<any>(null)
   const scrollRef = React.useRef<HTMLDivElement>(null)
 
   const types = useQuery({
@@ -43,13 +51,31 @@ export function InventarioClient() {
 
   const assets = useQuery({
     queryKey: ['assets', service.id],
+    queryFn: () =>
+      // Se pagina: un contrato grande pasa de los 3 600 elementos y PostgREST
+      // corta en 1 000 sin avisar. El `id` desempata para no repetir filas.
+      fetchAll((from, to) =>
+        sb.from('v_road_assets')
+          .select('*')
+          .eq('service_id', service.id)
+          .order('section_name')
+          .order('progresiva_m')
+          .order('id')
+          .range(from, to)
+      ),
+  })
+
+  /** Historial de intervenciones del elemento abierto en la ficha */
+  const history = useQuery({
+    queryKey: ['asset-history', detail?.id],
+    enabled: !!detail?.id,
     queryFn: async () => {
       const { data } = await sb
-        .from('v_road_assets')
-        .select('*')
-        .eq('service_id', service.id)
-        .order('section_name')
-        .order('progresiva_m')
+        .from('asset_interventions')
+        .select('id, intervened_on, action, condition_before, condition_after, notes, crews(name, color)')
+        .eq('asset_id', detail.id)
+        .order('intervened_on', { ascending: false })
+        .limit(20)
       return data ?? []
     },
   })
@@ -116,6 +142,10 @@ export function InventarioClient() {
                   <MapPin className="size-4" />
                   Ver en el mapa
                 </Link>
+              </Button>
+              <Button onClick={() => { setEditing(null); setFormOpen(true) }}>
+                <Plus className="size-4" />
+                Nuevo elemento
               </Button>
             </>
           )
@@ -324,18 +354,110 @@ export function InventarioClient() {
                 </div>
               )}
 
-              <div className="flex gap-2">
+              {/* Historial de intervenciones */}
+              <div className="border-border border-t pt-3">
+                <p className="text-muted-foreground mb-2 flex items-center gap-1.5 text-[11px] font-medium tracking-wide uppercase">
+                  <History className="size-3.5" />
+                  Historial de intervenciones
+                </p>
+                {history.isLoading ? (
+                  <p className="text-muted-foreground text-[12px]">Cargando…</p>
+                ) : !history.data?.length ? (
+                  <p className="text-muted-foreground text-[12px]">
+                    Todavía no se ha registrado ninguna intervención sobre este elemento.
+                  </p>
+                ) : (
+                  <ul className="max-h-44 space-y-1.5 overflow-y-auto pr-1">
+                    {history.data.map((h: any) => (
+                      <li key={h.id} className="bg-muted/40 flex items-start gap-2.5 rounded-lg px-3 py-2 text-[12px]">
+                        <span className="text-muted-foreground w-20 shrink-0 tabular-nums">
+                          {fmtDate(h.intervened_on)}
+                        </span>
+                        <span className="min-w-0 flex-1">
+                          <span className="block font-medium">{h.action}</span>
+                          {h.notes && <span className="text-muted-foreground block truncate">{h.notes}</span>}
+                          {h.crews?.name && (
+                            <span className="text-muted-foreground flex items-center gap-1.5 text-[11px]">
+                              <span className="size-1.5 rounded-full" style={{ background: h.crews.color }} />
+                              {h.crews.name}
+                            </span>
+                          )}
+                        </span>
+                        {h.condition_after && (
+                          <Badge className={cn('shrink-0', ASSET_CONDITION[h.condition_after as keyof typeof ASSET_CONDITION]?.className)}>
+                            {ASSET_CONDITION[h.condition_after as keyof typeof ASSET_CONDITION]?.label}
+                          </Badge>
+                        )}
+                      </li>
+                    ))}
+                  </ul>
+                )}
+              </div>
+
+              <div className="flex flex-wrap gap-2">
                 <Button variant="outline" className="flex-1" asChild>
                   <Link href={`/mapa?focus=${detail.id}`}>
                     <MapPin className="size-4" />
                     Ver en el mapa
                   </Link>
                 </Button>
+                {can.manage && (
+                  <>
+                    <Button className="flex-1" onClick={() => setIntervening(detail)}>
+                      <Wrench className="size-4" />
+                      Registrar intervención
+                    </Button>
+                    <Button variant="outline" size="icon" title="Editar elemento"
+                      onClick={() => { setEditing(detail); setFormOpen(true); setDetail(null) }}>
+                      <Pencil className="size-4" />
+                    </Button>
+                    <Button variant="outline" size="icon" title="Eliminar elemento"
+                      className="text-destructive hover:text-destructive"
+                      onClick={() => setDeleting(detail)}>
+                      <Trash2 className="size-4" />
+                    </Button>
+                  </>
+                )}
               </div>
             </>
           )}
         </DialogContent>
       </Dialog>
+
+      {/* Alta y edición */}
+      <AssetForm
+        open={formOpen}
+        onOpenChange={setFormOpen}
+        editing={editing}
+        onSaved={() => setEditing(null)}
+      />
+
+      {/* Registro de intervención */}
+      <InterventionForm
+        asset={intervening}
+        onClose={() => setIntervening(null)}
+        onSaved={() => setDetail(null)}
+      />
+
+      {/* Baja lógica: el elemento sale del inventario pero su historial se conserva */}
+      <ConfirmDialog
+        open={!!deleting}
+        onOpenChange={(v) => !v && setDeleting(null)}
+        title={`¿Eliminar ${deleting?.code ?? ''}?`}
+        description="El elemento deja de figurar en el inventario y en el mapa. Su historial de intervenciones se conserva y un administrador puede recuperarlo."
+        confirmLabel="Eliminar elemento"
+        onConfirm={async () => {
+          const { error } = await sb
+            .from('road_assets')
+            .update({ deleted_at: new Date().toISOString() })
+            .eq('id', deleting.id)
+          if (error) { toast.error(error.message); return }
+          toast.success('Elemento eliminado del inventario')
+          qc.invalidateQueries({ queryKey: ['assets'] })
+          setDeleting(null)
+          setDetail(null)
+        }}
+      />
     </>
   )
 }

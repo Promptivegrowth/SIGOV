@@ -96,6 +96,14 @@ const CRUD_EXPECTED = [
   { modulo: 'Registro campo',pista: /Registrar actividad/i },
   { modulo: 'Evidencia',     pista: /Foto|Capturar/i },
   { modulo: 'Documentos',    pista: /Adjuntar|Subir documento/i },
+  { modulo: 'Checklist',     pista: /Responder checklist/i },
+  { modulo: 'Plantilla chk', pista: /Nueva plantilla/i },
+  { modulo: 'ATS / IPERC',   pista: /Nuevo ATS/i },
+  { modulo: 'Inventario',    pista: /Nuevo elemento/i },
+  { modulo: 'Intervención',  pista: /Registrar intervención/i },
+  { modulo: 'Servicio',      pista: /Nuevo servicio/i },
+  { modulo: 'Trazo tramo',   pista: /Guardar trazo/i },
+  { modulo: 'Firma',         pista: /Confirmar firma/i },
 ]
 const allSrc = files.map((f) => fs.readFileSync(f, 'utf8')).join('\n')
 const crud = CRUD_EXPECTED.map((c) => ({ ...c, presente: c.pista.test(allSrc) }))

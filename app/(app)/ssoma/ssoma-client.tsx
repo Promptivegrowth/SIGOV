@@ -1,12 +1,13 @@
 'use client'
 
 import * as React from 'react'
+import { useSearchParams } from 'next/navigation'
 import { useQuery, useQueryClient } from '@tanstack/react-query'
 import { motion } from 'motion/react'
 import {
   ShieldCheck, Megaphone, ClipboardCheck, HardHat, Signature,
   Users, TriangleAlert, CircleCheck, Plus, Calendar, MapPin, ChevronRight,
-  Search, X, Pencil, Trash2, Download,
+  Search, X, Pencil, Trash2, Download, PenLine,
 } from 'lucide-react'
 import { createClient } from '@/lib/supabase/client'
 import { useSession } from '@/lib/hooks/use-session'
@@ -23,6 +24,9 @@ import { Input } from '@/components/ui/input'
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select'
 import { Checkbox, Tip } from '@/components/ui/primitives'
 import { FormDialog, ConfirmDialog, type FormField } from '@/components/forms/form-dialog'
+import { ChecklistRunner, ChecklistTemplates } from '@/components/ssoma/checklist-runner'
+import { AtsForm } from '@/components/ssoma/ats-form'
+import { SignaturePadDialog, uploadSignature } from '@/components/shared/signature-pad'
 import { DateRangeTabs, rangeFromPreset, type DatePresetKey } from '@/components/shared/misc'
 import { cn, fmtDate, fmtNumber, fmtRelative, truncate, toISODate } from '@/lib/utils'
 import { toast } from 'sonner'
@@ -47,6 +51,18 @@ export function SsomaClient() {
   const [talkForm, setTalkForm] = React.useState<{ open: boolean; row?: any }>({ open: false })
   const [attendance, setAttendance] = React.useState<any>(null)
   const [confirm, setConfirm] = React.useState<any>(null)
+  const [runner, setRunner] = React.useState(false)
+  const [templates, setTemplates] = React.useState(false)
+  const [atsForm, setAtsForm] = React.useState(false)
+
+  // El capataz llega desde su parte de campo con el formulario ya pedido:
+  // /ssoma?nuevo=checklist o /ssoma?nuevo=ats
+  const params = useSearchParams()
+  React.useEffect(() => {
+    const nuevo = params.get('nuevo')
+    if (nuevo === 'checklist') { setTab('checklists'); setRunner(true) }
+    if (nuevo === 'ats') { setTab('ats'); setAtsForm(true) }
+  }, [params])
 
   const range = React.useMemo(() => rangeFromPreset(preset), [preset])
   const from = range.from
@@ -185,10 +201,32 @@ export function SsomaClient() {
         title="SSOMA"
         description="Charlas de 5 minutos con asistencia firmada, checklists configurables y ATS/IPERC integrados al flujo diario de la cuadrilla. Todo funciona sin conexión."
         actions={can.write && (
-          <Button variant="accent" onClick={() => setTalkForm({ open: true })}>
-            <Plus className="size-4" />
-            Nueva charla
-          </Button>
+          /* La acción principal sigue a la pestaña abierta: el capataz entra a
+             lo que necesita en un solo toque, sin buscar por la pantalla. */
+          tab === 'checklists' ? (
+            <>
+              {can.manage && (
+                <Button variant="outline" onClick={() => setTemplates(true)}>
+                  <ClipboardCheck className="size-4" />
+                  Plantillas
+                </Button>
+              )}
+              <Button variant="accent" onClick={() => setRunner(true)}>
+                <Plus className="size-4" />
+                Responder checklist
+              </Button>
+            </>
+          ) : tab === 'ats' ? (
+            <Button variant="accent" onClick={() => setAtsForm(true)}>
+              <Plus className="size-4" />
+              Nuevo ATS
+            </Button>
+          ) : (
+            <Button variant="accent" onClick={() => setTalkForm({ open: true })}>
+              <Plus className="size-4" />
+              Nueva charla
+            </Button>
+          )
         )}
       >
         <div className="flex flex-wrap items-center gap-2">
@@ -325,7 +363,17 @@ export function SsomaClient() {
             {checklists.isLoading ? (
               <SkeletonList rows={6} />
             ) : !checklists.data?.length ? (
-              <Card><CardContent className="p-0"><EmptyState icon={ClipboardCheck} title="Sin checklists" description="Las plantillas configurables se responden desde el celular, con foto y firma." /></CardContent></Card>
+              <Card><CardContent className="p-0"><EmptyState
+                icon={ClipboardCheck}
+                title="Sin checklists"
+                description="Las plantillas configurables se responden desde el celular, con foto y firma."
+                action={can.write && (
+                  <Button onClick={() => setRunner(true)}>
+                    <Plus className="size-4" />
+                    Responder el primero
+                  </Button>
+                )}
+              /></CardContent></Card>
             ) : (
               <ul className="stagger space-y-2">
                 {checklists.data.map((c: any) => (
@@ -370,7 +418,17 @@ export function SsomaClient() {
             {ats.isLoading ? (
               <SkeletonList rows={6} />
             ) : !ats.data?.length ? (
-              <Card><CardContent className="p-0"><EmptyState icon={HardHat} title="Sin ATS registrados" description="El Análisis de Trabajo Seguro se llena antes de iniciar el frente, con la matriz de riesgos y las firmas del equipo." /></CardContent></Card>
+              <Card><CardContent className="p-0"><EmptyState
+                icon={HardHat}
+                title="Sin ATS registrados"
+                description="El Análisis de Trabajo Seguro se llena antes de iniciar el frente, con la matriz de riesgos y las firmas del equipo."
+                action={can.write && (
+                  <Button onClick={() => setAtsForm(true)}>
+                    <Plus className="size-4" />
+                    Registrar el primero
+                  </Button>
+                )}
+              /></CardContent></Card>
             ) : (
               <ul className="stagger space-y-2">
                 {ats.data.map((a: any) => (
@@ -440,6 +498,10 @@ export function SsomaClient() {
         onDone={() => qc.invalidateQueries()}
       />
 
+      <ChecklistRunner open={runner} onOpenChange={setRunner} />
+      <ChecklistTemplates open={templates} onOpenChange={setTemplates} />
+      <AtsForm open={atsForm} onOpenChange={setAtsForm} />
+
       <ConfirmDialog
         open={!!confirm}
         onOpenChange={() => setConfirm(null)}
@@ -466,6 +528,8 @@ function AttendanceDialog({
   const sb = React.useMemo(() => createClient(), [])
   const [selected, setSelected] = React.useState<Set<string>>(new Set())
   const [saving, setSaving] = React.useState(false)
+  const [firmas, setFirmas] = React.useState<Record<string, Blob>>({})
+  const [firmando, setFirmando] = React.useState<any>(null)
 
   const roster = useQuery({
     queryKey: ['crew-roster', talk?.crew_id],
@@ -483,7 +547,7 @@ function AttendanceDialog({
   })
 
   React.useEffect(() => {
-    if (!talk) { setSelected(new Set()); return }
+    if (!talk) { setSelected(new Set()); setFirmas({}); return }
     const ids = new Set((already.data ?? []).map((a: any) => a.crew_member_id).filter(Boolean))
     setSelected(ids as Set<string>)
   }, [talk, already.data])
@@ -492,20 +556,43 @@ function AttendanceDialog({
     if (!talk) return
     setSaving(true)
     const members = (roster.data ?? []).filter((m: any) => selected.has(m.id))
-    const rows = members.map((m: any) => ({
-      talk_id: talk.id,
-      service_id: service.id,
-      crew_member_id: m.id,
-      full_name: m.full_name,
-      dni: m.dni,
-      position: m.position,
-      signature_path: service.id + '/firmas/' + talk.id + '/' + m.id + '.png',
-      signed_at: new Date().toISOString(),
-    }))
+
+    // Solo se guarda una ruta de firma cuando la firma existe de verdad:
+    // un acta con firmas que nadie trazó no sirve ante una fiscalización.
+    const rows: any[] = []
+    for (const m of members) {
+      let path: string | null = null
+      const blob = firmas[m.id]
+      if (blob) {
+        try {
+          path = await uploadSignature(service.id, `charlas/${talk.id}`, m.id, blob)
+        } catch (e: any) {
+          setSaving(false)
+          toast.error(e?.message ?? 'No se pudo subir la firma')
+          return
+        }
+      }
+      rows.push({
+        talk_id: talk.id,
+        service_id: service.id,
+        crew_member_id: m.id,
+        full_name: m.full_name,
+        dni: m.dni,
+        position: m.position,
+        signature_path: path,
+        signed_at: new Date().toISOString(),
+      })
+    }
+
     const { error } = await sb.from('talk_attendance').upsert(rows, { onConflict: 'talk_id,full_name' })
     setSaving(false)
     if (error) { toast.error(error.message); return }
-    toast.success(rows.length + ' asistencias registradas')
+    const conFirma = rows.filter((r) => r.signature_path).length
+    toast.success(rows.length + ' asistencias registradas', {
+      description: conFirma
+        ? `${conFirma} con firma manuscrita.`
+        : 'Sin firma manuscrita: puedes agregarla tocando el lápiz de cada integrante.',
+    })
     onDone()
     onClose()
   }
@@ -558,7 +645,19 @@ function AttendanceDialog({
                       {m.position}{m.dni ? ' - DNI ' + m.dni : ''}
                     </span>
                   </span>
-                  {on && <Signature className="text-success size-3.5 shrink-0" />}
+                  {on && (
+                    <button
+                      type="button"
+                      onClick={(e) => { e.preventDefault(); setFirmando(m) }}
+                      title={firmas[m.id] ? 'Firma registrada · volver a firmar' : 'Firmar'}
+                      className={cn(
+                        'shrink-0 rounded-md p-1.5 transition-colors',
+                        firmas[m.id] ? 'text-success' : 'text-muted-foreground hover:text-foreground'
+                      )}
+                    >
+                      {firmas[m.id] ? <Signature className="size-4" /> : <PenLine className="size-4" />}
+                    </button>
+                  )}
                 </label>
               </li>
             )
@@ -578,6 +677,18 @@ function AttendanceDialog({
           </Button>
         </DialogFooter>
       </DialogContent>
+
+      <SignaturePadDialog
+        open={!!firmando}
+        onOpenChange={(v) => !v && setFirmando(null)}
+        title="Firma de asistencia"
+        description="El integrante firma con el dedo su participación en la charla."
+        signerName={firmando?.full_name}
+        onSigned={(blob) => {
+          setFirmas((p) => ({ ...p, [firmando.id]: blob }))
+          toast.success(`Firma de ${firmando.full_name} registrada`)
+        }}
+      />
     </Dialog>
   )
 }
@@ -592,10 +703,19 @@ function DetailDialog({ detail, onClose }: { detail: any; onClose: () => void })
     queryFn: async () => {
       const { data } = await sb
         .from('talk_attendance')
-        .select('id, full_name, dni, position, signed_at')
+        .select('id, full_name, dni, position, signed_at, signature_path')
         .eq('talk_id', detail.data.id)
         .order('full_name')
-      return data ?? []
+      const rows = data ?? []
+
+      // Las firmas viven en un bucket privado: se piden URLs firmadas
+      const paths = rows.map((r: any) => r.signature_path).filter(Boolean)
+      if (paths.length) {
+        const { data: urls } = await sb.storage.from('firmas').createSignedUrls(paths, 3600)
+        const byPath = new Map((urls ?? []).map((u: any) => [u.path, u.signedUrl]))
+        for (const r of rows as any[]) r.signature_url = byPath.get(r.signature_path) ?? null
+      }
+      return rows
     },
   })
 
@@ -635,6 +755,16 @@ function DetailDialog({ detail, onClose }: { detail: any; onClose: () => void })
                         DNI {a.dni} · {a.position}
                       </span>
                     </span>
+                    {a.signature_url ? (
+                      /* eslint-disable-next-line @next/next/no-img-element */
+                      <img
+                        src={a.signature_url}
+                        alt={`Firma de ${a.full_name}`}
+                        className="h-8 w-20 shrink-0 object-contain dark:invert"
+                      />
+                    ) : (
+                      <span className="text-muted-foreground shrink-0 text-[10.5px]">sin firma</span>
+                    )}
                     <span className="text-muted-foreground shrink-0 text-[10.5px]">
                       {a.signed_at ? new Date(a.signed_at).toLocaleTimeString('es-PE', { hour: '2-digit', minute: '2-digit' }) : '—'}
                     </span>

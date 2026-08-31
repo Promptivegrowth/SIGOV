@@ -7,6 +7,7 @@ import { motion } from 'motion/react'
 import {
   HardHat, Plus, Camera, CircleCheck, Clock, ChevronRight,
   CloudUpload, Users, CalendarDays, Sun, Cloudy, Wind, Search,
+  ShieldCheck, ClipboardCheck,
 } from 'lucide-react'
 import { createClient } from '@/lib/supabase/client'
 import { useSession } from '@/lib/hooks/use-session'
@@ -24,7 +25,7 @@ import { cn, fmtDate, fmtNumber, fmtRelative, toISODate } from '@/lib/utils'
 import { toast } from 'sonner'
 
 export function CampoClient() {
-  const { service, crew, role, can, profile } = useSession()
+  const { service, crew, role, can, profile, hasModule } = useSession()
   const qc = useQueryClient()
   const sb = React.useMemo(() => createClient(), [])
   const [status, setStatus] = React.useState('todos')
@@ -126,11 +127,33 @@ export function CampoClient() {
             : 'Partes diarios enviados por las cuadrillas, con su ejecución y evidencia georreferenciada.'
         }
         actions={
-          isField && !todayOrder && (
-            <Button variant="accent" size="lg" onClick={createToday}>
-              <Plus className="size-4" />
-              Abrir parte de hoy
-            </Button>
+          isField && (
+            <>
+              {/* Lo previo al frente: el ATS y el checklist se llenan antes de
+                  empezar, así que se llega a ellos desde aquí en un toque. */}
+              {hasModule('ssoma') && (
+                <>
+                  <Button variant="outline" asChild>
+                    <Link href="/ssoma?nuevo=ats">
+                      <ShieldCheck className="size-4" />
+                      ATS
+                    </Link>
+                  </Button>
+                  <Button variant="outline" asChild>
+                    <Link href="/ssoma?nuevo=checklist">
+                      <ClipboardCheck className="size-4" />
+                      Checklist
+                    </Link>
+                  </Button>
+                </>
+              )}
+              {!todayOrder && (
+                <Button variant="accent" size="lg" onClick={createToday}>
+                  <Plus className="size-4" />
+                  Abrir parte de hoy
+                </Button>
+              )}
+            </>
           )
         }
       />

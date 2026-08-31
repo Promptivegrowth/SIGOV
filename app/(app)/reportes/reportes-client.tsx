@@ -7,7 +7,7 @@ import {
   FileBarChart, FileText, FileSpreadsheet, HardHat, TriangleAlert,
   ShieldCheck, Ruler, Boxes, Loader2, CircleCheck,
 } from 'lucide-react'
-import { createClient } from '@/lib/supabase/client'
+import { createClient, fetchAll } from '@/lib/supabase/client'
 import { useSession } from '@/lib/hooks/use-session'
 import { PageHeader, PageBody } from '@/components/shared/page-header'
 import { Button } from '@/components/ui/button'
@@ -61,14 +61,17 @@ export function ReportesClient() {
   const fetchData = async (key: ReportKey) => {
     switch (key) {
       case 'diario': {
-        const { data } = await sb
-          .from('v_work_entries')
-          .select('*')
-          .eq('service_id', service.id)
-          .gte('work_date', range.from)
-          .lte('work_date', range.to)
-          .order('work_date', { ascending: false })
-        return data ?? []
+        // Un periodo largo supera las 1 000 filas que devuelve PostgREST
+        return await fetchAll((from, to) =>
+          sb.from('v_work_entries')
+            .select('*')
+            .eq('service_id', service.id)
+            .gte('work_date', range.from)
+            .lte('work_date', range.to)
+            .order('work_date', { ascending: false })
+            .order('id')
+            .range(from, to)
+        )
       }
       case 'metrados': {
         const { data } = await sb.rpc('dashboard_activity_production', {

@@ -9,7 +9,7 @@ import {
   ArrowLeft, TriangleAlert, Zap, Search, Camera, CircleCheck,
   Download, Users, RotateCcw, ChevronDown,
 } from 'lucide-react'
-import { createClient } from '@/lib/supabase/client'
+import { createClient, fetchAll } from '@/lib/supabase/client'
 import { useSession } from '@/lib/hooks/use-session'
 import { PageHeader, PageBody } from '@/components/shared/page-header'
 import { Button } from '@/components/ui/button'
@@ -55,13 +55,15 @@ export function PciDetailClient({ pciId }: { pciId: string }) {
   const items = useQuery({
     queryKey: ['pci-items', pciId],
     queryFn: async () => {
-      const { data, error } = await sb
-        .from('v_pci_items')
-        .select('*')
-        .eq('pci_id', pciId)
-        .order('item_number')
-      if (error) throw error
-      return data ?? []
+      // Un PCI puede traer más de 1 000 ítems: se pagina para no perder ninguno
+      return await fetchAll((from, to) =>
+        sb.from('v_pci_items')
+          .select('*')
+          .eq('pci_id', pciId)
+          .order('item_number')
+          .order('id')
+          .range(from, to)
+      )
     },
   })
 

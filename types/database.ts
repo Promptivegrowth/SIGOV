@@ -389,6 +389,7 @@ export type Database = {
       ats_signatures: {
         Row: {
           ats_id: string
+          client_id: string
           dni: string | null
           full_name: string
           id: string
@@ -397,6 +398,7 @@ export type Database = {
         }
         Insert: {
           ats_id: string
+          client_id?: string
           dni?: string | null
           full_name: string
           id?: string
@@ -405,6 +407,7 @@ export type Database = {
         }
         Update: {
           ats_id?: string
+          client_id?: string
           dni?: string | null
           full_name?: string
           id?: string
@@ -3222,6 +3225,31 @@ export type Database = {
       progresiva_from_point: {
         Args: { p_lat: number; p_lng: number; p_section_id: string }
         Returns: number
+      }
+      next_asset_code: {
+        Args: { p_service_id: string; p_section_id: string | null; p_type_id: string }
+        Returns: string
+      }
+      set_section_geometry: {
+        Args: { p_section_id: string; p_coords: Json }
+        Returns: Json
+      }
+      clear_section_geometry: {
+        Args: { p_section_id: string }
+        Returns: Json
+      }
+      create_service: {
+        Args: {
+          p_code: string
+          p_name: string
+          p_client_name?: string | null
+          p_contract_code?: string | null
+          p_starts_on?: string | null
+          p_ends_on?: string | null
+          p_color?: string | null
+          p_modules?: Json | null
+        }
+        Returns: Json
       }
       revert_pci_suspension: {
         Args: { p_suspension_id: string }

@@ -157,15 +157,67 @@ con GPS y hash, todo el inventario georreferenciado.
 
 ---
 
-## 5. Cómo reproducir
+## 5. Segunda ronda: las altas que faltaban
+
+La primera auditoría dejó una lista de funciones que se podían **ver** pero no
+**hacer**. Todas están implementadas, probadas en navegador y verificadas
+contra la base real.
+
+| Función | Dónde | Cómo se probó |
+|---|---|---|
+| Responder un checklist | SSOMA › Checklists › **Responder checklist** | 10 pasos: puntos conformes, foto sellada, hallazgo obligatorio, firma y envío |
+| Crear plantillas de checklist | SSOMA › Checklists › **Plantillas** | alta con constructor de puntos, edición y baja |
+| Registrar un ATS / IPERC | SSOMA › ATS › **Nuevo ATS** | matriz de riesgos con nivel calculado, EPP, firma del supervisor y del equipo |
+| Alta de elemento del inventario | Inventario › **Nuevo elemento** | atributos dinámicos por tipo, código sugerido, progresiva validada contra el tramo |
+| Registrar una intervención | Ficha del elemento › **Registrar intervención** | el estado del elemento se actualiza y queda en su historial |
+| Crear un contrato | Configuración › Servicios › **Nuevo servicio** | alta con módulos seleccionables; el creador queda dentro como administrador |
+| Cargar el trazo de un tramo | Configuración › Tramos › icono de ruta | KML, KMZ, GeoJSON y GPX con vista previa; 60 puntos = 9,93 km sobre el mapa |
+| Firma manuscrita | Checklists, ATS y asistencia a charlas | trazo con el dedo en pantalla de 390 px, guardado en el bucket privado |
+| Borrar cuadrilla, tramo y actividad | Configuración | baja lógica: dejan de ofrecerse y el historial se conserva |
+
+Todo se comprueba con:
 
 ```bash
-# Base de datos y reglas de negocio
-node scripts/e2e.mjs
-
-# Interfaz (requiere el servidor levantado)
-npm run build && npm start
-node scripts/ui-test.mjs http://localhost:3000
+node scripts/altas-test.mjs http://localhost:3100     # 48 pruebas
 ```
 
-Las capturas del recorrido completo quedan en `docs/capturas/`.
+El script crea de verdad cada registro contra la base de producción y **borra
+al final** lo que creó, dejando la base como estaba.
+
+### Defectos encontrados en esta ronda (y corregidos)
+
+1. **El inventario mostraba solo 1 000 de 3 632 elementos.** PostgREST corta en
+   1 000 filas sin avisar y nadie lo notaba porque la tabla se veía llena. Se
+   añadió `fetchAll()`, que pagina hasta agotar el resultado; se aplicó también
+   a los ítems de PCI y al parte diario de reportes, que podían sufrir lo mismo
+   con periodos largos.
+2. **Borrar un servicio fallaba** por una llave foránea de `audit_log`: al
+   borrar en cascada, el trigger de auditoría insertaba una fila apuntando a un
+   servicio ya inexistente. La traza debe sobrevivir a lo que audita, así que se
+   quitó la FK (migración `0019`) y el `service_id` queda como dato histórico.
+3. **Las asistencias a charlas decían tener firma y no la tenían**: se guardaba
+   una ruta a un archivo que nunca se subía. Ahora la firma se traza de verdad
+   y solo se guarda la ruta cuando existe; las 714 asistencias sembradas se
+   completaron con firmas reales (`scripts/gen-firmas.mjs`) y se muestran en el
+   acta.
+4. **Los tramos, cuadrillas y actividades no se podían eliminar**, solo
+   desactivar. Se añadió la baja lógica con su confirmación.
+
+---
+
+## 6. Cómo reproducir
+
+```bash
+# Base de datos y reglas de negocio          → 67 pruebas
+node scripts/e2e.mjs
+
+# Interfaz en navegador real (servidor levantado)
+node scripts/ui-test.mjs http://localhost:3100        # 46 pruebas
+node scripts/flow-test.mjs http://localhost:3100      # 40 pasos
+node scripts/altas-test.mjs http://localhost:3100     # 48 pruebas
+node scripts/responsive-test.mjs http://localhost:3100
+node scripts/audit-ui.mjs                             # navegación y botones muertos
+```
+
+Las capturas del recorrido completo quedan en `docs/capturas/`; las de esta
+segunda ronda, en `docs/capturas/altas/`.

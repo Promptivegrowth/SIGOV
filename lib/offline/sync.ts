@@ -67,6 +67,17 @@ if (typeof window !== 'undefined') {
   window.addEventListener('offline', () => emit({ online: false }))
 }
 
+/**
+ * Qué columna del hijo apunta al padre, según la tabla de cada uno.
+ * Cuando el padre recién nace en el servidor, aquí se le pega su id real.
+ */
+const PARENT_FK: Record<string, Record<string, string>> = {
+  work_entries: { work_orders: 'work_order_id' },
+  evidences: { work_entries: 'work_entry_id' },
+  ats_signatures: { ats_iperc: 'ats_id' },
+  checklist_responses: { work_orders: 'work_order_id' },
+}
+
 function backoff(attempts: number) {
   return Math.min(BASE_BACKOFF * 2 ** attempts, MAX_BACKOFF)
 }
@@ -101,11 +112,8 @@ async function pushOutbox(): Promise<{ pushed: number; failed: number; blobs: nu
       const payload = { ...item.payload }
       if (item.depends_on) {
         const parent = await db.outbox.get(item.depends_on)
-        if (parent?.server_id) {
-          if (item.table === 'work_entries') payload.work_order_id = parent.server_id
-          if (item.table === 'evidences' && parent.table === 'work_entries')
-            payload.work_entry_id = parent.server_id
-        }
+        const fk = parent?.table ? PARENT_FK[item.table]?.[parent.table] : undefined
+        if (parent?.server_id && fk) payload[fk] = parent.server_id
       }
 
       const { data, error } = await sb

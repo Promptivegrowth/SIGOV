@@ -17,6 +17,8 @@ import { Tabs, TabsList, TabsTrigger, TabsContent, Switch, Avatar, AvatarFallbac
 import { SkeletonTable } from '@/components/ui/skeleton'
 import { Progresiva, EmptyState } from '@/components/shared/misc'
 import { FormDialog, ConfirmDialog, type FormField } from '@/components/forms/form-dialog'
+import { SectionGeometryDialog } from '@/components/config/section-geometry'
+import { ServiceForm } from '@/components/config/service-form'
 import { ROLES, ASSET_CONDITION, type Role } from '@/lib/constants'
 import { cn, fmtDate, fmtNumber, fmtRelative, initials, bytes, parseProgresiva, fmtProgresiva } from '@/lib/utils'
 import { storageEstimate } from '@/lib/offline/db'
@@ -24,7 +26,7 @@ import { pushSupported, pushPermission, enablePush, isStandalone, isIOS } from '
 import { toast } from 'sonner'
 
 export function ConfiguracionClient() {
-  const { service, services, can, profile } = useSession()
+  const { service, services, can, profile, switchService } = useSession()
   const qc = useQueryClient()
   const sb = React.useMemo(() => createClient(), [])
   const [tab, setTab] = React.useState('usuarios')
@@ -36,8 +38,10 @@ export function ConfiguracionClient() {
   const [sectionForm, setSectionForm] = React.useState<{ open: boolean; row?: any }>({ open: false })
   const [activityForm, setActivityForm] = React.useState<{ open: boolean; row?: any }>({ open: false })
   const [passForm, setPassForm] = React.useState<{ open: boolean; row?: any }>({ open: false })
-  const [confirm, setConfirm] = React.useState<{ open: boolean; title: string; description?: string; action?: () => Promise<void> }>({ open: false, title: '' })
+  const [confirm, setConfirm] = React.useState<{ open: boolean; title: string; description?: string; confirmLabel?: string; action?: () => Promise<void> }>({ open: false, title: '' })
   const [newCred, setNewCred] = React.useState<{ email: string; password: string } | null>(null)
+  const [geomSection, setGeomSection] = React.useState<any>(null)
+  const [serviceForm, setServiceForm] = React.useState(false)
 
   const refresh = () => qc.invalidateQueries()
 
@@ -249,6 +253,30 @@ export function ConfiguracionClient() {
     toast.success(sectionForm.row ? 'Tramo actualizado' : 'Tramo creado')
     refresh()
   }
+
+  /**
+   * Baja lógica de un elemento de catálogo. No se borra de verdad: el trabajo
+   * ya registrado sigue apuntando a él, así que solo deja de ofrecerse.
+   */
+  const softDelete = (
+    table: 'crews' | 'road_sections' | 'activities_catalog',
+    row: any,
+    etiqueta: string,
+    nota: string
+  ) =>
+    setConfirm({
+      open: true,
+      title: `¿Eliminar ${etiqueta} «${row.name}»?`,
+      description: `${nota} El historial ya registrado se conserva y no se pierde ningún dato.`,
+      confirmLabel: 'Sí, eliminar',
+      action: async () => {
+        const { error } = await sb.from(table)
+          .update({ deleted_at: new Date().toISOString() }).eq('id', row.id)
+        if (error) { toast.error(error.message); return }
+        toast.success(`${etiqueta[0].toUpperCase()}${etiqueta.slice(1)} eliminada`)
+        refresh()
+      },
+    })
 
   const saveActivity = async (v: any) => {
     const payload = {
@@ -485,6 +513,15 @@ export function ConfiguracionClient() {
                               <Pencil className="size-3.5" />
                             </Button>
                           </Tip>
+                          <Tip label="Eliminar cuadrilla">
+                            <Button
+                              variant="ghost" size="icon-sm"
+                              onClick={() => softDelete('crews', c, 'la cuadrilla',
+                                'Dejará de aparecer en la programación y en los partes nuevos.')}
+                            >
+                              <Trash2 className="text-destructive size-3.5" />
+                            </Button>
+                          </Tip>
                           <Button variant="outline" size="sm" onClick={() => setMemberForm({ open: true, crew: c })}>
                             <Plus className="size-3.5" />
                             Integrante
@@ -585,11 +622,27 @@ export function ConfiguracionClient() {
                           </td>
                           <td className="px-4 py-3 text-right">
                             {can.manage && (
-                              <Tip label="Editar tramo">
-                                <Button variant="ghost" size="icon-sm" onClick={() => setSectionForm({ open: true, row: s })}>
-                                  <Pencil className="size-3.5" />
-                                </Button>
-                              </Tip>
+                              <span className="flex justify-end gap-1">
+                                <Tip label={s.geom ? 'Reemplazar el trazo' : 'Cargar el trazo (KML/KMZ)'}>
+                                  <Button variant="ghost" size="icon-sm" onClick={() => setGeomSection(s)}>
+                                    <Route className={cn('size-3.5', !s.geom && 'text-warning')} />
+                                  </Button>
+                                </Tip>
+                                <Tip label="Editar tramo">
+                                  <Button variant="ghost" size="icon-sm" onClick={() => setSectionForm({ open: true, row: s })}>
+                                    <Pencil className="size-3.5" />
+                                  </Button>
+                                </Tip>
+                                <Tip label="Eliminar tramo">
+                                  <Button
+                                    variant="ghost" size="icon-sm"
+                                    onClick={() => softDelete('road_sections', s, 'el tramo',
+                                      'Dejará de aparecer en el mapa y al registrar trabajo nuevo.')}
+                                  >
+                                    <Trash2 className="text-destructive size-3.5" />
+                                  </Button>
+                                </Tip>
+                              </span>
                             )}
                           </td>
                         </tr>
@@ -651,11 +704,22 @@ export function ConfiguracionClient() {
                           </td>
                           <td className="px-4 py-3 text-right">
                             {can.manage && (
-                              <Tip label="Editar actividad">
-                                <Button variant="ghost" size="icon-sm" onClick={() => setActivityForm({ open: true, row: a })}>
-                                  <Pencil className="size-3.5" />
-                                </Button>
-                              </Tip>
+                              <span className="flex justify-end gap-1">
+                                <Tip label="Editar actividad">
+                                  <Button variant="ghost" size="icon-sm" onClick={() => setActivityForm({ open: true, row: a })}>
+                                    <Pencil className="size-3.5" />
+                                  </Button>
+                                </Tip>
+                                <Tip label="Eliminar actividad">
+                                  <Button
+                                    variant="ghost" size="icon-sm"
+                                    onClick={() => softDelete('activities_catalog', a, 'la actividad',
+                                      'Dejará de ofrecerse al programar y al registrar metrados.')}
+                                  >
+                                    <Trash2 className="text-destructive size-3.5" />
+                                  </Button>
+                                </Tip>
+                              </span>
                             )}
                           </td>
                         </tr>
@@ -669,6 +733,21 @@ export function ConfiguracionClient() {
 
           {/* ═══ SERVICIOS ═════════════════════════════════════════════════ */}
           <TabsContent value="servicios" className="mt-4 space-y-3">
+            <div className="flex flex-wrap items-center justify-between gap-3">
+              <div>
+                <h2 className="text-[15px] font-semibold">Servicios y contratos</h2>
+                <p className="text-muted-foreground text-[12.5px]">
+                  {services.length} contrato{services.length === 1 ? '' : 's'} con tu usuario dentro
+                </p>
+              </div>
+              {can.admin && (
+                <Button onClick={() => setServiceForm(true)}>
+                  <Plus className="size-4" />
+                  Nuevo servicio
+                </Button>
+              )}
+            </div>
+
             {services.map((s) => (
               <Card key={s.id} className={cn(s.id === service.id && 'ring-primary/30 ring-2')}>
                 <CardContent className="p-5">
@@ -824,6 +903,19 @@ export function ConfiguracionClient() {
         onSubmit={saveMember}
       />
 
+      <SectionGeometryDialog section={geomSection} onClose={() => setGeomSection(null)} />
+
+      <ServiceForm
+        open={serviceForm}
+        onOpenChange={setServiceForm}
+        onCreated={(id) => {
+          refresh()
+          // Se entra al contrato recién creado: es lo que uno quiere hacer
+          // enseguida (cargar sus tramos y su personal).
+          if (id) switchService(id)
+        }}
+      />
+
       <FormDialog
         open={sectionForm.open}
         onOpenChange={(v) => setSectionForm({ open: v, row: v ? sectionForm.row : undefined })}
@@ -874,7 +966,7 @@ export function ConfiguracionClient() {
         onOpenChange={(v) => setConfirm({ ...confirm, open: v })}
         title={confirm.title}
         description={confirm.description}
-        confirmLabel="Sí, continuar"
+        confirmLabel={confirm.confirmLabel ?? "Sí, continuar"}
         onConfirm={async () => { await confirm.action?.() }}
       />
 
