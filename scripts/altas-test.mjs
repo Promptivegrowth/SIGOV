@@ -17,6 +17,7 @@
  */
 import fs from 'node:fs'
 import path from 'node:path'
+import os from 'node:os'
 import zlib from 'node:zlib'
 import { execFileSync } from 'node:child_process'
 import { chromium } from 'playwright'
@@ -186,7 +187,7 @@ function fotoDePrueba() {
     chunk('IDAT', zlib.deflateSync(raw)),
     chunk('IEND', Buffer.alloc(0)),
   ])
-  const file = path.join(SHOTS, 'foto-de-prueba.png')
+  const file = path.join(os.tmpdir(), 'sigov-foto-de-prueba.png')
   fs.writeFileSync(file, png)
   return file
 }
