@@ -35,3 +35,6 @@ playwright-report
 
 # Volcado de variables para Vercel (contiene secretos)
 vercel-env*.txt
+
+# El Word de la guía se regenera con `node scripts/gen-guia-docx.mjs`
+SIGOV - Guia de uso del sistema.docx
