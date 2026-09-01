@@ -3226,6 +3226,10 @@ export type Database = {
         Args: { p_lat: number; p_lng: number; p_section_id: string }
         Returns: number
       }
+      progresiva_con_distancia: {
+        Args: { p_section_id: string; p_lng: number; p_lat: number }
+        Returns: Json
+      }
       next_asset_code: {
         Args: { p_service_id: string; p_section_id: string | null; p_type_id: string }
         Returns: string

@@ -7,6 +7,7 @@ import { motion, AnimatePresence } from 'motion/react'
 import {
   ArrowLeft, Plus, Camera, Send, CircleCheck, CircleX, MapPin,
   Trash2, Clock, CloudUpload, TriangleAlert, ChevronDown, Ruler, Pencil,
+  FileText, Eye,
 } from 'lucide-react'
 import { createClient } from '@/lib/supabase/client'
 import { useSession } from '@/lib/hooks/use-session'
@@ -23,6 +24,7 @@ import { ConfirmDialog } from '@/components/forms/form-dialog'
 import { Tip } from '@/components/ui/primitives'
 import { CameraCapture } from '@/components/campo/camera-capture'
 import { EvidenceGrid } from '@/components/campo/evidence-grid'
+import { ParteInforme } from '@/components/campo/parte-informe'
 import { WORK_ORDER_STATUS, EVIDENCE_PHASE } from '@/lib/constants'
 import { cn, fmtDate, fmtNumber, fmtProgresiva, parseProgresiva, uuid, fmtRelative } from '@/lib/utils'
 import { enqueue, enqueueBlob, getDeviceId } from '@/lib/offline/db'
@@ -37,6 +39,7 @@ export function ParteDetailClient({ orderId }: { orderId: string }) {
   const [entryOpen, setEntryOpen] = React.useState(false)
   const [cameraFor, setCameraFor] = React.useState<any>(null)
   const [reviewOpen, setReviewOpen] = React.useState(false)
+  const [informeOpen, setInformeOpen] = React.useState(false)
   const [editEntry, setEditEntry] = React.useState<any>(null)
   const [confirm, setConfirm] = React.useState<any>(null)
 
@@ -136,6 +139,12 @@ export function ParteDetailClient({ orderId }: { orderId: string }) {
                 <ArrowLeft className="size-4" />
                 Volver
               </Link>
+            </Button>
+            {/* El parte completo como documento: es lo que el supervisor
+                necesita para validar y lo que se archiva del contrato. */}
+            <Button variant="outline" onClick={() => setInformeOpen(true)}>
+              <FileText className="size-4" />
+              Ver informe
             </Button>
             {editable && isOwner && (
               <Button variant="accent" onClick={submit} disabled={!entries.data?.length}>
@@ -252,6 +261,13 @@ export function ParteDetailClient({ orderId }: { orderId: string }) {
                           {fmtNumber(e.quantity, 1)}
                         </div>
                         <div className="text-muted-foreground text-[10.5px]">{e.unit_symbol}</div>
+                      </div>
+                      <div className="flex shrink-0 gap-1">
+                        <Tip label="Ver este registro en el informe">
+                          <Button variant="ghost" size="icon-sm" onClick={() => setInformeOpen(true)}>
+                            <Eye className="size-3.5" />
+                          </Button>
+                        </Tip>
                       </div>
                       {editable && isOwner && (
                         <div className="flex shrink-0 gap-1">
@@ -378,6 +394,13 @@ export function ParteDetailClient({ orderId }: { orderId: string }) {
           qc.invalidateQueries({ queryKey: ['work-entries', orderId] })
           setEditEntry(null)
         }}
+      />
+
+      <ParteInforme
+        open={informeOpen}
+        onOpenChange={setInformeOpen}
+        order={o}
+        entries={entries.data ?? []}
       />
 
       <ConfirmDialog

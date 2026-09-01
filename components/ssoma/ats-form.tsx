@@ -169,6 +169,56 @@ export function AtsForm({
     if (roster.data) setSelected(new Set(roster.data.map((m: any) => m.id)))
   }, [roster.data])
 
+  /**
+   * Toma la ubicación y calcula la progresiva sobre el tramo elegido.
+   * Si el punto cae lejos del tramo, no se inventa una progresiva: se avisa.
+   * Proyectar desde 100 km daría 0+000 y dejaría el documento mal ubicado.
+   */
+  const DISTANCIA_MAXIMA_M = 300
+
+  const tomarUbicacion = async () => {
+    setGpsBusy(true)
+    try {
+      const f = await getGpsFix()
+      setGps({ lat: f.lat, lng: f.lng, accuracy: f.accuracy })
+
+      if (!sectionId) {
+        toast.success(`Ubicación tomada · ±${f.accuracy.toFixed(0)} m`, {
+          description: 'Elige el tramo para calcular la progresiva.',
+        })
+        return
+      }
+
+      const { data } = await sb.rpc('progresiva_con_distancia', {
+        p_section_id: sectionId, p_lng: f.lng, p_lat: f.lat,
+      })
+      const r = data as any
+
+      if (!r || r.sin_trazo) {
+        toast.warning('Ese tramo todavía no tiene su trazo cargado', {
+          description: 'Escribe la progresiva a mano, o cárgale el trazo en Configuración.',
+        })
+        return
+      }
+      if (Number(r.distancia_m) > DISTANCIA_MAXIMA_M) {
+        const km = (Number(r.distancia_m) / 1000).toFixed(1)
+        toast.warning(`Estás a ${km} km de ${catalogos.data?.sections.find((x: any) => x.id === sectionId)?.name ?? 'ese tramo'}`, {
+          description: 'No se calculó la progresiva: revisa si elegiste el tramo correcto o escríbela a mano.',
+        })
+        return
+      }
+
+      setProg(fmtProgresiva(Number(r.progresiva_m)))
+      toast.success(`Progresiva ${fmtProgresiva(Number(r.progresiva_m))}`, {
+        description: `A ${Math.round(Number(r.distancia_m))} m del eje · GPS ±${f.accuracy.toFixed(0)} m`,
+      })
+    } catch (e: any) {
+      toast.error(e?.message ?? 'GPS no disponible')
+    } finally {
+      setGpsBusy(false)
+    }
+  }
+
   const maxRisk = React.useMemo(() => {
     if (!hazards.length) return 'tolerable'
     return hazards
@@ -332,22 +382,7 @@ export function AtsForm({
                   <Input value={prog} onChange={(e) => setProg(e.target.value)} placeholder="12+450" className="h-10 font-mono" />
                   <Button
                     variant="outline" size="icon-lg" title="Tomar ubicación"
-                    onClick={async () => {
-                      setGpsBusy(true)
-                      try {
-                        const f = await getGpsFix()
-                        setGps({ lat: f.lat, lng: f.lng, accuracy: f.accuracy })
-                        if (sectionId) {
-                          const { data } = await sb.rpc('progresiva_from_point', {
-                            p_section_id: sectionId, p_lng: f.lng, p_lat: f.lat,
-                          })
-                          if (data != null) setProg(fmtProgresiva(Number(data)))
-                        }
-                        toast.success(`Ubicación tomada · ±${f.accuracy.toFixed(0)} m`)
-                      } catch (e: any) {
-                        toast.error(e?.message ?? 'GPS no disponible')
-                      } finally { setGpsBusy(false) }
-                    }}
+                    onClick={() => tomarUbicacion()}
                   >
                     {gpsBusy ? <Loader2 className="size-4 animate-spin" /> : <MapPin className="size-4" />}
                   </Button>

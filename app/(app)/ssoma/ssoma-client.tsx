@@ -28,6 +28,7 @@ import { ChecklistRunner, ChecklistTemplates } from '@/components/ssoma/checklis
 import { AtsForm } from '@/components/ssoma/ats-form'
 import { SignaturePadDialog, uploadSignature } from '@/components/shared/signature-pad'
 import { DateRangeTabs, rangeFromPreset, type DatePresetKey } from '@/components/shared/misc'
+import { descargarPdf, ORG_DEFAULT } from '@/lib/reports'
 import { cn, fmtDate, fmtNumber, fmtRelative, truncate, toISODate } from '@/lib/utils'
 import { toast } from 'sonner'
 
@@ -696,6 +697,152 @@ function AttendanceDialog({
 // ═══════════════════════════════════════════════════════════════════════════
 function DetailDialog({ detail, onClose }: { detail: any; onClose: () => void }) {
   const sb = React.useMemo(() => createClient(), [])
+  const { service, profile } = useSession()
+  const [foto, setFoto] = React.useState<string | null>(null)
+  const [bajando, setBajando] = React.useState(false)
+
+  /** URLs firmadas de las fotos que respondió el checklist. */
+  const fotosQuery = useQuery({
+    queryKey: ['checklist-fotos', detail?.data?.id],
+    enabled: detail?.kind === 'checklist',
+    queryFn: async () => {
+      const rutas = Object.values(detail.data.answers ?? {})
+        .filter((v: any) => typeof v === 'string' && v.includes('/checklists/'))
+      if (!rutas.length) return {}
+      const { data } = await sb.storage.from('evidencias').createSignedUrls(rutas as string[], 3600)
+      const m: Record<string, string> = {}
+      for (const u of data ?? []) if (u.path && u.signedUrl) m[u.path] = u.signedUrl
+      return m
+    },
+  })
+  const fotos: Record<string, string> = fotosQuery.data ?? {}
+
+  /** Firmas del ATS: la del supervisor y las del equipo. */
+  const firmasAts = useQuery({
+    queryKey: ['ats-firmas', detail?.data?.id],
+    enabled: detail?.kind === 'ats',
+    queryFn: async () => {
+      const { data: sigs } = await sb.from('ats_signatures')
+        .select('id, full_name, dni, signature_path, signed_at')
+        .eq('ats_id', detail.data.id).order('full_name')
+      const rows = sigs ?? []
+      const rutas = [
+        ...rows.map((r: any) => r.signature_path).filter(Boolean),
+        detail.data.supervisor_signature_path,
+      ].filter(Boolean)
+      const urls: Record<string, string> = {}
+      if (rutas.length) {
+        const { data } = await sb.storage.from('firmas').createSignedUrls(rutas as string[], 3600)
+        for (const u of data ?? []) if (u.path && u.signedUrl) urls[u.path] = u.signedUrl
+      }
+      return { rows, urls }
+    },
+  })
+
+  /** El acta de la charla: quién expuso, qué se trató y quién firmó. */
+  const descargarActa = async (t: any) => {
+    setBajando(true)
+    try {
+      const filas = attendance.data ?? []
+      await descargarPdf(
+        `SIGOV_charla_${t.talk_date}_${(t.topic ?? '').slice(0, 24).replace(/\s+/g, '-')}`,
+        {
+          titulo: 'Acta de charla de seguridad',
+          subtitulo: `${t.topic} · ${fmtDate(t.talk_date, 'long')}`,
+          servicio: service.name,
+          cliente: service.client_name,
+          contrato: service.contract_code,
+          periodo: fmtDate(t.talk_date, 'long'),
+          generadoPor: profile.full_name,
+          organizacion: ORG_DEFAULT.nombre,
+          ruc: ORG_DEFAULT.ruc,
+        },
+        [
+          { header: 'N.º', key: 'n', align: 'center', width: 12 },
+          { header: 'Nombre', key: 'nombre', width: 70 },
+          { header: 'DNI', key: 'dni', width: 26 },
+          { header: 'Cargo', key: 'cargo', width: 42 },
+          { header: 'Hora de firma', key: 'hora', width: 28 },
+        ],
+        filas.map((a: any, i: number) => ({
+          n: i + 1,
+          nombre: a.full_name,
+          dni: a.dni ?? '—',
+          cargo: a.position ?? '—',
+          hora: a.signed_at
+            ? new Date(a.signed_at).toLocaleTimeString('es-PE', { hour: '2-digit', minute: '2-digit' })
+            : '—',
+        })),
+        {
+          kpis: [
+            { label: 'Asistentes', value: String(filas.length) },
+            { label: 'Duración', value: `${t.duration_min ?? 5} min` },
+            { label: 'Cuadrilla', value: t.crews?.name ?? '—' },
+            { label: 'Expositor', value: t.speaker_name ?? '—' },
+          ],
+          intro:
+            `Lugar: ${t.location ?? '—'}` +
+            (t.content ? `
+Contenido tratado: ${t.content}` : ''),
+        }
+      )
+      toast.success('Acta descargada')
+    } catch (e: any) {
+      toast.error(e?.message ?? 'No se pudo generar el acta')
+    } finally {
+      setBajando(false)
+    }
+  }
+
+  /** El checklist como documento, para el expediente. */
+  const descargarChecklist = async (d: any) => {
+    setBajando(true)
+    try {
+      const preguntas = d.checklist_templates?.questions ?? []
+      await descargarPdf(
+        `SIGOV_checklist_${d.responded_on}_${(d.checklist_templates?.code ?? 'CHK')}`,
+        {
+          titulo: d.checklist_templates?.name ?? 'Checklist',
+          subtitulo: `${d.crews?.name ?? ''} · ${fmtDate(d.responded_on, 'long')}`,
+          servicio: service.name,
+          cliente: service.client_name,
+          contrato: service.contract_code,
+          periodo: fmtDate(d.responded_on, 'long'),
+          generadoPor: profile.full_name,
+          organizacion: ORG_DEFAULT.nombre,
+          ruc: ORG_DEFAULT.ruc,
+        },
+        [
+          { header: 'N.º', key: 'n', align: 'center', width: 12 },
+          { header: 'Punto verificado', key: 'punto', width: 110 },
+          { header: 'Resultado', key: 'res', width: 34 },
+        ],
+        preguntas.map((q: any, i: number) => {
+          const a = d.answers?.[q.id]
+          const res = q.type !== 'bool'
+            ? (q.type === 'photo' ? (a ? 'Foto adjunta' : 'Sin foto') : (a ? String(a) : '—'))
+            : a === true || a === 'ok' ? 'Conforme'
+            : a === false || a === 'no' ? 'No conforme'
+            : a === 'na' ? 'No aplica' : 'Sin responder'
+          return { n: i + 1, punto: q.label, res }
+        }),
+        {
+          kpis: [
+            { label: 'Cumplimiento', value: `${Number(d.score ?? 0).toFixed(0)}%` },
+            { label: 'Puntos', value: String(preguntas.length) },
+            { label: 'Hallazgos', value: d.has_findings ? 'Sí' : 'No' },
+            { label: 'Cuadrilla', value: d.crews?.name ?? '—' },
+          ],
+          intro: d.has_findings && d.findings ? `Hallazgo registrado: ${d.findings}` : undefined,
+        }
+      )
+      toast.success('Informe descargado')
+    } catch (e: any) {
+      toast.error(e?.message ?? 'No se pudo generar el informe')
+    } finally {
+      setBajando(false)
+    }
+  }
 
   const attendance = useQuery({
     queryKey: ['talk-attendance', detail?.data?.id],
@@ -719,10 +866,71 @@ function DetailDialog({ detail, onClose }: { detail: any; onClose: () => void })
     },
   })
 
+  /** El ATS como documento, con su matriz y sus firmantes. */
+  const descargarAts = async (a: any) => {
+    setBajando(true)
+    try {
+      const firmantes = (firmasAts.data?.rows ?? [])
+        .map((f: any) => `${f.full_name}${f.dni ? ` (DNI ${f.dni})` : ''}${f.signature_path ? ' — firmado' : ''}`)
+        .join(' · ')
+      await descargarPdf(
+        `SIGOV_ATS_${a.doc_date}_${(a.task ?? '').slice(0, 24).replace(/\s+/g, '-')}`,
+        {
+          titulo: 'Análisis de Trabajo Seguro (ATS / IPERC)',
+          subtitulo: `${a.task} · ${fmtDate(a.doc_date, 'long')}`,
+          servicio: service.name,
+          cliente: service.client_name,
+          contrato: service.contract_code,
+          periodo: fmtDate(a.doc_date, 'long'),
+          generadoPor: profile.full_name,
+          organizacion: ORG_DEFAULT.nombre,
+          ruc: ORG_DEFAULT.ruc,
+        },
+        [
+          { header: 'Peligro', key: 'peligro', width: 44 },
+          { header: 'Riesgo', key: 'riesgo', width: 40 },
+          { header: 'P', key: 'p', align: 'center', width: 10 },
+          { header: 'S', key: 'sev', align: 'center', width: 10 },
+          { header: 'Nivel', key: 'nivel', width: 24 },
+          { header: 'Controles', key: 'controles', width: 76 },
+          { header: 'Responsable', key: 'resp', width: 30 },
+        ],
+        (a.hazards ?? []).map((h: any) => ({
+          peligro: h.peligro,
+          riesgo: h.riesgo,
+          p: h.probabilidad,
+          sev: h.severidad,
+          nivel: h.nivel,
+          controles: h.controles,
+          resp: h.responsable ?? '—',
+        })),
+        {
+          landscape: true,
+          kpis: [
+            { label: 'Riesgo máximo', value: String(a.max_risk ?? '—') },
+            { label: 'Peligros', value: String((a.hazards ?? []).length) },
+            { label: 'Cuadrilla', value: a.crews?.name ?? '—' },
+            { label: 'Firmas', value: String(firmasAts.data?.rows?.length ?? 0) },
+          ],
+          intro:
+            `Lugar: ${a.location ?? '—'}` +
+            `\nEPP obligatorio: ${(a.ppe ?? []).join(', ') || '—'}` +
+            (firmantes ? `\nEquipo que firma: ${firmantes}` : ''),
+        }
+      )
+      toast.success('Informe descargado')
+    } catch (e: any) {
+      toast.error(e?.message ?? 'No se pudo generar el informe')
+    } finally {
+      setBajando(false)
+    }
+  }
+
   if (!detail) return null
   const d = detail.data
 
   return (
+    <>
     <Dialog open={!!detail} onOpenChange={onClose}>
       <DialogContent size="md">
         {detail.kind === 'talk' && (
@@ -772,6 +980,13 @@ function DetailDialog({ detail, onClose }: { detail: any; onClose: () => void })
                 ))}
               </ul>
             </div>
+
+            <DialogFooter>
+              <Button variant="outline" loading={bajando} onClick={() => descargarActa(d)}>
+                <Download className="size-4" />
+                Descargar el acta en PDF
+              </Button>
+            </DialogFooter>
           </>
         )}
 
@@ -796,31 +1011,65 @@ function DetailDialog({ detail, onClose }: { detail: any; onClose: () => void })
               {(d.checklist_templates?.questions ?? []).map((q: any) => {
                 const ans = d.answers?.[q.id]
                 const isBool = q.type === 'bool'
+                // Las respuestas viven como 'ok' | 'no' | 'na' (o como booleano
+                // en los registros antiguos). Leerlas con un simple `ans ?`
+                // marcaba «Conforme» un punto observado: la cadena 'no' es
+                // verdadera en JavaScript.
+                const estado = !isBool ? null
+                  : ans === true || ans === 'ok' ? 'ok'
+                  : ans === false || ans === 'no' ? 'no'
+                  : ans === 'na' ? 'na' : null
+                const foto = q.type === 'photo' && typeof ans === 'string' ? fotos[ans] : null
+
                 return (
                   <li key={q.id} className="flex items-start gap-2.5 rounded-lg bg-muted/40 px-3 py-2 text-[12px]">
                     {isBool ? (
-                      ans ? <CircleCheck className="text-success mt-0.5 size-3.5 shrink-0" />
-                          : <TriangleAlert className="text-destructive mt-0.5 size-3.5 shrink-0" />
+                      estado === 'ok' ? <CircleCheck className="text-success mt-0.5 size-3.5 shrink-0" />
+                      : estado === 'no' ? <TriangleAlert className="text-destructive mt-0.5 size-3.5 shrink-0" />
+                      : <ClipboardCheck className="text-muted-foreground mt-0.5 size-3.5 shrink-0" />
                     ) : (
                       <ClipboardCheck className="text-muted-foreground mt-0.5 size-3.5 shrink-0" />
                     )}
                     <span className="min-w-0 flex-1">
                       <span className="block">{q.label}</span>
-                      {!isBool && ans && (
-                        <span className="text-muted-foreground block text-[11px]">
-                          {q.type === 'photo' ? 'Foto adjunta' : String(ans)}
-                        </span>
-                      )}
+                      {q.type === 'photo' ? (
+                        foto ? (
+                          <button
+                            onClick={() => setFoto(foto)}
+                            title="Ver la foto en grande"
+                            className="mt-1.5 block size-20 overflow-hidden rounded-lg border border-border transition-transform hover:scale-[1.03]"
+                          >
+                            {/* eslint-disable-next-line @next/next/no-img-element */}
+                            <img src={foto} alt={q.label} loading="lazy" className="size-full object-cover" />
+                          </button>
+                        ) : (
+                          <span className="text-muted-foreground block text-[11px]">Sin foto</span>
+                        )
+                      ) : !isBool && ans ? (
+                        <span className="text-muted-foreground block text-[11px]">{String(ans)}</span>
+                      ) : null}
                     </span>
                     {isBool && (
-                      <span className={cn('shrink-0 text-[11px] font-semibold', ans ? 'text-success' : 'text-destructive')}>
-                        {ans ? 'Conforme' : 'No conforme'}
+                      <span className={cn(
+                        'shrink-0 text-[11px] font-semibold',
+                        estado === 'ok' ? 'text-success'
+                          : estado === 'no' ? 'text-destructive'
+                          : 'text-muted-foreground'
+                      )}>
+                        {estado === 'ok' ? 'Conforme' : estado === 'no' ? 'No conforme' : estado === 'na' ? 'No aplica' : 'Sin responder'}
                       </span>
                     )}
                   </li>
                 )
               })}
             </ul>
+
+            <DialogFooter>
+              <Button variant="outline" onClick={() => descargarChecklist(d)}>
+                <Download className="size-4" />
+                Descargar el informe en PDF
+              </Button>
+            </DialogFooter>
           </>
         )}
 
@@ -875,9 +1124,84 @@ function DetailDialog({ detail, onClose }: { detail: any; onClose: () => void })
                 ))}
               </div>
             </div>
+
+            {/* Un ATS sin firmas a la vista no sirve ante una fiscalización */}
+            <div className="border-border border-t pt-3">
+              <p className="text-muted-foreground mb-2 flex items-center gap-1.5 text-[11px] font-medium tracking-wide uppercase">
+                <Signature className="size-3" />
+                Firmas del documento
+              </p>
+
+              {firmasAts.isLoading ? (
+                <p className="text-muted-foreground text-[12px]">Cargando firmas…</p>
+              ) : (
+                <>
+                  {d.supervisor_signature_path && firmasAts.data?.urls?.[d.supervisor_signature_path] && (
+                    <div className="bg-muted/40 mb-2 flex items-center gap-3 rounded-lg px-3 py-2">
+                      {/* eslint-disable-next-line @next/next/no-img-element */}
+                      <img
+                        src={firmasAts.data.urls[d.supervisor_signature_path]}
+                        alt="Firma del supervisor"
+                        className="h-9 w-24 shrink-0 object-contain dark:invert"
+                      />
+                      <span className="min-w-0 text-[12px]">
+                        <span className="block font-medium">Supervisor que aprueba</span>
+                        <span className="text-muted-foreground block text-[11px]">
+                          {d.approved_at ? fmtDate(d.approved_at, 'long') : 'Sin fecha de aprobación'}
+                        </span>
+                      </span>
+                    </div>
+                  )}
+
+                  <ul className="max-h-44 space-y-1.5 overflow-y-auto">
+                    {(firmasAts.data?.rows ?? []).map((f: any) => (
+                      <li key={f.id} className="bg-muted/40 flex items-center gap-3 rounded-lg px-3 py-2 text-[12px]">
+                        <span className="min-w-0 flex-1">
+                          <span className="block truncate font-medium">{f.full_name}</span>
+                          {f.dni && <span className="text-muted-foreground block text-[10.5px]">DNI {f.dni}</span>}
+                        </span>
+                        {f.signature_path && firmasAts.data?.urls?.[f.signature_path] ? (
+                          /* eslint-disable-next-line @next/next/no-img-element */
+                          <img
+                            src={firmasAts.data.urls[f.signature_path]}
+                            alt={`Firma de ${f.full_name}`}
+                            className="h-8 w-20 shrink-0 object-contain dark:invert"
+                          />
+                        ) : (
+                          <span className="text-muted-foreground shrink-0 text-[10.5px]">sin firma</span>
+                        )}
+                      </li>
+                    ))}
+                    {!firmasAts.data?.rows?.length && (
+                      <li className="text-muted-foreground text-[12px]">
+                        Este ATS todavía no tiene firmas del equipo.
+                      </li>
+                    )}
+                  </ul>
+                </>
+              )}
+            </div>
+
+            <DialogFooter>
+              <Button variant="outline" loading={bajando} onClick={() => descargarAts(d)}>
+                <Download className="size-4" />
+                Descargar el informe en PDF
+              </Button>
+            </DialogFooter>
           </>
         )}
       </DialogContent>
     </Dialog>
+
+    {/* La foto del checklist, en grande */}
+    <Dialog open={!!foto} onOpenChange={() => setFoto(null)}>
+      <DialogContent size="lg" className="p-0">
+        {foto && (
+          /* eslint-disable-next-line @next/next/no-img-element */
+          <img src={foto} alt="Foto del checklist" className="max-h-[80vh] w-full rounded-2xl bg-black object-contain" />
+        )}
+      </DialogContent>
+    </Dialog>
+    </>
   )
 }

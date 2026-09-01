@@ -4,7 +4,7 @@ import * as React from 'react'
 import { useQuery, useQueryClient } from '@tanstack/react-query'
 import {
   Camera, Plus, MapPin, ShieldCheck, Clock, Fingerprint, Images,
-  Link2, Unlink, Upload,
+  Link2, Unlink, Upload, Maximize2, ChevronLeft, ChevronRight, Eye,
 } from 'lucide-react'
 import { createClient } from '@/lib/supabase/client'
 import { useSession } from '@/lib/hooks/use-session'
@@ -60,7 +60,7 @@ export function EvidenceGrid({
 }) {
   const ref = React.useRef<HTMLDivElement>(null)
   const [visible, setVisible] = React.useState(false)
-  const [zoom, setZoom] = React.useState<any>(null)
+  const [zoomIdx, setZoomIdx] = React.useState<number | null>(null)
   const [picker, setPicker] = React.useState(false)
   const [uploader, setUploader] = React.useState(false)
   const qc = useQueryClient()
@@ -172,7 +172,9 @@ export function EvidenceGrid({
     void syncNow().then(refresh)
   }
 
-  const total = data?.length ?? count
+  const fotos: any[] = data ?? []
+  const total = fotos.length || count
+  const zoom = zoomIdx !== null ? fotos[zoomIdx] : null
 
   return (
     <>
@@ -181,10 +183,12 @@ export function EvidenceGrid({
           ? Array.from({ length: Math.min(count, 4) }).map((_, i) => (
               <Skeleton key={i} className="size-20 rounded-lg" />
             ))
-          : (data ?? []).map((e: any) => (
+          : (data ?? []).map((e: any, i: number) => (
               <button
                 key={`${e.id}-${e.link_id ?? 'own'}`}
-                onClick={() => setZoom(e)}
+                onClick={() => setZoomIdx(i)}
+                title="Ver la foto en grande"
+                aria-label={`Ver la foto ${i + 1} en grande`}
                 className="group relative size-20 overflow-hidden rounded-lg border border-border transition-transform hover:scale-[1.03]"
               >
                 {e.url ? (
@@ -206,6 +210,10 @@ export function EvidenceGrid({
                     <Link2 className="size-2.5" />
                   </span>
                 )}
+                {/* Sin esto nadie adivina que la miniatura se abre */}
+                <span className="absolute top-1 right-1 flex size-5 items-center justify-center rounded bg-black/45 text-white backdrop-blur-sm transition-colors group-hover:bg-black/70">
+                  <Maximize2 className="size-3" />
+                </span>
                 <span
                   className={cn(
                     'absolute inset-x-0 bottom-0 px-1 py-0.5 text-[8.5px] font-semibold text-white backdrop-blur-sm',
@@ -283,13 +291,48 @@ export function EvidenceGrid({
         onLinked={refresh}
       />
 
+      {total > 0 && (
+        <button
+          onClick={() => setZoomIdx(0)}
+          className="text-muted-foreground hover:text-primary mt-2 flex items-center gap-1.5 text-[12px] font-medium transition-colors"
+        >
+          <Eye className="size-3.5" />
+          Ver {total === 1 ? 'la foto' : `las ${total} fotos`} en grande
+        </button>
+      )}
+
       {/* Visor con los metadatos sellados */}
-      <Dialog open={!!zoom} onOpenChange={() => setZoom(null)}>
+      <Dialog open={zoomIdx !== null} onOpenChange={() => setZoomIdx(null)}>
         <DialogContent size="lg" className="p-0">
           {zoom && (
             <>
-              {/* eslint-disable-next-line @next/next/no-img-element */}
-              <img src={zoom.url} alt="Evidencia" className="max-h-[62vh] w-full rounded-t-2xl bg-black object-contain" />
+              <div className="relative">
+                {/* eslint-disable-next-line @next/next/no-img-element */}
+                <img src={zoom.url} alt="Evidencia" className="max-h-[62vh] w-full rounded-t-2xl bg-black object-contain" />
+
+                {/* Pasar de una foto a otra sin cerrar y volver a abrir */}
+                {fotos.length > 1 && (
+                  <>
+                    <button
+                      onClick={() => setZoomIdx((i) => ((i ?? 0) - 1 + fotos.length) % fotos.length)}
+                      aria-label="Foto anterior"
+                      className="absolute top-1/2 left-2 flex size-9 -translate-y-1/2 items-center justify-center rounded-full bg-black/45 text-white backdrop-blur-sm transition-colors hover:bg-black/70"
+                    >
+                      <ChevronLeft className="size-5" />
+                    </button>
+                    <button
+                      onClick={() => setZoomIdx((i) => ((i ?? 0) + 1) % fotos.length)}
+                      aria-label="Foto siguiente"
+                      className="absolute top-1/2 right-2 flex size-9 -translate-y-1/2 items-center justify-center rounded-full bg-black/45 text-white backdrop-blur-sm transition-colors hover:bg-black/70"
+                    >
+                      <ChevronRight className="size-5" />
+                    </button>
+                    <span className="absolute bottom-2 left-1/2 -translate-x-1/2 rounded-full bg-black/55 px-2.5 py-1 text-[11px] font-medium text-white backdrop-blur-sm">
+                      {(zoomIdx ?? 0) + 1} de {fotos.length}
+                    </span>
+                  </>
+                )}
+              </div>
               <div className="p-5">
                 <div className="flex flex-wrap items-center gap-2">
                   <Badge className={EVIDENCE_PHASE[zoom.phase as keyof typeof EVIDENCE_PHASE].className}>
@@ -308,7 +351,7 @@ export function EvidenceGrid({
                   {zoom.linked && canAdd && (
                     <Button
                       variant="ghost" size="sm" className="ml-auto"
-                      onClick={() => { unlink(zoom.link_id); setZoom(null) }}
+                      onClick={() => { unlink(zoom.link_id); setZoomIdx(null) }}
                     >
                       <Unlink className="size-3.5" />
                       Desvincular

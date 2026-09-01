@@ -757,8 +757,96 @@ async function main() {
     return 'módulos aplicados'
   })
 
-  // ─── 8 · EN EL CELULAR ──────────────────────────────────────────────────
-  section('8 · Los formularios nuevos en un celular de 390 px')
+  // ─── 8 · CONSULTAR LO REGISTRADO ────────────────────────────────────────
+  // De nada sirve registrar si después nadie puede mirarlo: el supervisor
+  // valida con el documento a la vista, no de memoria.
+  section('8 · Ver la foto y el informe del parte')
+  await entrar('supervisor@sigov.dev', 'consulta')
+
+  await step('El parte diario ofrece verlo como informe', async () => {
+    await page.goto(`${BASE}/campo`, { waitUntil: 'networkidle' })
+    await page.waitForTimeout(2000)
+    const fila = page.locator('main a[href^="/campo/"]').first()
+    await fila.waitFor({ state: 'visible', timeout: 20000 })
+    await fila.click()
+    // La navegación es del lado del cliente: se espera el contenido, no el load
+    const b = page.getByRole('button', { name: /Ver informe/i })
+    await b.waitFor({ state: 'visible', timeout: 30000 })
+    await page.waitForTimeout(1500)
+    return 'botón presente para el supervisor'
+  })
+
+  await step('El informe muestra cabecera, actividades y fotos', async () => {
+    await page.getByRole('button', { name: /Ver informe/i }).click()
+    const d = page.getByRole('dialog')
+    await d.waitFor({ state: 'visible', timeout: 15000 })
+    await page.waitForTimeout(2500)
+    const t = (await d.innerText()).toLowerCase()
+    for (const campo of ['cuadrilla', 'metrado total', 'evidencias', 'actividades ejecutadas']) {
+      assert(t.includes(campo), `Al informe le falta «${campo}»`)
+    }
+    assert(/descargar el informe en pdf/i.test(t), 'No ofrece descargar el informe')
+    await shot(page, '20-informe-parte')
+    return 'el parte completo en una sola pantalla'
+  })
+
+  await step('Las fotos del informe se abren en grande', async () => {
+    const d = page.getByRole('dialog')
+    const miniaturas = d.locator('button img')
+    const n = await miniaturas.count()
+    if (!n) return 'ese parte no tiene fotos'
+    await miniaturas.first().click()
+    await page.waitForTimeout(1200)
+    const visor = page.getByRole('dialog').last()
+    const t = (await visor.innerText()).toLowerCase()
+    assert(/sellada e inmutable/.test(t), 'El visor no muestra el sello de la foto')
+    assert(/coordenadas/.test(t), 'El visor no muestra las coordenadas')
+    await shot(page, '21-foto-en-grande')
+    await page.keyboard.press('Escape')
+    await page.waitForTimeout(600)
+    return `${n} fotos, con GPS y sello a la vista`
+  })
+
+  await step('El checklist se lee bien y también se descarga', async () => {
+    await page.keyboard.press('Escape')
+    await page.goto(`${BASE}/ssoma`, { waitUntil: 'networkidle' })
+    await page.getByRole('tab', { name: /Checklists/i }).click()
+    await page.waitForTimeout(2000)
+    await page.locator('main li button').first().click()
+    const d = page.getByRole('dialog')
+    await d.waitFor({ state: 'visible', timeout: 15000 })
+    await page.waitForTimeout(1500)
+    const t = await d.innerText()
+    assert(/Descargar el informe en PDF/i.test(t), 'El checklist no ofrece su informe')
+    // Un punto observado no puede leerse como conforme
+    if (/no conforme/i.test(t)) {
+      const conformes = (t.match(/\bConforme\b/g) ?? []).length
+      const noConformes = (t.match(/No conforme/g) ?? []).length
+      assert(noConformes > 0, 'Los puntos observados se leen como conformes')
+      return `${conformes} conformes · ${noConformes} no conformes, bien diferenciados`
+    }
+    return 'ficha completa'
+  })
+
+  await step('El ATS muestra sus firmas y su informe', async () => {
+    await page.keyboard.press('Escape')
+    await page.waitForTimeout(600)
+    await page.getByRole('tab', { name: /ATS/i }).click()
+    await page.waitForTimeout(1800)
+    await page.locator('main li button').first().click()
+    const d = page.getByRole('dialog')
+    await d.waitFor({ state: 'visible', timeout: 15000 })
+    await page.waitForTimeout(2500)
+    const t = await d.innerText()
+    assert(/Firmas del documento/i.test(t), 'El ATS no muestra sus firmas')
+    assert(/Descargar el informe en PDF/i.test(t), 'El ATS no ofrece su informe')
+    await shot(page, '22-ats-firmas')
+    await page.keyboard.press('Escape')
+    return 'matriz, firmas y descarga'
+  })
+
+  // ─── 9 · EN EL CELULAR ──────────────────────────────────────────────────
+  section('9 · Los formularios nuevos en un celular de 390 px')
   await entrar('cuadrilla1@sigov.dev', 'movil', {
     viewport: { width: 390, height: 844 },
     deviceScaleFactor: 3,
@@ -836,7 +924,7 @@ async function main() {
   // ─── 9 · SIN SEÑAL ──────────────────────────────────────────────────────
   // Lo que más se promete de esta app: que en el kilómetro 40, sin Starlink,
   // no se pierda nada. Aquí se corta la red de verdad y se comprueba.
-  section('9 · Checklist y ATS sin señal')
+  section('10 · Checklist y ATS sin señal')
   await entrar('cuadrilla1@sigov.dev', 'offline')
   await page.goto(`${BASE}/ssoma`, { waitUntil: 'networkidle' })
   // Se le da tiempo a la primera sincronización: es la que deja los catálogos
@@ -957,7 +1045,7 @@ async function main() {
 
   // ─── Limpieza ───────────────────────────────────────────────────────────
   // Estas pruebas escriben en la base real: hay que dejarla como estaba.
-  section('10 · Limpieza de los datos de prueba')
+  section('11 · Limpieza de los datos de prueba')
   await step('Se borran ATS, checklists, elementos, contratos y archivos', () => {
     const out = execFileSync(process.execPath, ['scripts/limpiar-pruebas.mjs'], { encoding: 'utf8' })
     assert(/base limpia/.test(out), out.slice(0, 200))

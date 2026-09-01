@@ -128,20 +128,37 @@ export function AssetForm({
       setLat(fix.lat.toFixed(6))
       setLng(fix.lng.toFixed(6))
 
-      // Si hay tramo, se calcula también la progresiva
-      if (sectionId) {
-        const { data } = await sb.rpc('progresiva_from_point', {
-          p_section_id: sectionId, p_lng: fix.lng, p_lat: fix.lat,
+      if (!sectionId) {
+        toast.success('Ubicación tomada', {
+          description: `Precisión ±${fix.accuracy.toFixed(0)} m · elige el tramo para la progresiva`,
         })
-        if (data != null) {
-          setProg(fmtProgresiva(Number(data)))
-          toast.success(`Ubicación tomada · ${fmtProgresiva(Number(data))}`, {
-            description: `Precisión ±${fix.accuracy.toFixed(0)} m`,
-          })
-          return
-        }
+        return
       }
-      toast.success('Ubicación tomada', { description: `Precisión ±${fix.accuracy.toFixed(0)} m` })
+
+      const { data } = await sb.rpc('progresiva_con_distancia', {
+        p_section_id: sectionId, p_lng: fix.lng, p_lat: fix.lat,
+      })
+      const r = data as any
+
+      if (!r || r.sin_trazo) {
+        toast.warning('Ese tramo todavía no tiene su trazo cargado', {
+          description: 'Escribe la progresiva a mano, o cárgale el trazo en Configuración.',
+        })
+        return
+      }
+      // Estar lejos del tramo no puede traducirse en una progresiva inventada
+      if (Number(r.distancia_m) > 300) {
+        const km = (Number(r.distancia_m) / 1000).toFixed(1)
+        toast.warning(`Estás a ${km} km de ese tramo`, {
+          description: 'No se calculó la progresiva: revisa el tramo elegido o escríbela a mano.',
+        })
+        return
+      }
+
+      setProg(fmtProgresiva(Number(r.progresiva_m)))
+      toast.success(`Progresiva ${fmtProgresiva(Number(r.progresiva_m))}`, {
+        description: `A ${Math.round(Number(r.distancia_m))} m del eje · GPS ±${fix.accuracy.toFixed(0)} m`,
+      })
     } catch (e: any) {
       toast.error(e?.message ?? 'No se pudo obtener la ubicación')
     } finally {
