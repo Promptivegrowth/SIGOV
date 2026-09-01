@@ -21,7 +21,7 @@ import {
   IMPORT_KINDS, autoMap, coerce, normKey,
   type ImportKind, type RowIssue,
 } from '@/lib/import-schemas'
-import { cn, fmtDate, fmtNumber, fmtRelative } from '@/lib/utils'
+import { cn, fmtDate, fmtNumber, fmtRelative, toISODate, parseFecha } from '@/lib/utils'
 import { toast } from 'sonner'
 
 type Step = 'tipo' | 'archivo' | 'mapeo' | 'validacion' | 'resultado'
@@ -649,7 +649,7 @@ function buildRow(
       }
     case 'pci': {
       const pci = pcis?.find((p) => p.id === pciId)
-      const notified = pci?.notified_on ? new Date(pci.notified_on) : new Date()
+      const notified = pci?.notified_on ? (parseFecha(pci.notified_on) ?? new Date()) : new Date()
       const term = v.term_days ?? pci?.default_days ?? 15
       const due = new Date(notified.getTime() + term * 86400000)
       return {
@@ -662,7 +662,7 @@ function buildRow(
         activity_id: v.activity_code ?? null,
         quantity: v.quantity ?? null,
         term_days: term,
-        due_date: due.toISOString().slice(0, 10),
+        due_date: toISODate(due),
         status: 'pendiente',
       }
     }

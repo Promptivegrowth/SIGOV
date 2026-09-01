@@ -1,4 +1,4 @@
-import { parseProgresiva } from '@/lib/utils'
+import { parseProgresiva, toISODate } from '@/lib/utils'
 
 /**
  * Esquemas de importación.
@@ -190,7 +190,7 @@ export function coerce(
       // Excel serial o texto
       if (typeof value === 'number') {
         const d = new Date(Math.round((value - 25569) * 86400 * 1000))
-        return { value: d.toISOString().slice(0, 10) }
+        return { value: toISODate(d) }
       }
       const s = String(value).trim()
       const iso = /^\d{4}-\d{2}-\d{2}/.test(s)

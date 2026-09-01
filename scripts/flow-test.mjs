@@ -319,7 +319,14 @@ section('FLUJO 2 · Capturar y almacenar fotografias')
   await step('El capataz entra a su parte diario', async () => {
     await page.goto(`${BASE}/campo`, { waitUntil: 'networkidle' })
     await page.waitForTimeout(2200)
-    const first = page.locator('a[href^="/campo/"]').first()
+
+    // Tiene que ser un parte que aun se pueda editar: uno ya validado no
+    // muestra el boton de registrar actividad, y con razon.
+    const enBorrador = page.locator('a[href^="/campo/"]')
+      .filter({ hasText: /Borrador|Observado/i }).first()
+    const first = (await enBorrador.count())
+      ? enBorrador
+      : page.locator('a[href^="/campo/"]').first()
     assert(await first.count() > 0, 'no hay partes listados')
     parteUrl = await first.getAttribute('href')
     await page.goto(`${BASE}${parteUrl}`, { waitUntil: 'networkidle' })

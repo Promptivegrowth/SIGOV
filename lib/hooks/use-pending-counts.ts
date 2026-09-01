@@ -3,6 +3,7 @@
 import { useQuery } from '@tanstack/react-query'
 import { useLiveQuery } from 'dexie-react-hooks'
 import { createClient } from '@/lib/supabase/client'
+import { toISODate } from '@/lib/utils'
 import { db } from '@/lib/offline/db'
 import { useSession } from './use-session'
 
@@ -24,8 +25,8 @@ export function usePendingCounts() {
     queryKey: ['pending-counts', service.id],
     queryFn: async () => {
       const sb = createClient()
-      const today = new Date().toISOString().slice(0, 10)
-      const in7 = new Date(Date.now() + 7 * 86400000).toISOString().slice(0, 10)
+      const today = toISODate(new Date())
+      const in7 = toISODate(new Date(Date.now() + 7 * 86400000))
 
       const [critical, partes, unread] = await Promise.all([
         sb

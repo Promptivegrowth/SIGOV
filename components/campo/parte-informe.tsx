@@ -12,6 +12,7 @@ import {
 } from '@/components/ui/dialog'
 import { Button } from '@/components/ui/button'
 import { Badge } from '@/components/ui/badge'
+import { ImageViewer } from '@/components/shared/image-viewer'
 import { EVIDENCE_PHASE, WORK_ORDER_STATUS } from '@/lib/constants'
 import { descargarPdf, ORG_DEFAULT } from '@/lib/reports'
 import { cn, fmtDate, fmtDateTime, fmtNumber, fmtProgresiva } from '@/lib/utils'
@@ -115,6 +116,19 @@ export function ParteInforme({
             { label: 'Evidencias', value: String(evidencias.data?.length ?? 0) },
             { label: 'Estado', value: st?.label ?? '—' },
           ],
+          // Las fotos van al PDF: un parte sin panel fotográfico no sirve
+          // para sustentar la valorización.
+          fotos: (evidencias.data ?? []).map((f: any) => {
+            const reg = (entries ?? []).find((e: any) => e.id === f.work_entry_id)
+            return {
+              url: f.url,
+              titulo: `${reg?.activity_name ?? 'Evidencia'} · ${EVIDENCE_PHASE[f.phase as keyof typeof EVIDENCE_PHASE]?.label ?? ''}`,
+              pie:
+                `${reg?.section_name ?? ''} ${fmtProgresiva(f.progresiva_m ?? reg?.prog_start_m)}` +
+                ` · ${fmtDateTime(f.taken_at)}` +
+                ` · ${Number(f.lat).toFixed(5)}, ${Number(f.lng).toFixed(5)}`,
+            }
+          }),
           intro:
             `Cuadrilla ${order.crews?.name ?? '—'}` +
             (order.start_time ? ` · Jornada ${order.start_time.slice(0, 5)} a ${order.end_time?.slice(0, 5) ?? '—'}` : '') +
@@ -300,8 +314,12 @@ export function ParteInforme({
         <DialogContent size="lg" className="p-0">
           {zoom && (
             <>
-              {/* eslint-disable-next-line @next/next/no-img-element */}
-              <img src={zoom.url} alt="Evidencia" className="max-h-[62vh] w-full rounded-t-2xl bg-black object-contain" />
+              <ImageViewer
+                src={zoom.url}
+                alt={zoom.caption ?? 'Evidencia'}
+                descargar={`SIGOV_evidencia_${zoom.id}.webp`}
+                className="h-[58vh] w-full rounded-t-2xl"
+              />
               <div className="space-y-2 p-5">
                 <div className="flex flex-wrap items-center gap-2">
                   <Badge className={EVIDENCE_PHASE[zoom.phase as keyof typeof EVIDENCE_PHASE].className}>

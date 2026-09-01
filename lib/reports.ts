@@ -223,6 +223,179 @@ function footer(doc: any, meta: ReportMeta) {
 }
 
 // ─── Reporte genérico de tabla ────────────────────────────────────────────
+/**
+ * Descarga una imagen y la deja lista para incrustarla en el PDF.
+ *
+ * Se pasa por un canvas a propósito: las evidencias se guardan en WebP y jsPDF
+ * no lo admite en todas las versiones, y de paso se limita el tamaño para que
+ * un parte con veinte fotos no produzca un archivo de 40 MB.
+ */
+async function imagenParaPdf(
+  url: string,
+  maxLado = 900
+): Promise<{ data: string; w: number; h: number } | null> {
+  try {
+    const res = await fetch(url)
+    if (!res.ok) return null
+    const blob = await res.blob()
+    const bitmap = await createImageBitmap(blob)
+    const escala = Math.min(1, maxLado / Math.max(bitmap.width, bitmap.height))
+    const w = Math.max(1, Math.round(bitmap.width * escala))
+    const h = Math.max(1, Math.round(bitmap.height * escala))
+    const canvas = document.createElement('canvas')
+    canvas.width = w
+    canvas.height = h
+    const ctx = canvas.getContext('2d')
+    if (!ctx) return null
+    ctx.fillStyle = '#ffffff'
+    ctx.fillRect(0, 0, w, h)
+    ctx.drawImage(bitmap, 0, 0, w, h)
+    bitmap.close?.()
+    return { data: canvas.toDataURL('image/jpeg', 0.82), w, h }
+  } catch {
+    return null
+  }
+}
+
+export interface FotoInforme {
+  url: string
+  titulo?: string
+  pie?: string
+}
+
+export interface FirmaInforme {
+  url?: string | null
+  nombre: string
+  detalle?: string | null
+}
+
+/** Panel fotográfico: las fotos en cuadrícula, dos por fila. */
+async function panelFotografico(doc: any, fotos: FotoInforme[], meta: ReportMeta) {
+  const cargadas = await Promise.all(fotos.slice(0, 24).map((f) => imagenParaPdf(f.url)))
+  const utiles = cargadas.map((img, i) => ({ img, info: fotos[i] })).filter((x) => x.img)
+  if (!utiles.length) return
+
+  doc.addPage()
+  let y = header(doc, meta)
+
+  doc.setFont('helvetica', 'bold')
+  doc.setFontSize(11)
+  doc.setTextColor(BRAND.r, BRAND.g, BRAND.b)
+  doc.text('Panel fotográfico', 14, y)
+  y += 7
+
+  const W = doc.internal.pageSize.getWidth()
+  const H = doc.internal.pageSize.getHeight()
+  const cols = 2
+  const gap = 6
+  const cellW = (W - 28 - gap) / cols
+  const imgH = 52
+  const cellH = imgH + 16
+
+  utiles.forEach((x, i) => {
+    const col = i % cols
+    if (col === 0 && y + cellH > H - 22) {
+      doc.addPage()
+      y = header(doc, meta)
+    }
+    const px = 14 + col * (cellW + gap)
+
+    // La foto, centrada y sin deformar dentro de su recuadro
+    const rel = x.img!.w / x.img!.h
+    let dw = cellW
+    let dh = dw / rel
+    if (dh > imgH) { dh = imgH; dw = dh * rel }
+    const offsetX = px + (cellW - dw) / 2
+
+    doc.setFillColor(244, 246, 250)
+    doc.rect(px, y, cellW, imgH, 'F')
+    doc.addImage(x.img!.data, 'JPEG', offsetX, y + (imgH - dh) / 2, dw, dh)
+    doc.setDrawColor(224, 227, 235)
+    doc.rect(px, y, cellW, imgH)
+
+    doc.setFont('helvetica', 'bold')
+    doc.setFontSize(7.5)
+    doc.setTextColor(20, 26, 48)
+    doc.text(doc.splitTextToSize(x.info.titulo ?? '', cellW).slice(0, 1), px, y + imgH + 4)
+
+    doc.setFont('helvetica', 'normal')
+    doc.setFontSize(6.6)
+    doc.setTextColor(110, 116, 132)
+    doc.text(doc.splitTextToSize(x.info.pie ?? '', cellW).slice(0, 2), px, y + imgH + 8)
+
+    if (col === cols - 1) y += cellH
+  })
+
+  if (utiles.length % cols !== 0) y += cellH
+}
+
+/** Bloque de firmas: la rúbrica de cada persona con su nombre debajo. */
+async function bloqueFirmas(doc: any, firmas: FirmaInforme[], meta: ReportMeta, startY: number) {
+  if (!firmas.length) return
+  const W = doc.internal.pageSize.getWidth()
+  const H = doc.internal.pageSize.getHeight()
+  const cols = 3
+  const gap = 6
+  const cellW = (W - 28 - gap * (cols - 1)) / cols
+  const firmaH = 22
+  const cellH = firmaH + 14
+
+  let y = startY
+  if (y + cellH + 12 > H - 22) {
+    doc.addPage()
+    y = header(doc, meta)
+  }
+
+  doc.setFont('helvetica', 'bold')
+  doc.setFontSize(9.5)
+  doc.setTextColor(BRAND.r, BRAND.g, BRAND.b)
+  doc.text('Firmas', 14, y)
+  y += 6
+
+  const cargadas = await Promise.all(
+    firmas.map((f) => (f.url ? imagenParaPdf(f.url, 500) : Promise.resolve(null)))
+  )
+
+  firmas.forEach((f, i) => {
+    const col = i % cols
+    if (col === 0 && i > 0) y += cellH
+    if (y + cellH > H - 22) {
+      doc.addPage()
+      y = header(doc, meta)
+    }
+    const px = 14 + col * (cellW + gap)
+    const img = cargadas[i]
+
+    if (img) {
+      const rel = img.w / img.h
+      let dh = firmaH
+      let dw = dh * rel
+      if (dw > cellW) { dw = cellW; dh = dw / rel }
+      doc.addImage(img.data, 'JPEG', px + (cellW - dw) / 2, y + (firmaH - dh), dw, dh)
+    } else {
+      doc.setFont('helvetica', 'italic')
+      doc.setFontSize(7)
+      doc.setTextColor(150, 155, 168)
+      doc.text('sin firma registrada', px + 2, y + firmaH - 4)
+    }
+
+    doc.setDrawColor(150, 155, 168)
+    doc.line(px, y + firmaH + 1, px + cellW, y + firmaH + 1)
+
+    doc.setFont('helvetica', 'bold')
+    doc.setFontSize(7.5)
+    doc.setTextColor(20, 26, 48)
+    doc.text(doc.splitTextToSize(f.nombre, cellW).slice(0, 1), px, y + firmaH + 5)
+
+    if (f.detalle) {
+      doc.setFont('helvetica', 'normal')
+      doc.setFontSize(6.6)
+      doc.setTextColor(110, 116, 132)
+      doc.text(doc.splitTextToSize(f.detalle, cellW).slice(0, 1), px, y + firmaH + 9)
+    }
+  })
+}
+
 export async function reportePdf(
   meta: ReportMeta,
   columns: { header: string; key: string; align?: 'left' | 'right' | 'center'; width?: number }[],
@@ -234,6 +407,10 @@ export async function reportePdf(
     cover?: boolean
     /** Nota al pie del cuerpo, antes de la tabla */
     intro?: string
+    /** Fotografías que acompañan al informe, en un panel al final */
+    fotos?: FotoInforme[]
+    /** Firmas que cierran el documento */
+    firmas?: FirmaInforme[]
   }
 ) {
   const { jsPDF, autoTable } = await jspdf()
@@ -292,7 +469,19 @@ export async function reportePdf(
     margin: { left: 14, right: 14, bottom: 20 },
   })
 
+  // Las firmas cierran el documento, justo debajo de la tabla
+  if (options?.firmas?.length) {
+    const finTabla = (doc as any).lastAutoTable?.finalY ?? y
+    await bloqueFirmas(doc, options.firmas, meta, finTabla + 10)
+  }
+
+  // Las fotos van en su propio panel, al final
+  if (options?.fotos?.length) await panelFotografico(doc, options.fotos, meta)
+
+  // El pie se pinta al final, con el documento ya completo: si se numerara
+  // antes, el panel fotográfico saldría con la numeración equivocada.
   footer(doc, meta)
+
   return doc
 }
 

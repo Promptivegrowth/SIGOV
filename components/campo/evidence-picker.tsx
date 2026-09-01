@@ -3,7 +3,7 @@
 import * as React from 'react'
 import { useQuery } from '@tanstack/react-query'
 import {
-  Images, Search, Check, MapPin, Calendar, X, Link2, CircleCheck,
+  Images, Search, Check, MapPin, Calendar, X, Link2, CircleCheck, Maximize2,
 } from 'lucide-react'
 import { createClient } from '@/lib/supabase/client'
 import { useSession } from '@/lib/hooks/use-session'
@@ -16,8 +16,9 @@ import { Badge } from '@/components/ui/badge'
 import { Input } from '@/components/ui/input'
 import { Skeleton } from '@/components/ui/skeleton'
 import { EmptyState, DateRangeTabs, rangeFromPreset, type DatePresetKey } from '@/components/shared/misc'
+import { ImageViewer } from '@/components/shared/image-viewer'
 import { EVIDENCE_PHASE } from '@/lib/constants'
-import { cn, fmtDateTime, fmtNumber } from '@/lib/utils'
+import { cn, fmtDate, fmtDateTime, fmtNumber } from '@/lib/utils'
 import { toast } from 'sonner'
 
 /**
@@ -46,6 +47,7 @@ export function EvidencePicker({
   const [debounced, setDebounced] = React.useState('')
   const [preset, setPreset] = React.useState<DatePresetKey>('90d')
   const [selected, setSelected] = React.useState<Set<string>>(new Set())
+  const [zoom, setZoom] = React.useState<any>(null)
   const [saving, setSaving] = React.useState(false)
 
   const range = React.useMemo(() => rangeFromPreset(preset), [preset])
@@ -114,6 +116,7 @@ export function EvidencePicker({
   const rows = gallery.data ?? []
 
   return (
+    <>
     <Dialog open={open} onOpenChange={onOpenChange}>
       <DialogContent size="xl" className="max-h-[92vh]">
         <DialogHeader>
@@ -208,6 +211,23 @@ export function EvidencePicker({
                       </span>
                     )}
 
+                    {/* Antes de reutilizar una foto hay que poder verla bien */}
+                    {e.url && (
+                      <span
+                        role="button"
+                        tabIndex={0}
+                        title="Ver la foto en grande"
+                        onClick={(ev) => { ev.stopPropagation(); setZoom(e) }}
+                        onKeyDown={(ev) => { if (ev.key === 'Enter') { ev.stopPropagation(); setZoom(e) } }}
+                        className={cn(
+                          'absolute bottom-1.5 right-1.5 flex size-6 items-center justify-center rounded-md bg-black/50 text-white backdrop-blur-sm transition-colors hover:bg-black/75',
+                          isSel && 'bottom-1.5'
+                        )}
+                      >
+                        <Maximize2 className="size-3.5" />
+                      </span>
+                    )}
+
                     {Number(e.usos) > 1 && (
                       <span className="bg-accent text-accent-foreground absolute top-1.5 left-1.5 flex items-center gap-0.5 rounded px-1 py-0.5 text-[9px] font-bold">
                         <Link2 className="size-2" />
@@ -251,5 +271,27 @@ export function EvidencePicker({
         </DialogFooter>
       </DialogContent>
     </Dialog>
+
+    <Dialog open={!!zoom} onOpenChange={() => setZoom(null)}>
+      <DialogContent size="lg" className="p-0">
+        {zoom && (
+          <>
+            <ImageViewer
+              src={zoom.url}
+              alt={zoom.activity_name ?? 'Evidencia'}
+              descargar={`SIGOV_evidencia_${zoom.id}.webp`}
+              className="h-[62vh] w-full rounded-t-2xl"
+            />
+            <div className="space-y-1 p-4 text-[12px]">
+              <p className="font-semibold">{zoom.activity_name ?? 'Evidencia'}</p>
+              <p className="text-muted-foreground">
+                {zoom.section_name ?? ''} {zoom.progresiva_txt ?? ''} · {fmtDate(zoom.taken_at)}
+              </p>
+            </div>
+          </>
+        )}
+      </DialogContent>
+    </Dialog>
+    </>
   )
 }

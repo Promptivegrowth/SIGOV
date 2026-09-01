@@ -1,6 +1,7 @@
 'use client'
 
 import { createClient } from '@/lib/supabase/client'
+import { toISODate } from '@/lib/utils'
 import {
   db, getDeviceId, putMirror, setMeta, getMeta, purgeSynced,
   type OutboxItem,
@@ -172,8 +173,8 @@ async function pullMirror(scope: PullScope): Promise<number> {
   let total = 0
 
   const today = new Date()
-  const weekAgo = new Date(today.getTime() - 10 * 86400000).toISOString().slice(0, 10)
-  const weekAhead = new Date(today.getTime() + 14 * 86400000).toISOString().slice(0, 10)
+  const weekAgo = toISODate(new Date(today.getTime() - 10 * 86400000))
+  const weekAhead = toISODate(new Date(today.getTime() + 14 * 86400000))
 
   // Catálogos: siempre completos (son pequeños y se usan offline)
   const catalogs: [string, any][] = [

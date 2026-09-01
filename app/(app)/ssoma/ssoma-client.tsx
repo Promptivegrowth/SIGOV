@@ -27,6 +27,7 @@ import { FormDialog, ConfirmDialog, type FormField } from '@/components/forms/fo
 import { ChecklistRunner, ChecklistTemplates } from '@/components/ssoma/checklist-runner'
 import { AtsForm } from '@/components/ssoma/ats-form'
 import { SignaturePadDialog, uploadSignature } from '@/components/shared/signature-pad'
+import { ImageViewer } from '@/components/shared/image-viewer'
 import { DateRangeTabs, rangeFromPreset, type DatePresetKey } from '@/components/shared/misc'
 import { descargarPdf, ORG_DEFAULT } from '@/lib/reports'
 import { cn, fmtDate, fmtNumber, fmtRelative, truncate, toISODate } from '@/lib/utils'
@@ -717,6 +718,18 @@ function DetailDialog({ detail, onClose }: { detail: any; onClose: () => void })
   })
   const fotos: Record<string, string> = fotosQuery.data ?? {}
 
+  /** La firma con que se cerró el checklist, para mostrarla y llevarla al PDF. */
+  const firmaChecklistQuery = useQuery({
+    queryKey: ['checklist-firma', detail?.data?.id],
+    enabled: detail?.kind === 'checklist' && !!detail?.data?.signature_path,
+    queryFn: async () => {
+      const { data } = await sb.storage.from('firmas')
+        .createSignedUrl(detail.data.signature_path, 3600)
+      return data?.signedUrl ?? null
+    },
+  })
+  const firmaChecklist = firmaChecklistQuery.data ?? null
+
   /** Firmas del ATS: la del supervisor y las del equipo. */
   const firmasAts = useQuery({
     queryKey: ['ats-firmas', detail?.data?.id],
@@ -780,6 +793,12 @@ function DetailDialog({ detail, onClose }: { detail: any; onClose: () => void })
             { label: 'Cuadrilla', value: t.crews?.name ?? '—' },
             { label: 'Expositor', value: t.speaker_name ?? '—' },
           ],
+          // El acta vale por las firmas: van dibujadas en el documento
+          firmas: filas.map((a: any) => ({
+            url: a.signature_url ?? null,
+            nombre: a.full_name,
+            detalle: [a.dni ? `DNI ${a.dni}` : null, a.position].filter(Boolean).join(' · '),
+          })),
           intro:
             `Lugar: ${t.location ?? '—'}` +
             (t.content ? `
@@ -834,6 +853,17 @@ Contenido tratado: ${t.content}` : ''),
             { label: 'Cuadrilla', value: d.crews?.name ?? '—' },
           ],
           intro: d.has_findings && d.findings ? `Hallazgo registrado: ${d.findings}` : undefined,
+          fotos: Object.entries(fotos).map(([ruta, url]) => {
+            const preg = preguntas.find((q: any) => d.answers?.[q.id] === ruta)
+            return {
+              url,
+              titulo: preg?.label ?? 'Evidencia del checklist',
+              pie: `${d.crews?.name ?? ''} · ${fmtDate(d.responded_on, 'long')}`,
+            }
+          }),
+          firmas: firmaChecklist
+            ? [{ url: firmaChecklist, nombre: 'Responsable de la inspección', detalle: fmtDate(d.responded_on, 'long') }]
+            : [],
         }
       )
       toast.success('Informe descargado')
@@ -911,6 +941,20 @@ Contenido tratado: ${t.content}` : ''),
             { label: 'Peligros', value: String((a.hazards ?? []).length) },
             { label: 'Cuadrilla', value: a.crews?.name ?? '—' },
             { label: 'Firmas', value: String(firmasAts.data?.rows?.length ?? 0) },
+          ],
+          firmas: [
+            ...(a.supervisor_signature_path && firmasAts.data?.urls?.[a.supervisor_signature_path]
+              ? [{
+                  url: firmasAts.data.urls[a.supervisor_signature_path],
+                  nombre: 'Supervisor que aprueba',
+                  detalle: a.approved_at ? fmtDate(a.approved_at, 'long') : null,
+                }]
+              : []),
+            ...(firmasAts.data?.rows ?? []).map((f: any) => ({
+              url: f.signature_path ? firmasAts.data?.urls?.[f.signature_path] ?? null : null,
+              nombre: f.full_name,
+              detalle: f.dni ? `DNI ${f.dni}` : null,
+            })),
           ],
           intro:
             `Lugar: ${a.location ?? '—'}` +
@@ -1064,8 +1108,20 @@ Contenido tratado: ${t.content}` : ''),
               })}
             </ul>
 
+            {firmaChecklist && (
+              <div className="border-border flex items-center gap-3 border-t pt-3">
+                {/* eslint-disable-next-line @next/next/no-img-element */}
+                <img src={firmaChecklist} alt="Firma del responsable"
+                  className="h-10 w-28 shrink-0 object-contain dark:invert" />
+                <span className="text-[12px]">
+                  <span className="block font-medium">Firma del responsable</span>
+                  <span className="text-muted-foreground block text-[11px]">{fmtDate(d.responded_on, 'long')}</span>
+                </span>
+              </div>
+            )}
+
             <DialogFooter>
-              <Button variant="outline" onClick={() => descargarChecklist(d)}>
+              <Button variant="outline" loading={bajando} onClick={() => descargarChecklist(d)}>
                 <Download className="size-4" />
                 Descargar el informe en PDF
               </Button>
@@ -1197,8 +1253,12 @@ Contenido tratado: ${t.content}` : ''),
     <Dialog open={!!foto} onOpenChange={() => setFoto(null)}>
       <DialogContent size="lg" className="p-0">
         {foto && (
-          /* eslint-disable-next-line @next/next/no-img-element */
-          <img src={foto} alt="Foto del checklist" className="max-h-[80vh] w-full rounded-2xl bg-black object-contain" />
+          <ImageViewer
+            src={foto}
+            alt="Foto del checklist"
+            descargar="SIGOV_checklist.webp"
+            className="h-[75vh] w-full rounded-2xl"
+          />
         )}
       </DialogContent>
     </Dialog>

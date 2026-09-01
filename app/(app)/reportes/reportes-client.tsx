@@ -15,7 +15,7 @@ import { Card, CardContent } from '@/components/ui/card'
 import { Badge } from '@/components/ui/badge'
 import { DateRangeTabs, rangeFromPreset, type DatePresetKey } from '@/components/shared/misc'
 import { descargarPdf, descargarExcel, type ReportMeta } from '@/lib/reports'
-import { cn, fmtDate, fmtNumber, fmtProgresiva, truncate } from '@/lib/utils'
+import { cn, fmtDate, fmtNumber, fmtProgresiva, truncate, toISODate } from '@/lib/utils'
 import { SEMAFORO } from '@/lib/constants'
 import { toast } from 'sonner'
 
@@ -114,7 +114,7 @@ export function ReportesClient() {
     setBusy(`${key}-${format}`)
     try {
       const data: any = await fetchData(key)
-      const stamp = new Date().toISOString().slice(0, 10)
+      const stamp = toISODate(new Date())
 
       if (key === 'diario') {
         const cols = [

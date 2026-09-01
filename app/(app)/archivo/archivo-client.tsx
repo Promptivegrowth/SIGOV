@@ -16,6 +16,7 @@ import { Card, CardContent } from '@/components/ui/card'
 import { Input, Textarea, Field } from '@/components/ui/input'
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select'
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription, DialogFooter } from '@/components/ui/dialog'
+import { ImageViewer } from '@/components/shared/image-viewer'
 import { SkeletonList } from '@/components/ui/skeleton'
 import { EmptyState, DateRangeTabs, rangeFromPreset, type DatePresetKey } from '@/components/shared/misc'
 import { ConfirmDialog } from '@/components/forms/form-dialog'
@@ -341,8 +342,12 @@ export function ArchivoClient() {
                 {preview.mime_type?.includes('pdf') ? (
                   <iframe src={preview.url} className="h-[70vh] w-full" title={preview.title} />
                 ) : preview.mime_type?.startsWith('image/') ? (
-                  // eslint-disable-next-line @next/next/no-img-element
-                  <img src={preview.url} alt={preview.title} className="mx-auto max-h-[70vh] object-contain" />
+                  <ImageViewer
+                    src={preview.url}
+                    alt={preview.title}
+                    descargar={preview.file_name}
+                    className="h-[70vh] w-full"
+                  />
                 ) : (
                   <div className="flex h-[60vh] flex-col items-center justify-center gap-3 text-center">
                     <FileSpreadsheet className="text-muted-foreground size-10" />

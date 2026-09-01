@@ -180,5 +180,51 @@ for (const f of filas) {
   if (subidas % 100 === 0) console.log(`  ${C.dim}${subidas}/${filas.length}…${C.reset}`)
 }
 
-console.log(`\n  ${C.ok}${subidas} firmas subidas${C.reset} ${C.dim}(${cache.size} rúbricas distintas)${C.reset}`)
+
+console.log(`  ${C.ok}${subidas}${C.reset} firmas de asistencia`)
+
+// ─── Firmas de los ATS ────────────────────────────────────────────────────
+// El ATS sembrado también prometía firmas que no existían: sin ellas, el
+// informe en PDF salía sin las rúbricas del equipo.
+const { data: ats } = await sb
+  .from('ats_iperc')
+  .select('id, service_id, supervisor_signature_path, profiles:supervisor_id(full_name)')
+  .limit(2000)
+
+let firmasAts = 0
+
+for (const a of ats ?? []) {
+  const nombreSup = a.profiles?.full_name ?? 'Supervisor'
+  if (!cache.has(nombreSup)) cache.set(nombreSup, firma(nombreSup))
+  const rutaSup = `${a.service_id}/ats/${a.id}/supervisor.png`
+  const { error: e1 } = await sb.storage.from('firmas')
+    .upload(rutaSup, cache.get(nombreSup), { contentType: 'image/png', upsert: true })
+  if (!e1) {
+    if (a.supervisor_signature_path !== rutaSup) {
+      await sb.from('ats_iperc').update({ supervisor_signature_path: rutaSup }).eq('id', a.id)
+    }
+    firmasAts++
+  } else fallos++
+
+  const { data: sigs } = await sb.from('ats_signatures')
+    .select('id, full_name, signature_path').eq('ats_id', a.id)
+
+  for (const sg of sigs ?? []) {
+    const nombre = sg.full_name ?? 'Trabajador'
+    if (!cache.has(nombre)) cache.set(nombre, firma(nombre))
+    const ruta = `${a.service_id}/ats/${a.id}/${sg.id}.png`
+    const { error: e2 } = await sb.storage.from('firmas')
+      .upload(ruta, cache.get(nombre), { contentType: 'image/png', upsert: true })
+    if (e2) { fallos++; continue }
+    if (sg.signature_path !== ruta) {
+      await sb.from('ats_signatures').update({ signature_path: ruta }).eq('id', sg.id)
+    }
+    firmasAts++
+  }
+
+  if (firmasAts % 150 === 0 && firmasAts) console.log(`  ${C.dim}${firmasAts} firmas de ATS...${C.reset}`)
+}
+
+console.log(`  ${C.ok}${firmasAts}${C.reset} firmas de ATS`)
+console.log(`\n  ${C.ok}Listo${C.reset} ${subidas + firmasAts} firmas ${C.dim}(${cache.size} rubricas distintas)${C.reset}`)
 if (fallos) console.log(`  ${C.bad}${fallos} con error${C.reset}`)

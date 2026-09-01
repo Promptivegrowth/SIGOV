@@ -24,7 +24,7 @@ import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription } f
 import { ConfirmDialog } from '@/components/forms/form-dialog'
 import { AssetForm, InterventionForm } from '@/components/inventario/asset-form'
 import { ASSET_CONDITION } from '@/lib/constants'
-import { cn, fmtDate, fmtNumber } from '@/lib/utils'
+import { cn, fmtDate, fmtNumber, parseFecha } from '@/lib/utils'
 
 export function InventarioClient() {
   const { service, can } = useSession()
@@ -106,12 +106,14 @@ export function InventarioClient() {
 
   const stats = React.useMemo(() => {
     const rows = assets.data ?? []
+    // Se compara día contra día: una inspección de hoy no está vencida
+    const hoy = new Date(); hoy.setHours(0, 0, 0, 0)
     const byCondition = rows.reduce((acc: any, r: any) => {
       acc[r.condition] = (acc[r.condition] ?? 0) + 1
       return acc
     }, {})
     const overdue = rows.filter(
-      (r: any) => r.next_inspection_on && new Date(r.next_inspection_on) < new Date()
+      (r: any) => r.next_inspection_on && (parseFecha(r.next_inspection_on) ?? new Date()) < hoy
     ).length
     return {
       total: rows.length,
@@ -266,8 +268,9 @@ export function InventarioClient() {
               <div style={{ height: virtualizer.getTotalSize(), position: 'relative' }}>
                 {virtualizer.getVirtualItems().map((v) => {
                   const r: any = filtered[v.index]
+                  const hoy = new Date(); hoy.setHours(0, 0, 0, 0)
                   const cond = ASSET_CONDITION[r.condition as keyof typeof ASSET_CONDITION]
-                  const overdue = r.next_inspection_on && new Date(r.next_inspection_on) < new Date()
+                  const overdue = r.next_inspection_on && (parseFecha(r.next_inspection_on) ?? new Date()) < hoy
                   return (
                     <button
                       key={r.id}

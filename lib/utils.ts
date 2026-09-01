@@ -43,10 +43,28 @@ export function fmtPct(n: number | null | undefined, decimals = 1): string {
   return `${n.toFixed(decimals)}%`
 }
 
+/**
+ * Convierte a Date respetando la fecha tal como se guardó.
+ *
+ * Una fecha sin hora («2026-08-31») la interpreta JavaScript como medianoche
+ * UTC, y en el Perú —cinco horas por detrás— eso se muestra como el día
+ * anterior: el parte del 31 aparecía como del 30. Aquí ese caso se arma como
+ * fecha local, que es lo que significa en la operación.
+ */
+export function parseFecha(d: string | Date | null | undefined): Date | null {
+  if (!d) return null
+  if (d instanceof Date) return Number.isNaN(d.getTime()) ? null : d
+  const soloFecha = /^(\d{4})-(\d{2})-(\d{2})$/.exec(d.trim())
+  const date = soloFecha
+    ? new Date(Number(soloFecha[1]), Number(soloFecha[2]) - 1, Number(soloFecha[3]))
+    : new Date(d)
+  return Number.isNaN(date.getTime()) ? null : date
+}
+
 export function fmtDate(d: string | Date | null | undefined, style: 'short' | 'long' | 'full' = 'short'): string {
   if (!d) return '—'
-  const date = typeof d === 'string' ? new Date(d) : d
-  if (Number.isNaN(date.getTime())) return '—'
+  const date = parseFecha(d)
+  if (!date) return '—'
   const opts: Record<string, Intl.DateTimeFormatOptions> = {
     short: { day: '2-digit', month: '2-digit', year: 'numeric' },
     long: { day: 'numeric', month: 'long', year: 'numeric' },
@@ -57,8 +75,8 @@ export function fmtDate(d: string | Date | null | undefined, style: 'short' | 'l
 
 export function fmtDateTime(d: string | Date | null | undefined): string {
   if (!d) return '—'
-  const date = typeof d === 'string' ? new Date(d) : d
-  if (Number.isNaN(date.getTime())) return '—'
+  const date = parseFecha(d)
+  if (!date) return '—'
   return new Intl.DateTimeFormat('es-PE', {
     day: '2-digit', month: '2-digit', year: 'numeric',
     hour: '2-digit', minute: '2-digit',
@@ -67,7 +85,8 @@ export function fmtDateTime(d: string | Date | null | undefined): string {
 
 export function fmtRelative(d: string | Date | null | undefined): string {
   if (!d) return '—'
-  const date = typeof d === 'string' ? new Date(d) : d
+  const date = parseFecha(d)
+  if (!date) return '—'
   const diff = date.getTime() - Date.now()
   const abs = Math.abs(diff)
   const rtf = new Intl.RelativeTimeFormat('es-PE', { numeric: 'auto' })
@@ -128,9 +147,10 @@ export function toISODate(d: Date): string {
 }
 
 export function addDays(d: Date | string, n: number): Date {
-  const date = typeof d === 'string' ? new Date(d) : new Date(d)
-  date.setDate(date.getDate() + n)
-  return date
+  const date = parseFecha(d) ?? new Date()
+  const copia = new Date(date)
+  copia.setDate(copia.getDate() + n)
+  return copia
 }
 
 export function bytes(n: number | null | undefined): string {

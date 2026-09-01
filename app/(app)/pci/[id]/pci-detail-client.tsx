@@ -24,7 +24,7 @@ import { SuspensionDialog } from '@/components/pci/suspension-dialog'
 import { PciItemSheet } from '@/components/pci/pci-item-sheet'
 import { descargarPdf, descargarExcel, type ReportMeta } from '@/lib/reports'
 import { PCI_PRIORITY, PCI_ITEM_STATUS, SEMAFORO, type Semaforo } from '@/lib/constants'
-import { cn, fmtDate, fmtNumber, truncate } from '@/lib/utils'
+import { cn, fmtDate, fmtNumber, truncate, toISODate } from '@/lib/utils'
 import { toast } from 'sonner'
 
 export function PciDetailClient({ pciId }: { pciId: string }) {
@@ -152,7 +152,7 @@ export function PciDetailClient({ pciId }: { pciId: string }) {
         periodo: 'Notificado el ' + fmtDate(p?.notified_on) + ' - plazo base ' + (p?.default_days ?? 0) + ' dias',
         generadoPor: profile.full_name,
       }
-      const stamp = new Date().toISOString().slice(0, 10)
+      const stamp = toISODate(new Date())
       if (format === 'pdf') {
         await descargarPdf('SIGOV_' + (p?.code ?? 'PCI') + '_' + stamp, meta, cols, rows, {
           landscape: true,

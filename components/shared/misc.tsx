@@ -2,7 +2,7 @@
 
 import * as React from 'react'
 import { Inbox, type LucideIcon } from 'lucide-react'
-import { cn, fmtProgresiva } from '@/lib/utils'
+import { cn, fmtProgresiva, toISODate } from '@/lib/utils'
 import { SEMAFORO, type Semaforo } from '@/lib/constants'
 import { Button } from '@/components/ui/button'
 
@@ -166,7 +166,7 @@ export function rangeFromPreset(key: DatePresetKey): { from: string; to: string 
   const to = new Date()
   const preset = DATE_PRESETS.find((p) => p.key === key) ?? DATE_PRESETS[1]
   const from = key === 'ytd' ? new Date(to.getFullYear(), 0, 1) : new Date(Date.now() - preset.days * 86400000)
-  const iso = (d: Date) => d.toISOString().slice(0, 10)
+  const iso = (d: Date) => toISODate(d)
   return { from: iso(from), to: iso(to) }
 }
 

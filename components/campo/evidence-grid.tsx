@@ -13,6 +13,7 @@ import { Badge } from '@/components/ui/badge'
 import { Button } from '@/components/ui/button'
 import { Skeleton } from '@/components/ui/skeleton'
 import { Tip } from '@/components/ui/primitives'
+import { ImageViewer } from '@/components/shared/image-viewer'
 import { EvidencePicker } from './evidence-picker'
 import { PhotoUploader } from './photo-uploader'
 import { EVIDENCE_PHASE } from '@/lib/constants'
@@ -307,8 +308,12 @@ export function EvidenceGrid({
           {zoom && (
             <>
               <div className="relative">
-                {/* eslint-disable-next-line @next/next/no-img-element */}
-                <img src={zoom.url} alt="Evidencia" className="max-h-[62vh] w-full rounded-t-2xl bg-black object-contain" />
+                <ImageViewer
+                  src={zoom.url}
+                  alt={`Evidencia ${zoom.phase}`}
+                  descargar={`SIGOV_evidencia_${zoom.id}.webp`}
+                  className="h-[58vh] w-full rounded-t-2xl"
+                />
 
                 {/* Pasar de una foto a otra sin cerrar y volver a abrir */}
                 {fotos.length > 1 && (
