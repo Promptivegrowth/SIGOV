@@ -282,6 +282,17 @@ export const CONTENIDO = [
   ]},
   { t: 'p', x: 'Cada foto se **sella** en el momento de guardarla: se le graba encima una marca de agua con el contrato, la cuadrilla, la actividad, el tramo, la progresiva, la fecha y hora exactas y las coordenadas, y se le calcula una huella digital (hash SHA-256). Además se clasifica por fase: **Antes**, **Durante**, **Después** o **General**.' },
   { t: 'p', x: 'Para verlas: tocar cualquier miniatura, o el enlace **Ver las N fotos en grande**. Dentro del visor se pasa de una a otra con las flechas, y se muestran la fase, la fecha de captura, las coordenadas, la precisión del GPS, la progresiva, el dispositivo, el peso del archivo y la huella digital completa.' },
+  { t: 'h3', x: 'Acercar la foto' },
+  { t: 'p', x: 'En una foto de obra el detalle es lo que importa: si la alcantarilla quedó limpia, si el operario lleva el barbiquejo puesto. Por eso el visor permite **acercar**:' },
+  { t: 'tabla', anchos: [30, 70], cab: ['Cómo', 'Dónde'], filas: [
+    ['Rueda del mouse', 'En la computadora, sobre la foto. Acerca justo en el punto donde está el cursor.'],
+    ['Doble clic o doble toque', 'Acerca de una vez; repitiendo, vuelve al tamaño original.'],
+    ['Pellizcar con dos dedos', 'En el celular y la tablet, como en la galería del teléfono.'],
+    ['Botones + y −', 'Abajo a la derecha, con el porcentaje de acercamiento a la vista.'],
+    ['Arrastrar', 'Con la foto acercada, se mueve por ella arrastrando.'],
+    ['Descargar', 'El botón de la flecha guarda la foto en el equipo.'],
+  ]},
+  { t: 'p', x: 'El mismo visor se usa en el informe del parte, en las fotos de los checklists, en el archivo documental y en la galería de reutilización.' },
   { t: 'aviso', x: [
     'La evidencia es **inmutable**: ni el administrador puede cambiarle la fecha, las coordenadas o la imagen. La base de datos bloquea la modificación y el almacenamiento no acepta reemplazos. Es lo que le da valor probatorio ante una fiscalización.',
     'Algunas actividades exigen un mínimo de fotos. Si faltan, el registro queda marcado y el sistema lo advierte.',
@@ -289,7 +300,7 @@ export const CONTENIDO = [
 
   { t: 'h2', x: 'Ver el parte como informe', n: '5.5' },
   { t: 'p', x: 'El botón **Ver informe**, arriba del parte, arma el documento completo en una sola pantalla: cabecera con cuadrilla, estado, jornada, personal, clima y totales; y debajo cada actividad con su tramo, sus progresivas, su metrado, su observación y sus fotos. Los registros sin evidencia salen señalados.' },
-  { t: 'p', x: 'Dentro del informe, el botón **Descargar el informe en PDF** genera el documento con la portada del contrato, los indicadores del día y la tabla de actividades. Es lo que se adjunta a la valorización o se entrega al supervisor.' },
+  { t: 'p', x: 'Dentro del informe, el botón **Descargar el informe en PDF** genera el documento con la portada del contrato, los indicadores del día, la tabla de actividades y, al final, el **panel fotográfico**: cada foto impresa con su pie de datos sellados —tramo, progresiva, fecha, hora y coordenadas—. Es lo que se adjunta a la valorización o se entrega al supervisor.' },
 
   { t: 'h2', x: 'Enviar y validar', n: '5.6' },
   { t: 'p', x: 'Cuando el parte está completo, el capataz toca **Enviar a validación**. El parte pasa a **Por validar** y deja de ser editable. El botón está deshabilitado si el parte no tiene ningún registro.' },
@@ -425,7 +436,7 @@ export const CONTENIDO = [
   ]},
   { t: 'p', x: 'Mientras se responde, arriba se actualiza solo el **cumplimiento en porcentaje** y el conteo de respondidas. Los puntos marcados como *No aplica* no bajan el porcentaje: se excluyen del cálculo.' },
   { t: 'p', x: 'Si algún punto sale **No conforme**, aparece el campo **Hallazgos detectados** y pasa a ser obligatorio: el sistema no deja enviar sin explicar qué se encontró y qué acción inmediata se tomó. El botón **Firmar** abre el recuadro de firma del responsable. Al final, **Enviar checklist**.' },
-  { t: 'p', x: 'En la lista, los checklists con hallazgos se distinguen con borde ámbar. Al abrir uno se ve cada punto con su resultado —Conforme en verde, No conforme en rojo, No aplica en gris—, las fotos (que se abren en grande al tocarlas) y el botón **Descargar el informe en PDF**.' },
+  { t: 'p', x: 'En la lista, los checklists con hallazgos se distinguen con borde ámbar. Al abrir uno se ve cada punto con su resultado —Conforme en verde, No conforme en rojo, No aplica en gris—, las fotos (que se abren en grande y se pueden acercar) y la firma del responsable. El botón **Descargar el informe en PDF** produce el documento con los puntos, el hallazgo, las fotografías y la firma.' },
 
   { t: 'h3', x: 'Crear sus propias plantillas' },
   { t: 'p', x: 'El botón **Plantillas** (para administrador y supervisor) permite armar listas nuevas sin depender del proveedor. En el editor se define:' },
@@ -467,7 +478,7 @@ export const CONTENIDO = [
   { t: 'h3', x: 'EPP y firmas' },
   { t: 'p', x: 'Debajo se marca el equipo de protección obligatorio para la tarea (casco, chaleco, botines, guantes, lentes, protector auditivo, respirador, arnés, bloqueador solar, cortaviento). Vienen marcados los cuatro básicos.' },
   { t: 'p', x: 'Al final firman el **supervisor que aprueba** y **cada integrante** de la cuadrilla, tocando el lápiz junto a su nombre. Con **Registrar ATS** se guarda todo junto.' },
-  { t: 'p', x: 'Al abrir un ATS registrado se ve la matriz completa, el EPP exigido y las firmas dibujadas de quienes participaron, con el botón **Descargar el informe en PDF**.' },
+  { t: 'p', x: 'Al abrir un ATS registrado se ve la matriz completa, el EPP exigido y las firmas dibujadas de quienes participaron. El botón **Descargar el informe en PDF** genera el documento con la matriz de riesgos y **las firmas impresas**, listo para el expediente o una fiscalización.' },
 
   { t: 'ejemplo', x: [
     '**Llene el SSOMA de una mañana.** Entre como **Ing. de seguridad**.',
@@ -601,7 +612,7 @@ export const CONTENIDO = [
     ['Inventario vial', 'Elementos por tipo, tramo y progresiva, con estado de conservación e inspecciones.'],
   ]},
   { t: 'p', x: 'El PDF lleva portada con el contrato, el cliente, el periodo y quién lo generó, más los indicadores del periodo en tarjetas. El Excel incluye una hoja de portada con los mismos datos. Ambos se generan en el propio equipo, en segundos.' },
-  { t: 'p', x: 'Además, cada documento del sistema tiene su propia descarga: el parte diario, el checklist, el ATS y el acta de la charla se descargan desde su propia ficha.' },
+  { t: 'p', x: 'Además, cada documento del sistema tiene su propia descarga desde su ficha: el **parte diario** con su panel fotográfico, el **checklist** con sus fotos y su firma, el **ATS** con su matriz y las firmas del equipo, y el **acta de la charla** con la asistencia firmada.' },
 
   { t: 'ejemplo', x: [
     '**Emita el reporte del mes.** Entre a **Reportes**, elija el periodo de 30 días y descargue el **Reporte diario de ejecución** en PDF y luego en Excel.',
@@ -775,6 +786,7 @@ export const CONTENIDO = [
     ['Sello de integridad', 'Cada foto lleva una huella digital SHA-256. Si el archivo cambiara un solo bit, la huella dejaría de coincidir.'],
     ['Registro de auditoría', 'Cada alta, cambio y baja queda anotada con el usuario, la fecha y el antes y el después.'],
     ['Copias de seguridad', 'La base de datos se respalda de forma automática todos los días.'],
+    ['Hora del Perú', 'El sistema trabaja en horario peruano. Un parte abierto a las ocho de la noche lleva la fecha de ese día, no la del siguiente.'],
   ]},
 
   { t: 'salto' },
