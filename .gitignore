@@ -46,3 +46,9 @@ android/app/build/
 android/local.properties
 android/.idea/
 *.apk
+
+# Caché de sesiones del compilador de Kotlin
+android/.kotlin/
+
+# Caché del CLI de Supabase
+supabase/.temp/

@@ -185,6 +185,13 @@ export type Database = {
             referencedColumns: ["id"]
           },
           {
+            foreignKeyName: "asset_interventions_crew_id_fkey"
+            columns: ["crew_id"]
+            isOneToOne: false
+            referencedRelation: "v_hygiene_today"
+            referencedColumns: ["crew_id"]
+          },
+          {
             foreignKeyName: "asset_interventions_pci_item_id_fkey"
             columns: ["pci_item_id"]
             isOneToOne: false
@@ -357,6 +364,13 @@ export type Database = {
             referencedColumns: ["id"]
           },
           {
+            foreignKeyName: "ats_iperc_crew_id_fkey"
+            columns: ["crew_id"]
+            isOneToOne: false
+            referencedRelation: "v_hygiene_today"
+            referencedColumns: ["crew_id"]
+          },
+          {
             foreignKeyName: "ats_iperc_section_id_fkey"
             columns: ["section_id"]
             isOneToOne: false
@@ -475,13 +489,6 @@ export type Database = {
             referencedRelation: "profiles"
             referencedColumns: ["id"]
           },
-          {
-            foreignKeyName: "audit_log_service_id_fkey"
-            columns: ["service_id"]
-            isOneToOne: false
-            referencedRelation: "services"
-            referencedColumns: ["id"]
-          },
         ]
       }
       backups_log: {
@@ -519,6 +526,253 @@ export type Database = {
           tables_count?: number | null
         }
         Relationships: []
+      }
+      cash_boxes: {
+        Row: {
+          client_id: string
+          closed_on: string | null
+          code: string
+          created_at: string
+          created_by: string | null
+          crew_id: string | null
+          currency: string
+          deleted_at: string | null
+          holder_id: string
+          id: string
+          is_active: boolean
+          low_balance_threshold: number
+          name: string
+          notes: string | null
+          opened_on: string
+          service_id: string
+          updated_at: string
+        }
+        Insert: {
+          client_id?: string
+          closed_on?: string | null
+          code: string
+          created_at?: string
+          created_by?: string | null
+          crew_id?: string | null
+          currency?: string
+          deleted_at?: string | null
+          holder_id: string
+          id?: string
+          is_active?: boolean
+          low_balance_threshold?: number
+          name: string
+          notes?: string | null
+          opened_on?: string
+          service_id: string
+          updated_at?: string
+        }
+        Update: {
+          client_id?: string
+          closed_on?: string | null
+          code?: string
+          created_at?: string
+          created_by?: string | null
+          crew_id?: string | null
+          currency?: string
+          deleted_at?: string | null
+          holder_id?: string
+          id?: string
+          is_active?: boolean
+          low_balance_threshold?: number
+          name?: string
+          notes?: string | null
+          opened_on?: string
+          service_id?: string
+          updated_at?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "cash_boxes_created_by_fkey"
+            columns: ["created_by"]
+            isOneToOne: false
+            referencedRelation: "profiles"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "cash_boxes_crew_id_fkey"
+            columns: ["crew_id"]
+            isOneToOne: false
+            referencedRelation: "crews"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "cash_boxes_crew_id_fkey"
+            columns: ["crew_id"]
+            isOneToOne: false
+            referencedRelation: "v_hygiene_today"
+            referencedColumns: ["crew_id"]
+          },
+          {
+            foreignKeyName: "cash_boxes_holder_id_fkey"
+            columns: ["holder_id"]
+            isOneToOne: false
+            referencedRelation: "profiles"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "cash_boxes_service_id_fkey"
+            columns: ["service_id"]
+            isOneToOne: false
+            referencedRelation: "services"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      cash_movements: {
+        Row: {
+          amount: number
+          cash_box_id: string
+          category: string | null
+          client_id: string
+          created_at: string
+          created_by: string | null
+          crew_id: string | null
+          deleted_at: string | null
+          description: string
+          id: string
+          kind: Database["public"]["Enums"]["cash_movement_kind"]
+          occurred_on: string
+          receipt_kind: Database["public"]["Enums"]["receipt_kind"]
+          receipt_number: string | null
+          review_note: string | null
+          reviewed_at: string | null
+          reviewed_by: string | null
+          section_id: string | null
+          service_id: string
+          status: Database["public"]["Enums"]["cash_movement_status"]
+          storage_path: string | null
+          storage_sha256: string | null
+          supplier: string | null
+          supplier_ruc: string | null
+          updated_at: string
+          work_order_id: string | null
+        }
+        Insert: {
+          amount: number
+          cash_box_id: string
+          category?: string | null
+          client_id?: string
+          created_at?: string
+          created_by?: string | null
+          crew_id?: string | null
+          deleted_at?: string | null
+          description: string
+          id?: string
+          kind: Database["public"]["Enums"]["cash_movement_kind"]
+          occurred_on?: string
+          receipt_kind?: Database["public"]["Enums"]["receipt_kind"]
+          receipt_number?: string | null
+          review_note?: string | null
+          reviewed_at?: string | null
+          reviewed_by?: string | null
+          section_id?: string | null
+          service_id: string
+          status?: Database["public"]["Enums"]["cash_movement_status"]
+          storage_path?: string | null
+          storage_sha256?: string | null
+          supplier?: string | null
+          supplier_ruc?: string | null
+          updated_at?: string
+          work_order_id?: string | null
+        }
+        Update: {
+          amount?: number
+          cash_box_id?: string
+          category?: string | null
+          client_id?: string
+          created_at?: string
+          created_by?: string | null
+          crew_id?: string | null
+          deleted_at?: string | null
+          description?: string
+          id?: string
+          kind?: Database["public"]["Enums"]["cash_movement_kind"]
+          occurred_on?: string
+          receipt_kind?: Database["public"]["Enums"]["receipt_kind"]
+          receipt_number?: string | null
+          review_note?: string | null
+          reviewed_at?: string | null
+          reviewed_by?: string | null
+          section_id?: string | null
+          service_id?: string
+          status?: Database["public"]["Enums"]["cash_movement_status"]
+          storage_path?: string | null
+          storage_sha256?: string | null
+          supplier?: string | null
+          supplier_ruc?: string | null
+          updated_at?: string
+          work_order_id?: string | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "cash_movements_cash_box_id_fkey"
+            columns: ["cash_box_id"]
+            isOneToOne: false
+            referencedRelation: "cash_boxes"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "cash_movements_cash_box_id_fkey"
+            columns: ["cash_box_id"]
+            isOneToOne: false
+            referencedRelation: "v_cash_boxes"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "cash_movements_created_by_fkey"
+            columns: ["created_by"]
+            isOneToOne: false
+            referencedRelation: "profiles"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "cash_movements_crew_id_fkey"
+            columns: ["crew_id"]
+            isOneToOne: false
+            referencedRelation: "crews"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "cash_movements_crew_id_fkey"
+            columns: ["crew_id"]
+            isOneToOne: false
+            referencedRelation: "v_hygiene_today"
+            referencedColumns: ["crew_id"]
+          },
+          {
+            foreignKeyName: "cash_movements_reviewed_by_fkey"
+            columns: ["reviewed_by"]
+            isOneToOne: false
+            referencedRelation: "profiles"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "cash_movements_section_id_fkey"
+            columns: ["section_id"]
+            isOneToOne: false
+            referencedRelation: "road_sections"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "cash_movements_service_id_fkey"
+            columns: ["service_id"]
+            isOneToOne: false
+            referencedRelation: "services"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "cash_movements_work_order_id_fkey"
+            columns: ["work_order_id"]
+            isOneToOne: false
+            referencedRelation: "work_orders"
+            referencedColumns: ["id"]
+          },
+        ]
       }
       checklist_responses: {
         Row: {
@@ -595,6 +849,13 @@ export type Database = {
             isOneToOne: false
             referencedRelation: "crews"
             referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "checklist_responses_crew_id_fkey"
+            columns: ["crew_id"]
+            isOneToOne: false
+            referencedRelation: "v_hygiene_today"
+            referencedColumns: ["crew_id"]
           },
           {
             foreignKeyName: "checklist_responses_service_id_fkey"
@@ -722,6 +983,13 @@ export type Database = {
             referencedColumns: ["id"]
           },
           {
+            foreignKeyName: "crew_members_crew_id_fkey"
+            columns: ["crew_id"]
+            isOneToOne: false
+            referencedRelation: "v_hygiene_today"
+            referencedColumns: ["crew_id"]
+          },
+          {
             foreignKeyName: "crew_members_profile_id_fkey"
             columns: ["profile_id"]
             isOneToOne: false
@@ -743,6 +1011,7 @@ export type Database = {
           name: string
           plate: string | null
           service_id: string
+          supervisor_id: string | null
           updated_at: string
           vehicle: string | null
         }
@@ -758,6 +1027,7 @@ export type Database = {
           name: string
           plate?: string | null
           service_id: string
+          supervisor_id?: string | null
           updated_at?: string
           vehicle?: string | null
         }
@@ -773,6 +1043,7 @@ export type Database = {
           name?: string
           plate?: string | null
           service_id?: string
+          supervisor_id?: string | null
           updated_at?: string
           vehicle?: string | null
         }
@@ -793,6 +1064,126 @@ export type Database = {
           },
           {
             foreignKeyName: "crews_service_id_fkey"
+            columns: ["service_id"]
+            isOneToOne: false
+            referencedRelation: "services"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "crews_supervisor_id_fkey"
+            columns: ["supervisor_id"]
+            isOneToOne: false
+            referencedRelation: "profiles"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      deposit_requests: {
+        Row: {
+          amount: number
+          approved_amount: number | null
+          bank_reference: string | null
+          cash_box_id: string
+          client_id: string
+          created_at: string
+          created_by: string | null
+          deleted_at: string | null
+          id: string
+          movement_id: string | null
+          needed_by: string | null
+          reason: string
+          resolution_note: string | null
+          resolved_at: string | null
+          resolved_by: string | null
+          service_id: string
+          status: Database["public"]["Enums"]["deposit_request_status"]
+          updated_at: string
+        }
+        Insert: {
+          amount: number
+          approved_amount?: number | null
+          bank_reference?: string | null
+          cash_box_id: string
+          client_id?: string
+          created_at?: string
+          created_by?: string | null
+          deleted_at?: string | null
+          id?: string
+          movement_id?: string | null
+          needed_by?: string | null
+          reason: string
+          resolution_note?: string | null
+          resolved_at?: string | null
+          resolved_by?: string | null
+          service_id: string
+          status?: Database["public"]["Enums"]["deposit_request_status"]
+          updated_at?: string
+        }
+        Update: {
+          amount?: number
+          approved_amount?: number | null
+          bank_reference?: string | null
+          cash_box_id?: string
+          client_id?: string
+          created_at?: string
+          created_by?: string | null
+          deleted_at?: string | null
+          id?: string
+          movement_id?: string | null
+          needed_by?: string | null
+          reason?: string
+          resolution_note?: string | null
+          resolved_at?: string | null
+          resolved_by?: string | null
+          service_id?: string
+          status?: Database["public"]["Enums"]["deposit_request_status"]
+          updated_at?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "deposit_requests_cash_box_id_fkey"
+            columns: ["cash_box_id"]
+            isOneToOne: false
+            referencedRelation: "cash_boxes"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "deposit_requests_cash_box_id_fkey"
+            columns: ["cash_box_id"]
+            isOneToOne: false
+            referencedRelation: "v_cash_boxes"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "deposit_requests_created_by_fkey"
+            columns: ["created_by"]
+            isOneToOne: false
+            referencedRelation: "profiles"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "deposit_requests_movement_id_fkey"
+            columns: ["movement_id"]
+            isOneToOne: false
+            referencedRelation: "cash_movements"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "deposit_requests_movement_id_fkey"
+            columns: ["movement_id"]
+            isOneToOne: false
+            referencedRelation: "v_cash_movements"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "deposit_requests_resolved_by_fkey"
+            columns: ["resolved_by"]
+            isOneToOne: false
+            referencedRelation: "profiles"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "deposit_requests_service_id_fkey"
             columns: ["service_id"]
             isOneToOne: false
             referencedRelation: "services"
@@ -966,6 +1357,13 @@ export type Database = {
             referencedColumns: ["id"]
           },
           {
+            foreignKeyName: "evidence_links_evidence_id_fkey"
+            columns: ["evidence_id"]
+            isOneToOne: false
+            referencedRelation: "v_evidences"
+            referencedColumns: ["id"]
+          },
+          {
             foreignKeyName: "evidence_links_pci_item_id_fkey"
             columns: ["pci_item_id"]
             isOneToOne: false
@@ -991,6 +1389,13 @@ export type Database = {
             columns: ["talk_id"]
             isOneToOne: false
             referencedRelation: "safety_talks"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "evidence_links_talk_id_fkey"
+            columns: ["talk_id"]
+            isOneToOne: false
+            referencedRelation: "v_safety_talks"
             referencedColumns: ["id"]
           },
           {
@@ -1167,6 +1572,13 @@ export type Database = {
             referencedColumns: ["id"]
           },
           {
+            foreignKeyName: "evidences_talk_id_fkey"
+            columns: ["talk_id"]
+            isOneToOne: false
+            referencedRelation: "v_safety_talks"
+            referencedColumns: ["id"]
+          },
+          {
             foreignKeyName: "evidences_work_entry_id_fkey"
             columns: ["work_entry_id"]
             isOneToOne: false
@@ -1178,6 +1590,89 @@ export type Database = {
             columns: ["work_entry_id"]
             isOneToOne: false
             referencedRelation: "work_entries"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      hygiene_checks: {
+        Row: {
+          checked_on: string
+          client_id: string
+          created_at: string
+          created_by: string | null
+          crew_id: string | null
+          deleted_at: string | null
+          done: boolean
+          id: string
+          item: Database["public"]["Enums"]["hygiene_item"]
+          lat: number | null
+          lng: number | null
+          notes: string | null
+          people_count: number | null
+          service_id: string
+          storage_path: string | null
+        }
+        Insert: {
+          checked_on?: string
+          client_id?: string
+          created_at?: string
+          created_by?: string | null
+          crew_id?: string | null
+          deleted_at?: string | null
+          done?: boolean
+          id?: string
+          item: Database["public"]["Enums"]["hygiene_item"]
+          lat?: number | null
+          lng?: number | null
+          notes?: string | null
+          people_count?: number | null
+          service_id: string
+          storage_path?: string | null
+        }
+        Update: {
+          checked_on?: string
+          client_id?: string
+          created_at?: string
+          created_by?: string | null
+          crew_id?: string | null
+          deleted_at?: string | null
+          done?: boolean
+          id?: string
+          item?: Database["public"]["Enums"]["hygiene_item"]
+          lat?: number | null
+          lng?: number | null
+          notes?: string | null
+          people_count?: number | null
+          service_id?: string
+          storage_path?: string | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "hygiene_checks_created_by_fkey"
+            columns: ["created_by"]
+            isOneToOne: false
+            referencedRelation: "profiles"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "hygiene_checks_crew_id_fkey"
+            columns: ["crew_id"]
+            isOneToOne: false
+            referencedRelation: "crews"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "hygiene_checks_crew_id_fkey"
+            columns: ["crew_id"]
+            isOneToOne: false
+            referencedRelation: "v_hygiene_today"
+            referencedColumns: ["crew_id"]
+          },
+          {
+            foreignKeyName: "hygiene_checks_service_id_fkey"
+            columns: ["service_id"]
+            isOneToOne: false
+            referencedRelation: "services"
             referencedColumns: ["id"]
           },
         ]
@@ -1372,6 +1867,8 @@ export type Database = {
           section_id: string | null
           service_id: string
           side: Database["public"]["Enums"]["road_side"] | null
+          started_at: string | null
+          started_by: string | null
           status: Database["public"]["Enums"]["pci_item_status"]
           term_days: number
           unit_id: string | null
@@ -1403,6 +1900,8 @@ export type Database = {
           section_id?: string | null
           service_id: string
           side?: Database["public"]["Enums"]["road_side"] | null
+          started_at?: string | null
+          started_by?: string | null
           status?: Database["public"]["Enums"]["pci_item_status"]
           term_days?: number
           unit_id?: string | null
@@ -1434,6 +1933,8 @@ export type Database = {
           section_id?: string | null
           service_id?: string
           side?: Database["public"]["Enums"]["road_side"] | null
+          started_at?: string | null
+          started_by?: string | null
           status?: Database["public"]["Enums"]["pci_item_status"]
           term_days?: number
           unit_id?: string | null
@@ -1455,6 +1956,13 @@ export type Database = {
             isOneToOne: false
             referencedRelation: "crews"
             referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "pci_items_assigned_crew_id_fkey"
+            columns: ["assigned_crew_id"]
+            isOneToOne: false
+            referencedRelation: "v_hygiene_today"
+            referencedColumns: ["crew_id"]
           },
           {
             foreignKeyName: "pci_items_assigned_to_fkey"
@@ -1496,6 +2004,13 @@ export type Database = {
             columns: ["service_id"]
             isOneToOne: false
             referencedRelation: "services"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "pci_items_started_by_fkey"
+            columns: ["started_by"]
+            isOneToOne: false
+            referencedRelation: "profiles"
             referencedColumns: ["id"]
           },
           {
@@ -1607,7 +2122,12 @@ export type Database = {
           crew_id: string | null
           deleted_at: string | null
           executed_qty: number
+          finished_at: string | null
+          finished_by: string | null
           id: string
+          impedimento: string | null
+          impedimento_at: string | null
+          impedimento_by: string | null
           notes: string | null
           original_date: string | null
           plan_id: string
@@ -1619,11 +2139,15 @@ export type Database = {
           section_id: string
           service_id: string
           sort_order: number
+          started_at: string | null
+          started_by: string | null
           status: Database["public"]["Enums"]["plan_item_status"]
           suspended_by_pci_id: string | null
           target_qty: number
           unit_id: string | null
           updated_at: string
+          validated_at: string | null
+          validated_by: string | null
         }
         Insert: {
           activity_id: string
@@ -1633,7 +2157,12 @@ export type Database = {
           crew_id?: string | null
           deleted_at?: string | null
           executed_qty?: number
+          finished_at?: string | null
+          finished_by?: string | null
           id?: string
+          impedimento?: string | null
+          impedimento_at?: string | null
+          impedimento_by?: string | null
           notes?: string | null
           original_date?: string | null
           plan_id: string
@@ -1645,11 +2174,15 @@ export type Database = {
           section_id: string
           service_id: string
           sort_order?: number
+          started_at?: string | null
+          started_by?: string | null
           status?: Database["public"]["Enums"]["plan_item_status"]
           suspended_by_pci_id?: string | null
           target_qty?: number
           unit_id?: string | null
           updated_at?: string
+          validated_at?: string | null
+          validated_by?: string | null
         }
         Update: {
           activity_id?: string
@@ -1659,7 +2192,12 @@ export type Database = {
           crew_id?: string | null
           deleted_at?: string | null
           executed_qty?: number
+          finished_at?: string | null
+          finished_by?: string | null
           id?: string
+          impedimento?: string | null
+          impedimento_at?: string | null
+          impedimento_by?: string | null
           notes?: string | null
           original_date?: string | null
           plan_id?: string
@@ -1671,11 +2209,15 @@ export type Database = {
           section_id?: string
           service_id?: string
           sort_order?: number
+          started_at?: string | null
+          started_by?: string | null
           status?: Database["public"]["Enums"]["plan_item_status"]
           suspended_by_pci_id?: string | null
           target_qty?: number
           unit_id?: string | null
           updated_at?: string
+          validated_at?: string | null
+          validated_by?: string | null
         }
         Relationships: [
           {
@@ -1700,6 +2242,27 @@ export type Database = {
             referencedColumns: ["id"]
           },
           {
+            foreignKeyName: "plan_items_crew_id_fkey"
+            columns: ["crew_id"]
+            isOneToOne: false
+            referencedRelation: "v_hygiene_today"
+            referencedColumns: ["crew_id"]
+          },
+          {
+            foreignKeyName: "plan_items_finished_by_fkey"
+            columns: ["finished_by"]
+            isOneToOne: false
+            referencedRelation: "profiles"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "plan_items_impedimento_by_fkey"
+            columns: ["impedimento_by"]
+            isOneToOne: false
+            referencedRelation: "profiles"
+            referencedColumns: ["id"]
+          },
+          {
             foreignKeyName: "plan_items_plan_id_fkey"
             columns: ["plan_id"]
             isOneToOne: false
@@ -1721,6 +2284,13 @@ export type Database = {
             referencedColumns: ["id"]
           },
           {
+            foreignKeyName: "plan_items_started_by_fkey"
+            columns: ["started_by"]
+            isOneToOne: false
+            referencedRelation: "profiles"
+            referencedColumns: ["id"]
+          },
+          {
             foreignKeyName: "plan_items_suspended_by_pci_id_fkey"
             columns: ["suspended_by_pci_id"]
             isOneToOne: false
@@ -1732,6 +2302,13 @@ export type Database = {
             columns: ["unit_id"]
             isOneToOne: false
             referencedRelation: "units"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "plan_items_validated_by_fkey"
+            columns: ["validated_by"]
+            isOneToOne: false
+            referencedRelation: "profiles"
             referencedColumns: ["id"]
           },
         ]
@@ -2099,6 +2676,191 @@ export type Database = {
           },
         ]
       }
+      safety_equipment: {
+        Row: {
+          brand: string | null
+          capacity: string | null
+          client_id: string
+          code: string
+          created_at: string
+          created_by: string | null
+          crew_id: string | null
+          deleted_at: string | null
+          description: string | null
+          expires_on: string | null
+          holder_id: string | null
+          id: string
+          kind: Database["public"]["Enums"]["safety_equipment_kind"]
+          last_check_on: string | null
+          location: string | null
+          next_check_on: string | null
+          notes: string | null
+          serial_number: string | null
+          service_id: string
+          status: Database["public"]["Enums"]["safety_equipment_status"]
+          updated_at: string
+        }
+        Insert: {
+          brand?: string | null
+          capacity?: string | null
+          client_id?: string
+          code: string
+          created_at?: string
+          created_by?: string | null
+          crew_id?: string | null
+          deleted_at?: string | null
+          description?: string | null
+          expires_on?: string | null
+          holder_id?: string | null
+          id?: string
+          kind: Database["public"]["Enums"]["safety_equipment_kind"]
+          last_check_on?: string | null
+          location?: string | null
+          next_check_on?: string | null
+          notes?: string | null
+          serial_number?: string | null
+          service_id: string
+          status?: Database["public"]["Enums"]["safety_equipment_status"]
+          updated_at?: string
+        }
+        Update: {
+          brand?: string | null
+          capacity?: string | null
+          client_id?: string
+          code?: string
+          created_at?: string
+          created_by?: string | null
+          crew_id?: string | null
+          deleted_at?: string | null
+          description?: string | null
+          expires_on?: string | null
+          holder_id?: string | null
+          id?: string
+          kind?: Database["public"]["Enums"]["safety_equipment_kind"]
+          last_check_on?: string | null
+          location?: string | null
+          next_check_on?: string | null
+          notes?: string | null
+          serial_number?: string | null
+          service_id?: string
+          status?: Database["public"]["Enums"]["safety_equipment_status"]
+          updated_at?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "safety_equipment_created_by_fkey"
+            columns: ["created_by"]
+            isOneToOne: false
+            referencedRelation: "profiles"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "safety_equipment_crew_id_fkey"
+            columns: ["crew_id"]
+            isOneToOne: false
+            referencedRelation: "crews"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "safety_equipment_crew_id_fkey"
+            columns: ["crew_id"]
+            isOneToOne: false
+            referencedRelation: "v_hygiene_today"
+            referencedColumns: ["crew_id"]
+          },
+          {
+            foreignKeyName: "safety_equipment_holder_id_fkey"
+            columns: ["holder_id"]
+            isOneToOne: false
+            referencedRelation: "profiles"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "safety_equipment_service_id_fkey"
+            columns: ["service_id"]
+            isOneToOne: false
+            referencedRelation: "services"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      safety_equipment_checks: {
+        Row: {
+          checked_on: string
+          client_id: string
+          conforme: boolean
+          created_at: string
+          created_by: string | null
+          deleted_at: string | null
+          equipment_id: string
+          findings: string | null
+          id: string
+          lat: number | null
+          lng: number | null
+          service_id: string
+          storage_path: string | null
+        }
+        Insert: {
+          checked_on?: string
+          client_id?: string
+          conforme?: boolean
+          created_at?: string
+          created_by?: string | null
+          deleted_at?: string | null
+          equipment_id: string
+          findings?: string | null
+          id?: string
+          lat?: number | null
+          lng?: number | null
+          service_id: string
+          storage_path?: string | null
+        }
+        Update: {
+          checked_on?: string
+          client_id?: string
+          conforme?: boolean
+          created_at?: string
+          created_by?: string | null
+          deleted_at?: string | null
+          equipment_id?: string
+          findings?: string | null
+          id?: string
+          lat?: number | null
+          lng?: number | null
+          service_id?: string
+          storage_path?: string | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "safety_equipment_checks_created_by_fkey"
+            columns: ["created_by"]
+            isOneToOne: false
+            referencedRelation: "profiles"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "safety_equipment_checks_equipment_id_fkey"
+            columns: ["equipment_id"]
+            isOneToOne: false
+            referencedRelation: "safety_equipment"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "safety_equipment_checks_equipment_id_fkey"
+            columns: ["equipment_id"]
+            isOneToOne: false
+            referencedRelation: "v_safety_equipment"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "safety_equipment_checks_service_id_fkey"
+            columns: ["service_id"]
+            isOneToOne: false
+            referencedRelation: "services"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       safety_talks: {
         Row: {
           attendees_count: number
@@ -2110,6 +2872,7 @@ export type Database = {
           deleted_at: string | null
           duration_min: number | null
           id: string
+          kind: Database["public"]["Enums"]["talk_kind"]
           lat: number | null
           lng: number | null
           location: string | null
@@ -2131,6 +2894,7 @@ export type Database = {
           deleted_at?: string | null
           duration_min?: number | null
           id?: string
+          kind?: Database["public"]["Enums"]["talk_kind"]
           lat?: number | null
           lng?: number | null
           location?: string | null
@@ -2152,6 +2916,7 @@ export type Database = {
           deleted_at?: string | null
           duration_min?: number | null
           id?: string
+          kind?: Database["public"]["Enums"]["talk_kind"]
           lat?: number | null
           lng?: number | null
           location?: string | null
@@ -2177,6 +2942,13 @@ export type Database = {
             isOneToOne: false
             referencedRelation: "crews"
             referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "safety_talks_crew_id_fkey"
+            columns: ["crew_id"]
+            isOneToOne: false
+            referencedRelation: "v_hygiene_today"
+            referencedColumns: ["crew_id"]
           },
           {
             foreignKeyName: "safety_talks_service_id_fkey"
@@ -2249,6 +3021,7 @@ export type Database = {
           modules: Json
           name: string
           org_id: string
+          settings: Json
           starts_on: string | null
           status: Database["public"]["Enums"]["service_status"]
           updated_at: string
@@ -2268,6 +3041,7 @@ export type Database = {
           modules?: Json
           name: string
           org_id: string
+          settings?: Json
           starts_on?: string | null
           status?: Database["public"]["Enums"]["service_status"]
           updated_at?: string
@@ -2287,6 +3061,7 @@ export type Database = {
           modules?: Json
           name?: string
           org_id?: string
+          settings?: Json
           starts_on?: string | null
           status?: Database["public"]["Enums"]["service_status"]
           updated_at?: string
@@ -2304,6 +3079,420 @@ export type Database = {
             columns: ["org_id"]
             isOneToOne: false
             referencedRelation: "organizations"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      stock_movements: {
+        Row: {
+          client_id: string
+          created_at: string
+          created_by: string | null
+          crew_id: string | null
+          deleted_at: string | null
+          document: string | null
+          id: string
+          kind: Database["public"]["Enums"]["stock_movement_kind"]
+          notes: string | null
+          occurred_on: string
+          qty: number
+          request_id: string | null
+          service_id: string
+          supplier: string | null
+          supply_id: string
+          unit_cost: number | null
+          updated_at: string
+          work_order_id: string | null
+        }
+        Insert: {
+          client_id?: string
+          created_at?: string
+          created_by?: string | null
+          crew_id?: string | null
+          deleted_at?: string | null
+          document?: string | null
+          id?: string
+          kind: Database["public"]["Enums"]["stock_movement_kind"]
+          notes?: string | null
+          occurred_on?: string
+          qty: number
+          request_id?: string | null
+          service_id: string
+          supplier?: string | null
+          supply_id: string
+          unit_cost?: number | null
+          updated_at?: string
+          work_order_id?: string | null
+        }
+        Update: {
+          client_id?: string
+          created_at?: string
+          created_by?: string | null
+          crew_id?: string | null
+          deleted_at?: string | null
+          document?: string | null
+          id?: string
+          kind?: Database["public"]["Enums"]["stock_movement_kind"]
+          notes?: string | null
+          occurred_on?: string
+          qty?: number
+          request_id?: string | null
+          service_id?: string
+          supplier?: string | null
+          supply_id?: string
+          unit_cost?: number | null
+          updated_at?: string
+          work_order_id?: string | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "stock_movements_created_by_fkey"
+            columns: ["created_by"]
+            isOneToOne: false
+            referencedRelation: "profiles"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "stock_movements_crew_id_fkey"
+            columns: ["crew_id"]
+            isOneToOne: false
+            referencedRelation: "crews"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "stock_movements_crew_id_fkey"
+            columns: ["crew_id"]
+            isOneToOne: false
+            referencedRelation: "v_hygiene_today"
+            referencedColumns: ["crew_id"]
+          },
+          {
+            foreignKeyName: "stock_movements_request_id_fkey"
+            columns: ["request_id"]
+            isOneToOne: false
+            referencedRelation: "supply_requests"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "stock_movements_request_id_fkey"
+            columns: ["request_id"]
+            isOneToOne: false
+            referencedRelation: "v_supply_requests"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "stock_movements_service_id_fkey"
+            columns: ["service_id"]
+            isOneToOne: false
+            referencedRelation: "services"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "stock_movements_supply_id_fkey"
+            columns: ["supply_id"]
+            isOneToOne: false
+            referencedRelation: "supplies"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "stock_movements_supply_id_fkey"
+            columns: ["supply_id"]
+            isOneToOne: false
+            referencedRelation: "v_supplies"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "stock_movements_work_order_id_fkey"
+            columns: ["work_order_id"]
+            isOneToOne: false
+            referencedRelation: "work_orders"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      supplies: {
+        Row: {
+          category: string | null
+          client_id: string
+          code: string
+          created_at: string
+          created_by: string | null
+          deleted_at: string | null
+          id: string
+          is_active: boolean
+          min_stock: number
+          name: string
+          notes: string | null
+          service_id: string
+          unit_cost: number | null
+          unit_id: string | null
+          updated_at: string
+        }
+        Insert: {
+          category?: string | null
+          client_id?: string
+          code: string
+          created_at?: string
+          created_by?: string | null
+          deleted_at?: string | null
+          id?: string
+          is_active?: boolean
+          min_stock?: number
+          name: string
+          notes?: string | null
+          service_id: string
+          unit_cost?: number | null
+          unit_id?: string | null
+          updated_at?: string
+        }
+        Update: {
+          category?: string | null
+          client_id?: string
+          code?: string
+          created_at?: string
+          created_by?: string | null
+          deleted_at?: string | null
+          id?: string
+          is_active?: boolean
+          min_stock?: number
+          name?: string
+          notes?: string | null
+          service_id?: string
+          unit_cost?: number | null
+          unit_id?: string | null
+          updated_at?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "supplies_created_by_fkey"
+            columns: ["created_by"]
+            isOneToOne: false
+            referencedRelation: "profiles"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "supplies_service_id_fkey"
+            columns: ["service_id"]
+            isOneToOne: false
+            referencedRelation: "services"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "supplies_unit_id_fkey"
+            columns: ["unit_id"]
+            isOneToOne: false
+            referencedRelation: "units"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      supply_request_items: {
+        Row: {
+          client_id: string
+          created_at: string
+          deleted_at: string | null
+          id: string
+          notes: string | null
+          qty_approved: number | null
+          qty_delivered: number
+          qty_requested: number
+          request_id: string
+          service_id: string
+          supply_id: string
+          updated_at: string
+        }
+        Insert: {
+          client_id?: string
+          created_at?: string
+          deleted_at?: string | null
+          id?: string
+          notes?: string | null
+          qty_approved?: number | null
+          qty_delivered?: number
+          qty_requested: number
+          request_id: string
+          service_id: string
+          supply_id: string
+          updated_at?: string
+        }
+        Update: {
+          client_id?: string
+          created_at?: string
+          deleted_at?: string | null
+          id?: string
+          notes?: string | null
+          qty_approved?: number | null
+          qty_delivered?: number
+          qty_requested?: number
+          request_id?: string
+          service_id?: string
+          supply_id?: string
+          updated_at?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "supply_request_items_request_id_fkey"
+            columns: ["request_id"]
+            isOneToOne: false
+            referencedRelation: "supply_requests"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "supply_request_items_request_id_fkey"
+            columns: ["request_id"]
+            isOneToOne: false
+            referencedRelation: "v_supply_requests"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "supply_request_items_service_id_fkey"
+            columns: ["service_id"]
+            isOneToOne: false
+            referencedRelation: "services"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "supply_request_items_supply_id_fkey"
+            columns: ["supply_id"]
+            isOneToOne: false
+            referencedRelation: "supplies"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "supply_request_items_supply_id_fkey"
+            columns: ["supply_id"]
+            isOneToOne: false
+            referencedRelation: "v_supplies"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      supply_requests: {
+        Row: {
+          client_id: string
+          code: string | null
+          created_at: string
+          created_by: string | null
+          crew_id: string | null
+          deleted_at: string | null
+          id: string
+          needed_on: string
+          notified_client_at: string | null
+          plan_id: string | null
+          plan_item_id: string | null
+          reason: string | null
+          review_note: string | null
+          reviewed_at: string | null
+          reviewed_by: string | null
+          section_id: string | null
+          service_id: string
+          status: Database["public"]["Enums"]["supply_request_status"]
+          updated_at: string
+        }
+        Insert: {
+          client_id?: string
+          code?: string | null
+          created_at?: string
+          created_by?: string | null
+          crew_id?: string | null
+          deleted_at?: string | null
+          id?: string
+          needed_on?: string
+          notified_client_at?: string | null
+          plan_id?: string | null
+          plan_item_id?: string | null
+          reason?: string | null
+          review_note?: string | null
+          reviewed_at?: string | null
+          reviewed_by?: string | null
+          section_id?: string | null
+          service_id: string
+          status?: Database["public"]["Enums"]["supply_request_status"]
+          updated_at?: string
+        }
+        Update: {
+          client_id?: string
+          code?: string | null
+          created_at?: string
+          created_by?: string | null
+          crew_id?: string | null
+          deleted_at?: string | null
+          id?: string
+          needed_on?: string
+          notified_client_at?: string | null
+          plan_id?: string | null
+          plan_item_id?: string | null
+          reason?: string | null
+          review_note?: string | null
+          reviewed_at?: string | null
+          reviewed_by?: string | null
+          section_id?: string | null
+          service_id?: string
+          status?: Database["public"]["Enums"]["supply_request_status"]
+          updated_at?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "supply_requests_created_by_fkey"
+            columns: ["created_by"]
+            isOneToOne: false
+            referencedRelation: "profiles"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "supply_requests_crew_id_fkey"
+            columns: ["crew_id"]
+            isOneToOne: false
+            referencedRelation: "crews"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "supply_requests_crew_id_fkey"
+            columns: ["crew_id"]
+            isOneToOne: false
+            referencedRelation: "v_hygiene_today"
+            referencedColumns: ["crew_id"]
+          },
+          {
+            foreignKeyName: "supply_requests_plan_id_fkey"
+            columns: ["plan_id"]
+            isOneToOne: false
+            referencedRelation: "weekly_plans"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "supply_requests_plan_item_id_fkey"
+            columns: ["plan_item_id"]
+            isOneToOne: false
+            referencedRelation: "plan_items"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "supply_requests_plan_item_id_fkey"
+            columns: ["plan_item_id"]
+            isOneToOne: false
+            referencedRelation: "v_plan_items"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "supply_requests_reviewed_by_fkey"
+            columns: ["reviewed_by"]
+            isOneToOne: false
+            referencedRelation: "profiles"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "supply_requests_section_id_fkey"
+            columns: ["section_id"]
+            isOneToOne: false
+            referencedRelation: "road_sections"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "supply_requests_service_id_fkey"
+            columns: ["service_id"]
+            isOneToOne: false
+            referencedRelation: "services"
             referencedColumns: ["id"]
           },
         ]
@@ -2437,6 +3626,13 @@ export type Database = {
             referencedRelation: "safety_talks"
             referencedColumns: ["id"]
           },
+          {
+            foreignKeyName: "talk_attendance_talk_id_fkey"
+            columns: ["talk_id"]
+            isOneToOne: false
+            referencedRelation: "v_safety_talks"
+            referencedColumns: ["id"]
+          },
         ]
       }
       units: {
@@ -2467,6 +3663,216 @@ export type Database = {
         Relationships: [
           {
             foreignKeyName: "units_service_id_fkey"
+            columns: ["service_id"]
+            isOneToOne: false
+            referencedRelation: "services"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      vehicle_checks: {
+        Row: {
+          checked_on: string
+          client_id: string
+          conforme: boolean
+          created_at: string
+          created_by: string | null
+          deleted_at: string | null
+          driver_id: string | null
+          findings: string | null
+          id: string
+          items: Json
+          lat: number | null
+          lng: number | null
+          odometer_km: number | null
+          service_id: string
+          signature_path: string | null
+          vehicle_id: string
+        }
+        Insert: {
+          checked_on?: string
+          client_id?: string
+          conforme?: boolean
+          created_at?: string
+          created_by?: string | null
+          deleted_at?: string | null
+          driver_id?: string | null
+          findings?: string | null
+          id?: string
+          items?: Json
+          lat?: number | null
+          lng?: number | null
+          odometer_km?: number | null
+          service_id: string
+          signature_path?: string | null
+          vehicle_id: string
+        }
+        Update: {
+          checked_on?: string
+          client_id?: string
+          conforme?: boolean
+          created_at?: string
+          created_by?: string | null
+          deleted_at?: string | null
+          driver_id?: string | null
+          findings?: string | null
+          id?: string
+          items?: Json
+          lat?: number | null
+          lng?: number | null
+          odometer_km?: number | null
+          service_id?: string
+          signature_path?: string | null
+          vehicle_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "vehicle_checks_created_by_fkey"
+            columns: ["created_by"]
+            isOneToOne: false
+            referencedRelation: "profiles"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "vehicle_checks_driver_id_fkey"
+            columns: ["driver_id"]
+            isOneToOne: false
+            referencedRelation: "profiles"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "vehicle_checks_service_id_fkey"
+            columns: ["service_id"]
+            isOneToOne: false
+            referencedRelation: "services"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "vehicle_checks_vehicle_id_fkey"
+            columns: ["vehicle_id"]
+            isOneToOne: false
+            referencedRelation: "v_vehicles"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "vehicle_checks_vehicle_id_fkey"
+            columns: ["vehicle_id"]
+            isOneToOne: false
+            referencedRelation: "vehicles"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      vehicles: {
+        Row: {
+          brand: string | null
+          client_id: string
+          code: string | null
+          created_at: string
+          created_by: string | null
+          crew_id: string | null
+          deleted_at: string | null
+          driver_id: string | null
+          id: string
+          inspection_expires_on: string | null
+          kind: Database["public"]["Enums"]["vehicle_kind"]
+          last_service_on: string | null
+          model: string | null
+          model_year: number | null
+          next_service_km: number | null
+          notes: string | null
+          odometer_km: number | null
+          owner: string | null
+          plate: string
+          policy_expires_on: string | null
+          service_id: string
+          soat_expires_on: string | null
+          status: Database["public"]["Enums"]["vehicle_status"]
+          updated_at: string
+        }
+        Insert: {
+          brand?: string | null
+          client_id?: string
+          code?: string | null
+          created_at?: string
+          created_by?: string | null
+          crew_id?: string | null
+          deleted_at?: string | null
+          driver_id?: string | null
+          id?: string
+          inspection_expires_on?: string | null
+          kind?: Database["public"]["Enums"]["vehicle_kind"]
+          last_service_on?: string | null
+          model?: string | null
+          model_year?: number | null
+          next_service_km?: number | null
+          notes?: string | null
+          odometer_km?: number | null
+          owner?: string | null
+          plate: string
+          policy_expires_on?: string | null
+          service_id: string
+          soat_expires_on?: string | null
+          status?: Database["public"]["Enums"]["vehicle_status"]
+          updated_at?: string
+        }
+        Update: {
+          brand?: string | null
+          client_id?: string
+          code?: string | null
+          created_at?: string
+          created_by?: string | null
+          crew_id?: string | null
+          deleted_at?: string | null
+          driver_id?: string | null
+          id?: string
+          inspection_expires_on?: string | null
+          kind?: Database["public"]["Enums"]["vehicle_kind"]
+          last_service_on?: string | null
+          model?: string | null
+          model_year?: number | null
+          next_service_km?: number | null
+          notes?: string | null
+          odometer_km?: number | null
+          owner?: string | null
+          plate?: string
+          policy_expires_on?: string | null
+          service_id?: string
+          soat_expires_on?: string | null
+          status?: Database["public"]["Enums"]["vehicle_status"]
+          updated_at?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "vehicles_created_by_fkey"
+            columns: ["created_by"]
+            isOneToOne: false
+            referencedRelation: "profiles"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "vehicles_crew_id_fkey"
+            columns: ["crew_id"]
+            isOneToOne: false
+            referencedRelation: "crews"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "vehicles_crew_id_fkey"
+            columns: ["crew_id"]
+            isOneToOne: false
+            referencedRelation: "v_hygiene_today"
+            referencedColumns: ["crew_id"]
+          },
+          {
+            foreignKeyName: "vehicles_driver_id_fkey"
+            columns: ["driver_id"]
+            isOneToOne: false
+            referencedRelation: "profiles"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "vehicles_service_id_fkey"
             columns: ["service_id"]
             isOneToOne: false
             referencedRelation: "services"
@@ -2776,6 +4182,13 @@ export type Database = {
             referencedColumns: ["id"]
           },
           {
+            foreignKeyName: "work_orders_crew_id_fkey"
+            columns: ["crew_id"]
+            isOneToOne: false
+            referencedRelation: "v_hygiene_today"
+            referencedColumns: ["crew_id"]
+          },
+          {
             foreignKeyName: "work_orders_reviewed_by_fkey"
             columns: ["reviewed_by"]
             isOneToOne: false
@@ -2793,6 +4206,250 @@ export type Database = {
       }
     }
     Views: {
+      v_cash_boxes: {
+        Row: {
+          balance: number | null
+          balance_approved: number | null
+          closed_on: string | null
+          code: string | null
+          crew_id: string | null
+          crew_name: string | null
+          currency: string | null
+          holder_id: string | null
+          holder_name: string | null
+          id: string | null
+          is_active: boolean | null
+          last_movement_on: string | null
+          low_balance_threshold: number | null
+          name: string | null
+          observed: number | null
+          opened_on: string | null
+          pending_review: number | null
+          service_id: string | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "cash_boxes_crew_id_fkey"
+            columns: ["crew_id"]
+            isOneToOne: false
+            referencedRelation: "crews"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "cash_boxes_crew_id_fkey"
+            columns: ["crew_id"]
+            isOneToOne: false
+            referencedRelation: "v_hygiene_today"
+            referencedColumns: ["crew_id"]
+          },
+          {
+            foreignKeyName: "cash_boxes_holder_id_fkey"
+            columns: ["holder_id"]
+            isOneToOne: false
+            referencedRelation: "profiles"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "cash_boxes_service_id_fkey"
+            columns: ["service_id"]
+            isOneToOne: false
+            referencedRelation: "services"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      v_cash_movements: {
+        Row: {
+          amount: number | null
+          box_code: string | null
+          cash_box_id: string | null
+          category: string | null
+          client_id: string | null
+          created_at: string | null
+          created_by: string | null
+          created_by_name: string | null
+          crew_id: string | null
+          crew_name: string | null
+          description: string | null
+          id: string | null
+          kind: Database["public"]["Enums"]["cash_movement_kind"] | null
+          occurred_on: string | null
+          receipt_kind: Database["public"]["Enums"]["receipt_kind"] | null
+          receipt_number: string | null
+          review_note: string | null
+          section_id: string | null
+          section_name: string | null
+          service_id: string | null
+          signed_amount: number | null
+          status: Database["public"]["Enums"]["cash_movement_status"] | null
+          storage_path: string | null
+          supplier: string | null
+          supplier_ruc: string | null
+          work_order_id: string | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "cash_movements_cash_box_id_fkey"
+            columns: ["cash_box_id"]
+            isOneToOne: false
+            referencedRelation: "cash_boxes"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "cash_movements_cash_box_id_fkey"
+            columns: ["cash_box_id"]
+            isOneToOne: false
+            referencedRelation: "v_cash_boxes"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "cash_movements_created_by_fkey"
+            columns: ["created_by"]
+            isOneToOne: false
+            referencedRelation: "profiles"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "cash_movements_crew_id_fkey"
+            columns: ["crew_id"]
+            isOneToOne: false
+            referencedRelation: "crews"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "cash_movements_crew_id_fkey"
+            columns: ["crew_id"]
+            isOneToOne: false
+            referencedRelation: "v_hygiene_today"
+            referencedColumns: ["crew_id"]
+          },
+          {
+            foreignKeyName: "cash_movements_section_id_fkey"
+            columns: ["section_id"]
+            isOneToOne: false
+            referencedRelation: "road_sections"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "cash_movements_service_id_fkey"
+            columns: ["service_id"]
+            isOneToOne: false
+            referencedRelation: "services"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "cash_movements_work_order_id_fkey"
+            columns: ["work_order_id"]
+            isOneToOne: false
+            referencedRelation: "work_orders"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      v_evidences: {
+        Row: {
+          accuracy_m: number | null
+          activity_name: string | null
+          caption: string | null
+          client_id: string | null
+          created_at: string | null
+          created_by: string | null
+          created_by_name: string | null
+          crew_id: string | null
+          crew_name: string | null
+          height: number | null
+          id: string | null
+          lat: number | null
+          lng: number | null
+          mime_type: string | null
+          origen: string | null
+          pci_code: string | null
+          pci_item_id: string | null
+          phase: Database["public"]["Enums"]["evidence_phase"] | null
+          progresiva_m: number | null
+          section_code: string | null
+          section_id: string | null
+          section_name: string | null
+          service_id: string | null
+          sha256: string | null
+          size_bytes: number | null
+          storage_path: string | null
+          taken_at: string | null
+          thumb_path: string | null
+          watermarked: boolean | null
+          width: number | null
+          work_date: string | null
+          work_entry_id: string | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "evidences_created_by_fkey"
+            columns: ["created_by"]
+            isOneToOne: false
+            referencedRelation: "profiles"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "evidences_pci_item_id_fkey"
+            columns: ["pci_item_id"]
+            isOneToOne: false
+            referencedRelation: "pci_items"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "evidences_pci_item_id_fkey"
+            columns: ["pci_item_id"]
+            isOneToOne: false
+            referencedRelation: "v_pci_items"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "evidences_service_id_fkey"
+            columns: ["service_id"]
+            isOneToOne: false
+            referencedRelation: "services"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "evidences_work_entry_id_fkey"
+            columns: ["work_entry_id"]
+            isOneToOne: false
+            referencedRelation: "v_work_entries"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "evidences_work_entry_id_fkey"
+            columns: ["work_entry_id"]
+            isOneToOne: false
+            referencedRelation: "work_entries"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      v_hygiene_today: {
+        Row: {
+          bloqueador: boolean | null
+          checked_on: string | null
+          crew_id: string | null
+          crew_name: string | null
+          cumplidos: number | null
+          desinfeccion_unidad: boolean | null
+          hidratacion: boolean | null
+          lavado_manos: boolean | null
+          orden_limpieza: boolean | null
+          people_count: number | null
+          service_id: string | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "crews_service_id_fkey"
+            columns: ["service_id"]
+            isOneToOne: false
+            referencedRelation: "services"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       v_pci_items: {
         Row: {
           activity_id: string | null
@@ -2807,6 +4464,8 @@ export type Database = {
           description: string | null
           due_date: string | null
           evidence_count: number | null
+          fotos_antes: number | null
+          fotos_despues: number | null
           id: string | null
           item_number: number | null
           notes: string | null
@@ -2826,6 +4485,7 @@ export type Database = {
           semaforo: string | null
           service_id: string | null
           side: Database["public"]["Enums"]["road_side"] | null
+          started_at: string | null
           status: Database["public"]["Enums"]["pci_item_status"] | null
           term_days: number | null
           unit_symbol: string | null
@@ -2846,6 +4506,13 @@ export type Database = {
             isOneToOne: false
             referencedRelation: "crews"
             referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "pci_items_assigned_crew_id_fkey"
+            columns: ["assigned_crew_id"]
+            isOneToOne: false
+            referencedRelation: "v_hygiene_today"
+            referencedColumns: ["crew_id"]
           },
           {
             foreignKeyName: "pci_items_assigned_to_fkey"
@@ -2889,7 +4556,11 @@ export type Database = {
           crew_id: string | null
           crew_name: string | null
           executed_qty: number | null
+          finished_at: string | null
+          finished_by_name: string | null
           id: string | null
+          impedimento: string | null
+          impedimento_at: string | null
           notes: string | null
           original_date: string | null
           pci_code: string | null
@@ -2908,11 +4579,15 @@ export type Database = {
           section_name: string | null
           service_id: string | null
           sort_order: number | null
+          started_at: string | null
+          started_by_name: string | null
           status: Database["public"]["Enums"]["plan_item_status"] | null
           suspended_by_pci_id: string | null
           target_qty: number | null
           unit_symbol: string | null
           updated_at: string | null
+          validated_at: string | null
+          validated_by_name: string | null
           week: number | null
           year: number | null
         }
@@ -2930,6 +4605,13 @@ export type Database = {
             isOneToOne: false
             referencedRelation: "crews"
             referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "plan_items_crew_id_fkey"
+            columns: ["crew_id"]
+            isOneToOne: false
+            referencedRelation: "v_hygiene_today"
+            referencedColumns: ["crew_id"]
           },
           {
             foreignKeyName: "plan_items_plan_id_fkey"
@@ -3013,6 +4695,302 @@ export type Database = {
             referencedColumns: ["id"]
           },
         ]
+      }
+      v_safety_equipment: {
+        Row: {
+          alert_level: string | null
+          brand: string | null
+          capacity: string | null
+          check_days_left: number | null
+          check_semaforo: string | null
+          code: string | null
+          crew_id: string | null
+          crew_name: string | null
+          days_left: number | null
+          description: string | null
+          expires_on: string | null
+          holder_id: string | null
+          holder_name: string | null
+          id: string | null
+          kind: Database["public"]["Enums"]["safety_equipment_kind"] | null
+          last_check_on: string | null
+          location: string | null
+          next_check_on: string | null
+          notes: string | null
+          observaciones_abiertas: number | null
+          semaforo: string | null
+          serial_number: string | null
+          service_id: string | null
+          status: Database["public"]["Enums"]["safety_equipment_status"] | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "safety_equipment_crew_id_fkey"
+            columns: ["crew_id"]
+            isOneToOne: false
+            referencedRelation: "crews"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "safety_equipment_crew_id_fkey"
+            columns: ["crew_id"]
+            isOneToOne: false
+            referencedRelation: "v_hygiene_today"
+            referencedColumns: ["crew_id"]
+          },
+          {
+            foreignKeyName: "safety_equipment_holder_id_fkey"
+            columns: ["holder_id"]
+            isOneToOne: false
+            referencedRelation: "profiles"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "safety_equipment_service_id_fkey"
+            columns: ["service_id"]
+            isOneToOne: false
+            referencedRelation: "services"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      v_safety_talks: {
+        Row: {
+          attendee_count: number | null
+          client_id: string | null
+          content: string | null
+          created_at: string | null
+          created_by: string | null
+          crew_id: string | null
+          crew_name: string | null
+          duration_min: number | null
+          id: string | null
+          kind: Database["public"]["Enums"]["talk_kind"] | null
+          lat: number | null
+          lng: number | null
+          location: string | null
+          service_id: string | null
+          signed_count: number | null
+          speaker_name: string | null
+          start_time: string | null
+          talk_date: string | null
+          topic: string | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "safety_talks_created_by_fkey"
+            columns: ["created_by"]
+            isOneToOne: false
+            referencedRelation: "profiles"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "safety_talks_crew_id_fkey"
+            columns: ["crew_id"]
+            isOneToOne: false
+            referencedRelation: "crews"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "safety_talks_crew_id_fkey"
+            columns: ["crew_id"]
+            isOneToOne: false
+            referencedRelation: "v_hygiene_today"
+            referencedColumns: ["crew_id"]
+          },
+          {
+            foreignKeyName: "safety_talks_service_id_fkey"
+            columns: ["service_id"]
+            isOneToOne: false
+            referencedRelation: "services"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      v_supplies: {
+        Row: {
+          category: string | null
+          code: string | null
+          committed: number | null
+          id: string | null
+          is_active: boolean | null
+          last_movement_on: string | null
+          min_stock: number | null
+          name: string | null
+          service_id: string | null
+          stock: number | null
+          unit_cost: number | null
+          unit_id: string | null
+          unit_symbol: string | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "supplies_service_id_fkey"
+            columns: ["service_id"]
+            isOneToOne: false
+            referencedRelation: "services"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "supplies_unit_id_fkey"
+            columns: ["unit_id"]
+            isOneToOne: false
+            referencedRelation: "units"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      v_supply_requests: {
+        Row: {
+          activity_name: string | null
+          client_id: string | null
+          code: string | null
+          created_at: string | null
+          created_by: string | null
+          created_by_name: string | null
+          crew_id: string | null
+          crew_name: string | null
+          id: string | null
+          item_count: number | null
+          needed_on: string | null
+          notified_client_at: string | null
+          plan_item_id: string | null
+          qty_delivered: number | null
+          qty_requested: number | null
+          reason: string | null
+          review_note: string | null
+          section_id: string | null
+          section_name: string | null
+          service_id: string | null
+          status: Database["public"]["Enums"]["supply_request_status"] | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "supply_requests_created_by_fkey"
+            columns: ["created_by"]
+            isOneToOne: false
+            referencedRelation: "profiles"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "supply_requests_crew_id_fkey"
+            columns: ["crew_id"]
+            isOneToOne: false
+            referencedRelation: "crews"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "supply_requests_crew_id_fkey"
+            columns: ["crew_id"]
+            isOneToOne: false
+            referencedRelation: "v_hygiene_today"
+            referencedColumns: ["crew_id"]
+          },
+          {
+            foreignKeyName: "supply_requests_plan_item_id_fkey"
+            columns: ["plan_item_id"]
+            isOneToOne: false
+            referencedRelation: "plan_items"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "supply_requests_plan_item_id_fkey"
+            columns: ["plan_item_id"]
+            isOneToOne: false
+            referencedRelation: "v_plan_items"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "supply_requests_section_id_fkey"
+            columns: ["section_id"]
+            isOneToOne: false
+            referencedRelation: "road_sections"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "supply_requests_service_id_fkey"
+            columns: ["service_id"]
+            isOneToOne: false
+            referencedRelation: "services"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      v_vehicles: {
+        Row: {
+          brand: string | null
+          code: string | null
+          crew_id: string | null
+          crew_name: string | null
+          driver_id: string | null
+          driver_name: string | null
+          first_due: string | null
+          id: string | null
+          inspection_expires_on: string | null
+          kind: Database["public"]["Enums"]["vehicle_kind"] | null
+          km_to_service: number | null
+          last_check_on: string | null
+          last_service_on: string | null
+          model: string | null
+          model_year: number | null
+          next_service_km: number | null
+          notes: string | null
+          odometer_km: number | null
+          owner: string | null
+          plate: string | null
+          policy_expires_on: string | null
+          semaforo: string | null
+          service_id: string | null
+          soat_expires_on: string | null
+          status: Database["public"]["Enums"]["vehicle_status"] | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "vehicles_crew_id_fkey"
+            columns: ["crew_id"]
+            isOneToOne: false
+            referencedRelation: "crews"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "vehicles_crew_id_fkey"
+            columns: ["crew_id"]
+            isOneToOne: false
+            referencedRelation: "v_hygiene_today"
+            referencedColumns: ["crew_id"]
+          },
+          {
+            foreignKeyName: "vehicles_driver_id_fkey"
+            columns: ["driver_id"]
+            isOneToOne: false
+            referencedRelation: "profiles"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "vehicles_service_id_fkey"
+            columns: ["service_id"]
+            isOneToOne: false
+            referencedRelation: "services"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      v_vencimientos: {
+        Row: {
+          alert_level: string | null
+          crew_id: string | null
+          crew_name: string | null
+          days_left: number | null
+          detalle: string | null
+          due_date: string | null
+          id: string | null
+          origen: string | null
+          referencia: string | null
+          semaforo: string | null
+          service_id: string | null
+          titulo: string | null
+        }
+        Relationships: []
       }
       v_work_entries: {
         Row: {
@@ -3112,10 +5090,30 @@ export type Database = {
             referencedRelation: "crews"
             referencedColumns: ["id"]
           },
+          {
+            foreignKeyName: "work_orders_crew_id_fkey"
+            columns: ["crew_id"]
+            isOneToOne: false
+            referencedRelation: "v_hygiene_today"
+            referencedColumns: ["crew_id"]
+          },
         ]
       }
     }
     Functions: {
+      ajustes_del_servicio: { Args: { p_service_id: string }; Returns: Json }
+      alertas_operativas: {
+        Args: { p_service_id: string }
+        Returns: {
+          cantidad: number
+          clave: string
+          detalle: string
+          orden: number
+          severidad: string
+          titulo: string
+          url: string
+        }[]
+      }
       apply_pci_suspension: { Args: { p_pci_id: string }; Returns: Json }
       assets_geojson: {
         Args: {
@@ -3131,6 +5129,20 @@ export type Database = {
       }
       can_manage: { Args: { sid: string }; Returns: boolean }
       can_write: { Args: { sid: string }; Returns: boolean }
+      clear_section_geometry: { Args: { p_section_id: string }; Returns: Json }
+      create_service: {
+        Args: {
+          p_client_name?: string
+          p_code: string
+          p_color?: string
+          p_contract_code?: string
+          p_ends_on?: string
+          p_modules?: Json
+          p_name: string
+          p_starts_on?: string
+        }
+        Returns: Json
+      }
       dashboard_activity_production: {
         Args: { p_from?: string; p_service_id: string; p_to?: string }
         Returns: {
@@ -3171,6 +5183,10 @@ export type Database = {
         Args: { p_from?: string; p_service_id: string; p_to?: string }
         Returns: Json
       }
+      duplicar_semana: {
+        Args: { p_destino: string; p_origen: string; p_service_id: string }
+        Returns: Json
+      }
       evaluate_pci_deadlines: { Args: never; Returns: Json }
       evidence_gallery: {
         Args: {
@@ -3208,11 +5224,68 @@ export type Database = {
         Returns: Json
       }
       fmt_progresiva: { Args: { m: number }; Returns: string }
+      hoy_peru: { Args: never; Returns: string }
       is_member: { Args: { sid: string }; Returns: boolean }
       is_platform_admin: { Args: never; Returns: boolean }
+      mis_cuadrillas: { Args: { p_service_id: string }; Returns: string[] }
       my_service_ids: { Args: never; Returns: string[] }
+      next_asset_code: {
+        Args: { p_section_id: string; p_service_id: string; p_type_id: string }
+        Returns: string
+      }
+      next_supply_request_code: {
+        Args: { p_service_id: string }
+        Returns: string
+      }
+      panel_cuadrillas: {
+        Args: { p_from: string; p_service_id: string; p_to: string }
+        Returns: {
+          actividades: number
+          avance: number
+          code: string
+          color: string
+          crew_id: string
+          ejecutadas: number
+          estado: string
+          leader_name: string
+          name: string
+          pci_abiertos: number
+          por_validar: number
+        }[]
+      }
+      panel_resumen: {
+        Args: { p_from: string; p_service_id: string; p_to: string }
+        Returns: Json
+      }
+      panel_ultimas: {
+        Args: { p_limite?: number; p_service_id: string }
+        Returns: {
+          activity_name: string
+          cantidad: number
+          crew_color: string
+          crew_name: string
+          estado: string
+          evidencias: number
+          id: string
+          progresiva: string
+          reportado_en: string
+          unidad: string
+          work_date: string
+        }[]
+      }
       parse_progresiva: { Args: { p: string }; Returns: number }
+      partida_finalizar: { Args: { p_item: string }; Returns: Json }
+      partida_impedimento: {
+        Args: { p_item: string; p_motivo: string }
+        Returns: Json
+      }
+      partida_iniciar: { Args: { p_item: string }; Returns: Json }
+      partida_validar: {
+        Args: { p_aceptar?: boolean; p_item: string; p_nota?: string }
+        Returns: Json
+      }
       pci_geojson: { Args: { p_service_id: string }; Returns: Json }
+      pci_iniciar_atencion: { Args: { p_item: string }; Returns: Json }
       pci_item_semaforo: {
         Args: {
           p_due: string
@@ -3221,39 +5294,26 @@ export type Database = {
         }
         Returns: string
       }
+      pci_levantar: { Args: { p_item: string; p_nota?: string }; Returns: Json }
+      pci_tablero: {
+        Args: {
+          p_crew?: string
+          p_from: string
+          p_section?: string
+          p_service_id: string
+          p_term?: number
+          p_to: string
+        }
+        Returns: Json
+      }
       preview_pci_suspension: { Args: { p_pci_id: string }; Returns: Json }
+      progresiva_con_distancia: {
+        Args: { p_lat: number; p_lng: number; p_section_id: string }
+        Returns: Json
+      }
       progresiva_from_point: {
         Args: { p_lat: number; p_lng: number; p_section_id: string }
         Returns: number
-      }
-      progresiva_con_distancia: {
-        Args: { p_section_id: string; p_lng: number; p_lat: number }
-        Returns: Json
-      }
-      next_asset_code: {
-        Args: { p_service_id: string; p_section_id: string | null; p_type_id: string }
-        Returns: string
-      }
-      set_section_geometry: {
-        Args: { p_section_id: string; p_coords: Json }
-        Returns: Json
-      }
-      clear_section_geometry: {
-        Args: { p_section_id: string }
-        Returns: Json
-      }
-      create_service: {
-        Args: {
-          p_code: string
-          p_name: string
-          p_client_name?: string | null
-          p_contract_code?: string | null
-          p_starts_on?: string | null
-          p_ends_on?: string | null
-          p_color?: string | null
-          p_modules?: Json | null
-        }
-        Returns: Json
       }
       revert_pci_suspension: {
         Args: { p_suspension_id: string }
@@ -3264,9 +5324,15 @@ export type Database = {
         Returns: Database["public"]["Enums"]["user_role"]
       }
       sections_geojson: { Args: { p_service_id: string }; Returns: Json }
+      set_section_geometry: {
+        Args: { p_coords: Json; p_section_id: string }
+        Returns: Json
+      }
       show_limit: { Args: never; Returns: number }
       show_trgm: { Args: { "": string }; Returns: string[] }
       storage_service_id: { Args: { p_name: string }; Returns: string }
+      vencimiento_aviso: { Args: { p_due: string }; Returns: string }
+      vencimiento_semaforo: { Args: { p_due: string }; Returns: string }
       work_entries_geojson: {
         Args: {
           p_activity_ids?: string[]
@@ -3280,6 +5346,18 @@ export type Database = {
     }
     Enums: {
       asset_condition: "bueno" | "regular" | "malo" | "critico" | "no_evaluado"
+      cash_movement_kind:
+        | "apertura"
+        | "deposito"
+        | "gasto"
+        | "devolucion"
+        | "ajuste"
+      cash_movement_status: "registrado" | "observado" | "aprobado" | "anulado"
+      deposit_request_status:
+        | "solicitado"
+        | "aprobado"
+        | "depositado"
+        | "rechazado"
       document_kind:
         | "contrato"
         | "pci"
@@ -3292,6 +5370,12 @@ export type Database = {
         | "normativa"
         | "otro"
       evidence_phase: "antes" | "durante" | "despues" | "general"
+      hygiene_item:
+        | "bloqueador"
+        | "lavado_manos"
+        | "hidratacion"
+        | "desinfeccion_unidad"
+        | "orden_limpieza"
       pci_item_status:
         | "pendiente"
         | "en_atencion"
@@ -3308,11 +5392,19 @@ export type Database = {
       plan_item_status:
         | "programado"
         | "en_curso"
+        | "por_validar"
         | "ejecutado"
         | "suspendido"
         | "reprogramado"
         | "cancelado"
       plan_status: "borrador" | "publicado" | "suspendido" | "cerrado"
+      receipt_kind:
+        | "boleta"
+        | "factura"
+        | "recibo"
+        | "ticket"
+        | "planilla"
+        | "sin_comprobante"
       risk_level:
         | "trivial"
         | "tolerable"
@@ -3320,13 +5412,52 @@ export type Database = {
         | "importante"
         | "intolerable"
       road_side: "derecho" | "izquierdo" | "ambos" | "eje"
+      safety_equipment_kind:
+        | "extintor"
+        | "botiquin"
+        | "kit_antiderrame"
+        | "camilla"
+        | "lavaojos"
+        | "detector_gas"
+        | "otro"
+      safety_equipment_status:
+        | "operativo"
+        | "observado"
+        | "fuera_servicio"
+        | "dado_de_baja"
       service_status: "activo" | "pausado" | "cerrado"
+      stock_movement_kind:
+        | "ingreso"
+        | "salida"
+        | "devolucion"
+        | "merma"
+        | "ajuste"
+      supply_request_status:
+        | "borrador"
+        | "solicitado"
+        | "aprobado"
+        | "parcial"
+        | "entregado"
+        | "rechazado"
+        | "anulado"
+      talk_kind: "diaria" | "induccion" | "capacitacion" | "simulacro"
       user_role:
         | "admin"
         | "supervisor"
         | "jefe_cuadrilla"
         | "ing_seguridad"
         | "visor"
+      vehicle_kind:
+        | "camioneta"
+        | "volquete"
+        | "cisterna"
+        | "cargador"
+        | "retroexcavadora"
+        | "rodillo"
+        | "motoniveladora"
+        | "moto"
+        | "otro"
+      vehicle_status: "operativo" | "taller" | "inoperativo" | "dado_de_baja"
       work_order_status: "borrador" | "enviado" | "validado" | "observado"
     }
     CompositeTypes: {
@@ -3343,12 +5474,12 @@ export type Tables<
   DefaultSchemaTableNameOrOptions extends
     | keyof (DefaultSchema["Tables"] & DefaultSchema["Views"])
     | { schema: keyof DatabaseWithoutInternals },
-  TableName extends DefaultSchemaTableNameOrOptions extends {
+  TableName extends (DefaultSchemaTableNameOrOptions extends {
     schema: keyof DatabaseWithoutInternals
   }
     ? keyof (DatabaseWithoutInternals[DefaultSchemaTableNameOrOptions["schema"]]["Tables"] &
         DatabaseWithoutInternals[DefaultSchemaTableNameOrOptions["schema"]]["Views"])
-    : never = never,
+    : never) = never,
 > = DefaultSchemaTableNameOrOptions extends {
   schema: keyof DatabaseWithoutInternals
 }
@@ -3372,11 +5503,11 @@ export type TablesInsert<
   DefaultSchemaTableNameOrOptions extends
     | keyof DefaultSchema["Tables"]
     | { schema: keyof DatabaseWithoutInternals },
-  TableName extends DefaultSchemaTableNameOrOptions extends {
+  TableName extends (DefaultSchemaTableNameOrOptions extends {
     schema: keyof DatabaseWithoutInternals
   }
     ? keyof DatabaseWithoutInternals[DefaultSchemaTableNameOrOptions["schema"]]["Tables"]
-    : never = never,
+    : never) = never,
 > = DefaultSchemaTableNameOrOptions extends {
   schema: keyof DatabaseWithoutInternals
 }
@@ -3397,11 +5528,11 @@ export type TablesUpdate<
   DefaultSchemaTableNameOrOptions extends
     | keyof DefaultSchema["Tables"]
     | { schema: keyof DatabaseWithoutInternals },
-  TableName extends DefaultSchemaTableNameOrOptions extends {
+  TableName extends (DefaultSchemaTableNameOrOptions extends {
     schema: keyof DatabaseWithoutInternals
   }
     ? keyof DatabaseWithoutInternals[DefaultSchemaTableNameOrOptions["schema"]]["Tables"]
-    : never = never,
+    : never) = never,
 > = DefaultSchemaTableNameOrOptions extends {
   schema: keyof DatabaseWithoutInternals
 }
@@ -3422,11 +5553,11 @@ export type Enums<
   DefaultSchemaEnumNameOrOptions extends
     | keyof DefaultSchema["Enums"]
     | { schema: keyof DatabaseWithoutInternals },
-  EnumName extends DefaultSchemaEnumNameOrOptions extends {
+  EnumName extends (DefaultSchemaEnumNameOrOptions extends {
     schema: keyof DatabaseWithoutInternals
   }
     ? keyof DatabaseWithoutInternals[DefaultSchemaEnumNameOrOptions["schema"]]["Enums"]
-    : never = never,
+    : never) = never,
 > = DefaultSchemaEnumNameOrOptions extends {
   schema: keyof DatabaseWithoutInternals
 }
@@ -3439,11 +5570,11 @@ export type CompositeTypes<
   PublicCompositeTypeNameOrOptions extends
     | keyof DefaultSchema["CompositeTypes"]
     | { schema: keyof DatabaseWithoutInternals },
-  CompositeTypeName extends PublicCompositeTypeNameOrOptions extends {
+  CompositeTypeName extends (PublicCompositeTypeNameOrOptions extends {
     schema: keyof DatabaseWithoutInternals
   }
     ? keyof DatabaseWithoutInternals[PublicCompositeTypeNameOrOptions["schema"]]["CompositeTypes"]
-    : never = never,
+    : never) = never,
 > = PublicCompositeTypeNameOrOptions extends {
   schema: keyof DatabaseWithoutInternals
 }
@@ -3456,6 +5587,20 @@ export const Constants = {
   public: {
     Enums: {
       asset_condition: ["bueno", "regular", "malo", "critico", "no_evaluado"],
+      cash_movement_kind: [
+        "apertura",
+        "deposito",
+        "gasto",
+        "devolucion",
+        "ajuste",
+      ],
+      cash_movement_status: ["registrado", "observado", "aprobado", "anulado"],
+      deposit_request_status: [
+        "solicitado",
+        "aprobado",
+        "depositado",
+        "rechazado",
+      ],
       document_kind: [
         "contrato",
         "pci",
@@ -3469,6 +5614,13 @@ export const Constants = {
         "otro",
       ],
       evidence_phase: ["antes", "durante", "despues", "general"],
+      hygiene_item: [
+        "bloqueador",
+        "lavado_manos",
+        "hidratacion",
+        "desinfeccion_unidad",
+        "orden_limpieza",
+      ],
       pci_item_status: [
         "pendiente",
         "en_atencion",
@@ -3481,12 +5633,21 @@ export const Constants = {
       plan_item_status: [
         "programado",
         "en_curso",
+        "por_validar",
         "ejecutado",
         "suspendido",
         "reprogramado",
         "cancelado",
       ],
       plan_status: ["borrador", "publicado", "suspendido", "cerrado"],
+      receipt_kind: [
+        "boleta",
+        "factura",
+        "recibo",
+        "ticket",
+        "planilla",
+        "sin_comprobante",
+      ],
       risk_level: [
         "trivial",
         "tolerable",
@@ -3495,7 +5656,39 @@ export const Constants = {
         "intolerable",
       ],
       road_side: ["derecho", "izquierdo", "ambos", "eje"],
+      safety_equipment_kind: [
+        "extintor",
+        "botiquin",
+        "kit_antiderrame",
+        "camilla",
+        "lavaojos",
+        "detector_gas",
+        "otro",
+      ],
+      safety_equipment_status: [
+        "operativo",
+        "observado",
+        "fuera_servicio",
+        "dado_de_baja",
+      ],
       service_status: ["activo", "pausado", "cerrado"],
+      stock_movement_kind: [
+        "ingreso",
+        "salida",
+        "devolucion",
+        "merma",
+        "ajuste",
+      ],
+      supply_request_status: [
+        "borrador",
+        "solicitado",
+        "aprobado",
+        "parcial",
+        "entregado",
+        "rechazado",
+        "anulado",
+      ],
+      talk_kind: ["diaria", "induccion", "capacitacion", "simulacro"],
       user_role: [
         "admin",
         "supervisor",
@@ -3503,6 +5696,18 @@ export const Constants = {
         "ing_seguridad",
         "visor",
       ],
+      vehicle_kind: [
+        "camioneta",
+        "volquete",
+        "cisterna",
+        "cargador",
+        "retroexcavadora",
+        "rodillo",
+        "motoniveladora",
+        "moto",
+        "otro",
+      ],
+      vehicle_status: ["operativo", "taller", "inoperativo", "dado_de_baja"],
       work_order_status: ["borrador", "enviado", "validado", "observado"],
     },
   },
