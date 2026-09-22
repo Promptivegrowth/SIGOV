@@ -2,7 +2,7 @@ import type { LucideIcon } from 'lucide-react'
 import {
   LayoutDashboard,
   Wallet, CalendarRange, TriangleAlert, HardHat, MapPinned,
-  Boxes, Package, PackageCheck, CalendarClock, ShieldCheck, FileBarChart, Upload, Settings, Map, FolderOpen, Bell,
+  Boxes, Package, PackageCheck, CalendarClock, ShieldCheck, FileBarChart, Upload, Settings, Map, FolderOpen, Bell, FileSignature,
 } from 'lucide-react'
 
 export type Role = 'admin' | 'supervisor' | 'jefe_cuadrilla' | 'ing_seguridad' | 'visor'
@@ -75,6 +75,7 @@ export const NAV: NavItem[] = [
   { href: '/materiales',   label: 'Materiales',    icon: Package,         roles: ['admin','supervisor'], module: 'materiales' },
   { href: '/caja',         label: 'Caja chica',    icon: Wallet,          roles: ['admin','supervisor'], module: 'caja' },
   { href: '/reportes',     label: 'Reportes',      icon: FileBarChart,    roles: ['admin','supervisor','ing_seguridad','visor'], module: 'reportes' },
+  { href: '/formatos',     label: 'Formatos',      icon: FileSignature,   roles: ['admin','supervisor','ing_seguridad'], module: 'reportes' },
   { href: '/paquetes',     label: 'Entregables',   icon: PackageCheck,    roles: ['admin','supervisor'], module: 'reportes' },
   { href: '/archivo',      label: 'Archivo',       icon: FolderOpen,      roles: ['admin','supervisor','ing_seguridad','visor'] },
   { href: '/importar',     label: 'Importación',   icon: Upload,          roles: ['admin','supervisor'] },
