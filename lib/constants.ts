@@ -1,7 +1,8 @@
 import type { LucideIcon } from 'lucide-react'
 import {
-  LayoutDashboard, CalendarRange, TriangleAlert, HardHat, MapPinned,
-  Boxes, ShieldCheck, FileBarChart, Upload, Settings, Map, FolderOpen,
+  LayoutDashboard,
+  Wallet, CalendarRange, TriangleAlert, HardHat, MapPinned,
+  Boxes, Package, PackageCheck, CalendarClock, ShieldCheck, FileBarChart, Upload, Settings, Map, FolderOpen, Bell,
 } from 'lucide-react'
 
 export type Role = 'admin' | 'supervisor' | 'jefe_cuadrilla' | 'ing_seguridad' | 'visor'
@@ -58,7 +59,7 @@ export interface NavItem {
   roles: Role[]
   module?: string
   field?: boolean   // visible en la barra inferior del modo campo
-  badge?: 'pci' | 'sync' | 'partes'
+  badge?: 'pci' | 'sync' | 'partes' | 'alertas'
 }
 
 export const NAV: NavItem[] = [
@@ -66,10 +67,15 @@ export const NAV: NavItem[] = [
   { href: '/campo',        label: 'Campo',         icon: HardHat,         roles: ['admin','supervisor','jefe_cuadrilla'], module: 'campo', field: true, badge: 'sync' },
   { href: '/programacion', label: 'Programación',  icon: CalendarRange,   roles: ['admin','supervisor','jefe_cuadrilla','visor'], module: 'programacion', field: true },
   { href: '/pci',          label: 'PCIs',          icon: TriangleAlert,   roles: ['admin','supervisor','jefe_cuadrilla','visor'], module: 'pci', field: true, badge: 'pci' },
+  { href: '/alertas',      label: 'Alertas',       icon: Bell,            roles: ['admin','supervisor','ing_seguridad','jefe_cuadrilla'], badge: 'alertas' },
   { href: '/mapa',         label: 'Mapa',          icon: Map,             roles: ['admin','supervisor','ing_seguridad','visor','jefe_cuadrilla'], module: 'mapa' },
   { href: '/inventario',   label: 'Inventario',    icon: Boxes,           roles: ['admin','supervisor','jefe_cuadrilla','visor'], module: 'inventario' },
   { href: '/ssoma',        label: 'SSOMA',         icon: ShieldCheck,     roles: ['admin','supervisor','ing_seguridad','jefe_cuadrilla','visor'], module: 'ssoma', field: true },
+  { href: '/vencimientos', label: 'Vencimientos',  icon: CalendarClock,   roles: ['admin','supervisor','ing_seguridad'], module: 'ssoma' },
+  { href: '/materiales',   label: 'Materiales',    icon: Package,         roles: ['admin','supervisor'], module: 'materiales' },
+  { href: '/caja',         label: 'Caja chica',    icon: Wallet,          roles: ['admin','supervisor'], module: 'caja' },
   { href: '/reportes',     label: 'Reportes',      icon: FileBarChart,    roles: ['admin','supervisor','ing_seguridad','visor'], module: 'reportes' },
+  { href: '/paquetes',     label: 'Entregables',   icon: PackageCheck,    roles: ['admin','supervisor'], module: 'reportes' },
   { href: '/archivo',      label: 'Archivo',       icon: FolderOpen,      roles: ['admin','supervisor','ing_seguridad','visor'] },
   { href: '/importar',     label: 'Importación',   icon: Upload,          roles: ['admin','supervisor'] },
   { href: '/configuracion',label: 'Configuración', icon: Settings,        roles: ['admin','supervisor'] },
@@ -100,13 +106,21 @@ export const PCI_ITEM_STATUS = {
   rechazado:   { label: 'Rechazado',   className: 'bg-destructive/15 text-destructive' },
 } as const
 
+/**
+ * Los cinco estados de una partida, como los nombra la obra.
+ *
+ * «Por validar» es el que faltaba: la cuadrilla dio por terminado el
+ * trabajo y espera el visto bueno del supervisor. Antes la partida saltaba
+ * sola a ejecutada al alcanzar el metrado, sin que nadie la mirara.
+ */
 export const PLAN_ITEM_STATUS = {
-  programado:   { label: 'Programado',   className: 'bg-muted text-muted-foreground' },
-  en_curso:     { label: 'En curso',     className: 'bg-info/15 text-info' },
-  ejecutado:    { label: 'Ejecutado',    className: 'bg-success/15 text-success' },
-  suspendido:   { label: 'Suspendido',   className: 'bg-destructive/15 text-destructive' },
-  reprogramado: { label: 'Reprogramado', className: 'bg-warning/20 text-warning' },
-  cancelado:    { label: 'Cancelado',    className: 'bg-muted text-muted-foreground line-through' },
+  programado:   { label: 'Pendiente',    className: 'bg-muted text-muted-foreground' },
+  en_curso:     { label: 'En ejecución', className: 'bg-info/15 text-info' },
+  por_validar:  { label: 'Por validar',  className: 'bg-warning/20 text-warning' },
+  ejecutado:    { label: 'Culminada',    className: 'bg-success/15 text-success' },
+  suspendido:   { label: 'Observada',    className: 'bg-destructive/15 text-destructive' },
+  reprogramado: { label: 'Reprogramada', className: 'bg-warning/20 text-warning' },
+  cancelado:    { label: 'Anulada',      className: 'bg-muted text-muted-foreground line-through' },
 } as const
 
 export const WORK_ORDER_STATUS = {
@@ -206,7 +220,7 @@ export const APP = {
   name: 'SIGOV',
   fullName: 'Sistema Integral de Gestión Operativa Vial',
   tagline: 'Gestión Operativa Vial 4.0',
-  org: 'ETS VALERIA',
+  org: 'Grupo Servicon V&D EIRL',
   builtBy: 'Promptive',
   version: '1.0.0',
 }

@@ -6,7 +6,7 @@ import { useQuery, useQueryClient } from '@tanstack/react-query'
 import { motion } from 'motion/react'
 import {
   TriangleAlert, Plus, FileText, Calendar, ChevronRight,
-  Zap, CircleCheck, Timer, Filter,
+  Zap, CircleCheck, Timer, Filter, LayoutDashboard,
 } from 'lucide-react'
 import { createClient } from '@/lib/supabase/client'
 import { useSession } from '@/lib/hooks/use-session'
@@ -137,20 +137,28 @@ export function PciListClient() {
         title="PCIs · OSITRAN"
         description="Pedidos de Corrección de Incumplimiento con plazos diferenciados por ítem, semáforo de vencimientos y evidencia obligatoria de levantamiento."
         actions={
-          can.manage && (
-            <>
-              <Button variant="outline" asChild>
-                <Link href="/importar?kind=pci">
-                  <FileText className="size-4" />
-                  Importar Excel
-                </Link>
-              </Button>
-              <Button onClick={() => setNewOpen(true)}>
-                <Plus className="size-4" />
-                Nuevo PCI
-              </Button>
-            </>
-          )
+          <>
+            <Button variant="outline" asChild>
+              <Link href="/pci/tablero">
+                <LayoutDashboard className="size-4" />
+                Tablero
+              </Link>
+            </Button>
+            {can.manage && (
+              <>
+                <Button variant="outline" asChild>
+                  <Link href="/importar?kind=pci">
+                    <FileText className="size-4" />
+                    Importar Excel
+                  </Link>
+                </Button>
+                <Button onClick={() => setNewOpen(true)}>
+                  <Plus className="size-4" />
+                  Nuevo PCI
+                </Button>
+              </>
+            )}
+          </>
         }
       />
 

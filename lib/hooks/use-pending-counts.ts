@@ -28,7 +28,7 @@ export function usePendingCounts() {
       const today = toISODate(new Date())
       const in7 = toISODate(new Date(Date.now() + 7 * 86400000))
 
-      const [critical, partes, unread] = await Promise.all([
+      const [critical, partes, unread, alertas] = await Promise.all([
         sb
           .from('pci_items')
           .select('id', { count: 'exact', head: true })
@@ -46,12 +46,16 @@ export function usePendingCounts() {
           .from('notifications')
           .select('id', { count: 'exact', head: true })
           .is('read_at', null),
+        // El badge cuenta alertas abiertas, no ítems: «3» son tres frentes
+        // que atender, no 324 papeles. La cifra grande vive dentro.
+        sb.rpc('alertas_operativas', { p_service_id: service.id }),
       ])
 
       return {
         pciCritical: critical.count ?? 0,
         partesPorValidar: partes.count ?? 0,
         unreadNotifications: unread.count ?? 0,
+        alertasAbiertas: (alertas.data ?? []).length,
       }
     },
     refetchInterval: 120_000,
@@ -63,5 +67,6 @@ export function usePendingCounts() {
     pciCritical: data?.pciCritical ?? 0,
     partesPorValidar: data?.partesPorValidar ?? 0,
     unreadNotifications: data?.unreadNotifications ?? 0,
+    alertasAbiertas: data?.alertasAbiertas ?? 0,
   }
 }

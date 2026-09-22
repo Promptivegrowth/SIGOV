@@ -7,7 +7,7 @@ import { motion } from 'motion/react'
 import {
   CalendarRange, ChevronLeft, ChevronRight, Plus, Upload, Send,
   Zap, CircleCheck, Users, LayoutGrid, List, TriangleAlert,
-  Pencil, Trash2, Search, X,
+  Pencil, Trash2, Search, X, CalendarDays, CopyPlus, Undo2,
 } from 'lucide-react'
 import { createClient } from '@/lib/supabase/client'
 import { useSession } from '@/lib/hooks/use-session'
@@ -32,7 +32,9 @@ export function ProgramacionClient() {
   const qc = useQueryClient()
   const sb = React.useMemo(() => createClient(), [])
   const [offset, setOffset] = React.useState(0)
-  const [view, setView] = React.useState<'tablero' | 'lista'>('tablero')
+  const [view, setView] = React.useState<'tablero' | 'calendario' | 'lista'>('tablero')
+  const [pagina, setPagina] = React.useState(0)
+  const [duplicando, setDuplicando] = React.useState(false)
   const [itemForm, setItemForm] = React.useState<{ open: boolean; row?: any }>({ open: false })
   const [confirm, setConfirm] = React.useState<any>(null)
   const [q, setQ] = React.useState('')
@@ -206,6 +208,32 @@ export function ProgramacionClient() {
     qc.invalidateQueries()
   }
 
+  /**
+   * El visto bueno del supervisor.
+   *
+   * La cuadrilla cierra la partida y ésta queda «por validar»; aceptarla o
+   * devolverla es trabajo de quien no la ejecutó. La regla la impone la
+   * base de datos, no esta pantalla: aquí solo se pulsa el botón.
+   */
+  const validar = async (row: any, aceptar: boolean, nota?: string) => {
+    const { data, error } = await sb.rpc('partida_validar', {
+      p_item: row.id,
+      p_aceptar: aceptar,
+      p_nota: nota ?? undefined,
+    })
+    if (error) { toast.error(error.message); return }
+    toast.success(
+      aceptar ? 'Partida validada' : 'Partida devuelta a campo',
+      {
+        description: aceptar
+          ? `${row.activity_name} queda culminada y entra a la valorización.`
+          : `${row.activity_name} vuelve a estar en ejecución para la cuadrilla.`,
+      }
+    )
+    void data
+    qc.invalidateQueries()
+  }
+
   const publish = async () => {
     try {
       const planId = await ensurePlan()
@@ -222,14 +250,53 @@ export function ProgramacionClient() {
     }
   }
 
+  /**
+   * Copia la semana que se está viendo a la siguiente.
+   *
+   * La conservación rutinaria se repite tal cual, y volver a teclear las
+   * veinticuatro partidas cada lunes es donde se cuelan los errores. El
+   * servidor decide qué se copia y qué no; aquí solo se cuenta el resultado.
+   */
+  const duplicar = async () => {
+    const destino = addDays(monday, 7)
+    setDuplicando(true)
+    try {
+      const { data, error } = await sb.rpc('duplicar_semana', {
+        p_service_id: service.id,
+        p_origen: toISODate(monday),
+        p_destino: toISODate(destino),
+      })
+      if (error) { toast.error(error.message); return }
+      const r = data as any
+      if (r?.existentes > 0) {
+        toast.warning('La semana siguiente ya tiene programación', { description: r.mensaje })
+        return
+      }
+      toast.success(`Semana copiada al ${fmtDate(destino)}`, {
+        description: r?.omitidas > 0
+          ? `${r.copiadas} partidas copiadas. Se omitieron ${r.omitidas} canceladas o nacidas de un PCI.`
+          : `${r.copiadas} partidas copiadas, en borrador y sin avance.`,
+      })
+      qc.invalidateQueries()
+      setOffset((v) => v + 1)
+    } catch (e: any) {
+      toast.error(e?.message ?? 'No se pudo duplicar la semana')
+    } finally {
+      setDuplicando(false)
+    }
+  }
+
   const stats = React.useMemo(() => {
-    const meta = rows.reduce((s: number, r: any) => s + Number(r.target_qty ?? 0), 0)
-    const avance = rows.reduce((s: number, r: any) => s + Number(r.executed_qty ?? 0), 0)
+    // Nada de metrado total: la semana mezcla metros, metros cuadrados y
+    // unidades, y sumarlos da una cifra que no significa nada. Lo que sí
+    // se puede promediar es el avance de cada partida contra su propia meta.
+    const avanceMedio = rows.length
+      ? rows.reduce((s: number, r: any) => s + Math.min(Number(r.progress_pct ?? 0), 100), 0) / rows.length
+      : 0
     return {
       items: rows.length,
-      meta,
-      avance,
-      pct: meta ? (avance / meta) * 100 : 0,
+      avanceMedio,
+      enCurso: rows.filter((r: any) => r.status === 'en_curso').length,
       suspendidos: rows.filter((r: any) => r.status === 'suspendido').length,
       ejecutados: rows.filter((r: any) => r.status === 'ejecutado').length,
     }
@@ -251,6 +318,15 @@ export function ProgramacionClient() {
                   <Upload className="size-4" />
                   Importar
                 </Link>
+              </Button>
+              <Button
+                variant="outline"
+                onClick={duplicar}
+                disabled={!rows.length || duplicando}
+                loading={duplicando}
+              >
+                <CopyPlus className="size-4" />
+                Duplicar semana
               </Button>
               {p?.status !== 'publicado' && p?.status !== 'cerrado' && (
                 <Button variant="outline" onClick={publish} disabled={!rows.length}>
@@ -305,7 +381,8 @@ export function ProgramacionClient() {
 
           <div className="bg-muted ml-auto inline-flex rounded-lg p-0.5">
             {[
-              { k: 'tablero' as const, icon: LayoutGrid, label: 'Tablero' },
+              { k: 'tablero' as const, icon: LayoutGrid, label: 'Por cuadrilla' },
+              { k: 'calendario' as const, icon: CalendarDays, label: 'Calendario' },
               { k: 'lista' as const, icon: List, label: 'Lista' },
             ].map((v) => (
               <button
@@ -379,8 +456,8 @@ export function ProgramacionClient() {
         <div className="grid grid-cols-1 gap-3 sm:grid-cols-2 lg:grid-cols-4">
           {[
             { label: 'Actividades programadas', value: fmtNumber(stats.items), sub: `${stats.ejecutados} ejecutadas` },
-            { label: 'Meta de la semana', value: fmtNumber(stats.meta), sub: 'unidades' },
-            { label: 'Avance registrado', value: fmtNumber(stats.avance), sub: `${stats.pct.toFixed(1)}% de cumplimiento` },
+            { label: 'Avance medio', value: `${stats.avanceMedio.toFixed(1)}%`, sub: 'promedio por partida' },
+            { label: 'En ejecución', value: fmtNumber(stats.enCurso), sub: stats.enCurso ? 'empezadas y sin cerrar' : 'ninguna empezada' },
             { label: 'Suspendidas por PCI', value: fmtNumber(stats.suspendidos), sub: stats.suspendidos ? 'reordenadas automáticamente' : 'ninguna', danger: stats.suspendidos > 0 },
           ].map((s, i) => (
             <motion.div
@@ -418,10 +495,20 @@ export function ProgramacionClient() {
             canEdit={can.manage}
             onEdit={(row) => setItemForm({ open: true, row })}
           />
+        ) : view === 'calendario' ? (
+          <CalendarView
+            rows={rows}
+            monday={monday}
+            canEdit={can.manage}
+            onEdit={(row) => setItemForm({ open: true, row })}
+          />
         ) : (
           <ListView
             rows={rows}
+            pagina={pagina}
+            onPagina={setPagina}
             canEdit={can.manage}
+            onValidar={can.manage ? validar : undefined}
             onEdit={(row) => setItemForm({ open: true, row })}
             onDelete={(row) => setConfirm({
               title: 'Retirar ' + row.activity_name + ' de la programacion?',
@@ -615,14 +702,25 @@ function PlanChip({ item, canEdit, onEdit }: { item: any; canEdit?: boolean; onE
 }
 
 // ═══════════════════════════════════════════════════════════════════════════
+const POR_PAGINA = 50
+
 function ListView({
-  rows, canEdit, onEdit, onDelete,
+  rows, pagina, onPagina, canEdit, onEdit, onDelete, onValidar,
 }: {
   rows: any[]
+  pagina: number
+  onPagina: (n: number) => void
   canEdit?: boolean
   onEdit?: (row: any) => void
   onDelete?: (row: any) => void
+  onValidar?: (row: any, aceptar: boolean) => void
 }) {
+  // Una semana suele caber de sobra, pero al reprogramar un PCI entran
+  // doscientas partidas de golpe y la tabla se vuelve un rollo de papel
+  const paginas = Math.max(1, Math.ceil(rows.length / POR_PAGINA))
+  const actual = Math.min(pagina, paginas - 1)
+  const visibles = rows.slice(actual * POR_PAGINA, actual * POR_PAGINA + POR_PAGINA)
+
   return (
     <Card className="overflow-hidden">
       <div className="overflow-x-auto">
@@ -635,7 +733,7 @@ function ListView({
             </tr>
           </thead>
           <tbody className="divide-y divide-border">
-            {rows.map((r) => {
+            {visibles.map((r) => {
               const st = PLAN_ITEM_STATUS[r.status as keyof typeof PLAN_ITEM_STATUS]
               return (
                 <tr key={r.id} className="hover:bg-secondary/40 transition-colors">
@@ -677,10 +775,33 @@ function ListView({
                     {r.pci_code && (
                       <span className="text-muted-foreground mt-0.5 block text-[10px]">{r.pci_code}</span>
                     )}
+                    {/* Una partida observada sin decir por qué obliga a
+                        llamar por radio para enterarse */}
+                    {r.impedimento && (
+                      <span className="text-muted-foreground mt-0.5 block max-w-[220px] truncate text-[10px]" title={r.impedimento}>
+                        {r.impedimento}
+                      </span>
+                    )}
                   </td>
                   <td className="px-3 py-2.5 text-right whitespace-nowrap">
                     {canEdit && (
                       <span className="flex justify-end gap-1">
+                        {/* Solo aparece cuando la cuadrilla ya cerró: validar
+                            antes de que termine no significaría nada */}
+                        {r.status === 'por_validar' && onValidar && (
+                          <>
+                            <Tip label="Validar: la doy por culminada">
+                              <Button variant="ghost" size="icon-sm" onClick={() => onValidar(r, true)}>
+                                <CircleCheck className="text-success size-3.5" />
+                              </Button>
+                            </Tip>
+                            <Tip label="Devolver a campo">
+                              <Button variant="ghost" size="icon-sm" onClick={() => onValidar(r, false)}>
+                                <Undo2 className="text-warning size-3.5" />
+                              </Button>
+                            </Tip>
+                          </>
+                        )}
                         <Tip label="Editar">
                           <Button variant="ghost" size="icon-sm" onClick={() => onEdit?.(r)}>
                             <Pencil className="size-3.5" />
@@ -700,6 +821,100 @@ function ListView({
           </tbody>
         </table>
       </div>
+
+      {paginas > 1 && (
+        <div className="flex items-center justify-between gap-3 border-t border-border px-3 py-2.5">
+          <span className="text-muted-foreground text-[11.5px] tabular-nums">
+            {actual * POR_PAGINA + 1}–{actual * POR_PAGINA + visibles.length} de {rows.length} partidas
+          </span>
+          <span className="flex items-center gap-1">
+            <Button
+              variant="outline"
+              size="sm"
+              onClick={() => onPagina(actual - 1)}
+              disabled={actual === 0}
+            >
+              <ChevronLeft className="size-3.5" />
+              Anterior
+            </Button>
+            <span className="text-muted-foreground px-2 text-[11.5px] tabular-nums">
+              {actual + 1} / {paginas}
+            </span>
+            <Button
+              variant="outline"
+              size="sm"
+              onClick={() => onPagina(actual + 1)}
+              disabled={actual >= paginas - 1}
+            >
+              Siguiente
+              <ChevronRight className="size-3.5" />
+            </Button>
+          </span>
+        </div>
+      )}
     </Card>
+  )
+}
+
+// ═══════════════════════════════════════════════════════════════════════════
+/**
+ * La semana como calendario: un día por columna, sin separar por cuadrilla.
+ *
+ * Responde a otra pregunta que el tablero: no «qué hace cada cuadrilla»
+ * sino «qué carga tiene el jueves». Por eso cada columna lleva su total de
+ * partidas y de metrado.
+ */
+function CalendarView({
+  rows, monday, canEdit, onEdit,
+}: {
+  rows: any[]; monday: Date
+  canEdit?: boolean; onEdit?: (row: any) => void
+}) {
+  const days = Array.from({ length: 7 }, (_, i) => addDays(monday, i))
+  const today = toISODate(new Date())
+
+  return (
+    <div className="overflow-x-auto pb-2">
+      <div className="grid min-w-[1000px] gap-2" style={{ gridTemplateColumns: `repeat(${days.length}, minmax(0,1fr))` }}>
+        {days.map((d) => {
+          const iso = toISODate(d)
+          const esHoy = iso === today
+          const delDia = rows.filter((r) => r.scheduled_on === iso)
+          // Sin metrado total del día: las partidas se miden en metros,
+          // metros cuadrados y unidades, y sumarlas daría una cifra falsa
+          const cuadrillas = new Set(delDia.map((r) => r.crew_id).filter(Boolean)).size
+
+          return (
+            <div key={iso} className="flex min-w-0 flex-col">
+              <div
+                className={cn(
+                  'rounded-t-lg px-2 py-2 text-center',
+                  esHoy ? 'bg-primary/10 ring-1 ring-primary/30' : 'bg-muted/40'
+                )}
+              >
+                <div className={cn('text-[11.5px] font-semibold', esHoy && 'text-primary')}>
+                  {DIAS[d.getDay() === 0 ? 6 : d.getDay() - 1]}
+                </div>
+                <div className="text-muted-foreground text-[10.5px] tabular-nums">
+                  {d.getDate()}/{String(d.getMonth() + 1).padStart(2, '0')}
+                </div>
+                <div className="text-muted-foreground mt-1 text-[10px] tabular-nums">
+                  {delDia.length === 0
+                    ? 'Sin partidas'
+                    : `${delDia.length} ${delDia.length === 1 ? 'partida' : 'partidas'}` +
+                      (cuadrillas > 0 ? ` · ${cuadrillas} ${cuadrillas === 1 ? 'cuadrilla' : 'cuadrillas'}` : '')}
+                </div>
+              </div>
+
+              <div className="min-h-[220px] flex-1 space-y-1.5 rounded-b-lg bg-muted/25 p-1.5">
+                {delDia.map((r) => (
+                  <PlanChip key={r.id} item={r} canEdit={canEdit} onEdit={onEdit} />
+                ))}
+              </div>
+            </div>
+          )
+        })}
+      </div>
+    </div>
   )
 }

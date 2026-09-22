@@ -22,6 +22,7 @@ import { SkeletonKpi, SkeletonChart, SkeletonList } from '@/components/ui/skelet
 import { Badge } from '@/components/ui/badge'
 import { fmtNumber, fmtDate, fmtRelative, truncate, cn } from '@/lib/utils'
 import { PCI_PRIORITY, WORK_ORDER_STATUS } from '@/lib/constants'
+import { SupervisorDashboard } from './supervisor-dashboard'
 
 // ── Lazy: los gráficos y el mapa no deben pesar en el bundle inicial ──────
 const ProductionChart = dynamic(() => import('@/components/dashboard/production-chart').then((m) => m.ProductionChart), {
@@ -42,7 +43,18 @@ const MiniMap = dynamic(() => import('@/components/dashboard/mini-map').then((m)
 })
 
 export function DashboardClient() {
-  const { service, profile, role, hasModule } = useSession()
+  const { role } = useSession()
+
+  // El supervisor de campo no dirige el contrato: dirige sus cuadrillas.
+  // Darle las cifras globales lo obliga a buscar las suyas dentro de un
+  // total que en su mayoría no le corresponde, así que tiene panel propio.
+  if (role === 'supervisor') return <SupervisorDashboard />
+
+  return <PanelGeneral />
+}
+
+function PanelGeneral() {
+  const { service, profile, hasModule } = useSession()
   const [preset, setPreset] = React.useState<DatePresetKey>('30d')
   const range = React.useMemo(() => rangeFromPreset(preset), [preset])
   const sb = React.useMemo(() => createClient(), [])

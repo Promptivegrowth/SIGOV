@@ -16,7 +16,7 @@ import { CommandPalette } from './command-palette'
 import { useSession } from '@/lib/hooks/use-session'
 import { NAV, ROLES } from '@/lib/constants'
 import { cn, initials } from '@/lib/utils'
-import { SigovMark } from '@/components/shared/logo'
+import { ServiconMark } from '@/components/shared/logo'
 
 export function Topbar({ onMenuClick }: { onMenuClick: () => void }) {
   const pathname = usePathname()
@@ -48,16 +48,23 @@ export function Topbar({ onMenuClick }: { onMenuClick: () => void }) {
         </Button>
 
         <div className="flex items-center gap-2.5 lg:hidden">
-          <SigovMark size={26} />
+          <ServiconMark size={26} />
         </div>
 
         <div className="hidden min-w-0 lg:block">
           <h1 className="truncate text-[15px] font-semibold tracking-tight">
             {current?.label ?? 'SIGOV'}
           </h1>
-          <p className="text-muted-foreground truncate text-[11.5px]">
-            {service.name}
-            {service.client_name ? ` · ${service.client_name}` : ''}
+          <p className="text-muted-foreground flex min-w-0 items-center gap-1.5 truncate text-[11.5px]">
+            {/* El contrato, siempre a la vista: quien lleva dos servicios a
+                la vez necesita saber en cuál está antes de tocar nada */}
+            <span className="bg-primary/10 text-primary shrink-0 rounded px-1.5 py-0.5 font-mono text-[10px] font-semibold tracking-wide">
+              {service.contract_code ?? service.code}
+            </span>
+            <span className="truncate">
+              {service.name}
+              {service.client_name ? ` · ${service.client_name}` : ''}
+            </span>
           </p>
         </div>
 

@@ -5,7 +5,7 @@ import Link from 'next/link'
 import { usePathname } from 'next/navigation'
 import { motion } from 'motion/react'
 import { PanelLeftClose, PanelLeftOpen, X } from 'lucide-react'
-import { SigovMark } from '@/components/shared/logo'
+import { ServiconMark } from '@/components/shared/logo'
 import { ServiceSwitcher } from './service-switcher'
 import { SyncIndicator } from './sync-indicator'
 import { useSession } from '@/lib/hooks/use-session'
@@ -37,6 +37,7 @@ export function Sidebar({
     if (key === 'pci') return counts.pciCritical
     if (key === 'sync') return counts.pendingSync
     if (key === 'partes') return counts.partesPorValidar
+    if (key === 'alertas') return counts.alertasAbiertas
     return 0
   }
 
@@ -44,7 +45,7 @@ export function Sidebar({
     <>
       {/* Marca */}
       <div className={cn('flex h-16 shrink-0 items-center gap-2.5 px-4', collapsed && 'lg:justify-center lg:px-0')}>
-        <SigovMark size={30} />
+        <ServiconMark size={30} claro />
         {!collapsed && (
           <div className="min-w-0 lg:block">
             <div className="text-[17px] leading-none font-bold tracking-tight text-white">SIGOV</div>
@@ -101,7 +102,7 @@ export function Sidebar({
                     <span
                       className={cn(
                         'min-w-5 rounded-full px-1.5 py-0.5 text-center text-[10px] font-bold tabular-nums',
-                        item.badge === 'pci'
+                        item.badge === 'pci' || item.badge === 'alertas'
                           ? 'bg-destructive text-white'
                           : 'bg-accent text-accent-foreground'
                       )}
