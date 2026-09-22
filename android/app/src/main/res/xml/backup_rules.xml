@@ -1,0 +1,7 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- La cola de envío y las fotos pendientes no se respaldan en la nube de
+     Google: son datos del contrato y viajan por su propio camino. -->
+<full-backup-content>
+    <exclude domain="database" path="sigov.db" />
+    <exclude domain="file" path="evidencias/" />
+</full-backup-content>

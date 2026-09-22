@@ -1,0 +1,10 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- Los colores de la marca, tomados del propio logo de Grupo Servicon -->
+<resources>
+    <color name="servicon_azul">#072D70</color>
+    <color name="servicon_verde">#6BB43B</color>
+    <color name="servicon_naranja">#F96414</color>
+    <color name="servicon_verde_bandera">#019D3F</color>
+    <color name="blanco">#FFFFFF</color>
+    <color name="tinta">#0F172A</color>
+</resources>

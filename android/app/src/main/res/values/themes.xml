@@ -1,0 +1,13 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources xmlns:tools="http://schemas.android.com/tools">
+    <!-- El tema real lo pinta Compose; esto es lo que se ve antes de que arranque -->
+    <style name="Theme.Sigov" parent="android:Theme.Material.Light.NoActionBar">
+        <item name="android:statusBarColor">@color/servicon_azul</item>
+        <item name="android:navigationBarColor">@color/blanco</item>
+        <item name="android:windowLightStatusBar">false</item>
+    </style>
+
+    <style name="Theme.Sigov.Splash" parent="Theme.Sigov">
+        <item name="android:windowBackground">@drawable/splash_background</item>
+    </style>
+</resources>

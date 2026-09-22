@@ -1,0 +1,8 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- Pantalla de arranque: fondo azul de la marca con el logo al centro -->
+<layer-list xmlns:android="http://schemas.android.com/apk/res/android">
+    <item android:drawable="@color/servicon_azul" />
+    <item android:gravity="center">
+        <bitmap android:src="@drawable/logo_servicon" android:gravity="center" />
+    </item>
+</layer-list>
