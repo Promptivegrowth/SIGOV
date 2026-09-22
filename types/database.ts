@@ -4002,6 +4002,9 @@ export type Database = {
           deleted_at: string | null
           finished_at: string | null
           geom: unknown
+          lat: number | null
+          lng: number | null
+          accuracy_m: number | null
           id: string
           observation: string | null
           pci_item_id: string | null
@@ -4025,6 +4028,9 @@ export type Database = {
           deleted_at?: string | null
           finished_at?: string | null
           geom?: unknown
+          lat?: number | null
+          lng?: number | null
+          accuracy_m?: number | null
           id?: string
           observation?: string | null
           pci_item_id?: string | null
@@ -4048,6 +4054,9 @@ export type Database = {
           deleted_at?: string | null
           finished_at?: string | null
           geom?: unknown
+          lat?: number | null
+          lng?: number | null
+          accuracy_m?: number | null
           id?: string
           observation?: string | null
           pci_item_id?: string | null

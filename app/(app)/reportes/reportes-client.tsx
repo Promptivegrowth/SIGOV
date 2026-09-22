@@ -5,7 +5,7 @@ import { useQuery } from '@tanstack/react-query'
 import { motion } from 'motion/react'
 import {
   FileBarChart, FileText, FileSpreadsheet, HardHat, TriangleAlert,
-  ShieldCheck, Ruler, Boxes, Loader2, CircleCheck,
+  ShieldCheck, Ruler, Boxes, Loader2, CircleCheck, Wallet, Package,
 } from 'lucide-react'
 import { createClient, fetchAll } from '@/lib/supabase/client'
 import { useSession } from '@/lib/hooks/use-session'
@@ -19,7 +19,7 @@ import { cn, fmtDate, fmtNumber, fmtProgresiva, truncate, toISODate } from '@/li
 import { SEMAFORO } from '@/lib/constants'
 import { toast } from 'sonner'
 
-type ReportKey = 'diario' | 'metrados' | 'pci' | 'ssoma' | 'inventario'
+type ReportKey = 'diario' | 'metrados' | 'pci' | 'ssoma' | 'inventario' | 'caja' | 'materiales'
 
 interface ReportDef {
   key: ReportKey
@@ -28,6 +28,8 @@ interface ReportDef {
   icon: React.ComponentType<{ className?: string }>
   module?: string
   tone: string
+  /** La economía interna no sale del Administrador */
+  soloAdmin?: boolean
 }
 
 const REPORTS: ReportDef[] = [
@@ -36,16 +38,21 @@ const REPORTS: ReportDef[] = [
   { key: 'pci', label: 'Reporte de PCIs', description: 'Ítems con su plazo, semáforo de vencimiento, responsable y estado de levantamiento.', icon: TriangleAlert, module: 'pci', tone: 'var(--sem-rojo)' },
   { key: 'ssoma', label: 'Reporte SSOMA', description: 'Charlas, asistencia firmada, checklists con hallazgos y ATS/IPERC del periodo.', icon: ShieldCheck, module: 'ssoma', tone: 'var(--chart-3)' },
   { key: 'inventario', label: 'Inventario vial', description: 'Elementos por tipo, tramo y progresiva, con estado de conservación e inspecciones.', icon: Boxes, module: 'inventario', tone: 'var(--chart-2)' },
+  // La economía interna: solo el Administrador la exporta (15.1)
+  { key: 'caja', label: 'Caja chica', description: 'Movimientos por cuadrilla y categoría, con su comprobante y estado de revisión.', icon: Wallet, module: 'caja', tone: 'var(--success)', soloAdmin: true },
+  { key: 'materiales', label: 'Materiales e insumos', description: 'Solicitudes con su fecha de necesidad, cuadrilla, ítems y estado de atención.', icon: Package, module: 'materiales', tone: 'var(--info)' },
 ]
 
 export function ReportesClient() {
-  const { service, profile, hasModule } = useSession()
+  const { service, profile, hasModule, can } = useSession()
   const sb = React.useMemo(() => createClient(), [])
   const [preset, setPreset] = React.useState<DatePresetKey>('30d')
   const [busy, setBusy] = React.useState<string | null>(null)
   const range = React.useMemo(() => rangeFromPreset(preset), [preset])
 
-  const available = REPORTS.filter((r) => !r.module || hasModule(r.module))
+  const available = REPORTS.filter(
+    (r) => (!r.module || hasModule(r.module)) && (!r.soloAdmin || can.admin)
+  )
 
   const meta = (titulo: string, subtitulo?: string): ReportMeta => ({
     titulo,
@@ -105,6 +112,28 @@ export function ReportesClient() {
           .eq('service_id', service.id)
           .order('section_name')
           .order('progresiva_m')
+        return data ?? []
+      }
+      case 'caja': {
+        return await fetchAll((from, to) =>
+          sb.from('v_cash_movements')
+            .select('*')
+            .eq('service_id', service.id)
+            .gte('occurred_on', range.from)
+            .lte('occurred_on', range.to)
+            .order('occurred_on')
+            .order('id')
+            .range(from, to)
+        )
+      }
+      case 'materiales': {
+        const { data } = await sb
+          .from('v_supply_requests')
+          .select('*')
+          .eq('service_id', service.id)
+          .gte('needed_on', range.from)
+          .lte('needed_on', range.to)
+          .order('needed_on')
         return data ?? []
       }
     }
@@ -304,6 +333,76 @@ export function ReportesClient() {
         format === 'pdf'
           ? await descargarPdf(`SIGOV_inventario_${stamp}`, meta('Inventario vial georreferenciado'), cols, rows, { landscape: true })
           : await descargarExcel(`SIGOV_inventario_${stamp}`, meta('Inventario vial georreferenciado'), [{ name: 'Inventario', columns: cols, rows }])
+      }
+
+      if (key === 'caja') {
+        const cols = [
+          { header: 'Fecha', key: 'fecha', width: 12 },
+          { header: 'Caja', key: 'caja', width: 14 },
+          { header: 'Cuadrilla', key: 'cuadrilla', width: 26 },
+          { header: 'Movimiento', key: 'tipo', width: 14 },
+          { header: 'Categoría', key: 'categoria', width: 20 },
+          { header: 'Concepto', key: 'concepto', width: 46 },
+          { header: 'Proveedor', key: 'proveedor', width: 26 },
+          { header: 'Comprobante', key: 'comprobante', width: 18 },
+          { header: 'Importe', key: 'importe', width: 14 },
+          { header: 'Estado', key: 'estado', width: 14 },
+        ]
+        const rows = data.map((m: any) => ({
+          fecha: fmtDate(m.occurred_on),
+          caja: m.box_code ?? '—',
+          cuadrilla: m.crew_name ?? 'Caja del contrato',
+          tipo: m.kind,
+          categoria: m.category ?? '—',
+          concepto: truncate(m.description ?? '—', 90),
+          proveedor: m.supplier ?? '—',
+          comprobante: [m.receipt_kind, m.receipt_number].filter(Boolean).join(' ') || '—',
+          importe: Number(m.signed_amount ?? m.amount ?? 0),
+          estado: m.status,
+        }))
+        const egresos = rows.filter((r: any) => r.importe < 0)
+          .reduce((s: number, r: any) => s + Math.abs(r.importe), 0)
+        const ingresos = rows.filter((r: any) => r.importe > 0)
+          .reduce((s: number, r: any) => s + r.importe, 0)
+        format === 'pdf'
+          ? await descargarPdf(`SIGOV_caja_${stamp}`, meta('Caja chica', 'Movimientos del periodo'), cols, rows, {
+              landscape: true,
+              kpis: [
+                { label: 'Movimientos', value: fmtNumber(rows.length) },
+                { label: 'Ingresos', value: `S/ ${fmtNumber(ingresos, 2)}` },
+                { label: 'Egresos', value: `S/ ${fmtNumber(egresos, 2)}` },
+                { label: 'Saldo del periodo', value: `S/ ${fmtNumber(ingresos - egresos, 2)}` },
+              ],
+            })
+          : await descargarExcel(`SIGOV_caja_${stamp}`, meta('Caja chica'), [
+              { name: 'Movimientos', columns: cols, rows },
+            ])
+      }
+
+      if (key === 'materiales') {
+        const cols = [
+          { header: 'Necesario para', key: 'fecha', width: 14 },
+          { header: 'Código', key: 'codigo', width: 16 },
+          { header: 'Cuadrilla', key: 'cuadrilla', width: 26 },
+          { header: 'Tramo', key: 'tramo', width: 26 },
+          { header: 'Ítems', key: 'items', width: 10 },
+          { header: 'Motivo', key: 'motivo', width: 52 },
+          { header: 'Estado', key: 'estado', width: 16 },
+        ]
+        const rows = data.map((r: any) => ({
+          fecha: r.needed_on ? fmtDate(r.needed_on) : '—',
+          codigo: r.code ?? '—',
+          cuadrilla: r.crew_name ?? '—',
+          tramo: r.section_name ?? '—',
+          items: r.item_count ?? 0,
+          motivo: truncate(r.reason ?? '—', 100),
+          estado: r.status,
+        }))
+        format === 'pdf'
+          ? await descargarPdf(`SIGOV_materiales_${stamp}`, meta('Materiales e insumos'), cols, rows, { landscape: true })
+          : await descargarExcel(`SIGOV_materiales_${stamp}`, meta('Materiales e insumos'), [
+              { name: 'Solicitudes', columns: cols, rows },
+            ])
       }
 
       toast.success(`Reporte ${format === 'pdf' ? 'PDF' : 'Excel'} generado`)

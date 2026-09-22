@@ -16,20 +16,60 @@ import { reportePdf, type ReportMeta } from './reports'
 import { fmtDate } from './utils'
 
 /** Las carpetas del paquete, en el orden en que el cliente las revisa. */
+/**
+ * Las ocho carpetas del apartado 12.3, con su numeración.
+ *
+ * El orden y los nombres no son decorativos: el cliente archiva el ZIP tal
+ * cual lo recibe, y si cada entrega trae otra estructura deja de poder
+ * compararlas. La numeración fija el orden al descomprimir.
+ *
+ * 08_GASTOS solo va en el paquete del Administrador: la especificación
+ * dice que COVINCA no ve información económica interna.
+ */
 export const CARPETAS = {
-  partes: '01_PARTES_DIARIOS',
-  fotos: '02_PANEL_FOTOGRAFICO',
+  programacion: '01_PROGRAMACION',
+  partes: '02_REPORTES_DIARIOS',
   pci: '03_PCI',
-  ssoma: '04_SSOMA',
-  valorizacion: '05_VALORIZACION',
+  fotos: '04_FOTOGRAFIAS',
+  ssoma: '05_SSOMA',
+  materiales: '06_MATERIALES',
+  inventario: '07_INVENTARIO',
+  gastos: '08_GASTOS',
 } as const
 
 export type ContenidoPaquete = {
+  programacion: boolean
   partes: boolean
-  fotos: boolean
   pci: boolean
+  fotos: boolean
   ssoma: boolean
-  valorizacion: boolean
+  materiales: boolean
+  inventario: boolean
+  /** Solo el Administrador: COVINCA no ve la economía interna */
+  gastos: boolean
+}
+
+/**
+ * Los filtros del apartado 12.2.
+ *
+ * «Desde» y «hasta» van aparte porque acotan el paquete entero. El sector no
+ * viene como campo propio: agrupa tramos por su código de ruta, así que quien
+ * elige un sector manda aquí la lista de tramos que lo forman. El subtramo es
+ * el rango de progresivas dentro del tramo, que es como se nombra en campo.
+ * El tipo documental son las casillas de `ContenidoPaquete`.
+ */
+export type FiltrosPaquete = {
+  /** Tramos. Un sector entra como la lista de los suyos. */
+  tramoIds?: string[] | null
+  cuadrillaId?: string | null
+  actividadId?: string | null
+  /** Subtramo: el rango de progresivas, en metros */
+  progDesde?: number | null
+  progHasta?: number | null
+  /** Una programación semanal concreta */
+  planId?: string | null
+  /** Un documento PCI concreto */
+  pciId?: string | null
 }
 
 export type AvancePaquete = {
@@ -86,14 +126,16 @@ export async function armarPaquete(opciones: {
   desde: string
   hasta: string
   contenido: ContenidoPaquete
+  filtros?: FiltrosPaquete
   generadoPor: string
   organizacion?: string
   alAvanzar?: (avance: AvancePaquete) => void
 }): Promise<Blob> {
   const {
     sb, servicioId, servicioNombre, cliente, contrato,
-    desde, hasta, contenido, generadoPor, organizacion, alAvanzar,
+    desde, hasta, contenido, filtros, generadoPor, organizacion, alAvanzar,
   } = opciones
+  const f = filtros ?? {}
 
   const JSZip = (await import('jszip')).default
   const zip = new JSZip()
@@ -112,10 +154,72 @@ export async function armarPaquete(opciones: {
   const avisar = (paso: string, hechos: number, total: number) =>
     alAvanzar?.({ paso, hechos, total })
 
-  // ─── 01 · Partes diarios ────────────────────────────────────────────
+  /**
+   * Aplica los filtros del 12.2 sobre una consulta, diciéndole antes cómo se
+   * llama cada columna en esa vista. Lo que la vista no tiene, no se filtra.
+   */
+  const filtrar = (c: any, cols: {
+    crew?: string; section?: string; activity?: string
+    prog?: string; plan?: string; pci?: string
+  }) => {
+    if (f.cuadrillaId && cols.crew) c = c.eq(cols.crew, f.cuadrillaId)
+    if (f.tramoIds?.length && cols.section) c = c.in(cols.section, f.tramoIds)
+    if (f.actividadId && cols.activity) c = c.eq(cols.activity, f.actividadId)
+    if (f.progDesde != null && cols.prog) c = c.gte(cols.prog, f.progDesde)
+    if (f.progHasta != null && cols.prog) c = c.lte(cols.prog, f.progHasta)
+    if (f.planId && cols.plan) c = c.eq(cols.plan, f.planId)
+    if (f.pciId && cols.pci) c = c.eq(cols.pci, f.pciId)
+    return c
+  }
+
+  // ─── 01 · Programación ──────────────────────────────────────────────
+  if (contenido.programacion) {
+    avisar('Programación', 0, 1)
+    let c = sb.from('v_plan_items')
+      .select('*')
+      .eq('service_id', servicioId)
+      .gte('scheduled_on', desde)
+      .lte('scheduled_on', hasta)
+      .order('scheduled_on')
+      .limit(5000)
+    c = filtrar(c, {
+      crew: 'crew_id', section: 'section_id', activity: 'activity_id',
+      prog: 'prog_start_m', plan: 'plan_id',
+    })
+    const { data: plan } = await c
+
+    const doc = await reportePdf(
+      { ...meta, titulo: 'Programación del periodo' },
+      [
+        { header: 'Fecha', key: 'scheduled_on', width: 24 },
+        { header: 'Actividad', key: 'activity_name', width: 60 },
+        { header: 'Tramo', key: 'section_name', width: 46 },
+        { header: 'Progresiva', key: 'prog_start_txt', width: 26 },
+        { header: 'Cuadrilla', key: 'crew_name', width: 40 },
+        { header: 'Meta', key: 'target_qty', align: 'right', width: 22 },
+        { header: 'Ejecutado', key: 'executed_qty', align: 'right', width: 24 },
+        { header: 'Estado', key: 'status', width: 26 },
+      ],
+      plan ?? [],
+      { landscape: true }
+    )
+    const bytes = doc.output('arraybuffer')
+    zip.folder(CARPETAS.programacion)!.file('PROGRAMACION.pdf', bytes)
+    indice.push({
+      carpeta: CARPETAS.programacion,
+      archivo: 'PROGRAMACION.pdf',
+      tipo: 'Programación',
+      fecha: hasta,
+      detalle: plural((plan ?? []).length, 'partida'),
+      bytes: bytes.byteLength,
+    })
+    avisar('Programación', 1, 1)
+  }
+
+  // ─── 02 · Reportes diarios ──────────────────────────────────────────
   if (contenido.partes) {
     avisar('Partes diarios', 0, 1)
-    const { data: partes } = await sb
+    let cPartes = sb
       .from('work_orders')
       .select('id, work_date, status, crews(name)')
       .eq('service_id', servicioId)
@@ -123,6 +227,8 @@ export async function armarPaquete(opciones: {
       .lte('work_date', hasta)
       .is('deleted_at', null)
       .order('work_date')
+    cPartes = filtrar(cPartes, { crew: 'crew_id' })
+    const { data: partes } = await cPartes
 
     const lista = partes ?? []
     for (const [i, parte] of lista.entries()) {
@@ -172,10 +278,10 @@ export async function armarPaquete(opciones: {
     }
   }
 
-  // ─── 02 · Panel fotográfico ─────────────────────────────────────────
+  // ─── 04 · Fotografías ───────────────────────────────────────────────
   if (contenido.fotos) {
     avisar('Panel fotográfico', 0, 1)
-    const { data: fotos } = await sb
+    let cFotos = sb
       .from('v_evidences')
       .select('*')
       .eq('service_id', servicioId)
@@ -183,6 +289,10 @@ export async function armarPaquete(opciones: {
       .lte('work_date', hasta)
       .order('taken_at')
       .limit(400)
+    cFotos = filtrar(cFotos, {
+      crew: 'crew_id', section: 'section_id', prog: 'progresiva_m',
+    })
+    const { data: fotos } = await cFotos
 
     const lista = fotos ?? []
     // Las urls se firman en tandas: una por una tarda una eternidad
@@ -238,12 +348,17 @@ export async function armarPaquete(opciones: {
   // ─── 03 · PCI ───────────────────────────────────────────────────────
   if (contenido.pci) {
     avisar('PCI', 0, 1)
-    const { data: items } = await sb
+    let cPci = sb
       .from('v_pci_items')
       .select('*')
       .eq('service_id', servicioId)
       .order('due_date')
       .limit(2000)
+    cPci = filtrar(cPci, {
+      crew: 'assigned_crew_id', section: 'section_id', activity: 'activity_id',
+      prog: 'prog_start_m', pci: 'pci_id',
+    })
+    const { data: items } = await cPci
 
     const filas = (items ?? []).map((i: any) => ({
       pci: i.pci_code ?? '',
@@ -284,18 +399,20 @@ export async function armarPaquete(opciones: {
     avisar('PCI', 1, 1)
   }
 
-  // ─── 04 · SSOMA ─────────────────────────────────────────────────────
+  // ─── 05 · SSOMA ─────────────────────────────────────────────────────
   if (contenido.ssoma) {
     avisar('SSOMA', 0, 3)
 
     // Charlas con su asistencia
-    const { data: charlas } = await sb
+    let cCharlas = sb
       .from('v_safety_talks')
       .select('*')
       .eq('service_id', servicioId)
       .gte('talk_date', desde)
       .lte('talk_date', hasta)
       .order('talk_date')
+    cCharlas = filtrar(cCharlas, { crew: 'crew_id' })
+    const { data: charlas } = await cCharlas
 
     const filasCharlas = (charlas ?? []).map((c: any) => ({
       fecha: c.talk_date,
@@ -403,8 +520,47 @@ export async function armarPaquete(opciones: {
     avisar('SSOMA', 3, 3)
   }
 
-  // ─── 05 · Valorización ──────────────────────────────────────────────
-  if (contenido.valorizacion) {
+  // ─── 06 · Materiales e insumos ──────────────────────────────────────
+  if (contenido.materiales) {
+    avisar('Materiales', 0, 1)
+    let c = sb.from('v_supply_requests')
+      .select('*')
+      .eq('service_id', servicioId)
+      .gte('needed_on', desde)
+      .lte('needed_on', hasta)
+      .order('needed_on')
+      .limit(5000)
+    c = filtrar(c, { crew: 'crew_id', section: 'section_id' })
+    const { data: pedidos } = await c
+
+    const doc = await reportePdf(
+      { ...meta, titulo: 'Solicitudes de materiales e insumos' },
+      [
+        { header: 'Código', key: 'code', width: 28 },
+        { header: 'Requerido', key: 'needed_on', width: 24 },
+        { header: 'Cuadrilla', key: 'crew_name', width: 42 },
+        { header: 'Ítems', key: 'item_count', align: 'right', width: 20 },
+        { header: 'Estado', key: 'status', width: 26 },
+        { header: 'Motivo', key: 'reason', width: 70 },
+      ],
+      pedidos ?? [],
+      { landscape: true }
+    )
+    const bytes = doc.output('arraybuffer')
+    zip.folder(CARPETAS.materiales)!.file('SOLICITUDES.pdf', bytes)
+    indice.push({
+      carpeta: CARPETAS.materiales,
+      archivo: 'SOLICITUDES.pdf',
+      tipo: 'Materiales',
+      fecha: hasta,
+      detalle: plural((pedidos ?? []).length, 'solicitud', 'solicitudes'),
+      bytes: bytes.byteLength,
+    })
+    avisar('Materiales', 1, 1)
+  }
+
+  // ─── 07 · Inventario vial ───────────────────────────────────────────
+  if (contenido.inventario) {
     avisar('Valorización', 0, 1)
     const { data: entradas } = await sb
       .from('v_work_entries')
@@ -441,9 +597,9 @@ export async function armarPaquete(opciones: {
       filas
     )
     const bytes = doc.output('arraybuffer')
-    zip.folder(CARPETAS.valorizacion)!.file('RESUMEN_DE_METRADOS.pdf', bytes)
+    zip.folder(CARPETAS.inventario)!.file('RESUMEN_DE_METRADOS.pdf', bytes)
     indice.push({
-      carpeta: CARPETAS.valorizacion,
+      carpeta: CARPETAS.inventario,
       archivo: 'RESUMEN_DE_METRADOS.pdf',
       tipo: 'Resumen de metrados',
       fecha: hasta,
@@ -451,6 +607,52 @@ export async function armarPaquete(opciones: {
       bytes: bytes.byteLength,
     })
     avisar('Valorización', 1, 1)
+  }
+
+  // ─── 08 · Gastos · solo el Administrador ────────────────────────────
+  //
+  // El apartado 15.1 es explícito: «COVINCA no debe visualizar información
+  // económica interna». Quien arma el paquete decide si esta carpeta entra,
+  // y la pantalla solo se lo ofrece al Administrador.
+  if (contenido.gastos) {
+    avisar('Gastos', 0, 1)
+    let c = sb.from('v_cash_movements')
+      .select('*')
+      .eq('service_id', servicioId)
+      .gte('occurred_on', desde)
+      .lte('occurred_on', hasta)
+      .order('occurred_on')
+      .limit(10000)
+    c = filtrar(c, { crew: 'crew_id', section: 'section_id' })
+    const { data: movimientos } = await c
+
+    const doc = await reportePdf(
+      { ...meta, titulo: 'Movimientos de caja chica' },
+      [
+        { header: 'Fecha', key: 'occurred_on', width: 24 },
+        { header: 'Caja', key: 'box_code', width: 30 },
+        { header: 'Cuadrilla', key: 'crew_name', width: 38 },
+        { header: 'Tipo', key: 'kind', width: 24 },
+        { header: 'Categoría', key: 'category', width: 32 },
+        { header: 'Descripción', key: 'description', width: 70 },
+        { header: 'Comprobante', key: 'receipt_number', width: 30 },
+        { header: 'Monto', key: 'amount', align: 'right', width: 24 },
+        { header: 'Estado', key: 'status', width: 24 },
+      ],
+      movimientos ?? [],
+      { landscape: true }
+    )
+    const bytes = doc.output('arraybuffer')
+    zip.folder(CARPETAS.gastos)!.file('MOVIMIENTOS_DE_CAJA.pdf', bytes)
+    indice.push({
+      carpeta: CARPETAS.gastos,
+      archivo: 'MOVIMIENTOS_DE_CAJA.pdf',
+      tipo: 'Gastos',
+      fecha: hasta,
+      detalle: plural((movimientos ?? []).length, 'movimiento'),
+      bytes: bytes.byteLength,
+    })
+    avisar('Gastos', 1, 1)
   }
 
   // ─── El índice ──────────────────────────────────────────────────────

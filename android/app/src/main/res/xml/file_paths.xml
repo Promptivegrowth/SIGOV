@@ -2,5 +2,6 @@
 <paths>
     <files-path name="evidencias" path="evidencias/" />
     <files-path name="comprobantes" path="comprobantes/" />
+    <files-path name="formatos" path="formatos/" />
     <cache-path name="temporal" path="capturas/" />
 </paths>

@@ -37,6 +37,7 @@ class CampoRepositorio @Inject constructor(
     private val catalogo: CatalogoDao,
     private val partes: ParteDao,
     private val cola: ColaRepositorio,
+    private val ubicacion: Ubicacion,
 ) {
 
     // ─── Catálogos ────────────────────────────────────────────────────────
@@ -74,6 +75,15 @@ class CampoRepositorio @Inject constructor(
             "crews",
             supabase.postgrest.from("crews")
                 .select { filter { eq("service_id", servicioId); exact("deleted_at", null) } }
+                .decodeList<JsonObject>()
+        )
+
+        // El contrato: su nombre, el cliente y el número van en la cabecera
+        // de todo formato que el equipo imprima en campo.
+        guardar(
+            "services",
+            supabase.postgrest.from("services")
+                .select { filter { eq("id", servicioId) } }
                 .decodeList<JsonObject>()
         )
 
@@ -127,6 +137,12 @@ class CampoRepositorio @Inject constructor(
             // corredor lleva su propio kilometraje y ordenarlos por progresiva
             // los mezclaba.
             .sortedBy { it.code }
+
+    /** El contrato, para la cabecera de los formatos impresos en campo. */
+    suspend fun contrato(servicioId: String): Servicio? =
+        catalogo.de("services", servicioId)
+            .firstOrNull()
+            ?.let { runCatching { json.decodeFromString<Servicio>(it.datos) }.getOrNull() }
 
     suspend fun unidades(): List<Unidad> =
         catalogo.de("units", null)
@@ -352,6 +368,15 @@ class CampoRepositorio @Inject constructor(
         origen: OrigenDelTrabajo = OrigenDelTrabajo.Emergencia,
     ): RegistroLocal = withContext(Dispatchers.IO) {
         val clientId = UUID.randomUUID().toString()
+        // Dónde se registró el trabajo. Si el GPS no engancha se manda sin
+        // punto y el servidor lo sitúa por la progresiva declarada.
+        val punto = runCatching { ubicacion.actual() }.getOrNull()
+        // El símbolo de la unidad, para que el metrado se lea en el equipo:
+        // «300 m²» y no «300» a secas. En la nube ya lo resuelve el
+        // disparador a partir de la actividad.
+        val simbolo = unidad ?: actividad.unidadId?.let { id ->
+            runCatching { unidades().firstOrNull { it.id == id }?.symbol }.getOrNull()
+        }
         val registro = RegistroLocal(
             clientId = clientId,
             parteClientId = parte.clientId,
@@ -364,7 +389,7 @@ class CampoRepositorio @Inject constructor(
             progresivaFin = progresivaFin,
             lado = lado,
             cantidad = cantidad,
-            unidad = unidad,
+            unidad = simbolo,
             observacion = observacion,
             origen = origen.clave,
             planItemId = origen.planItemId,
@@ -393,6 +418,11 @@ class CampoRepositorio @Inject constructor(
                 actividad.unidadId?.let { put("unit_id", it) }
                 origen.planItemId?.let { put("plan_item_id", it) }
                 origen.pciItemId?.let { put("pci_item_id", it) }
+                punto?.let {
+                    put("lat", it.latitud)
+                    put("lng", it.longitud)
+                    put("accuracy_m", it.precision)
+                }
                 observacion?.takeIf { it.isNotBlank() }?.let { put("observation", it) }
                 supabase.usuarioActual()?.let { put("created_by", it) }
             },

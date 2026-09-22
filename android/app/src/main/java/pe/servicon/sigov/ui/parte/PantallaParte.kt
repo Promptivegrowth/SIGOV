@@ -8,7 +8,10 @@ import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.outlined.ArrowBack
 import androidx.compose.material.icons.outlined.Add
+import androidx.compose.material.icons.outlined.IosShare
 import androidx.compose.material.icons.outlined.PhotoCamera
+import androidx.compose.material.icons.outlined.PictureAsPdf
+import androidx.compose.material.icons.outlined.TableChart
 import androidx.compose.material.icons.outlined.Straighten
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
@@ -42,6 +45,7 @@ fun PantallaParte(
     val estado by vm.estado.collectAsStateWithLifecycle()
     val avisos = remember { SnackbarHostState() }
     var formularioAbierto by remember { mutableStateOf(false) }
+    var menuAbierto by remember { mutableStateOf(false) }
 
     LaunchedEffect(estado.aviso, estado.error) {
         (estado.aviso ?: estado.error)?.let {
@@ -57,6 +61,42 @@ fun PantallaParte(
         cuadrilla = estado.cuadrilla.ifBlank { null },
         ayuda = "Registra lo ejecutado hoy y genera el formato oficial.",
         avisos = avisos,
+        acciones = {
+            // El formato SIG-OP-F01, armado aquí mismo: el supervisor puede
+            // pedir el parte en el frente de trabajo, sin señal.
+            if (estado.parte != null && estado.registros.isNotEmpty()) {
+                if (estado.imprimiendo) {
+                    CircularProgressIndicator(
+                        modifier = Modifier.size(20.dp),
+                        strokeWidth = 2.dp,
+                        color = Marca.Azul,
+                    )
+                } else {
+                    IconButton(onClick = { vm.imprimirParte(compartir = false) }) {
+                        Icon(Icons.Outlined.PictureAsPdf, contentDescription = "Ver el parte en PDF",
+                            tint = Marca.Azul)
+                    }
+                    Box {
+                        IconButton(onClick = { menuAbierto = true }) {
+                            Icon(Icons.Outlined.IosShare, contentDescription = "Compartir el parte",
+                                tint = Marca.Verde)
+                        }
+                        DropdownMenu(expanded = menuAbierto, onDismissRequest = { menuAbierto = false }) {
+                            DropdownMenuItem(
+                                text = { Text("Compartir el PDF") },
+                                onClick = { menuAbierto = false; vm.imprimirParte(compartir = true) },
+                                leadingIcon = { Icon(Icons.Outlined.PictureAsPdf, null) },
+                            )
+                            DropdownMenuItem(
+                                text = { Text("Compartir para Excel") },
+                                onClick = { menuAbierto = false; vm.exportarCsv() },
+                                leadingIcon = { Icon(Icons.Outlined.TableChart, null) },
+                            )
+                        }
+                    }
+                }
+            }
+        },
         botonFlotante = {
             if (!estado.cargando && estado.parte != null) {
                 ExtendedFloatingActionButton(

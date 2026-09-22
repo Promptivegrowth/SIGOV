@@ -20,6 +20,7 @@ import { ImageViewer } from '@/components/shared/image-viewer'
 import { SkeletonList } from '@/components/ui/skeleton'
 import { EmptyState, DateRangeTabs, rangeFromPreset, type DatePresetKey } from '@/components/shared/misc'
 import { ConfirmDialog } from '@/components/forms/form-dialog'
+import { ArbolDeArchivo } from '@/components/archivo/arbol-de-archivo'
 import { Tip } from '@/components/ui/primitives'
 import { cn, fmtDate, fmtNumber, bytes, fmtRelative, toISODate, debounce } from '@/lib/utils'
 import { toast } from 'sonner'
@@ -60,6 +61,8 @@ export function ArchivoClient() {
   const [edit, setEdit] = React.useState<any>(null)
   const [preview, setPreview] = React.useState<any>(null)
   const [confirm, setConfirm] = React.useState<any>(null)
+  // 11.1: la lista sirve para buscar un documento; el árbol, para recorrer el mes
+  const [vista, setVista] = React.useState<'lista' | 'carpetas'>('lista')
 
   const range = React.useMemo(() => rangeFromPreset(preset), [preset])
 
@@ -137,7 +140,25 @@ export function ArchivoClient() {
           )
         }
       >
-        <div className="flex flex-wrap items-center gap-2">
+        <div className="mb-2 flex flex-wrap items-center gap-2">
+        <div className="bg-muted inline-flex rounded-lg p-0.5">
+          {([['lista', 'Documentos'], ['carpetas', 'Carpetas']] as const).map(([k, t]) => (
+            <button
+              key={k}
+              onClick={() => setVista(k)}
+              className={cn(
+                'rounded-md px-3 py-1.5 text-[12px] font-medium transition-all',
+                vista === k ? 'bg-card shadow-sm' : 'text-muted-foreground hover:text-foreground'
+              )}
+            >
+              {t}
+            </button>
+          ))}
+        </div>
+        {vista === 'carpetas' && <DateRangeTabs value={preset} onChange={setPreset} />}
+        </div>
+
+        <div className={cn('flex flex-wrap items-center gap-2', vista === 'carpetas' && 'hidden')}>
           <div className="relative min-w-56 flex-1 sm:max-w-sm">
             <Search className="text-muted-foreground absolute top-1/2 left-3 size-3.5 -translate-y-1/2" />
             <Input
@@ -178,6 +199,10 @@ export function ArchivoClient() {
       </PageHeader>
 
       <PageBody className="space-y-4">
+        {vista === 'carpetas' ? (
+          <ArbolDeArchivo desde={range.from} hasta={range.to} />
+        ) : (
+        <>
         {/* Atajos por tipo */}
         <div className="flex flex-wrap gap-2">
           {(Object.keys(KINDS) as Kind[]).map((k) => {
@@ -309,6 +334,8 @@ export function ArchivoClient() {
               )
             })}
           </ul>
+        )}
+        </>
         )}
       </PageBody>
 

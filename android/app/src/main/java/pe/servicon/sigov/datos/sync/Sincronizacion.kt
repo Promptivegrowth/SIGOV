@@ -46,6 +46,20 @@ private val LLAVE_DEL_PADRE: Map<String, Map<String, String>> = mapOf(
     "talk_attendance" to mapOf("safety_talks" to "talk_id"),
 )
 
+/**
+ * La llave natural de una tabla, cuando la nube tiene una además del
+ * `client_id`.
+ *
+ * El parte diario es único por contrato, cuadrilla y fecha. Si el equipo
+ * abrió el parte estando sin señal y mientras tanto ya existía en la nube
+ * —lo abrió el supervisor, o el mismo capataz desde el panel—, el envío
+ * choca contra esa restricción y el parte se queda atascado para siempre,
+ * arrastrando consigo todo lo que se registró debajo.
+ */
+private val LLAVE_NATURAL: Map<String, List<String>> = mapOf(
+    "work_orders" to listOf("service_id", "crew_id", "work_date"),
+)
+
 const val MAX_INTENTOS = 8
 private const val ESPERA_BASE_MS = 2_000L
 private const val ESPERA_MAXIMA_MS = 300_000L
@@ -183,10 +197,25 @@ class TrabajadorSincronizacion @AssistedInject constructor(
                     }
                 }
 
+                // Si la tabla tiene llave natural, primero se mira si ese
+                // registro ya existe en la nube. Existir no es un error: el
+                // parte del día es uno solo, lo abra quien lo abra.
+                val existente = LLAVE_NATURAL[envio.tabla]?.let { llaves ->
+                    val valores = llaves.associateWith { cuerpo[it]?.jsonPrimitive?.content }
+                    if (valores.values.any { it == null }) null
+                    else supabase.postgrest.from(envio.tabla)
+                        .select {
+                            filter { valores.forEach { (k, v) -> eq(k, v!!) } }
+                            limit(1)
+                        }
+                        .decodeList<JsonObject>()
+                        .firstOrNull()
+                }
+
                 // `client_id` es la llave del reintento: si el mismo envío
                 // llega dos veces por un corte, la nube actualiza en vez de
                 // duplicar.
-                val respuesta = supabase.postgrest
+                val respuesta = existente ?: supabase.postgrest
                     .from(envio.tabla)
                     .upsert(cuerpo, onConflict = "client_id") { select() }
                     .decodeSingle<JsonObject>()
@@ -220,7 +249,7 @@ class TrabajadorSincronizacion @AssistedInject constructor(
                         estado = EstadoEnvio.ERROR,
                         intentos = intentos,
                         proximoIntento = System.currentTimeMillis() + espera(intentos),
-                        ultimoError = fallo.message,
+                        ultimoError = sinSecretos(fallo.message),
                     )
                 )
             }
@@ -230,6 +259,23 @@ class TrabajadorSincronizacion @AssistedInject constructor(
         cola.limpiarViejos(ahora - 7 * 24 * 3600_000L)
 
         return if (fallaron > 0) Result.retry() else Result.success()
+    }
+
+    /**
+     * El error, sin lo que no debe verse.
+     *
+     * La biblioteca adjunta al mensaje la petición entera, con la cabecera
+     * `Authorization` y el token de sesión dentro. Ese texto se guarda y se
+     * enseña en la pantalla de Sincronización: el token quedaba a la vista de
+     * cualquiera que mirara el teléfono, o de quien recibiera la captura.
+     */
+    private fun sinSecretos(mensaje: String?): String {
+        val limpio = (mensaje ?: "Error desconocido")
+            .substringBefore("URL:")
+            .substringBefore("Headers:")
+            .replace(Regex("""Bearer\s+[A-Za-z0-9._-]+"""), "Bearer ···")
+            .trim()
+        return limpio.take(220).ifBlank { "No se pudo enviar. Reintenta más tarde." }
     }
 
     /** Cada intento falla más espaciado: de 2 segundos hasta 5 minutos. */

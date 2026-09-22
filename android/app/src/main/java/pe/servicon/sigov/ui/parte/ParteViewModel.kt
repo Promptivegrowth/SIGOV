@@ -20,6 +20,11 @@ import pe.servicon.sigov.datos.Tramo
 import pe.servicon.sigov.datos.local.ParteLocal
 import pe.servicon.sigov.datos.local.ParteDao
 import pe.servicon.sigov.datos.local.RegistroLocal
+import pe.servicon.sigov.datos.CabeceraPdf
+import pe.servicon.sigov.datos.FirmaPdf
+import pe.servicon.sigov.datos.FormatoOficial
+import pe.servicon.sigov.datos.FormatosPdf
+import java.time.LocalDate
 import javax.inject.Inject
 
 data class EstadoParte(
@@ -34,6 +39,8 @@ data class EstadoParte(
     val cuadrilla: String = "",
     val fotosPorRegistro: Map<String, Int> = emptyMap(),
     val guardando: Boolean = false,
+    /** Mientras se arma el PDF del parte */
+    val imprimiendo: Boolean = false,
     val aviso: String? = null,
     val error: String? = null,
 ) {
@@ -51,6 +58,7 @@ class ParteViewModel @Inject constructor(
     private val campo: CampoRepositorio,
     private val sesion: SesionRepositorio,
     private val partes: ParteDao,
+    private val formatos: FormatosPdf,
 ) : ViewModel() {
 
     private val _estado = MutableStateFlow(EstadoParte())
@@ -176,6 +184,124 @@ class ParteViewModel @Inject constructor(
             }
         }
     }
+
+    /**
+     * El parte del día como PDF, armado en el equipo.
+     *
+     * El formato SIG-OP-F01 sale igual que el del panel, pero sin depender de
+     * que haya señal: al capataz le pueden pedir el parte en el frente de
+     * trabajo y aquí lo manda por donde quiera.
+     */
+    fun imprimirParte(compartir: Boolean) {
+        val e = _estado.value
+        val parte = e.parte ?: return
+        _estado.update { it.copy(imprimiendo = true) }
+
+        viewModelScope.launch {
+            runCatching {
+                val servicio = campo.contrato(parte.servicioId)
+                val quien = sesion.perfil()?.nombre ?: "SIGOV"
+                val fecha = LocalDate.parse(parte.fecha)
+
+                val archivo = formatos.armar(
+                    formato = FormatoOficial.PARTE,
+                    cab = CabeceraPdf(
+                        servicio = servicio?.name ?: "",
+                        cliente = servicio?.cliente,
+                        contrato = servicio?.contrato,
+                        cuadrilla = e.cuadrilla,
+                        fecha = fecha,
+                        lugar = e.registros.firstNotNullOfOrNull { it.tramoNombre },
+                        emitidoPor = quien,
+                    ),
+                    columnas = listOf("Actividad", "Tramo", "Progresiva", "Lado", "Cantidad", "Fotos"),
+                    anchos = listOf(150f, 110f, 95f, 50f, 65f, 57f),
+                    filas = e.registros.map { r ->
+                        listOf(
+                            r.actividadNombre,
+                            r.tramoNombre ?: "—",
+                            listOfNotNull(r.progresivaInicio, r.progresivaFin)
+                                .joinToString(" → ") { progresiva(it) }
+                                .ifBlank { "—" },
+                            r.lado.replaceFirstChar { it.uppercase() },
+                            "%.2f %s".format(r.cantidad, r.unidad ?: ""),
+                            (e.fotosPorRegistro[r.clientId] ?: 0).toString(),
+                        )
+                    },
+                    contextoExtra = listOf(
+                        "Clima" to (parte.clima ?: "—"),
+                        "Personal" to (parte.personal?.toString() ?: "—"),
+                        "Jornada" to listOfNotNull(parte.horaInicio, parte.horaFin)
+                            .joinToString(" a ").ifBlank { "—" },
+                        "Metrado total" to "%.2f".format(e.metradoTotal),
+                    ),
+                    nota = parte.notas,
+                    firmas = listOf(
+                        FirmaPdf(quien, "Jefe de cuadrilla"),
+                        FirmaPdf("", "Supervisor de obra"),
+                    ),
+                    nombreArchivo = "PARTE_${parte.fecha}_${e.cuadrilla.filter { it.isLetterOrDigit() }}",
+                )
+                if (compartir) formatos.compartir(archivo, "Parte diario ${parte.fecha}")
+                else formatos.abrir(archivo)
+            }.onFailure { fallo ->
+                _estado.update { it.copy(error = fallo.enCristiano()) }
+            }
+            _estado.update { it.copy(imprimiendo = false) }
+        }
+    }
+
+    /**
+     * El mismo parte como hoja de cálculo.
+     *
+     * Lo pide la oficina cuando quiere sumar metrados de varias cuadrillas:
+     * el PDF se lee, el CSV se pega en la planilla.
+     */
+    fun exportarCsv() {
+        val e = _estado.value
+        val parte = e.parte ?: return
+        _estado.update { it.copy(imprimiendo = true) }
+
+        viewModelScope.launch {
+            runCatching {
+                val servicio = campo.contrato(parte.servicioId)
+                val archivo = formatos.armarCsv(
+                    columnas = listOf("Actividad", "Tramo", "Progresiva inicio", "Progresiva fin",
+                        "Lado", "Cantidad", "Unidad", "Origen", "Observación", "Fotos"),
+                    filas = e.registros.map { r ->
+                        listOf(
+                            r.actividadNombre,
+                            r.tramoNombre ?: "",
+                            r.progresivaInicio?.let { progresiva(it) } ?: "",
+                            r.progresivaFin?.let { progresiva(it) } ?: "",
+                            r.lado,
+                            "%.2f".format(r.cantidad),
+                            r.unidad ?: "",
+                            r.pciCodigo ?: r.origen,
+                            r.observacion ?: "",
+                            (e.fotosPorRegistro[r.clientId] ?: 0).toString(),
+                        )
+                    },
+                    encabezado = listOf(
+                        "Contrato" to (servicio?.name ?: ""),
+                        "Cliente" to (servicio?.cliente ?: ""),
+                        "Cuadrilla" to e.cuadrilla,
+                        "Fecha" to parte.fecha,
+                        "Metrado total" to "%.2f".format(e.metradoTotal),
+                    ),
+                    nombreArchivo = "PARTE_${parte.fecha}_${e.cuadrilla.filter { it.isLetterOrDigit() }}",
+                )
+                formatos.compartir(archivo, "Parte diario ${parte.fecha}")
+            }.onFailure { fallo ->
+                _estado.update { it.copy(error = fallo.enCristiano()) }
+            }
+            _estado.update { it.copy(imprimiendo = false) }
+        }
+    }
+
+    /** La progresiva, como se lee en el contrato: 12+450. */
+    private fun progresiva(metros: Double): String =
+        "%d+%03d".format((metros / 1000).toInt(), (metros % 1000).toInt())
 
     fun avisoVisto() = _estado.update { it.copy(aviso = null, error = null) }
 }

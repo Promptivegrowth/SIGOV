@@ -113,8 +113,9 @@ export const NAV: NavItem[] = [
     roles: ['admin','supervisor','ing_seguridad','visor'], module: 'reportes' },
   { href: '/formatos',     label: 'Formatos',      icon: FileSignature,
     roles: ['admin','supervisor','ing_seguridad'], module: 'reportes' },
+  // 12.1: el paquete lo arman el Administrador y el Visor COVINCA
   { href: '/paquetes',     label: 'Entregables',   icon: PackageCheck,
-    roles: ['admin','supervisor'], module: 'reportes' },
+    roles: ['admin','supervisor','visor'], module: 'reportes' },
   { href: '/archivo',      label: 'Archivo',       labelPorRol: { admin: 'Documentos', visor: 'Documentos', ing_seguridad: 'Documentos' },
     icon: FolderOpen, roles: ['admin','supervisor','ing_seguridad','visor'] },
   { href: '/importar',     label: 'Importación',   icon: Upload,
