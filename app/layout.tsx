@@ -1,11 +1,23 @@
 import type { Metadata, Viewport } from 'next'
-import { Geist, Geist_Mono } from 'next/font/google'
+import { Inter, Saira, Geist_Mono } from 'next/font/google'
 import { Providers } from '@/components/providers'
 import { BootScreen } from '@/components/shared/boot-screen'
 import './globals.css'
 
-const geistSans = Geist({
-  variable: '--font-geist-sans',
+/**
+ * La tipografía sigue al logotipo: Saira para los títulos, que comparte el
+ * corte condensado y técnico del lettering de Servicon, e Inter para el
+ * cuerpo, que es la que de verdad se lee en un celular bajo el sol.
+ */
+const saira = Saira({
+  variable: '--font-marca',
+  subsets: ['latin'],
+  weight: ['500', '600', '700'],
+  display: 'swap',
+})
+
+const inter = Inter({
+  variable: '--font-cuerpo',
   subsets: ['latin'],
   display: 'swap',
 })
@@ -44,7 +56,7 @@ export const metadata: Metadata = {
     type: 'website',
     locale: 'es_PE',
     title: 'SIGOV · Gestión Operativa Vial 4.0',
-    description: 'Sistema Integral de Gestión Operativa Vial para ETS VALERIA',
+    description: 'Sistema Integral de Gestión Operativa Vial para Grupo Servicon V&D EIRL',
     siteName: 'SIGOV',
   },
   robots: { index: false, follow: false },
@@ -53,7 +65,7 @@ export const metadata: Metadata = {
 export const viewport: Viewport = {
   themeColor: [
     { media: '(prefers-color-scheme: light)', color: '#F7F8FC' },
-    { media: '(prefers-color-scheme: dark)', color: '#101C5E' },
+    { media: '(prefers-color-scheme: dark)', color: '#072D70' },
   ],
   width: 'device-width',
   initialScale: 1,
@@ -71,7 +83,7 @@ export default function RootLayout({
         <link rel="dns-prefetch" href="https://tile.openstreetmap.org" />
         <BootScreen />
       </head>
-      <body className={`${geistSans.variable} ${geistMono.variable} font-sans`}>
+      <body className={`${inter.variable} ${saira.variable} ${geistMono.variable} font-sans`}>
         <Providers>{children}</Providers>
       </body>
     </html>

@@ -10,7 +10,7 @@ import {
 import { createClient } from '@/lib/supabase/client'
 import { Button } from '@/components/ui/button'
 import { Input, Label } from '@/components/ui/input'
-import { SigovMark } from '@/components/shared/logo'
+import { ServiconLogo, ServiconMark } from '@/components/shared/logo'
 import { DEMO_USERS, DEMO_PASSWORD, ROLES, APP } from '@/lib/constants'
 import { cn, initials } from '@/lib/utils'
 import { toast } from 'sonner'
@@ -72,10 +72,10 @@ export function LoginClient() {
           }}
         />
 
-        <div className="relative z-10 flex items-center gap-3">
-          <SigovMark size={44} />
-          <div>
-            <div className="text-2xl font-bold tracking-tight text-white">SIGOV</div>
+        <div className="relative z-10 flex flex-col gap-4">
+          <ServiconLogo width={230} claro />
+          <div className="border-l-2 border-white/20 pl-3">
+            <div className="font-marca text-2xl font-bold tracking-tight text-white">SIGOV</div>
             <div className="text-[11px] font-medium tracking-[0.18em] text-white/50 uppercase">
               {APP.tagline}
             </div>
@@ -121,7 +121,7 @@ export function LoginClient() {
         </div>
 
         <div className="relative z-10 flex items-center justify-between text-[11px] text-white/35">
-          <span>{APP.org} · RUC 20600222393</span>
+          <span>{APP.org}</span>
           <span>Desarrollado por {APP.builtBy}</span>
         </div>
       </aside>
@@ -131,9 +131,9 @@ export function LoginClient() {
         <div className="mx-auto w-full max-w-[420px]">
           {/* Marca compacta en móvil */}
           <div className="mb-8 flex items-center gap-3 lg:hidden">
-            <SigovMark size={40} />
+            <ServiconMark size={40} />
             <div>
-              <div className="text-xl font-bold tracking-tight">SIGOV</div>
+              <div className="font-marca text-xl font-bold tracking-tight">SIGOV</div>
               <div className="text-muted-foreground text-[10px] font-medium tracking-[0.16em] uppercase">
                 {APP.tagline}
               </div>
@@ -159,7 +159,7 @@ export function LoginClient() {
                 type="email"
                 autoComplete="username"
                 inputMode="email"
-                placeholder="usuario@etsvaleria.pe"
+                placeholder="usuario@gruposervicon.pe"
                 value={email}
                 onChange={(e) => setEmail(e.target.value)}
                 required

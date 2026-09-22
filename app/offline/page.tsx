@@ -1,12 +1,12 @@
 import { WifiOff, RefreshCw } from 'lucide-react'
-import { SigovMark } from '@/components/shared/logo'
+import { ServiconMark } from '@/components/shared/logo'
 
 export const metadata = { title: 'Sin conexión' }
 
 export default function OfflinePage() {
   return (
     <div className="flex min-h-dvh flex-col items-center justify-center px-6 text-center">
-      <SigovMark size={56} />
+      <ServiconMark size={56} />
       <div className="bg-secondary text-muted-foreground mt-6 flex size-12 items-center justify-center rounded-2xl">
         <WifiOff className="size-5" />
       </div>

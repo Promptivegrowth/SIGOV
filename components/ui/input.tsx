@@ -58,6 +58,14 @@ function Label({ className, ...props }: React.ComponentProps<typeof LabelPrimiti
 }
 
 /** Campo con etiqueta, ayuda y error — para no repetir el markup 200 veces */
+/**
+ * Etiqueta, campo y ayuda, atados entre sí.
+ *
+ * La etiqueta lleva `htmlFor` y el campo su `id`: sin eso el lector de
+ * pantalla no dice de qué campo se trata y tocar el texto no lleva el foco al
+ * recuadro, que en un celular con guantes es la diferencia entre acertar y
+ * no acertar.
+ */
 function Field({
   label,
   hint,
@@ -73,19 +81,35 @@ function Field({
   children: React.ReactNode
   className?: string
 }) {
+  const propio = React.useId()
+  const soloUno = React.isValidElement(children)
+  const hijo = soloUno ? (children as React.ReactElement<Record<string, unknown>>) : null
+
+  // Se respeta el id que el campo ya traiga
+  const idCampo = (hijo?.props?.id as string | undefined) ?? propio
+  const idAyuda = `${idCampo}-ayuda`
+
+  const campo = hijo
+    ? React.cloneElement(hijo, {
+        id: idCampo,
+        'aria-describedby': (error || hint) ? idAyuda : hijo.props['aria-describedby'],
+        'aria-invalid': error ? true : hijo.props['aria-invalid'],
+      })
+    : children
+
   return (
     <div className={cn('space-y-1.5', className)}>
       {label && (
-        <Label>
+        <Label htmlFor={idCampo}>
           {label}
           {required && <span className="text-destructive">*</span>}
         </Label>
       )}
-      {children}
+      {campo}
       {error ? (
-        <p className="text-destructive text-xs">{error}</p>
+        <p id={idAyuda} className="text-destructive text-xs">{error}</p>
       ) : hint ? (
-        <p className="text-muted-foreground text-xs">{hint}</p>
+        <p id={idAyuda} className="text-muted-foreground text-xs">{hint}</p>
       ) : null}
     </div>
   )

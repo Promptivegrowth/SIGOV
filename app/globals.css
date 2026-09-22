@@ -20,14 +20,17 @@
   --popover: oklch(1 0 0);
   --popover-foreground: oklch(0.19 0.02 258);
 
-  /* Marca */
-  --primary: oklch(0.47 0.19 264);
+  /* Marca Grupo Servicon · azul #072D70, verde #6BB43B, naranja #F96414.
+     El azul del logo es muy oscuro para un botón, así que el primario usa
+     una variante aclarada del mismo tono y el azul puro queda para los
+     fondos profundos —barra lateral, pantalla de ingreso—. */
+  --primary: oklch(0.392 0.154 261);
   --primary-foreground: oklch(0.99 0.005 250);
-  --brand-deep: oklch(0.24 0.07 262);
+  --brand-deep: oklch(0.319 0.123 261);
 
-  /* Ámbar de señalización */
-  --accent: oklch(0.78 0.16 74);
-  --accent-foreground: oklch(0.22 0.04 70);
+  /* Naranja de la marca, que en la vía es color de advertencia */
+  --accent: oklch(0.685 0.198 42);
+  --accent-foreground: oklch(1 0 0);
 
   --secondary: oklch(0.955 0.008 255);
   --secondary-foreground: oklch(0.28 0.03 258);
@@ -36,13 +39,14 @@
 
   --destructive: oklch(0.58 0.22 27);
   --destructive-foreground: oklch(0.99 0.005 250);
-  --success: oklch(0.6 0.15 152);
+  --success: oklch(0.607 0.175 148);
   --warning: oklch(0.77 0.16 71);
   --info: oklch(0.62 0.14 235);
+  --brand-green: oklch(0.697 0.171 135);
 
   --border: oklch(0.9 0.008 255);
   --input: oklch(0.9 0.008 255);
-  --ring: oklch(0.47 0.19 264);
+  --ring: oklch(0.392 0.154 261);
 
   /* Semáforo PCI · el color ES el dato */
   --sem-verde: oklch(0.62 0.16 150);
@@ -75,12 +79,12 @@
   --popover: oklch(0.21 0.026 260);
   --popover-foreground: oklch(0.95 0.008 255);
 
-  --primary: oklch(0.66 0.17 264);
+  --primary: oklch(0.63 0.16 261);
   --primary-foreground: oklch(0.15 0.03 262);
   --brand-deep: oklch(0.18 0.03 262);
 
-  --accent: oklch(0.79 0.16 74);
-  --accent-foreground: oklch(0.2 0.04 70);
+  --accent: oklch(0.72 0.19 42);
+  --accent-foreground: oklch(1 0 0);
 
   --secondary: oklch(0.26 0.028 260);
   --secondary-foreground: oklch(0.94 0.008 255);
@@ -89,7 +93,8 @@
 
   --destructive: oklch(0.64 0.21 26);
   --destructive-foreground: oklch(0.98 0.005 250);
-  --success: oklch(0.68 0.15 152);
+  --success: oklch(0.66 0.17 148);
+  --brand-green: oklch(0.72 0.17 135);
   --warning: oklch(0.8 0.15 71);
   --info: oklch(0.68 0.13 235);
 
@@ -128,6 +133,7 @@
   --color-primary: var(--primary);
   --color-primary-foreground: var(--primary-foreground);
   --color-brand-deep: var(--brand-deep);
+  --color-brand-green: var(--brand-green);
   --color-secondary: var(--secondary);
   --color-secondary-foreground: var(--secondary-foreground);
   --color-muted: var(--muted);
@@ -166,7 +172,8 @@
   --radius-lg: var(--radius);
   --radius-xl: calc(var(--radius) + 4px);
 
-  --font-sans: var(--font-geist-sans), ui-sans-serif, system-ui, -apple-system, 'Segoe UI', sans-serif;
+  --font-sans: var(--font-cuerpo), ui-sans-serif, system-ui, -apple-system, 'Segoe UI', sans-serif;
+  --font-marca: var(--font-marca), var(--font-cuerpo), ui-sans-serif, system-ui, sans-serif;
   --font-mono: var(--font-geist-mono), ui-monospace, 'SF Mono', Menlo, monospace;
 }
 
@@ -310,4 +317,11 @@
 @media print {
   .no-print { display: none !important; }
   body { background: white; }
+}
+
+/* Los títulos llevan la tipografía de la marca; el cuerpo se queda en Inter,
+   que es la que aguanta párrafos y tablas densas. */
+h1, h2, h3, .font-marca {
+  font-family: var(--font-marca);
+  letter-spacing: -0.015em;
 }

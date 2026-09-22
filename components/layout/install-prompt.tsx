@@ -4,7 +4,7 @@ import * as React from 'react'
 import { AnimatePresence, motion } from 'motion/react'
 import { Download, X, Share, SquarePlus, Smartphone, Monitor } from 'lucide-react'
 import { Button } from '@/components/ui/button'
-import { SigovMark } from '@/components/shared/logo'
+import { ServiconMark } from '@/components/shared/logo'
 import { isIOS, isStandalone } from '@/lib/push'
 
 const DISMISS_KEY = 'sigov.install_dismissed'
@@ -75,7 +75,7 @@ export function InstallPrompt() {
 
             <div className="p-5">
               <div className="flex items-start gap-3.5">
-                <SigovMark size={44} />
+                <ServiconMark size={44} />
                 <div className="min-w-0 flex-1 pr-6">
                   <h3 className="text-[15px] font-semibold leading-tight">Instala SIGOV</h3>
                   <p className="text-muted-foreground mt-1 text-[12.5px] leading-snug">
