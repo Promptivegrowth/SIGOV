@@ -268,18 +268,53 @@ class EvidenciaRepositorio @Inject constructor(
             foto.rutaLocal = foto.clientId?.let { enElEquipo[it]?.absolutePath }
         }
 
-        val porFirmar = fotos.filter { it.rutaLocal == null }.map { it.ruta }.distinct()
+        // Y lo que ni siquiera ha subido todavía. Sin esto el capataz
+        // fotografía sin señal, entra a «Fotos» y no encuentra su foto:
+        // solo aparecería cuando el equipo recupere cobertura, que es
+        // justo cuando ya dejó de mirarla.
+        val yaListadas = fotos.mapNotNull { it.clientId }.toSet()
+        val enCola = partes.evidenciasEnElEquipo(servicioId)
+            .filter { it.clientId !in yaListadas }
+            .filter { it.fecha == null || (it.fecha >= desde && it.fecha <= hasta) }
+            .filter { fase == null || it.fase == fase }
+            .map { local ->
+                EvidenciaEnGaleria(
+                    id = local.clientId,
+                    clientId = local.clientId,
+                    servicioId = local.servicioId,
+                    phase = local.fase,
+                    ruta = local.rutaDestino,
+                    tomadaEn = Instant.ofEpochMilli(local.tomadaEn).toString(),
+                    fecha = local.fecha,
+                    actividad = local.actividad,
+                    tramo = local.tramo,
+                    progresiva = local.progresiva,
+                    cuadrillaId = cuadrillaId,
+                    pciCodigo = local.pciCodigo,
+                    caption = local.leyenda,
+                    lat = local.latitud.takeIf { it != 0.0 },
+                    lng = local.longitud.takeIf { it != 0.0 },
+                    precision = local.precision.toDouble().takeIf { it > 0 },
+                    watermarked = local.conMarcaDeAgua,
+                    // Sin sha256: la miniatura lo usa para marcar «sin subir»
+                    sha256 = null,
+                ).also { it.rutaLocal = local.rutaLocal }
+            }
+
+        val todas = (fotos + enCola).sortedByDescending { it.tomadaEn }
+
+        val porFirmar = todas.filter { it.rutaLocal == null }.map { it.ruta }.distinct()
         if (porFirmar.isNotEmpty()) {
             runCatching {
                 val firmadas = supabase.storage.from("evidencias")
                     .createSignedUrls(1.hours, porFirmar)
                     .associate { it.path to completar(it.signedURL) }
-                fotos.forEach { foto ->
+                todas.forEach { foto ->
                     if (foto.rutaLocal == null) foto.url = firmadas[foto.ruta]
                 }
             }
         }
-        fotos
+        todas
     }
 
     /**

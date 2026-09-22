@@ -135,6 +135,32 @@ data class FilaCatalogo(
     val bajadoEn: Long = System.currentTimeMillis(),
 )
 
+/**
+ * Una foto del equipo con el contexto de su actividad.
+ *
+ * Es lo que la galería necesita para enseñar lo que todavía no ha subido
+ * con el mismo aspecto que lo que ya está en la nube.
+ */
+data class EvidenciaConContexto(
+    val clientId: String,
+    val servicioId: String,
+    val fase: String,
+    val rutaLocal: String,
+    val rutaDestino: String,
+    val tomadaEn: Long,
+    val latitud: Double,
+    val longitud: Double,
+    val precision: Float,
+    val sha256: String,
+    val conMarcaDeAgua: Boolean,
+    val progresiva: Double?,
+    val leyenda: String?,
+    val actividad: String?,
+    val tramo: String?,
+    val pciCodigo: String?,
+    val fecha: String?,
+)
+
 /** Cuántas fotos lleva cada actividad: lo que la lista del parte necesita saber. */
 data class ConteoEvidencias(
     val registroClientId: String,

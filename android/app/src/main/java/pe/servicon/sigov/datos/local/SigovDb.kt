@@ -130,6 +130,31 @@ interface ParteDao {
     @Query("SELECT COUNT(*) FROM evidencias WHERE registroClientId = :registroId")
     suspend fun cuantasEvidencias(registroId: String): Int
 
+    /**
+     * Todo lo fotografiado en el equipo, con el dato de la actividad a la
+     * que pertenece. La galería lo necesita para enseñar lo que aún no ha
+     * subido: si solo mostrara lo que está en la nube, el capataz toma una
+     * foto sin señal, entra a «Fotos» y no la encuentra.
+     */
+    @Query(
+        """
+        SELECT e.clientId AS clientId, e.servicioId AS servicioId, e.fase AS fase,
+               e.rutaLocal AS rutaLocal, e.rutaDestino AS rutaDestino,
+               e.tomadaEn AS tomadaEn, e.latitud AS latitud, e.longitud AS longitud,
+               e.precision AS precision, e.sha256 AS sha256,
+               e.conMarcaDeAgua AS conMarcaDeAgua, e.progresiva AS progresiva,
+               e.leyenda AS leyenda,
+               r.actividadNombre AS actividad, r.tramoNombre AS tramo,
+               r.pciCodigo AS pciCodigo, p.fecha AS fecha
+        FROM evidencias e
+        LEFT JOIN registros r ON r.clientId = e.registroClientId
+        LEFT JOIN partes p ON p.clientId = r.parteClientId
+        WHERE e.servicioId = :servicioId
+        ORDER BY e.tomadaEn DESC
+        """
+    )
+    suspend fun evidenciasEnElEquipo(servicioId: String): List<EvidenciaConContexto>
+
     /** Cuántas fotos tiene cada actividad del parte, para pintarlo en la lista. */
     @Query(
         """

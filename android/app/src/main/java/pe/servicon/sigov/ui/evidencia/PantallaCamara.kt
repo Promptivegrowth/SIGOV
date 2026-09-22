@@ -38,6 +38,7 @@ import com.google.accompanist.permissions.ExperimentalPermissionsApi
 import com.google.accompanist.permissions.isGranted
 import com.google.accompanist.permissions.rememberMultiplePermissionsState
 import pe.servicon.sigov.datos.Fase
+import pe.servicon.sigov.datos.Sello
 import pe.servicon.sigov.datos.Progresiva
 import pe.servicon.sigov.ui.theme.Marca
 import java.io.File
@@ -179,6 +180,7 @@ fun PantallaCamara(
             Controles(
                 fase = estado.fase,
                 conMarca = estado.conMarcaDeAgua,
+                queLleva = resumenDelSello(estado.ajustes.sello),
                 alCambiarFase = vm::cambiarFase,
                 alAlternarMarca = vm::alternarMarca,
             )
@@ -331,6 +333,7 @@ private fun Disparador(
 /** Fase de la obra y marca de agua: lo único que el capataz decide. */
 @Composable
 private fun Controles(
+    queLleva: String,
     fase: Fase,
     conMarca: Boolean,
     alCambiarFase: (Fase) -> Unit,
@@ -382,7 +385,10 @@ private fun Controles(
                     color = Color.White,
                 )
                 Text(
-                    "Fecha, coordenadas, tramo y actividad",
+                    // Lo que lleva el sello lo decide el contrato, así que
+                    // este texto no puede estar cableado: diría una cosa
+                    // mientras la foto sale con otra.
+                    queLleva,
                     style = MaterialTheme.typography.bodySmall,
                     color = Color.White.copy(alpha = 0.6f),
                 )
@@ -393,5 +399,26 @@ private fun Controles(
                 colors = SwitchDefaults.colors(checkedTrackColor = Marca.Verde),
             )
         }
+    }
+}
+
+/** Qué campos lleva el sello, dicho en una línea. */
+private fun resumenDelSello(sello: Sello): String {
+    if (!sello.activo) return "Desactivado para este contrato"
+    val campos = listOfNotNull(
+        "fecha".takeIf { sello.fecha },
+        "hora".takeIf { sello.hora && !sello.fecha },
+        "coordenadas".takeIf { sello.geo },
+        "tramo".takeIf { sello.tramo },
+        "progresiva".takeIf { sello.progresiva },
+        "actividad".takeIf { sello.actividad },
+        "PCI".takeIf { sello.pci },
+        "cuadrilla".takeIf { sello.cuadrilla },
+    )
+    return when (campos.size) {
+        0 -> "Solo la firma de la empresa"
+        1 -> campos.first().replaceFirstChar { it.uppercase() }
+        else -> campos.dropLast(1).joinToString(", ").replaceFirstChar { it.uppercase() } +
+            " y " + campos.last()
     }
 }
