@@ -13,40 +13,43 @@
   --radius: 0.75rem;
 
   /* Superficies */
-  --background: oklch(0.985 0.003 250);
+  --background: oklch(0.990 0.003 229);
   --foreground: oklch(0.19 0.02 258);
   --card: oklch(1 0 0);
   --card-foreground: oklch(0.19 0.02 258);
   --popover: oklch(1 0 0);
   --popover-foreground: oklch(0.19 0.02 258);
 
-  /* Marca Grupo Servicon · azul #072D70, verde #6BB43B, naranja #F96414.
-     El azul del logo es muy oscuro para un botón, así que el primario usa
-     una variante aclarada del mismo tono y el azul puro queda para los
-     fondos profundos —barra lateral, pantalla de ingreso—. */
-  --primary: oklch(0.392 0.154 261);
+  /* Marca Grupo Servicon, medida sobre los mockups de la especificación:
+     azul marino #013266, azul medio #014b97 y verde bandera #0b8637.
+
+     Antes el primario y la barra lateral usaban un gris azulado de
+     plantilla —saturación 0.045— que no era el azul de SERVICON. Se ve al
+     comparar: el sidebar salía #0f1a2f, casi negro, donde el mockup pide
+     #013266. Ahora los tonos salen del logotipo. */
+  --primary: oklch(0.360 0.115 254);
   --primary-foreground: oklch(0.99 0.005 250);
-  --brand-deep: oklch(0.319 0.123 261);
+  --brand-deep: oklch(0.290 0.095 256);
 
   /* Naranja de la marca, que en la vía es color de advertencia */
   --accent: oklch(0.685 0.198 42);
   --accent-foreground: oklch(1 0 0);
 
-  --secondary: oklch(0.955 0.008 255);
+  --secondary: oklch(0.962 0.009 222);
   --secondary-foreground: oklch(0.28 0.03 258);
   --muted: oklch(0.958 0.006 255);
   --muted-foreground: oklch(0.53 0.02 257);
 
   --destructive: oklch(0.58 0.22 27);
   --destructive-foreground: oklch(0.99 0.005 250);
-  --success: oklch(0.607 0.175 148);
+  --success: oklch(0.542 0.152 148);
   --warning: oklch(0.77 0.16 71);
-  --info: oklch(0.62 0.14 235);
-  --brand-green: oklch(0.697 0.171 135);
+  --info: oklch(0.421 0.140 255);
+  --brand-green: oklch(0.542 0.152 148);
 
-  --border: oklch(0.9 0.008 255);
-  --input: oklch(0.9 0.008 255);
-  --ring: oklch(0.392 0.154 261);
+  --border: oklch(0.870 0.013 252);
+  --input: oklch(0.870 0.013 252);
+  --ring: oklch(0.360 0.115 254);
 
   /* Semáforo PCI · el color ES el dato */
   --sem-verde: oklch(0.62 0.16 150);
@@ -61,14 +64,14 @@
   --chart-1: oklch(0.51 0.19 264);  /* #2b5bd1 azul   */
   --chart-2: oklch(0.64 0.15 68);   /* #c67700 ámbar  */
   --chart-3: oklch(0.55 0.20 320);  /* #a23db8 morado */
-  --chart-4: oklch(0.56 0.15 148);  /* #1d8b3d verde  */
+  --chart-4: oklch(0.542 0.152 148);  /* #0b8637 verde de marca */
   --chart-5: oklch(0.52 0.03 258);  /* neutro "Otros" */
 
-  --sidebar: oklch(0.22 0.045 262);
-  --sidebar-foreground: oklch(0.9 0.015 255);
-  --sidebar-muted: oklch(0.68 0.025 258);
-  --sidebar-accent: oklch(0.3 0.06 262);
-  --sidebar-border: oklch(0.3 0.05 262);
+  --sidebar: oklch(0.321 0.104 255);
+  --sidebar-foreground: oklch(0.94 0.012 250);
+  --sidebar-muted: oklch(0.74 0.035 250);
+  --sidebar-accent: oklch(0.421 0.140 255);
+  --sidebar-border: oklch(0.400 0.095 255);
 }
 
 .dark {
@@ -79,9 +82,9 @@
   --popover: oklch(0.21 0.026 260);
   --popover-foreground: oklch(0.95 0.008 255);
 
-  --primary: oklch(0.63 0.16 261);
+  --primary: oklch(0.58 0.135 254);
   --primary-foreground: oklch(0.15 0.03 262);
-  --brand-deep: oklch(0.18 0.03 262);
+  --brand-deep: oklch(0.24 0.075 256);
 
   --accent: oklch(0.72 0.19 42);
   --accent-foreground: oklch(1 0 0);
@@ -94,7 +97,7 @@
   --destructive: oklch(0.64 0.21 26);
   --destructive-foreground: oklch(0.98 0.005 250);
   --success: oklch(0.66 0.17 148);
-  --brand-green: oklch(0.72 0.17 135);
+  --brand-green: oklch(0.63 0.155 148);
   --warning: oklch(0.8 0.15 71);
   --info: oklch(0.68 0.13 235);
 
@@ -116,11 +119,11 @@
   --chart-4: oklch(0.65 0.16 148);  /* #37a953 */
   --chart-5: oklch(0.62 0.03 258);  /* neutro "Otros" */
 
-  --sidebar: oklch(0.18 0.028 262);
-  --sidebar-foreground: oklch(0.92 0.012 255);
-  --sidebar-muted: oklch(0.65 0.022 258);
-  --sidebar-accent: oklch(0.26 0.045 262);
-  --sidebar-border: oklch(0.27 0.04 262);
+  --sidebar: oklch(0.245 0.080 256);
+  --sidebar-foreground: oklch(0.93 0.012 250);
+  --sidebar-muted: oklch(0.70 0.030 250);
+  --sidebar-accent: oklch(0.360 0.115 254);
+  --sidebar-border: oklch(0.330 0.085 255);
 }
 
 @theme inline {

@@ -9,7 +9,7 @@ import { ServiconMark } from '@/components/shared/logo'
 import { ServiceSwitcher } from './service-switcher'
 import { SyncIndicator } from './sync-indicator'
 import { useSession } from '@/lib/hooks/use-session'
-import { NAV, APP } from '@/lib/constants'
+import { NAV, APP, ROLES, rotuloDeNav } from '@/lib/constants'
 import { cn } from '@/lib/utils'
 import { Tip } from '@/components/ui/primitives'
 import { usePendingCounts } from '@/lib/hooks/use-pending-counts'
@@ -26,7 +26,7 @@ export function Sidebar({
   onMobileClose: () => void
 }) {
   const pathname = usePathname()
-  const { role, hasModule } = useSession()
+  const { role, hasModule, crew, service } = useSession()
   const counts = usePendingCounts()
 
   const items = NAV.filter(
@@ -43,14 +43,21 @@ export function Sidebar({
 
   const content = (
     <>
-      {/* Marca */}
-      <div className={cn('flex h-16 shrink-0 items-center gap-2.5 px-4', collapsed && 'lg:justify-center lg:px-0')}>
-        <ServiconMark size={30} claro />
+      {/* El rol de quien entró, que es lo que encabeza el menú en el mockup.
+          La marca ya no va aquí: vive en la banda superior, y repetirla
+          dejaba «SIGOV» escrito dos veces en la misma pantalla. */}
+      <div className={cn(
+        'flex h-[62px] shrink-0 items-center gap-2.5 border-b border-white/10 px-4',
+        collapsed && 'lg:justify-center lg:px-0'
+      )}>
+        <ServiconMark size={26} claro />
         {!collapsed && (
-          <div className="min-w-0 lg:block">
-            <div className="text-[17px] leading-none font-bold tracking-tight text-white">SIGOV</div>
-            <div className="mt-1 truncate text-[9px] leading-none font-medium tracking-[0.14em] text-white/40 uppercase">
-              Gestión Operativa Vial
+          <div className="min-w-0">
+            <div className="truncate text-[13px] font-semibold leading-tight text-white">
+              {ROLES[role].label}
+            </div>
+            <div className="text-[10.5px] leading-tight text-white/55">
+              {crew ? crew.code : service.code}
             </div>
           </div>
         )}
@@ -94,7 +101,7 @@ export function Sidebar({
                   />
                 )}
                 <item.icon className={cn('size-[18px] shrink-0', active && 'text-accent')} />
-                {!collapsed && <span className="flex-1 truncate">{item.label}</span>}
+                {!collapsed && <span className="flex-1 truncate">{rotuloDeNav(item, role)}</span>}
                 {badge > 0 &&
                   (collapsed ? (
                     <span className="bg-destructive absolute top-1.5 right-2 size-2 rounded-full ring-2 ring-sidebar" />

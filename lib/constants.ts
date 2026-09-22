@@ -3,6 +3,7 @@ import {
   LayoutDashboard,
   Wallet, CalendarRange, TriangleAlert, HardHat, MapPinned,
   Boxes, Package, PackageCheck, CalendarClock, ShieldCheck, FileBarChart, Upload, Settings, Map, FolderOpen, Bell, FileSignature,
+  ClipboardList, Camera, BarChart3, RefreshCw,
 } from 'lucide-react'
 
 export type Role = 'admin' | 'supervisor' | 'jefe_cuadrilla' | 'ing_seguridad' | 'visor'
@@ -60,27 +61,68 @@ export interface NavItem {
   module?: string
   field?: boolean   // visible en la barra inferior del modo campo
   badge?: 'pci' | 'sync' | 'partes' | 'alertas'
+  /** Cuando el rótulo cambia según quién mira */
+  labelPorRol?: Partial<Record<Role, string>>
 }
 
+/**
+ * El menú, con los nombres que usa cada rol.
+ *
+ * El Jefe de Cuadrilla no llama «Campo» al reporte diario ni «Caja chica» a
+ * su caja: la especificación nombra sus apartados uno por uno, y esos son
+ * los nombres que la cuadrilla reconoce. Cuando el rótulo cambia según
+ * quién mira, se declara en `labelPorRol`.
+ */
 export const NAV: NavItem[] = [
-  { href: '/dashboard',    label: 'Dashboard',     icon: LayoutDashboard, roles: ['admin','supervisor','ing_seguridad','visor','jefe_cuadrilla'] },
-  { href: '/campo',        label: 'Campo',         icon: HardHat,         roles: ['admin','supervisor','jefe_cuadrilla'], module: 'campo', field: true, badge: 'sync' },
-  { href: '/programacion', label: 'Programación',  icon: CalendarRange,   roles: ['admin','supervisor','jefe_cuadrilla','visor'], module: 'programacion', field: true },
-  { href: '/pci',          label: 'PCIs',          icon: TriangleAlert,   roles: ['admin','supervisor','jefe_cuadrilla','visor'], module: 'pci', field: true, badge: 'pci' },
-  { href: '/alertas',      label: 'Alertas',       icon: Bell,            roles: ['admin','supervisor','ing_seguridad','jefe_cuadrilla'], badge: 'alertas' },
-  { href: '/mapa',         label: 'Mapa',          icon: Map,             roles: ['admin','supervisor','ing_seguridad','visor','jefe_cuadrilla'], module: 'mapa' },
-  { href: '/inventario',   label: 'Inventario',    icon: Boxes,           roles: ['admin','supervisor','jefe_cuadrilla','visor'], module: 'inventario' },
-  { href: '/ssoma',        label: 'SSOMA',         icon: ShieldCheck,     roles: ['admin','supervisor','ing_seguridad','jefe_cuadrilla','visor'], module: 'ssoma', field: true },
-  { href: '/vencimientos', label: 'Vencimientos',  icon: CalendarClock,   roles: ['admin','supervisor','ing_seguridad'], module: 'ssoma' },
-  { href: '/materiales',   label: 'Materiales',    icon: Package,         roles: ['admin','supervisor'], module: 'materiales' },
-  { href: '/caja',         label: 'Caja chica',    icon: Wallet,          roles: ['admin','supervisor'], module: 'caja' },
-  { href: '/reportes',     label: 'Reportes',      icon: FileBarChart,    roles: ['admin','supervisor','ing_seguridad','visor'], module: 'reportes' },
-  { href: '/formatos',     label: 'Formatos',      icon: FileSignature,   roles: ['admin','supervisor','ing_seguridad'], module: 'reportes' },
-  { href: '/paquetes',     label: 'Entregables',   icon: PackageCheck,    roles: ['admin','supervisor'], module: 'reportes' },
-  { href: '/archivo',      label: 'Archivo',       icon: FolderOpen,      roles: ['admin','supervisor','ing_seguridad','visor'] },
-  { href: '/importar',     label: 'Importación',   icon: Upload,          roles: ['admin','supervisor'] },
-  { href: '/configuracion',label: 'Configuración', icon: Settings,        roles: ['admin','supervisor'] },
+  { href: '/dashboard',    label: 'Dashboard',     labelPorRol: { jefe_cuadrilla: 'Inicio' },
+    icon: LayoutDashboard, roles: ['admin','supervisor','ing_seguridad','visor','jefe_cuadrilla'] },
+  { href: '/jornada',      label: 'Mi Jornada',    icon: ClipboardList,
+    roles: ['jefe_cuadrilla'], module: 'campo' },
+  { href: '/programacion', label: 'Programación',  icon: CalendarRange,
+    roles: ['admin','supervisor','jefe_cuadrilla','visor'], module: 'programacion', field: true },
+  { href: '/pci',          label: 'PCIs',          icon: TriangleAlert,
+    roles: ['admin','supervisor','jefe_cuadrilla','visor'], module: 'pci', field: true, badge: 'pci' },
+  { href: '/campo',        label: 'Campo',         labelPorRol: { jefe_cuadrilla: 'Reporte Diario' },
+    icon: HardHat, roles: ['admin','supervisor','jefe_cuadrilla'], module: 'campo', field: true, badge: 'sync' },
+  { href: '/caja',         label: 'Caja chica',    labelPorRol: { jefe_cuadrilla: 'Registro de Gastos / Mi Caja' },
+    icon: Wallet, roles: ['admin','supervisor','jefe_cuadrilla'], module: 'caja' },
+  { href: '/materiales',   label: 'Materiales',    labelPorRol: { jefe_cuadrilla: 'Materiales / Insumos' },
+    icon: Package, roles: ['admin','supervisor','jefe_cuadrilla'], module: 'materiales' },
+  { href: '/evidencias',   label: 'Fotos / Evidencias', icon: Camera,
+    roles: ['admin','supervisor','ing_seguridad','jefe_cuadrilla','visor'], module: 'campo' },
+  { href: '/avance',       label: 'Mi Avance',     icon: BarChart3,
+    roles: ['jefe_cuadrilla'], module: 'campo' },
+  { href: '/sincronizacion', label: 'Sincronización', icon: RefreshCw,
+    roles: ['jefe_cuadrilla'], badge: 'sync' },
+  { href: '/alertas',      label: 'Alertas',       icon: Bell,
+    roles: ['admin','supervisor','ing_seguridad'], badge: 'alertas' },
+  { href: '/mapa',         label: 'Mapa',          icon: Map,
+    roles: ['admin','supervisor','ing_seguridad','visor'], module: 'mapa' },
+  { href: '/inventario',   label: 'Inventario',    icon: Boxes,
+    roles: ['admin','supervisor','visor'], module: 'inventario' },
+  { href: '/ssoma',        label: 'SSOMA',         icon: ShieldCheck,
+    roles: ['admin','supervisor','ing_seguridad','visor'], module: 'ssoma', field: true },
+  { href: '/vencimientos', label: 'Vencimientos',  icon: CalendarClock,
+    roles: ['admin','supervisor','ing_seguridad'], module: 'ssoma' },
+  { href: '/reportes',     label: 'Reportes',      icon: FileBarChart,
+    roles: ['admin','supervisor','ing_seguridad','visor'], module: 'reportes' },
+  { href: '/formatos',     label: 'Formatos',      icon: FileSignature,
+    roles: ['admin','supervisor','ing_seguridad'], module: 'reportes' },
+  { href: '/paquetes',     label: 'Entregables',   icon: PackageCheck,
+    roles: ['admin','supervisor'], module: 'reportes' },
+  { href: '/archivo',      label: 'Archivo',       icon: FolderOpen,
+    roles: ['admin','supervisor','ing_seguridad','visor'] },
+  { href: '/importar',     label: 'Importación',   icon: Upload,
+    roles: ['admin','supervisor'] },
+  { href: '/configuracion',label: 'Configuración', icon: Settings,
+    roles: ['admin','supervisor'] },
 ]
+
+/** El rótulo que le toca a este rol. */
+export function rotuloDeNav(item: NavItem, role: Role): string {
+  return item.labelPorRol?.[role] ?? item.label
+}
+
 
 export const SEMAFORO = {
   verde:   { label: 'En plazo',    className: 'bg-sem-verde',   text: 'text-sem-verde',   ring: 'ring-sem-verde/30' },

@@ -14,9 +14,9 @@ import {
 import { NotificationsBell } from './notifications-bell'
 import { CommandPalette } from './command-palette'
 import { useSession } from '@/lib/hooks/use-session'
-import { NAV, ROLES } from '@/lib/constants'
+import { NAV, ROLES, rotuloDeNav } from '@/lib/constants'
 import { cn, initials } from '@/lib/utils'
-import { ServiconMark } from '@/components/shared/logo'
+
 
 export function Topbar({ onMenuClick }: { onMenuClick: () => void }) {
   const pathname = usePathname()
@@ -42,18 +42,14 @@ export function Topbar({ onMenuClick }: { onMenuClick: () => void }) {
 
   return (
     <>
-      <header className="glass sticky top-0 z-30 flex h-16 shrink-0 items-center gap-3 border-b border-border px-4 lg:px-6">
+      <header className="glass sticky top-0 z-30 flex h-14 shrink-0 items-center gap-3 border-b border-border px-4 lg:px-6">
         <Button variant="ghost" size="icon" onClick={onMenuClick} className="lg:hidden" aria-label="Abrir menú">
           <Menu className="size-5" />
         </Button>
 
-        <div className="flex items-center gap-2.5 lg:hidden">
-          <ServiconMark size={26} />
-        </div>
-
         <div className="hidden min-w-0 lg:block">
           <h1 className="truncate text-[15px] font-semibold tracking-tight">
-            {current?.label ?? 'SIGOV'}
+            {current ? rotuloDeNav(current, role) : 'SIGOV'}
           </h1>
           <p className="text-muted-foreground flex min-w-0 items-center gap-1.5 truncate text-[11.5px]">
             {/* El contrato, siempre a la vista: quien lleva dos servicios a

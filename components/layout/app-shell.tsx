@@ -6,6 +6,7 @@ import { AnimatePresence, motion } from 'motion/react'
 import { Sidebar } from './sidebar'
 import { Topbar } from './topbar'
 import { BottomNav } from './bottom-nav'
+import { BandaDeMarca, PieDeCampana } from './banda-de-marca'
 import { InstallPrompt } from './install-prompt'
 import { OfflineBanner } from './offline-banner'
 import { useSession } from '@/lib/hooks/use-session'
@@ -57,10 +58,14 @@ export function AppShell({ children }: { children: React.ReactNode }) {
           collapsed ? 'lg:pl-[72px]' : 'lg:pl-[264px]'
         )}
       >
+        {/* La firma visual de los mockups: la marca encabeza cada pantalla
+            y la campaña la cierra. Sin ellas la aplicación se ve como una
+            plantilla con el logotipo pegado encima. */}
+        <BandaDeMarca />
         <Topbar onMenuClick={() => setMobileOpen(true)} />
         <OfflineBanner />
 
-        <main className="flex-1 pb-24 lg:pb-8">
+        <main className="flex-1 pb-24 lg:pb-0">
           <AnimatePresence mode="wait">
             <motion.div
               key={pathname}
@@ -73,6 +78,8 @@ export function AppShell({ children }: { children: React.ReactNode }) {
             </motion.div>
           </AnimatePresence>
         </main>
+
+        <PieDeCampana className="hidden lg:flex" />
       </div>
 
       <BottomNav />
