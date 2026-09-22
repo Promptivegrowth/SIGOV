@@ -21,10 +21,12 @@ export interface ReportMeta {
   ruc?: string
 }
 
-export const ORG_DEFAULT = { nombre: 'ETS VALERIA', ruc: '20600222393' }
+export const ORG_DEFAULT = { nombre: 'Grupo Servicon V&D EIRL', ruc: '' }
 
-const BRAND = { r: 27, g: 49, b: 160 }
-const ACCENT = { r: 245, g: 163, b: 20 }
+/* Los colores del logotipo de Grupo Servicon, que es lo que el cliente ve
+   impreso: azul #072D70 y naranja #F96414. */
+const BRAND = { r: 7, g: 45, b: 112 }
+const ACCENT = { r: 249, g: 100, b: 20 }
 
 async function jspdf() {
   const [{ jsPDF }, autoTable] = await Promise.all([
@@ -515,7 +517,7 @@ export async function descargarExcel(
   t0.value = 'SIGOV'
   t0.font = { bold: true, size: 26, color: { argb: 'FFFFFFFF' } }
   t0.alignment = { vertical: 'middle', horizontal: 'center' }
-  t0.fill = { type: 'pattern', pattern: 'solid', fgColor: { argb: 'FF1B31A0' } }
+  t0.fill = { type: 'pattern', pattern: 'solid', fgColor: { argb: 'FF072D70' } }
   portada.getRow(1).height = 26
   portada.getRow(2).height = 20
 
@@ -524,7 +526,7 @@ export async function descargarExcel(
   t1.value = 'SISTEMA INTEGRAL DE GESTION OPERATIVA VIAL'
   t1.font = { size: 8.5, color: { argb: 'FFFFFFFF' } }
   t1.alignment = { horizontal: 'center' }
-  t1.fill = { type: 'pattern', pattern: 'solid', fgColor: { argb: 'FF1B31A0' } }
+  t1.fill = { type: 'pattern', pattern: 'solid', fgColor: { argb: 'FF072D70' } }
 
   portada.addRow([])
   const tt = portada.addRow(['', meta.titulo])
@@ -564,7 +566,7 @@ export async function descargarExcel(
     ws.mergeCells('A1', `${String.fromCharCode(64 + Math.max(s.columns.length, 3))}1`)
     const t = ws.getCell('A1')
     t.value = `SIGOV · ${meta.titulo}`
-    t.font = { bold: true, size: 14, color: { argb: 'FF1B31A0' } }
+    t.font = { bold: true, size: 14, color: { argb: 'FF072D70' } }
     t.alignment = { vertical: 'middle' }
     ws.getRow(1).height = 22
 
@@ -578,7 +580,7 @@ export async function descargarExcel(
     const headerRow = ws.addRow(s.columns.map((c) => c.header))
     headerRow.eachCell((cell: any) => {
       cell.font = { bold: true, color: { argb: 'FFFFFFFF' }, size: 9 }
-      cell.fill = { type: 'pattern', pattern: 'solid', fgColor: { argb: 'FF1B31A0' } }
+      cell.fill = { type: 'pattern', pattern: 'solid', fgColor: { argb: 'FF072D70' } }
       cell.alignment = { vertical: 'middle', horizontal: 'left' }
       cell.border = { bottom: { style: 'thin', color: { argb: 'FFD1D5DB' } } }
     })

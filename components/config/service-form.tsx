@@ -67,10 +67,12 @@ export function ServiceForm({
     const { data, error } = await sb.rpc('create_service', {
       p_code: code.trim(),
       p_name: name.trim(),
-      p_client_name: client.trim() || null,
-      p_contract_code: contract.trim() || null,
-      p_starts_on: starts || null,
-      p_ends_on: ends || null,
+      // Los argumentos opcionales se omiten en vez de mandarse en nulo: la
+      // función ya tiene sus valores por defecto.
+      p_client_name: client.trim() || undefined,
+      p_contract_code: contract.trim() || undefined,
+      p_starts_on: starts || undefined,
+      p_ends_on: ends || undefined,
       p_color: color,
       p_modules: modules as any,
     })

@@ -235,7 +235,7 @@ export function ImportarClient() {
       <PageHeader
         icon={Upload}
         title="Importación desde Excel"
-        description="Sube el archivo tal como lo maneja ETS VALERIA. El sistema detecta las columnas, valida fila a fila y muestra los errores antes de escribir nada en la base."
+        description="Sube el archivo tal como lo maneja Grupo Servicon. El sistema detecta las columnas, valida fila a fila y muestra los errores antes de escribir nada en la base."
         actions={
           schema && (
             <Button variant="outline" onClick={downloadTemplate}>

@@ -5,7 +5,7 @@ import { useQuery, useQueryClient } from '@tanstack/react-query'
 import {
   Settings, Users, Route, ListChecks, Truck, Building2, ShieldCheck,
   Database, HardDrive, Bell, CircleCheck, CircleX, Activity, Plus,
-  Pencil, UserPlus, KeyRound, Trash2, Copy,
+  Pencil, UserPlus, KeyRound, Trash2, Copy, SlidersHorizontal,
 } from 'lucide-react'
 import { createClient } from '@/lib/supabase/client'
 import { useSession } from '@/lib/hooks/use-session'
@@ -18,6 +18,7 @@ import { SkeletonTable } from '@/components/ui/skeleton'
 import { Progresiva, EmptyState } from '@/components/shared/misc'
 import { FormDialog, ConfirmDialog, type FormField } from '@/components/forms/form-dialog'
 import { SectionGeometryDialog } from '@/components/config/section-geometry'
+import { AjustesDelServicio } from '@/components/config/ajustes-form'
 import { ServiceForm } from '@/components/config/service-form'
 import { ROLES, ASSET_CONDITION, type Role } from '@/lib/constants'
 import { cn, fmtDate, fmtNumber, fmtRelative, initials, bytes, parseProgresiva, fmtProgresiva } from '@/lib/utils'
@@ -114,7 +115,7 @@ export function ConfiguracionClient() {
 
   const userFields: FormField[] = [
     { name: 'full_name', label: 'Nombre completo', type: 'text', required: true, span: 2, placeholder: 'Marco Quispe Ramos' },
-    { name: 'email', label: 'Correo electrónico', type: 'email', required: true, placeholder: 'capataz@etsvaleria.pe' },
+    { name: 'email', label: 'Correo electrónico', type: 'email', required: true, placeholder: 'capataz@gruposervicon.pe' },
     { name: 'role', label: 'Rol en el servicio', type: 'select', required: true, options: roleOptions },
     { name: 'dni', label: 'DNI', type: 'text', placeholder: '43128907' },
     { name: 'phone', label: 'Teléfono', type: 'tel', placeholder: '+51 987 654 321' },
@@ -313,6 +314,7 @@ export function ConfiguracionClient() {
             <TabsTrigger value="tramos"><Route className="size-3.5" />Tramos</TabsTrigger>
             <TabsTrigger value="actividades"><ListChecks className="size-3.5" />Actividades</TabsTrigger>
             <TabsTrigger value="servicios"><Building2 className="size-3.5" />Servicios</TabsTrigger>
+            <TabsTrigger value="ajustes"><SlidersHorizontal className="size-3.5" />Ajustes</TabsTrigger>
             <TabsTrigger value="dispositivo"><HardDrive className="size-3.5" />Dispositivo</TabsTrigger>
             {can.manage && <TabsTrigger value="seguridad"><ShieldCheck className="size-3.5" />Seguridad</TabsTrigger>}
           </TabsList>
@@ -799,6 +801,10 @@ export function ConfiguracionClient() {
           </TabsContent>
 
           {/* ═══ DISPOSITIVO ═══════════════════════════════════════════════ */}
+          <TabsContent value="ajustes" className="mt-4">
+            <AjustesDelServicio />
+          </TabsContent>
+
           <TabsContent value="dispositivo" className="mt-4">
             <DeviceSettings />
           </TabsContent>

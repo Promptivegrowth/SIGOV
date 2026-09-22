@@ -108,7 +108,10 @@ export function AssetForm({
     setCodeBusy(true)
     const { data } = await sb.rpc('next_asset_code', {
       p_service_id: service.id,
-      p_section_id: sectionId || null,
+      // Sin sección la función devuelve el código general del tipo; el
+      // generador de tipos declara todos los argumentos obligatorios, pero
+      // este acepta nulo.
+      p_section_id: sectionId || (null as unknown as string),
       p_type_id: typeId,
     })
     setCodeBusy(false)
