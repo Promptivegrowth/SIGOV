@@ -284,8 +284,11 @@ export type Database = {
           crew_id: string | null
           deleted_at: string | null
           doc_date: string
+          driver_id: string | null
+          fit_to_drive: Json | null
           hazards: Json
           id: string
+          kind: Database["public"]["Enums"]["ats_kind"]
           lat: number | null
           lng: number | null
           location: string | null
@@ -298,6 +301,7 @@ export type Database = {
           supervisor_signature_path: string | null
           task: string
           updated_at: string
+          vehicle_id: string | null
           work_order_id: string | null
         }
         Insert: {
@@ -308,8 +312,11 @@ export type Database = {
           crew_id?: string | null
           deleted_at?: string | null
           doc_date?: string
+          driver_id?: string | null
+          fit_to_drive?: Json | null
           hazards?: Json
           id?: string
+          kind?: Database["public"]["Enums"]["ats_kind"]
           lat?: number | null
           lng?: number | null
           location?: string | null
@@ -322,6 +329,7 @@ export type Database = {
           supervisor_signature_path?: string | null
           task: string
           updated_at?: string
+          vehicle_id?: string | null
           work_order_id?: string | null
         }
         Update: {
@@ -332,8 +340,11 @@ export type Database = {
           crew_id?: string | null
           deleted_at?: string | null
           doc_date?: string
+          driver_id?: string | null
+          fit_to_drive?: Json | null
           hazards?: Json
           id?: string
+          kind?: Database["public"]["Enums"]["ats_kind"]
           lat?: number | null
           lng?: number | null
           location?: string | null
@@ -346,6 +357,7 @@ export type Database = {
           supervisor_signature_path?: string | null
           task?: string
           updated_at?: string
+          vehicle_id?: string | null
           work_order_id?: string | null
         }
         Relationships: [
@@ -371,6 +383,13 @@ export type Database = {
             referencedColumns: ["crew_id"]
           },
           {
+            foreignKeyName: "ats_iperc_driver_id_fkey"
+            columns: ["driver_id"]
+            isOneToOne: false
+            referencedRelation: "profiles"
+            referencedColumns: ["id"]
+          },
+          {
             foreignKeyName: "ats_iperc_section_id_fkey"
             columns: ["section_id"]
             isOneToOne: false
@@ -389,6 +408,20 @@ export type Database = {
             columns: ["supervisor_id"]
             isOneToOne: false
             referencedRelation: "profiles"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "ats_iperc_vehicle_id_fkey"
+            columns: ["vehicle_id"]
+            isOneToOne: false
+            referencedRelation: "v_vehicles"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "ats_iperc_vehicle_id_fkey"
+            columns: ["vehicle_id"]
+            isOneToOne: false
+            referencedRelation: "vehicles"
             referencedColumns: ["id"]
           },
           {
@@ -434,6 +467,13 @@ export type Database = {
             columns: ["ats_id"]
             isOneToOne: false
             referencedRelation: "ats_iperc"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "ats_signatures_ats_id_fkey"
+            columns: ["ats_id"]
+            isOneToOne: false
+            referencedRelation: "v_ats"
             referencedColumns: ["id"]
           },
         ]
@@ -4206,6 +4246,97 @@ export type Database = {
       }
     }
     Views: {
+      v_ats: {
+        Row: {
+          approved_at: string | null
+          apto: boolean | null
+          created_at: string | null
+          crew_id: string | null
+          crew_name: string | null
+          doc_date: string | null
+          driver_id: string | null
+          driver_name: string | null
+          firmas: number | null
+          fit_to_drive: Json | null
+          hazards: Json | null
+          id: string | null
+          kind: Database["public"]["Enums"]["ats_kind"] | null
+          lat: number | null
+          lng: number | null
+          location: string | null
+          max_risk: Database["public"]["Enums"]["risk_level"] | null
+          ppe: Json | null
+          prog_start_m: number | null
+          prog_start_txt: string | null
+          section_id: string | null
+          section_name: string | null
+          service_id: string | null
+          supervisor_id: string | null
+          supervisor_name: string | null
+          task: string | null
+          vehicle_id: string | null
+          vehicle_name: string | null
+          vehicle_plate: string | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "ats_iperc_crew_id_fkey"
+            columns: ["crew_id"]
+            isOneToOne: false
+            referencedRelation: "crews"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "ats_iperc_crew_id_fkey"
+            columns: ["crew_id"]
+            isOneToOne: false
+            referencedRelation: "v_hygiene_today"
+            referencedColumns: ["crew_id"]
+          },
+          {
+            foreignKeyName: "ats_iperc_driver_id_fkey"
+            columns: ["driver_id"]
+            isOneToOne: false
+            referencedRelation: "profiles"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "ats_iperc_section_id_fkey"
+            columns: ["section_id"]
+            isOneToOne: false
+            referencedRelation: "road_sections"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "ats_iperc_service_id_fkey"
+            columns: ["service_id"]
+            isOneToOne: false
+            referencedRelation: "services"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "ats_iperc_supervisor_id_fkey"
+            columns: ["supervisor_id"]
+            isOneToOne: false
+            referencedRelation: "profiles"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "ats_iperc_vehicle_id_fkey"
+            columns: ["vehicle_id"]
+            isOneToOne: false
+            referencedRelation: "v_vehicles"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "ats_iperc_vehicle_id_fkey"
+            columns: ["vehicle_id"]
+            isOneToOne: false
+            referencedRelation: "vehicles"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       v_cash_boxes: {
         Row: {
           balance: number | null
@@ -5130,6 +5261,7 @@ export type Database = {
       can_manage: { Args: { sid: string }; Returns: boolean }
       can_write: { Args: { sid: string }; Returns: boolean }
       clear_section_geometry: { Args: { p_section_id: string }; Returns: Json }
+      conductor_apto: { Args: { p_respuestas: Json }; Returns: boolean }
       create_service: {
         Args: {
           p_client_name?: string
@@ -5346,6 +5478,7 @@ export type Database = {
     }
     Enums: {
       asset_condition: "bueno" | "regular" | "malo" | "critico" | "no_evaluado"
+      ats_kind: "cuadrilla" | "conductor"
       cash_movement_kind:
         | "apertura"
         | "deposito"
@@ -5587,6 +5720,7 @@ export const Constants = {
   public: {
     Enums: {
       asset_condition: ["bueno", "regular", "malo", "critico", "no_evaluado"],
+      ats_kind: ["cuadrilla", "conductor"],
       cash_movement_kind: [
         "apertura",
         "deposito",

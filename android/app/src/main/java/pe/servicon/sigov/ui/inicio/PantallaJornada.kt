@@ -48,6 +48,7 @@ fun PantallaJornada(
     alAbrirEquipos: () -> Unit = {},
     alAbrirVehiculos: () -> Unit = {},
     alAbrirCharlas: () -> Unit = {},
+    alAbrirAst: () -> Unit = {},
     alAbrirAvance: () -> Unit = {},
     alAbrirSincronizacion: () -> Unit = {},
 ) {
@@ -141,6 +142,7 @@ fun PantallaJornada(
                 Apartado(Icons.Outlined.HealthAndSafety, "Equipos SSOMA", "Extintores, botiquines", azul, 0, alAbrirEquipos),
                 Apartado(Icons.Outlined.DirectionsCar, "Vehículos", "Papeles y revisión", verde, 0, alAbrirVehiculos),
                 Apartado(Icons.Outlined.Campaign, "Charlas e higiene", "Charla del día e higiene", azul, 0, alAbrirCharlas),
+                Apartado(Icons.Outlined.Assignment, "AST", "Antes de empezar la jornada", verde, 0, alAbrirAst),
                 Apartado(Icons.Outlined.BarChart, "Mi Avance", "Cumplimiento del día", verde, 0, alAbrirAvance),
                 Apartado(Icons.Outlined.Sync, "Sincronización", "Registros pendientes", azul, estado.pendientes, alAbrirSincronizacion),
             )

@@ -33,6 +33,7 @@ import pe.servicon.sigov.ui.perfil.PantallaPerfil
 import pe.servicon.sigov.ui.sync.PantallaSincronizacion
 import pe.servicon.sigov.ui.theme.Fondo
 import pe.servicon.sigov.ui.acceso.PantallaArranque
+import pe.servicon.sigov.ui.ast.PantallaAst
 import pe.servicon.sigov.ui.avance.PantallaAvance
 import pe.servicon.sigov.ui.caja.PantallaCaja
 import pe.servicon.sigov.ui.charlas.PantallaCharlas
@@ -146,6 +147,7 @@ class MainActivity : ComponentActivity() {
                             alAbrirEquipos = { nav.navigate("equipos") },
                             alAbrirVehiculos = { nav.navigate("vehiculos") },
                             alAbrirCharlas = { nav.navigate("charlas") },
+                            alAbrirAst = { nav.navigate("ast") },
                             alAbrirAvance = { nav.navigate("avance") },
                             alAbrirSincronizacion = { nav.navigate("sincronizacion") },
                         )
@@ -185,6 +187,9 @@ class MainActivity : ComponentActivity() {
                     }
                     composable("caja") {
                         PantallaCaja(alVolver = { nav.popBackStack() })
+                    }
+                    composable("ast") {
+                        PantallaAst(alVolver = { nav.popBackStack() })
                     }
                     composable("avance") {
                         PantallaAvance(alVolver = { nav.popBackStack() })

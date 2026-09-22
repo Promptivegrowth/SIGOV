@@ -7,7 +7,7 @@ import { motion } from 'motion/react'
 import {
   ShieldCheck, Megaphone, ClipboardCheck, HardHat, Signature,
   Users, TriangleAlert, CircleCheck, Plus, Calendar, MapPin, ChevronRight,
-  Search, X, Pencil, Trash2, Download, PenLine,
+  Search, X, Pencil, Trash2, Download, PenLine, Car,
 } from 'lucide-react'
 import { createClient } from '@/lib/supabase/client'
 import { useSession } from '@/lib/hooks/use-session'
@@ -185,7 +185,7 @@ export function SsomaClient() {
     queryFn: async () => {
       const { data } = await sb
         .from('ats_iperc')
-        .select('*, crews(name, color), ats_signatures(count)')
+        .select('*, crews(name, color), ats_signatures(count), vehicles(plate), profiles!ats_iperc_driver_id_fkey(full_name)')
         .eq('service_id', service.id)
         .is('deleted_at', null)
         .order('doc_date', { ascending: false })
@@ -446,10 +446,21 @@ export function SsomaClient() {
                           color: RISK_COLORS[a.max_risk],
                         }}
                       >
-                        <HardHat className="size-4.5" />
+                        {a.kind === 'conductor'
+                          ? <Car className="size-4.5" />
+                          : <HardHat className="size-4.5" />}
                       </span>
                       <div className="min-w-0 flex-1">
-                        <p className="truncate text-[13.5px] font-semibold">{a.task}</p>
+                        <p className="flex items-center gap-2 truncate text-[13.5px] font-semibold">
+                          {a.task}
+                          {/* Un conductor que se declaró no apto es lo primero
+                              que el supervisor tiene que ver de esta lista */}
+                          {a.kind === 'conductor' && !esApto(a.fit_to_drive) && (
+                            <Badge variant="outline" className="border-destructive/40 text-destructive shrink-0">
+                              No apto
+                            </Badge>
+                          )}
+                        </p>
                         <p className="text-muted-foreground flex flex-wrap items-center gap-x-3 text-[11.5px]">
                           <span>{fmtDate(a.doc_date)}</span>
                           {a.crews && <span>{a.crews.name}</span>}
@@ -1264,4 +1275,21 @@ Contenido tratado: ${t.content}` : ''),
     </Dialog>
     </>
   )
+}
+
+/**
+ * Si el conductor se declaró en condiciones de manejar.
+ *
+ * Repite el criterio de `conductor_apto()` en la base de datos. Se
+ * duplica a propósito: la lista lo necesita para ordenar y colorear sin
+ * pedir una columna calculada por cada fila, y si alguna vez discrepan, la
+ * que manda es la de la base.
+ */
+function esApto(respuestas: any): boolean {
+  if (!respuestas) return false
+  return respuestas.descanso_suficiente === true
+    && respuestas.consumio_alcohol !== true
+    && respuestas.medicacion_que_afecta !== true
+    && respuestas.licencia_vigente === true
+    && respuestas.vehiculo_operativo === true
 }
