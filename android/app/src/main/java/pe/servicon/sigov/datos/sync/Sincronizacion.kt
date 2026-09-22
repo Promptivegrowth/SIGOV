@@ -42,9 +42,11 @@ private val LLAVE_DEL_PADRE: Map<String, Map<String, String>> = mapOf(
     "evidences" to mapOf("work_entries" to "work_entry_id"),
     "ats_signatures" to mapOf("ats_iperc" to "ats_id"),
     "checklist_responses" to mapOf("work_orders" to "work_order_id"),
+    "supply_request_items" to mapOf("supply_requests" to "request_id"),
+    "talk_attendance" to mapOf("safety_talks" to "talk_id"),
 )
 
-private const val MAX_INTENTOS = 8
+const val MAX_INTENTOS = 8
 private const val ESPERA_BASE_MS = 2_000L
 private const val ESPERA_MAXIMA_MS = 300_000L
 
@@ -65,6 +67,32 @@ class ColaRepositorio @Inject constructor(
         combine(cola.cuantosPendientes(), archivos.cuantosSinSubir()) { registros, fotos ->
             registros + fotos
         }
+
+    /** Lo que sigue en la cola, para mostrarlo tal cual en Sincronización. */
+    val enEspera: Flow<List<EnvioPendiente>> = cola.enEspera()
+
+    /** Cuántos fallaron y van a reintentarse. */
+    val conError: Flow<Int> = cola.cuantosConError()
+
+    /** El momento del último envío que sí llegó. */
+    val ultimoEnvio: Flow<Long?> = cola.ultimoEnvio()
+
+    /** Fotos y firmas todavía sin subir. */
+    val archivosPendientes: Flow<Int> = archivos.cuantosSinSubir()
+
+    /**
+     * Empuja la cola ahora mismo.
+     *
+     * El reintento automático espacia cada vez más los intentos para no
+     * gastar batería contra una red que no está; cuando el capataz llega al
+     * campamento y ve señal, no tiene por qué esperar ese compás.
+     */
+    suspend fun sincronizarAhora() {
+        // Lo que se había rendido vuelve a la cola: pulsar el botón es una
+        // decisión de la persona, no el reintento automático que se frenó.
+        cola.revivirFallidos(System.currentTimeMillis())
+        pedirSincronizacion(contexto)
+    }
 
     /** Deja un registro listo para subir. Devuelve su identificador propio. */
     suspend fun encolar(

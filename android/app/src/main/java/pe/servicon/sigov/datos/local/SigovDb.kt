@@ -9,6 +9,8 @@ import androidx.room.Query
 import androidx.room.Room
 import androidx.room.RoomDatabase
 import androidx.room.Update
+import androidx.room.migration.Migration
+import androidx.sqlite.db.SupportSQLiteDatabase
 import dagger.Module
 import dagger.Provides
 import dagger.hilt.InstallIn
@@ -46,8 +48,35 @@ interface ColaDao {
     @Query("SELECT clientId FROM cola WHERE estado = 'ENVIADO'")
     suspend fun yaEnviados(): List<String>
 
+    /** Lo que todavía no llegó a la nube para una tabla concreta. */
+    @Query("SELECT * FROM cola WHERE tabla = :tabla AND estado <> 'ENVIADO' ORDER BY creadoEn")
+    suspend fun sinConfirmarDe(tabla: String): List<EnvioPendiente>
+
     @Query("DELETE FROM cola WHERE estado = 'ENVIADO' AND enviadoEn < :antesDe")
     suspend fun limpiarViejos(antesDe: Long)
+
+    /** Lo que sigue esperando, para poder enseñárselo al capataz. */
+    @Query("SELECT * FROM cola WHERE estado IN ('PENDIENTE','ERROR') ORDER BY creadoEn")
+    fun enEspera(): Flow<List<EnvioPendiente>>
+
+    /** Cuándo subió algo por última vez. */
+    @Query("SELECT MAX(enviadoEn) FROM cola WHERE estado = 'ENVIADO'")
+    fun ultimoEnvio(): Flow<Long?>
+
+    @Query("SELECT COUNT(*) FROM cola WHERE estado = 'ERROR'")
+    fun cuantosConError(): Flow<Int>
+
+    /**
+     * Devuelve a la cola lo que ya se había rendido.
+     *
+     * El reintento automático se detiene tras varios fallos para no golpear
+     * una red que no está. Pero cuando es la persona la que pulsa
+     * «Sincronizar ahora», ya no es un reintento ciego: puede haber llegado
+     * al campamento con wifi, o el supervisor puede haber corregido en
+     * oficina lo que hacía fallar el registro.
+     */
+    @Query("UPDATE cola SET intentos = 0, proximoIntento = :ahora WHERE estado = 'ERROR'")
+    suspend fun revivirFallidos(ahora: Long)
 }
 
 @Dao
@@ -82,6 +111,13 @@ interface ParteDao {
     @Query("SELECT * FROM registros WHERE parteClientId = :parteId ORDER BY creadoEn")
     fun registrosDe(parteId: String): Flow<List<RegistroLocal>>
 
+    @Query("SELECT * FROM registros WHERE clientId = :id")
+    suspend fun registro(id: String): RegistroLocal?
+
+    /** Los registros del parte, de una vez y no como flujo. */
+    @Query("SELECT * FROM registros WHERE parteClientId = :parteId ORDER BY creadoEn")
+    suspend fun registrosDelParte(parteId: String): List<RegistroLocal>
+
     @Query("DELETE FROM registros WHERE clientId = :id")
     suspend fun borrarRegistro(id: String)
 
@@ -93,6 +129,18 @@ interface ParteDao {
 
     @Query("SELECT COUNT(*) FROM evidencias WHERE registroClientId = :registroId")
     suspend fun cuantasEvidencias(registroId: String): Int
+
+    /** Cuántas fotos tiene cada actividad del parte, para pintarlo en la lista. */
+    @Query(
+        """
+        SELECT e.registroClientId AS registroClientId, COUNT(*) AS cuantas
+        FROM evidencias e
+        JOIN registros r ON r.clientId = e.registroClientId
+        WHERE r.parteClientId = :parteId
+        GROUP BY e.registroClientId
+        """
+    )
+    fun conteoEvidencias(parteId: String): Flow<List<ConteoEvidencias>>
 }
 
 @Dao
@@ -105,6 +153,14 @@ interface CatalogoDao {
 
     @Query("SELECT COUNT(*) FROM catalogo WHERE tabla = :tabla")
     suspend fun cuantas(tabla: String): Int
+
+    /**
+     * Borra del espejo lo que ya no vino de la nube: un tramo dado de baja o
+     * una partida retirada del contrato tienen que dejar de ofrecerse en el
+     * formulario, o el capataz seguirá registrando contra algo que no existe.
+     */
+    @Query("DELETE FROM catalogo WHERE tabla = :tabla AND id NOT IN (:vigentes)")
+    suspend fun borrarLosQueYaNoEstan(tabla: String, vigentes: List<String>)
 }
 
 @Database(
@@ -116,7 +172,7 @@ interface CatalogoDao {
         EvidenciaLocal::class,
         FilaCatalogo::class,
     ],
-    version = 1,
+    version = 3,
     exportSchema = false,
 )
 abstract class SigovDb : RoomDatabase() {
@@ -124,6 +180,28 @@ abstract class SigovDb : RoomDatabase() {
     abstract fun archivos(): ArchivoDao
     abstract fun partes(): ParteDao
     abstract fun catalogo(): CatalogoDao
+}
+
+/**
+ * De la versión 1 a la 2: el registro guarda de dónde nace el trabajo.
+ *
+ * Se migra en vez de recrear la base. Destruirla borraría la cola de envíos
+ * de un capataz que lleva tres días sin señal, que es justo el dato que esta
+ * aplicación existe para no perder.
+ */
+private val DE_1_A_2 = object : Migration(1, 2) {
+    override fun migrate(db: SupportSQLiteDatabase) {
+        db.execSQL("ALTER TABLE registros ADD COLUMN origen TEXT NOT NULL DEFAULT 'emergencia'")
+        db.execSQL("ALTER TABLE registros ADD COLUMN planItemId TEXT")
+        db.execSQL("ALTER TABLE registros ADD COLUMN pciItemId TEXT")
+    }
+}
+
+/** De la 2 a la 3: el registro guarda el código del PCI para el sello. */
+private val DE_2_A_3 = object : Migration(2, 3) {
+    override fun migrate(db: SupportSQLiteDatabase) {
+        db.execSQL("ALTER TABLE registros ADD COLUMN pciCodigo TEXT")
+    }
 }
 
 @Module
@@ -134,7 +212,7 @@ object BaseLocalModule {
     @Singleton
     fun proveerBase(@ApplicationContext contexto: Context): SigovDb =
         Room.databaseBuilder(contexto, SigovDb::class.java, "sigov.db")
-            .fallbackToDestructiveMigration()
+            .addMigrations(DE_1_A_2, DE_2_A_3)
             .build()
 
     @Provides fun cola(db: SigovDb) = db.cola()

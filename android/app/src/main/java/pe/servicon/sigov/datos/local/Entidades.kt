@@ -91,6 +91,15 @@ data class RegistroLocal(
     val cantidad: Double,
     val unidad: String?,
     val observacion: String? = null,
+    // De dónde nace el trabajo: "programacion", "pci" o "emergencia".
+    // Sin esto el metrado llega a la nube suelto, y el avance de la partida
+    // programada se queda en cero aunque la cuadrilla la haya terminado.
+    val origen: String = "emergencia",
+    val planItemId: String? = null,
+    val pciItemId: String? = null,
+    // El código del PCI se copia aquí porque se imprime en el sello de la
+    // foto, y eso ocurre en la quebrada: no puede depender de consultarlo.
+    val pciCodigo: String? = null,
     val creadoEn: Long = System.currentTimeMillis(),
 )
 
@@ -124,4 +133,10 @@ data class FilaCatalogo(
     val servicioId: String?,
     val datos: String,                      // la fila completa, en JSON
     val bajadoEn: Long = System.currentTimeMillis(),
+)
+
+/** Cuántas fotos lleva cada actividad: lo que la lista del parte necesita saber. */
+data class ConteoEvidencias(
+    val registroClientId: String,
+    val cuantas: Int,
 )

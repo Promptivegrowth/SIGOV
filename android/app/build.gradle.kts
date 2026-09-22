@@ -111,6 +111,7 @@ dependencies {
     implementation(libs.camera.view)
     implementation(libs.play.services.location)
     implementation(libs.coil.compose)
+    implementation(libs.exifinterface)
     implementation(libs.accompanist.permissions)
 
     implementation(libs.hilt.android)

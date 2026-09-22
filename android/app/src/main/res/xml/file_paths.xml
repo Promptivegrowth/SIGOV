@@ -1,5 +1,6 @@
 <?xml version="1.0" encoding="utf-8"?>
 <paths>
     <files-path name="evidencias" path="evidencias/" />
+    <files-path name="comprobantes" path="comprobantes/" />
     <cache-path name="temporal" path="capturas/" />
 </paths>

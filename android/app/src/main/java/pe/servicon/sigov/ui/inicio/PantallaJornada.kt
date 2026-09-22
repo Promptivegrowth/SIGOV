@@ -2,239 +2,219 @@ package pe.servicon.sigov.ui.inicio
 
 import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.*
+import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.outlined.ListAlt
 import androidx.compose.material.icons.outlined.*
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
-import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.draw.clip
+import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.hilt.navigation.compose.hiltViewModel
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
+import pe.servicon.sigov.ui.componentes.AzulejoDeMenu
+import pe.servicon.sigov.ui.componentes.CabeceraDeMarca
+import pe.servicon.sigov.ui.componentes.EncabezadoDeApartado
+import pe.servicon.sigov.ui.componentes.FichaDato
+import pe.servicon.sigov.ui.theme.Fondo
 import pe.servicon.sigov.ui.theme.Marca
+import pe.servicon.sigov.ui.theme.TintaSuave
 
 /**
- * «Mi Jornada»: la primera pantalla del capataz, tal como la define la
- * especificación de SERVICON.
+ * «Mi Jornada», el apartado 4.3 de la especificación.
  *
- * Responde de un vistazo a lo que necesita saber al bajar de la camioneta:
- * qué le toca hoy, cuántos PCI tiene encima, qué le falta registrar y si
- * quedó algo esperando señal.
+ * Responde de un vistazo a lo que el capataz necesita al bajar de la
+ * camioneta: en qué fecha y sector está, quién lo supervisa, cuánto le queda
+ * en caja, qué le toca hoy y si algo quedó esperando señal. Debajo, el menú
+ * en cuadrícula con los apartados del documento.
  */
 @Composable
 fun PantallaJornada(
     vm: JornadaViewModel = hiltViewModel(),
     alSalir: () -> Unit,
+    alAbrirParte: () -> Unit = {},
+    alAbrirProgramacion: () -> Unit = {},
+    alAbrirPci: () -> Unit = {},
+    alAbrirCaja: () -> Unit = {},
+    alAbrirEvidencias: () -> Unit = {},
+    alAbrirMateriales: () -> Unit = {},
+    alAbrirEquipos: () -> Unit = {},
+    alAbrirVehiculos: () -> Unit = {},
+    alAbrirCharlas: () -> Unit = {},
+    alAbrirAvance: () -> Unit = {},
+    alAbrirSincronizacion: () -> Unit = {},
 ) {
     val estado by vm.estado.collectAsStateWithLifecycle()
 
-    Scaffold(
-        topBar = {
-            Surface(color = Marca.Azul) {
-                Column(
-                    Modifier
-                        .fillMaxWidth()
-                        .statusBarsPadding()
-                        .padding(horizontal = 20.dp, vertical = 16.dp),
-                ) {
-                    Row(
-                        Modifier.fillMaxWidth(),
-                        horizontalArrangement = Arrangement.SpaceBetween,
-                        verticalAlignment = Alignment.CenterVertically,
-                    ) {
-                        Column {
-                            Text(
-                                estado.saludo,
-                                style = MaterialTheme.typography.bodySmall,
-                                color = Color.White.copy(alpha = 0.72f),
-                            )
-                            Text(
-                                estado.nombre.ifBlank { "SIGOV" },
-                                style = MaterialTheme.typography.headlineMedium,
-                                color = Color.White,
-                            )
-                        }
-                        IconButton(onClick = { vm.salir(alSalir) }) {
-                            Icon(
-                                Icons.Outlined.Logout,
-                                contentDescription = "Cerrar sesión",
-                                tint = Color.White,
-                            )
-                        }
-                    }
-
-                    Spacer(Modifier.height(6.dp))
-                    Text(
-                        listOfNotNull(
-                            estado.cuadrilla.ifBlank { null },
-                            estado.fecha,
-                        ).joinToString(" · "),
-                        style = MaterialTheme.typography.bodySmall,
-                        color = Color.White.copy(alpha = 0.85f),
+    // El color de fondo se declara aquí: sin él se transparenta el fondo de
+    // la ventana, que es el de la pantalla de arranque.
+    Surface(color = Fondo, modifier = Modifier.fillMaxSize()) {
+    Column(Modifier.fillMaxSize()) {
+        CabeceraDeMarca()
+        EncabezadoDeApartado(
+            titulo = "Mi Jornada",
+            seccion = "Apartado 4.3 · ${estado.saludo}",
+            persona = estado.nombre.ifBlank { null },
+            cuadrilla = estado.cuadrilla.ifBlank { null },
+            acciones = {
+                IconButton(onClick = { vm.salir(alSalir) }) {
+                    Icon(
+                        Icons.Outlined.Logout,
+                        contentDescription = "Cerrar sesión",
+                        tint = TintaSuave,
                     )
                 }
-            }
-        },
-    ) { relleno ->
+            },
+        )
+
         Column(
             Modifier
                 .fillMaxSize()
-                .padding(relleno)
-                .padding(16.dp),
-            verticalArrangement = Arrangement.spacedBy(12.dp),
+                .verticalScroll(rememberScrollState())
+                .padding(14.dp),
+            verticalArrangement = Arrangement.spacedBy(10.dp),
         ) {
-            // Estado de la conexión: lo primero que hay que saber en carretera
-            EstadoSincronizacion(pendientes = estado.pendientes)
-
-            Row(horizontalArrangement = Arrangement.spacedBy(12.dp)) {
-                Indicador(
-                    Modifier.weight(1f),
-                    Icons.AutoMirrored.Outlined.ListAlt,
-                    "Programadas",
-                    estado.programadas.toString(),
-                    Marca.Azul,
+            // ── La fila de contexto del documento ───────────────────────
+            Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                FichaDato(
+                    Icons.Outlined.CalendarMonth, "Fecha", estado.fechaCorta,
+                    Marca.Azul, Modifier.weight(1f),
                 )
-                Indicador(
+                FichaDato(
+                    Icons.Outlined.Groups, "Cuadrilla",
+                    estado.cuadrillaCodigo.ifBlank { "—" },
+                    Marca.VerdeBandera, Modifier.weight(1f),
+                )
+            }
+            Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                FichaDato(
+                    Icons.Outlined.SupervisorAccount, "Supervisor",
+                    estado.supervisor.ifBlank { "Sin asignar" },
+                    Marca.Azul, Modifier.weight(1f),
+                )
+                FichaDato(
+                    Icons.Outlined.Place, "Sector / Tramo",
+                    estado.sector.ifBlank { "—" },
+                    Marca.Naranja, Modifier.weight(1f),
+                )
+            }
+            Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                FichaDato(
+                    Icons.Outlined.AccountBalanceWallet, "Saldo disponible",
+                    estado.saldo,
+                    Marca.VerdeBandera, Modifier.weight(1f),
+                    alTocar = alAbrirCaja,
+                )
+                FichaDato(
+                    Icons.Outlined.CloudUpload, "Pendientes",
+                    estado.pendientes.toString(),
+                    if (estado.pendientes == 0) Marca.VerdeBandera else Marca.Naranja,
                     Modifier.weight(1f),
-                    Icons.Outlined.Warning,
-                    "PCI asignados",
-                    estado.pci.toString(),
-                    Marca.Naranja,
+                    alTocar = alAbrirSincronizacion,
                 )
             }
 
+            // ── El menú, en cuadrícula de dos columnas ──────────────────
             Text(
-                "Qué vas a hacer",
+                "Menú principal",
                 style = MaterialTheme.typography.titleMedium,
-                modifier = Modifier.padding(top = 8.dp),
+                fontWeight = FontWeight.Bold,
+                modifier = Modifier.padding(top = 6.dp),
             )
 
-            Accion(Icons.Outlined.Assignment, "Programación", "Las actividades de hoy")
-            Accion(Icons.Outlined.ReportProblem, "PCI", "Los requerimientos con plazo")
-            Accion(Icons.Outlined.EditNote, "Reporte diario", "Registrar lo ejecutado")
-            Accion(Icons.Outlined.PhotoCamera, "Evidencias", "Fotos con GPS y sello")
-            Accion(Icons.Outlined.AccountBalanceWallet, "Mi caja", "Gastos y depósitos")
-            Accion(Icons.Outlined.Inventory2, "Materiales", "Solicitar insumos")
+            val azul = Marca.Azul
+            val verde = Marca.VerdeBandera
+            val apartados = listOf(
+                Apartado(Icons.Outlined.Assignment, "Programación", "Lo asignado a tu cuadrilla", azul, estado.programadas, alAbrirProgramacion),
+                Apartado(Icons.AutoMirrored.Outlined.ListAlt, "PCIs", "Ítems por atender", verde, estado.pci, alAbrirPci),
+                Apartado(Icons.Outlined.EditNote, "Reporte Diario", "Registrar lo ejecutado", azul, 0, alAbrirParte),
+                Apartado(Icons.Outlined.PhotoCamera, "Fotos / Evidencias", "Fotos con GPS y sello", verde, 0, alAbrirEvidencias),
+                Apartado(Icons.Outlined.AccountBalanceWallet, "Mi Caja", "Saldo y movimientos", azul, 0, alAbrirCaja),
+                Apartado(Icons.Outlined.Inventory2, "Materiales", "Solicitar insumos", verde, 0, alAbrirMateriales),
+                Apartado(Icons.Outlined.HealthAndSafety, "Equipos SSOMA", "Extintores, botiquines", azul, 0, alAbrirEquipos),
+                Apartado(Icons.Outlined.DirectionsCar, "Vehículos", "Papeles y revisión", verde, 0, alAbrirVehiculos),
+                Apartado(Icons.Outlined.Campaign, "Charlas e higiene", "Charla del día e higiene", azul, 0, alAbrirCharlas),
+                Apartado(Icons.Outlined.BarChart, "Mi Avance", "Cumplimiento del día", verde, 0, alAbrirAvance),
+                Apartado(Icons.Outlined.Sync, "Sincronización", "Registros pendientes", azul, estado.pendientes, alAbrirSincronizacion),
+            )
 
-            if (estado.error != null) {
+            apartados.chunked(2).forEach { pareja ->
+                // La fila se mide por el azulejo más alto y los dos se
+                // estiran a esa altura: quedan parejos sin fijar dp.
+                Row(
+                    Modifier.height(IntrinsicSize.Min),
+                    horizontalArrangement = Arrangement.spacedBy(8.dp),
+                ) {
+                    pareja.forEach { a ->
+                        AzulejoDeMenu(
+                            icono = a.icono,
+                            titulo = a.titulo,
+                            detalle = a.detalle,
+                            color = a.color,
+                            insignia = a.insignia,
+                            alTocar = a.alTocar,
+                            modifier = Modifier.weight(1f).fillMaxHeight(),
+                        )
+                    }
+                    // Si la fila quedó impar, el hueco se reserva para que el
+                    // azulejo solitario no ocupe todo el ancho.
+                    if (pareja.size == 1) Spacer(Modifier.weight(1f))
+                }
+            }
+
+            estado.error?.let {
                 Text(
-                    estado.error!!,
+                    it,
                     style = MaterialTheme.typography.bodySmall,
                     color = MaterialTheme.colorScheme.error,
                 )
             }
+
+            BandaDeCampana()
+            Spacer(Modifier.height(4.dp))
         }
+    }
     }
 }
 
-@Composable
-private fun EstadoSincronizacion(pendientes: Int) {
-    val alDia = pendientes == 0
-    Surface(
-        color = if (alDia) Marca.Verde.copy(alpha = 0.12f) else Marca.Naranja.copy(alpha = 0.14f),
-        shape = RoundedCornerShape(14.dp),
-        modifier = Modifier.fillMaxWidth(),
-    ) {
-        Row(
-            Modifier.padding(14.dp),
-            verticalAlignment = Alignment.CenterVertically,
-            horizontalArrangement = Arrangement.spacedBy(10.dp),
-        ) {
-            Icon(
-                if (alDia) Icons.Outlined.CloudDone else Icons.Outlined.CloudUpload,
-                contentDescription = null,
-                tint = if (alDia) Marca.VerdeBandera else Marca.Naranja,
-            )
-            Column {
-                Text(
-                    if (alDia) "Todo sincronizado" else "$pendientes registros esperando señal",
-                    style = MaterialTheme.typography.titleSmall,
-                )
-                Text(
-                    if (alDia) "No hay nada pendiente de enviar"
-                    else "Se enviarán solos cuando vuelva la conexión",
-                    style = MaterialTheme.typography.bodySmall,
-                    color = MaterialTheme.colorScheme.onSurfaceVariant,
-                )
-            }
-        }
-    }
-}
+private data class Apartado(
+    val icono: ImageVector,
+    val titulo: String,
+    val detalle: String,
+    val color: Color,
+    val insignia: Int,
+    val alTocar: () -> Unit,
+)
 
+/** La banda de campaña del pie, que cierra la pantalla con la marca. */
 @Composable
-private fun Indicador(
-    modifier: Modifier,
-    icono: ImageVector,
-    etiqueta: String,
-    valor: String,
-    color: Color,
-) {
-    Card(
-        modifier = modifier,
-        shape = RoundedCornerShape(16.dp),
-        colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface),
-        elevation = CardDefaults.cardElevation(defaultElevation = 0.dp),
-        border = CardDefaults.outlinedCardBorder(),
+private fun BandaDeCampana() {
+    Box(
+        Modifier
+            .fillMaxWidth()
+            .clip(RoundedCornerShape(12.dp))
+            .background(Brush.horizontalGradient(listOf(Marca.Azul, Marca.VerdeBandera)))
+            .padding(horizontal = 16.dp, vertical = 14.dp),
     ) {
-        Column(Modifier.padding(16.dp)) {
-            Box(
-                Modifier
-                    .size(36.dp)
-                    .background(color.copy(alpha = 0.12f), RoundedCornerShape(10.dp)),
-                contentAlignment = Alignment.Center,
-            ) {
-                Icon(icono, contentDescription = null, tint = color, modifier = Modifier.size(20.dp))
-            }
-            Spacer(Modifier.height(10.dp))
-            Text(valor, style = MaterialTheme.typography.displayMedium, color = color)
+        Column {
             Text(
-                etiqueta,
-                style = MaterialTheme.typography.bodySmall,
-                color = MaterialTheme.colorScheme.onSurfaceVariant,
+                "PREVENCIÓN HOY,",
+                style = MaterialTheme.typography.titleSmall,
+                color = Color.White,
+                fontWeight = FontWeight.Bold,
             )
-        }
-    }
-}
-
-@Composable
-private fun Accion(icono: ImageVector, titulo: String, detalle: String) {
-    Card(
-        shape = RoundedCornerShape(14.dp),
-        colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface),
-        elevation = CardDefaults.cardElevation(defaultElevation = 0.dp),
-        border = CardDefaults.outlinedCardBorder(),
-        modifier = Modifier.fillMaxWidth(),
-    ) {
-        Row(
-            Modifier.padding(14.dp),
-            verticalAlignment = Alignment.CenterVertically,
-            horizontalArrangement = Arrangement.spacedBy(14.dp),
-        ) {
-            Box(
-                Modifier
-                    .size(42.dp)
-                    .background(Marca.Azul.copy(alpha = 0.08f), RoundedCornerShape(12.dp)),
-                contentAlignment = Alignment.Center,
-            ) {
-                Icon(icono, contentDescription = null, tint = Marca.Azul)
-            }
-            Column(Modifier.weight(1f)) {
-                Text(titulo, style = MaterialTheme.typography.titleSmall, fontWeight = FontWeight.SemiBold)
-                Text(
-                    detalle,
-                    style = MaterialTheme.typography.bodySmall,
-                    color = MaterialTheme.colorScheme.onSurfaceVariant,
-                )
-            }
-            Icon(
-                Icons.Outlined.ChevronRight,
-                contentDescription = null,
-                tint = MaterialTheme.colorScheme.onSurfaceVariant,
+            Text(
+                "VÍAS MÁS SEGURAS MAÑANA",
+                style = MaterialTheme.typography.titleSmall,
+                color = Color.White,
+                fontWeight = FontWeight.Bold,
             )
         }
     }
