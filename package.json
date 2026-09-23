@@ -14,7 +14,10 @@
     "db:seed": "tsx scripts/seed.ts",
     "gen:types": "supabase gen types typescript --local > types/database.ts",
     "gen:vapid": "tsx scripts/gen-vapid.ts",
-    "gen:icons": "tsx scripts/gen-icons.ts"
+    "gen:icons": "tsx scripts/gen-icons.ts",
+    "guia:pdf": "node scripts/guia/generar.mjs",
+    "guia:word": "node scripts/guia/generar-docx.mjs",
+    "guia": "npm run guia:pdf && npm run guia:word"
   },
   "dependencies": {
     "@hookform/resolvers": "^5.2.2",
