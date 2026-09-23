@@ -24,7 +24,12 @@ class AccesoViewModel @Inject constructor(
     private val sesion: SesionRepositorio,
 ) : ViewModel() {
 
-    private val _estado = MutableStateFlow(EstadoAcceso())
+    // El correo de la última vez ya viene escrito: si la aplicación pide la
+    // contraseña es porque algo pasó, y en ese momento no se le añade a
+    // nadie el trabajo de teclear su correo entero con guantes.
+    private val _estado = MutableStateFlow(
+        EstadoAcceso(correo = sesion.correoRecordado.orEmpty())
+    )
     val estado: StateFlow<EstadoAcceso> = _estado.asStateFlow()
 
     fun correoCambio(v: String) = _estado.update { it.copy(correo = v, error = null) }

@@ -36,10 +36,24 @@ import pe.servicon.sigov.ui.theme.TintaSuave
  * producto con la V en verde, y la consigna de campaña. Va en todas las
  * pantallas porque es lo que el capataz enseña cuando alguien le pregunta
  * desde qué sistema está registrando.
+ *
+ * Debajo va la franja de «sin conexión». Cuelga de aquí y no de cada
+ * pantalla justamente porque la señal se cae en cualquiera de ellas, y el
+ * aviso tiene que salir donde el supervisor esté mirando.
  */
 @Composable
 fun CabeceraDeMarca(modifier: Modifier = Modifier) {
     Surface(color = Color.White, modifier = modifier.fillMaxWidth()) {
+        Column {
+            FranjaDeMarca()
+            AvisoDeConexion()
+        }
+    }
+}
+
+@Composable
+private fun FranjaDeMarca() {
+    Surface(color = Color.White, modifier = Modifier.fillMaxWidth()) {
         Row(
             // Sin reservar la barra de estado: de eso ya se encarga el
             // armazón de la aplicación, y hacerlo dos veces deja una franja
