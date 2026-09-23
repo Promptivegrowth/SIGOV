@@ -1,0 +1,576 @@
+/**
+ * La aplicación de campo: cómo se instala, cómo se entra y qué hace cada
+ * pantalla del celular.
+ */
+
+export const APP = [
+  {
+    titulo: 'App Android · Instalación y primer ingreso',
+    entrada:
+      'La aplicación de campo es para el Jefe de cuadrilla. Está pensada para trabajar **sin señal**: todo lo que se registra se guarda en el teléfono y se envía solo cuando hay conexión. Esta es la parte del sistema que hay que probar con más cuidado, porque es la que se usa en carretera.',
+    bloques: [
+      { tipo: 'subtitulo', titulo: 'Instalar la aplicación' },
+      {
+        tipo: 'lista',
+        orden: true,
+        items: [
+          'Copia el archivo `app-debug.apk` al celular (por cable, WhatsApp o correo).',
+          'Abre el archivo desde el celular. Android avisará que la aplicación viene de un origen desconocido.',
+          'Pulsa **Configuración** y activa **Permitir de esta fuente**. Es normal: la aplicación todavía no está publicada en Play Store.',
+          'Vuelve atrás y pulsa **Instalar**.',
+          'Cuando termine, pulsa **Abrir**.',
+        ],
+      },
+      {
+        tipo: 'nota',
+        titulo: 'Ten en cuenta',
+        texto: 'La aplicación pide dos permisos la primera vez: **cámara** y **ubicación**. Los dos son obligatorios para que la evidencia sirva: una foto sin coordenada no sustenta nada. Acepta los dos.',
+      },
+      { tipo: 'subtitulo', titulo: 'La pantalla de arranque' },
+      { tipo: 'parrafo', texto: 'Al abrir aparece el logotipo de Servicon **girando**: las tres figuras se encienden una detrás de otra formando un ciclo, con el texto «SIGOV · Gestión Operativa Vial» y «Preparando tu jornada…» debajo. Dura lo que tarde el teléfono en recuperar la sesión guardada, normalmente uno o dos segundos.' },
+      {
+        tipo: 'prueba',
+        id: 'A-01',
+        titulo: 'Primer ingreso en el celular',
+        rol: 'Jefe de cuadrilla',
+        pasos: [
+          'Abre la aplicación SIGOV.',
+          'Observa la pantalla de arranque con el logotipo animado.',
+          'En la pantalla de acceso, escribe **Correo** `cuadrilla1@sigov.dev`.',
+          'Escribe **Contraseña** `Sigov2026!`.',
+          'Pulsa el botón de entrar.',
+          'Acepta el permiso de **cámara** cuando lo pida.',
+          'Acepta el permiso de **ubicación** cuando lo pida.',
+        ],
+        esperado: [
+          'El logotipo se ve girando y con sus tres colores vivos, no apagado ni entrecortado.',
+          'Después del ingreso aparece **Mi Jornada** con el nombre **Marco Quispe Ramos** y la cuadrilla **CUA-01**.',
+          'Abajo hay una barra con cuatro secciones: **Inicio**, **Trabajos**, **Fotos** y **Perfil**.',
+          'Arriba se ve la banda de marca con el logotipo de Servicon y «SEGURIDAD EN MOVIMIENTO, COMPROMISO EN CADA KM».',
+        ],
+      },
+      {
+        tipo: 'prueba',
+        id: 'A-02',
+        titulo: 'La sesión no se pierde al cerrar la aplicación',
+        rol: 'Jefe de cuadrilla',
+        pasos: [
+          'Cierra la aplicación por completo (desliza desde la lista de aplicaciones recientes).',
+          'Vuelve a abrirla.',
+          'Apaga y enciende el celular, y ábrela otra vez.',
+        ],
+        esperado: [
+          'En los dos casos entra directo a **Mi Jornada** sin pedir la contraseña.',
+          'Esto es intencional: en carretera muchas veces no hay señal para volver a entrar.',
+        ],
+      },
+    ],
+  },
+
+  {
+    titulo: 'App Android · Mi Jornada (pantalla de inicio)',
+    entrada:
+      'La primera pantalla del día. Resume dónde está parada la cuadrilla y da acceso a todo lo demás.',
+    bloques: [
+      { tipo: 'subtitulo', titulo: 'Las seis fichas de arriba' },
+      {
+        tipo: 'controles',
+        items: [
+          ['**Fecha**', 'El día de hoy en hora de Perú. Es la fecha con la que se abre el parte diario.'],
+          ['**Cuadrilla**', 'El código de tu cuadrilla, por ejemplo CUA-01.'],
+          ['**Supervisor**', 'Quién supervisa tu contrato.'],
+          ['**Sector / Tramo**', 'Dónde te toca trabajar hoy, según lo programado. Si no hay nada programado, toma el tramo del primer PCI asignado.'],
+          ['**Saldo disponible**', 'Cuánto queda en tu caja chica. Se puede pulsar para ir a **Mi Caja**.'],
+          ['**Pendientes**', 'Cuántos registros están esperando señal para enviarse. En verde si es cero, en naranja si hay algo esperando. Se puede pulsar para ir a **Sincronización**.'],
+        ],
+      },
+      {
+        tipo: 'nota',
+        titulo: 'Ten en cuenta',
+        texto: 'Mientras la aplicación busca los datos, las fichas muestran tres puntos (`…`). Solo cuando termina de cargar muestra el valor real o un guion si no hay dato.',
+      },
+      { tipo: 'subtitulo', titulo: 'El menú principal' },
+      {
+        tipo: 'tabla',
+        columnas: ['Tarjeta', 'Lleva a', 'Para qué'],
+        filas: [
+          ['**Programación**', 'Apartado 4.4', 'Lo asignado a tu cuadrilla para hoy.'],
+          ['**PCIs**', 'Apartado 4.5', 'Los ítems con plazo que te tocan levantar.'],
+          ['**Reporte Diario**', 'Apartado 4.6', 'Registrar lo ejecutado.'],
+          ['**Fotos / Evidencias**', 'Apartado 4.13', 'Las fotos con GPS y sello.'],
+          ['**Mi Caja**', 'Apartado 4.7', 'Saldo y movimientos de la caja chica.'],
+          ['**Materiales**', 'Apartado 4.10', 'Consultar el almacén y pedir insumos.'],
+          ['**Equipos SSOMA**', 'Apartado 6.8', 'Extintores, botiquines y kits.'],
+          ['**Vehículos**', 'Apartado 6.6', 'Papeles del vehículo y revisión de antes de salir.'],
+          ['**Charlas e higiene**', 'Apartados 6.4 y 6.5', 'La charla del día con sus firmas.'],
+          ['**Mi Avance**', 'Apartado 4.11', 'Lo que llevas hecho contra lo que te tocaba.'],
+          ['**ATS / IPERC**', 'Apartado 4.9', 'El análisis de seguridad antes de empezar.'],
+        ],
+      },
+      {
+        tipo: 'prueba',
+        id: 'A-03',
+        titulo: 'Las fichas de Mi Jornada dicen la verdad',
+        rol: 'Jefe de cuadrilla',
+        pasos: [
+          'Abre la aplicación y quédate en **Mi Jornada**.',
+          'Espera a que las seis fichas terminen de cargar.',
+          'Anota el **Saldo disponible** y los **Pendientes**.',
+          'Entra al panel web con `admin@sigov.dev` y ve a **Caja chica**.',
+          'Compara el saldo de la Cuadrilla 1 con el que viste en el celular.',
+        ],
+        esperado: [
+          'Las fichas no se quedan en `…`: terminan mostrando un valor.',
+          'La **Fecha** es la de hoy.',
+          'La **Cuadrilla** dice CUA-01.',
+          'El **Saldo** del celular coincide con el del panel web.',
+          'El **Supervisor** dice «Elvis Dueñas» y no «Sin asignar».',
+        ],
+      },
+      {
+        tipo: 'prueba',
+        id: 'A-04',
+        titulo: 'Las once tarjetas del menú abren',
+        rol: 'Jefe de cuadrilla',
+        pasos: [
+          'Desde **Mi Jornada**, pulsa una por una las once tarjetas del menú principal.',
+          'En cada pantalla, comprueba que arriba aparece su título y el número de apartado.',
+          'Vuelve atrás con la flecha de la izquierda.',
+        ],
+        esperado: [
+          'Las once abren su pantalla.',
+          'Ninguna se queda en blanco ni cierra la aplicación.',
+          'Si una pantalla no tiene datos, muestra un mensaje explicando por qué (por ejemplo «Hoy no te programaron partidas»), no una pantalla vacía.',
+          'La flecha de volver siempre regresa a **Mi Jornada**.',
+        ],
+      },
+    ],
+  },
+
+  {
+    titulo: 'App Android · Reporte Diario',
+    entrada:
+      'El corazón de la aplicación. Aquí la cuadrilla anota lo que ejecutó: qué actividad, en qué tramo, entre qué progresivas, de qué lado y cuánto. De cada registro cuelgan las fotos.',
+    bloques: [
+      { tipo: 'subtitulo', titulo: 'Qué hay en pantalla' },
+      {
+        tipo: 'controles',
+        items: [
+          ['**REGISTROS / METRADO / ESTADO**', 'El resumen del parte de hoy: cuántas actividades llevas, cuánto metrado suman y en qué estado está el parte (Borrador, Por validar, Validado, Observado).'],
+          ['Botón **PDF** (arriba)', 'Genera el formato oficial `SIG-OP-F01` **en el propio teléfono** y lo abre. Funciona sin señal.'],
+          ['Botón **compartir** (arriba, verde)', 'Despliega dos opciones: **Compartir el PDF** y **Compartir para Excel**.'],
+          ['**Registrar actividad**', 'El botón verde grande de abajo. Abre el formulario de la actividad ejecutada.'],
+          ['Cada tarjeta de la lista', 'Una actividad registrada, con su tramo, progresivas, lado, cantidad y el origen del trabajo.'],
+          ['**Tomar evidencia fotográfica**', 'Aparece en naranja cuando el registro todavía no tiene fotos.'],
+          ['**N fotos · agregar otra**', 'Aparece en verde cuando el registro ya tiene fotos.'],
+        ],
+      },
+      { tipo: 'subtitulo', titulo: 'El formulario «Actividad ejecutada»' },
+      { tipo: 'parrafo', texto: 'Lo primero que pregunta es **¿De dónde sale este trabajo?**, con tres opciones. Esto es lo que permite que el avance se descuente de la partida correcta:' },
+      {
+        tipo: 'tabla',
+        columnas: ['Origen', 'Cuándo se usa', 'Qué pasa después'],
+        filas: [
+          ['**Programación**', 'El trabajo estaba programado para hoy.', 'El metrado se descuenta de la partida programada y el supervisor ve el avance.'],
+          ['**PCI**', 'El trabajo levanta un ítem de PCI.', 'El registro queda como sustento del levantamiento, y las fotos llevan el código del PCI en el sello.'],
+          ['**Emergencia**', 'No estaba programado ni corresponde a un PCI.', 'No descuenta de nada, y el sistema **exige** escribir en la observación por qué se hizo.'],
+        ],
+      },
+      {
+        tipo: 'tabla',
+        columnas: ['Campo', 'Obligatorio', 'Qué se escribe'],
+        filas: [
+          ['**Actividad**', 'Sí', 'Se elige de la lista del catálogo del contrato.'],
+          ['**Tramo**', 'Sí', 'Se elige de los cuatro tramos. Muestra código y nombre.'],
+          ['**Progresiva inicio**', 'Sí', 'En metros. `18000` se guarda como 18+000.'],
+          ['**Fin**', 'No', 'En metros. Si se deja vacío, se toma solo el punto de inicio.'],
+          ['**Lado de la vía**', 'Sí', 'Derecho, izquierdo o ambos. Por defecto derecho.'],
+          ['**Metrado ejecutado**', 'Sí', 'Cuánto se hizo, en la unidad de la actividad.'],
+          ['**Observación**', 'Depende', 'Obligatoria si el origen es **Emergencia**. Opcional en los demás casos.'],
+        ],
+      },
+      {
+        tipo: 'ojo',
+        titulo: 'Atención',
+        texto: 'Si escribes una progresiva que queda fuera del tramo, la aplicación **avisa antes de guardar** e indica entre qué progresivas va ese tramo. El aviso no impide guardar, porque en obra a veces el dato del contrato está desactualizado, pero conviene revisarlo.',
+      },
+      {
+        tipo: 'prueba',
+        id: 'A-05',
+        titulo: 'Registrar una actividad programada',
+        rol: 'Jefe de cuadrilla',
+        previo: 'Debe haber al menos una partida programada para hoy. Si no la hay, pídela al Supervisor (prueba P-08) con fecha de hoy.',
+        pasos: [
+          'Entra a **Reporte Diario**.',
+          'Pulsa **Registrar actividad**.',
+          'Elige el origen **Programación** y selecciona la partida de la lista.',
+          'Comprueba que la actividad, el tramo y las progresivas se rellenaron solos.',
+          'Escribe el **Metrado ejecutado**: la mitad de la meta programada.',
+          'Guarda.',
+        ],
+        esperado: [
+          'Al elegir la partida, los campos se rellenan solos con lo programado.',
+          'Aparece el aviso «Registrado y descontado de la partida programada».',
+          'La tarjeta aparece en la lista con la etiqueta del origen.',
+          'El contador de **REGISTROS** sube y el **METRADO** suma la cantidad.',
+        ],
+      },
+      {
+        tipo: 'prueba',
+        id: 'A-06',
+        titulo: 'Registrar un trabajo de emergencia',
+        rol: 'Jefe de cuadrilla',
+        pasos: [
+          'En **Reporte Diario**, pulsa **Registrar actividad**.',
+          'Deja el origen en **Emergencia**.',
+          'Elige la actividad `Limpieza de calzada y bermas`.',
+          'Elige el tramo `AQP-02 · San Camilo – Montalvo – Moquegua`.',
+          'Escribe progresiva inicio `150000` y fin `150300`.',
+          'Escribe metrado `300`.',
+          'Sin escribir observación, pulsa **Guardar**.',
+          'Ahora escribe en **Observación**: `Derrame de material en la calzada` y guarda.',
+        ],
+        esperado: [
+          'Al intentar guardar sin observación, aparece en rojo: «Es un trabajo no programado: escribe en la observación por qué se hizo».',
+          'Con la observación escrita, el registro se guarda.',
+          'La tarjeta muestra la etiqueta **No programado** y la observación entre comillas.',
+        ],
+      },
+      {
+        tipo: 'prueba',
+        id: 'A-07',
+        titulo: 'El PDF del parte se genera en el teléfono',
+        rol: 'Jefe de cuadrilla',
+        previo: 'El parte de hoy debe tener al menos un registro.',
+        pasos: [
+          'En **Reporte Diario**, pulsa el botón **PDF** de arriba (icono de documento).',
+          'Espera a que se genere y se abra.',
+          'Revisa el documento.',
+          'Vuelve atrás y pulsa el botón **compartir** (verde).',
+          'Elige **Compartir para Excel**.',
+        ],
+        esperado: [
+          'El PDF se abre en el visor del teléfono.',
+          'Arriba a la izquierda tiene el recuadro azul **SERVICON**; en el centro, «REPORTE DIARIO DE ACTIVIDADES»; a la derecha, el código `SIG-OP-F01`, la versión y la fecha.',
+          'Debajo lleva el contrato, el cliente COVINCA, la cuadrilla, el lugar, el clima, el personal y el metrado total.',
+          'La tabla lista las actividades con tramo, progresiva, lado, cantidad y fotos.',
+          'Al final hay dos espacios de firma: Jefe de cuadrilla y Supervisor de obra.',
+          'Al compartir para Excel se ofrece un archivo `.csv` que se abre en columnas.',
+        ],
+      },
+      {
+        tipo: 'prueba',
+        id: 'A-08',
+        titulo: 'Tomar evidencia fotográfica con sello',
+        rol: 'Jefe de cuadrilla',
+        previo: 'Tener al menos un registro en el parte de hoy y el permiso de ubicación concedido.',
+        pasos: [
+          'En **Reporte Diario**, pulsa **Tomar evidencia fotográfica** en un registro.',
+          'Espera a que aparezca la coordenada («Buscando posición…» debe dar paso a un dato).',
+          'Elige la fase: **Antes**.',
+          'Toma la foto.',
+          'Repite con la fase **Después**.',
+        ],
+        esperado: [
+          'Antes de disparar se ve si hay GPS. Si no lo encuentra, avisa «Sin GPS · la foto se guarda igual».',
+          'La foto queda con el sello impreso **dentro de la imagen**: fecha, hora, progresiva, tramo, actividad y cuadrilla.',
+          'El registro pasa de decir «Tomar evidencia fotográfica» (naranja) a «2 fotos · agregar otra» (verde).',
+          'Las fotos aparecen también en la sección **Fotos** de la barra inferior.',
+        ],
+      },
+    ],
+  },
+
+  {
+    titulo: 'App Android · Mi Caja, Materiales y PCIs',
+    entrada:
+      'Las tres pantallas que la cuadrilla usa durante el día para registrar gastos, pedir insumos y atender los pedidos del regulador.',
+    bloques: [
+      { tipo: 'subtitulo', titulo: 'Mi Caja (apartado 4.7)' },
+      {
+        tipo: 'controles',
+        items: [
+          ['El saldo grande', 'Cuánto queda disponible en la caja de tu cuadrilla.'],
+          ['Lista de movimientos', 'Los gastos e ingresos, con su estado: pendiente, aprobado, observado o rechazado.'],
+          ['**Pedir depósito**', 'Solicita reposición de caja. Pide **Cuánto necesitas** y el motivo.'],
+          ['Botón de registrar gasto', 'Abre el formulario de gasto.'],
+        ],
+      },
+      {
+        tipo: 'tabla',
+        columnas: ['Campo del gasto', 'Obligatorio', 'Qué se escribe'],
+        filas: [
+          ['**Importe**', 'Sí', 'El monto en soles, por ejemplo `120.50`.'],
+          ['**En qué se gastó**', 'Sí', 'El concepto: «Petróleo para la camioneta de la cuadrilla».'],
+          ['**Proveedor**', 'No', 'A quién se le compró: «Grifo Repsol El Pedregal».'],
+          ['**RUC**', 'No', 'El RUC del proveedor, si figura en el comprobante.'],
+          ['**N.º comprobante**', 'No', 'El número de la boleta o factura: `B001-0001234`.'],
+          ['Foto del comprobante', 'Recomendado', 'La foto de la boleta. Sin ella, el gasto llega marcado «Sin comprobante» y es probable que lo observen.'],
+        ],
+      },
+      {
+        tipo: 'prueba',
+        id: 'A-09',
+        titulo: 'Registrar un gasto con su comprobante',
+        rol: 'Jefe de cuadrilla',
+        pasos: [
+          'Entra a **Mi Caja** y anota el saldo.',
+          'Registra un gasto nuevo.',
+          'Importe `120.50`, concepto `Petróleo para la camioneta`, proveedor `Grifo Repsol El Pedregal`, comprobante `B001-0001234`.',
+          'Toma la foto del comprobante (puede ser cualquier papel para la prueba).',
+          'Guarda.',
+        ],
+        esperado: [
+          'El gasto aparece en la lista en estado pendiente.',
+          'El saldo mostrado baja en 120.50.',
+          'En el panel web, **Caja chica**, el gasto aparece con su foto de comprobante.',
+        ],
+      },
+      {
+        tipo: 'prueba',
+        id: 'A-10',
+        titulo: 'Pedir reposición de caja',
+        rol: 'Jefe de cuadrilla',
+        pasos: [
+          'En **Mi Caja**, pulsa **Pedir depósito**.',
+          'Escribe **Cuánto necesitas**: `500`.',
+          'Escribe el motivo: `Combustible y peajes de la semana`.',
+          'Envía.',
+        ],
+        esperado: [
+          'La solicitud queda registrada y visible en la lista.',
+          'En el panel web aparece como solicitud pendiente de atender.',
+        ],
+      },
+      { tipo: 'subtitulo', titulo: 'Materiales (apartado 4.10)' },
+      {
+        tipo: 'controles',
+        items: [
+          ['**En almacén**', 'Lo que hay disponible, con su cantidad.'],
+          ['**Buscar insumo por nombre o código**', 'El buscador.'],
+          ['**Todo**', 'Filtro por categoría de insumo.'],
+          ['**Cuánto necesitas**', 'La cantidad que se pide de cada insumo.'],
+          ['**Para cuándo**', 'La fecha en que se necesita.'],
+          ['**Para qué**', 'El motivo del pedido: «Sellado de fisuras en Camaná – La Joya».'],
+          ['**Enviar pedido**', 'Manda la solicitud al almacén.'],
+        ],
+      },
+      {
+        tipo: 'prueba',
+        id: 'A-11',
+        titulo: 'Pedir insumos al almacén',
+        rol: 'Jefe de cuadrilla',
+        pasos: [
+          'Entra a **Materiales**.',
+          'Busca un insumo por su nombre.',
+          'Escribe la cantidad en **Cuánto necesitas**.',
+          'Pon **Para cuándo** en dos días.',
+          'Escribe **Para qué**: `Prueba del sistema`.',
+          'Pulsa **Enviar pedido**.',
+        ],
+        esperado: [
+          'El pedido se registra y aparece en la lista con su estado.',
+          'En el panel web, **Materiales / Insumos**, el pedido aparece pendiente con la fecha de necesidad.',
+        ],
+      },
+      { tipo: 'subtitulo', titulo: 'PCIs (apartado 4.5)' },
+      {
+        tipo: 'controles',
+        items: [
+          ['**Todos · N**', 'Cuántos ítems tienes asignados en total.'],
+          ['Los filtros de urgencia', 'Agrupan por cuánto falta para el vencimiento, cada uno con su cantidad.'],
+          ['Cada tarjeta', 'Un ítem de PCI, con su código, descripción, progresiva y cuándo vence.'],
+          ['**¿Dar por levantado?**', 'Marca el ítem como resuelto. Pide una **Nota (opcional)**: «Qué se hizo, con qué material…».'],
+          ['**Levantar**', 'Confirma el levantamiento.'],
+        ],
+      },
+      {
+        tipo: 'prueba',
+        id: 'A-12',
+        titulo: 'Levantar un ítem de PCI con evidencia',
+        rol: 'Jefe de cuadrilla',
+        previo: 'Tener al menos un ítem de PCI asignado (prueba P-13).',
+        pasos: [
+          'Entra a **PCIs** y abre un ítem.',
+          'Antes de levantarlo, ve a **Reporte Diario** y registra la actividad con origen **PCI**, eligiendo ese ítem.',
+          'Toma las fotos **Antes** y **Después**.',
+          'Vuelve a **PCIs**, abre el ítem y pulsa **¿Dar por levantado?**.',
+          'Escribe la nota: `Cuneta limpiada y perfilada en 40 m`.',
+          'Pulsa **Levantar**.',
+        ],
+        esperado: [
+          'Las fotos del registro llevan el **código del PCI** en el sello.',
+          'El ítem cambia de estado y sale de la lista de pendientes.',
+          'En el panel web, el ítem figura como levantado y muestra las fotos como sustento.',
+          'En **Documentos → Carpetas → PCI**, las fotos aparecen bajo la fase que corresponde.',
+        ],
+      },
+    ],
+  },
+
+  {
+    titulo: 'App Android · SSOMA en el celular',
+    entrada:
+      'Cuatro pantallas de seguridad que la cuadrilla completa antes de empezar o durante la jornada: el ATS, la charla del día, la revisión del vehículo y el control de los equipos de seguridad.',
+    bloques: [
+      { tipo: 'subtitulo', titulo: 'ATS / IPERC (apartado 4.9)' },
+      { tipo: 'parrafo', texto: 'Hay dos formularios distintos según quién lo llena:' },
+      {
+        tipo: 'tabla',
+        columnas: ['Formulario', 'Campos'],
+        filas: [
+          ['**De conductor**', '**Nombre de quien maneja**, el vehículo, **Horas que dormiste** (por defecto 8), las preguntas de aptitud, y **Observación** («Algo que el supervisor deba saber…»). Al final, la firma.'],
+          ['**De cuadrilla**', '**Tarea a ejecutar** («Limpieza de cunetas en 247+574»), **Lugar** (tramo y progresiva o referencia), y la matriz de riesgos: por cada línea un **Peligro identificado**, su **Riesgo** y el **Control**. Se agregan con el botón **Agregar**. Al final, **Firmar** recoge la firma de cada integrante.'],
+        ],
+      },
+      {
+        tipo: 'prueba',
+        id: 'A-13',
+        titulo: 'ATS de cuadrilla con peligros y firmas',
+        rol: 'Jefe de cuadrilla',
+        pasos: [
+          'Entra a **ATS / IPERC** y elige el formulario **de cuadrilla**.',
+          'Escribe la tarea: `Limpieza de cunetas en 150+000`.',
+          'Escribe el lugar: `AQP-02, km 150`.',
+          'Agrega un peligro: peligro `Tránsito vehicular en la vía`, riesgo `Atropello`, control `Conos, banderillero y chaleco reflectivo`.',
+          'Agrega un segundo peligro cualquiera.',
+          'Pulsa **Firmar** y traza una firma con el dedo.',
+          'Guarda.',
+        ],
+        esperado: [
+          'Los dos peligros quedan en la lista con su riesgo y control.',
+          'La firma trazada se guarda y se ve.',
+          'En el panel web, **SSOMA → ATS / IPERC**, aparece el documento con los dos peligros, el riesgo máximo y una firma.',
+          'Se puede descargar como formato `SIG-SST-F02` desde **Formatos**.',
+        ],
+      },
+      { tipo: 'subtitulo', titulo: 'Charlas e higiene (apartados 6.4 y 6.5)' },
+      {
+        tipo: 'controles',
+        items: [
+          ['**Tema**', 'El asunto de la charla: «Trabajos junto a vía con tránsito».'],
+          ['**Qué se trató**', 'El contenido, en pocas líneas.'],
+          ['**Duración (min)**', 'Cuánto duró.'],
+          ['**Lugar**', 'Dónde se dictó: «Km 940».'],
+          ['**Guardar firma**', 'Recoge la firma de cada asistente trazada en la pantalla.'],
+          ['Control de higiene', 'La lista de elementos de higiene de la cuadrilla, que se marcan como conformes o pendientes.'],
+        ],
+      },
+      { tipo: 'subtitulo', titulo: 'Vehículos (apartado 6.6)' },
+      {
+        tipo: 'controles',
+        items: [
+          ['Papeles del vehículo', 'SOAT, revisión técnica y demás, con sus vencimientos.'],
+          ['**Kilometraje del tablero (km)**', 'El odómetro al momento de la revisión.'],
+          ['La lista de verificación', 'Cada punto se marca conforme o no conforme.'],
+          ['**Qué encontraste**', 'El detalle del hallazgo: «Llanta posterior derecha con poco labrado…».'],
+        ],
+      },
+      { tipo: 'subtitulo', titulo: 'Equipos de seguridad (apartado 6.8)' },
+      {
+        tipo: 'controles',
+        items: [
+          ['**Todos**', 'Filtro por urgencia de la inspección, con la cantidad de cada grupo.'],
+          ['Cada tarjeta', 'Un extintor, botiquín o kit antiderrame, con su código, ubicación y vencimiento.'],
+          ['**Registrar revisión**', 'Abre el formulario de inspección de ese equipo.'],
+          ['**Qué encontraste**', 'El hallazgo: «Manómetro en rojo, precinto roto…».'],
+        ],
+      },
+      {
+        tipo: 'prueba',
+        id: 'A-14',
+        titulo: 'Revisar un extintor y ver el hallazgo en el panel',
+        rol: 'Jefe de cuadrilla',
+        pasos: [
+          'Entra a **Equipos SSOMA**.',
+          'Elige un extintor y pulsa **Registrar revisión**.',
+          'Marca que **no** está conforme.',
+          'Escribe en **Qué encontraste**: `Manómetro en zona roja`.',
+          'Registra.',
+        ],
+        esperado: [
+          'La revisión queda guardada y el equipo muestra su nuevo estado.',
+          'En el panel web, **SSOMA** y **Vencimientos**, el equipo figura como observado.',
+          'El formato `SIG-SST-F06` (inspección de extintores) se puede descargar con esa revisión incluida.',
+        ],
+      },
+    ],
+  },
+
+  {
+    titulo: 'App Android · Sin señal y sincronización',
+    entrada:
+      'Esta es la prueba más importante de toda la guía. La aplicación está hecha para trabajar sin conexión: si esto falla, se pierde el trabajo de una jornada entera.',
+    bloques: [
+      { tipo: 'subtitulo', titulo: 'La pantalla de Sincronización (apartado 4.12)' },
+      {
+        tipo: 'controles',
+        items: [
+          ['El recuadro de arriba', 'Cuántos registros faltan por enviar, cuándo fue el último envío y cuántas fotografías están sin subir.'],
+          ['**Esperando para subir**', 'La lista de lo que está en cola, con el tipo de cada cosa: Parte diario, Actividad ejecutada, Fotografía, Gasto de caja, Pedido de depósito, Charla de seguridad, Firma de asistencia, ATS / IPERC, Firma del ATS, Checklist, Control de higiene.'],
+          ['**No se pudo enviar**', 'Marca en rojo lo que falló. Debajo explica por qué, en lenguaje entendible.'],
+          ['**Falló N intentos · reintentando**', 'El sistema vuelve a intentarlo solo, cada vez más espaciado.'],
+          ['**Sincronizar ahora**', 'Fuerza el envío inmediato en vez de esperar.'],
+          ['«No queda nada por enviar desde este teléfono»', 'El mensaje cuando la cola está vacía. Es lo que debe verse al final del día.'],
+        ],
+      },
+      {
+        tipo: 'prueba',
+        id: 'A-15',
+        titulo: 'Trabajar sin señal y recuperar todo',
+        rol: 'Jefe de cuadrilla',
+        previo: 'Esta prueba es la más importante del documento. Hazla con calma y anota todo.',
+        pasos: [
+          'Activa el **modo avión** en el celular. Comprueba que no hay datos ni wifi.',
+          'Abre la aplicación SIGOV.',
+          'Entra a **Reporte Diario** y registra **dos** actividades distintas.',
+          'Toma **dos fotos** de evidencia en una de ellas.',
+          'Entra a **Mi Caja** y registra un gasto con foto de comprobante.',
+          'Entra a **Sincronización** y mira la cola.',
+          'Cierra la aplicación por completo y vuelve a abrirla, todavía en modo avión.',
+          'Comprueba que todo lo registrado sigue ahí.',
+          'Desactiva el modo avión y espera a que haya señal.',
+          'Vuelve a **Sincronización** y pulsa **Sincronizar ahora**.',
+        ],
+        esperado: [
+          'Sin señal, todo se registra igual y sin errores.',
+          'La ficha **Pendientes** de Mi Jornada sube con cada registro.',
+          'La pantalla de Sincronización lista todo lo que está esperando, con su tipo.',
+          'Al cerrar y abrir la aplicación **no se pierde nada**.',
+          'Con señal, la cola se vacía y aparece «No queda nada por enviar desde este teléfono».',
+          'En el panel web aparecen las dos actividades, las dos fotos y el gasto.',
+          'Las fotos conservan la **fecha y hora reales** de cuando se tomaron, no la de la sincronización.',
+        ],
+      },
+      {
+        tipo: 'prueba',
+        id: 'A-16',
+        titulo: 'Un error de envío se explica en cristiano',
+        rol: 'Jefe de cuadrilla',
+        pasos: [
+          'En **Sincronización**, si hay algo en rojo bajo **No se pudo enviar**, léelo.',
+          'Si no hay nada fallido, esta prueba se marca «No se pudo probar».',
+        ],
+        esperado: [
+          'El mensaje explica el problema en lenguaje entendible.',
+          '**No debe verse** ninguna dirección de internet larga, ni cabeceras, ni texto que empiece por `Bearer` o `eyJ…`. Si aparece algo así, es una observación **de seguridad**: se está mostrando la clave de la sesión.',
+        ],
+      },
+      {
+        tipo: 'prueba',
+        id: 'A-17',
+        titulo: 'Mi Avance compara lo hecho con lo programado',
+        rol: 'Jefe de cuadrilla',
+        pasos: [
+          'Entra a **Mi Avance**.',
+          'Revisa el cumplimiento del día y el detalle **Partida por partida**.',
+        ],
+        esperado: [
+          'Muestra lo ejecutado contra la meta de cada partida.',
+          'Si hoy no hubo programación, dice «Hoy no te programaron partidas» en vez de quedar vacío.',
+          'El porcentaje coincide con lo que se ve en el panel web para esa cuadrilla.',
+        ],
+      },
+    ],
+  },
+]

@@ -328,3 +328,60 @@ h1, h2, h3, .font-marca {
   font-family: var(--font-marca);
   letter-spacing: -0.015em;
 }
+
+/* ═══════════════════════════════════════════════════════════════════════
+   El isotipo en movimiento
+
+   Tres figuras que giran una detrás de otra. El contenedor rota entero y
+   cada pieza respira con un tercio de desfase, de modo que el ojo lee un
+   flujo continuo en vez de tres cosas parpadeando a la vez.
+
+   Quien haya pedido menos movimiento en su sistema ve el logotipo quieto:
+   una animación perpetua es de las que peor sientan a quien tiene vértigo.
+   ═══════════════════════════════════════════════════════════════════════ */
+
+@keyframes sigov-orbita {
+  to { transform: rotate(360deg); }
+}
+
+/* La opacidad no baja de 0.55: por debajo, una captura tomada en el momento
+   equivocado deja el logotipo cojo, y lo que se anima es la marca. */
+@keyframes sigov-fluir {
+  0%, 100% { opacity: 0.58; transform: scale(0.95); }
+  28%      { opacity: 1;    transform: scale(1.04); }
+  60%      { opacity: 0.72; transform: scale(0.99); }
+}
+
+@keyframes sigov-barra {
+  0%   { transform: translateX(-100%); }
+  100% { transform: translateX(300%); }
+}
+
+.sigov-orbita {
+  animation: sigov-orbita 3.6s linear infinite;
+  transform-origin: 50% 50%;
+}
+
+.sigov-pieza {
+  animation: sigov-fluir 1.8s ease-in-out infinite;
+  transform-origin: 50% 50%;
+  will-change: opacity, transform;
+}
+
+.sigov-barra::after {
+  content: '';
+  display: block;
+  height: 100%;
+  width: 40%;
+  border-radius: inherit;
+  background: linear-gradient(90deg,
+    transparent,
+    oklch(0.72 0.19 140),
+    transparent);
+  animation: sigov-barra 1.4s ease-in-out infinite;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .sigov-orbita, .sigov-pieza, .sigov-barra::after { animation: none; }
+  .sigov-pieza { opacity: 1; }
+}

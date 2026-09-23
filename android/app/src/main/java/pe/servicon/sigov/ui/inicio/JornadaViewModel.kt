@@ -31,6 +31,8 @@ data class EstadoJornada(
     val pci: Int = 0,
     val pendientes: Int = 0,
     val error: String? = null,
+    /** Mientras no se sepa la cuadrilla, no se afirma nada sobre ella */
+    val cargando: Boolean = true,
 )
 
 @HiltViewModel
@@ -87,7 +89,10 @@ class JornadaViewModel @Inject constructor(
 
                 // El resto se baja después del perfil para que la pantalla no
                 // espere a la red para mostrar el nombre.
-                cuadrilla ?: return@runCatching
+                if (cuadrilla == null) {
+                    _estado.update { it.copy(cargando = false) }
+                    return@runCatching
+                }
                 runCatching { campo.bajarCatalogos(cuadrilla.servicioId) }
 
                 val programado = campo.programacionDelDia(cuadrilla.servicioId, cuadrilla.id)
@@ -105,10 +110,11 @@ class JornadaViewModel @Inject constructor(
                             ?: pci.firstOrNull()?.tramo).orEmpty(),
                         supervisor = jefe.orEmpty(),
                         saldo = miCaja?.caja?.let { c -> soles(c.balance) } ?: "—",
+                        cargando = false,
                     )
                 }
             }.onFailure { fallo ->
-                _estado.update { it.copy(error = fallo.enCristiano()) }
+                _estado.update { it.copy(error = fallo.enCristiano(), cargando = false) }
             }
         }
     }

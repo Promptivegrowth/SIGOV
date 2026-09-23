@@ -90,19 +90,21 @@ fun PantallaJornada(
                 )
                 FichaDato(
                     Icons.Outlined.Groups, "Cuadrilla",
-                    estado.cuadrillaCodigo.ifBlank { "—" },
+                    estado.cuadrillaCodigo.ifBlank { if (estado.cargando) "…" else "—" },
                     Marca.VerdeBandera, Modifier.weight(1f),
                 )
             }
             Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
                 FichaDato(
                     Icons.Outlined.SupervisorAccount, "Supervisor",
-                    estado.supervisor.ifBlank { "Sin asignar" },
+                    // Mientras carga no se afirma nada: «Sin asignar» es una
+                    // frase que dice algo, y a los dos segundos resulta falsa.
+                    estado.supervisor.ifBlank { if (estado.cargando) "…" else "Sin asignar" },
                     Marca.Azul, Modifier.weight(1f),
                 )
                 FichaDato(
                     Icons.Outlined.Place, "Sector / Tramo",
-                    estado.sector.ifBlank { "—" },
+                    estado.sector.ifBlank { if (estado.cargando) "…" else "—" },
                     Marca.Naranja, Modifier.weight(1f),
                 )
             }
