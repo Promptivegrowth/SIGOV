@@ -2,7 +2,6 @@ package pe.servicon.sigov.datos
 
 import io.github.jan.supabase.SupabaseClient
 import io.github.jan.supabase.postgrest.postgrest
-import io.github.jan.supabase.postgrest.query.Order
 import io.github.jan.supabase.postgrest.rpc
 import io.github.jan.supabase.storage.storage
 import kotlinx.coroutines.Dispatchers
@@ -93,30 +92,35 @@ class InventarioRepositorio @Inject constructor(
     private val catalogo: CatalogoDao,
 ) {
 
-    /** Todos los elementos del contrato, con su semáforo y sus fotos. */
+    /**
+     * Todos los elementos del contrato, con su semáforo y sus fotos.
+     *
+     * Se pide con una sola llamada al servidor, que devuelve el inventario
+     * ya armado. Antes se traía la vista por páginas de mil, y en carretera
+     * eso eran tres viajes de ida y vuelta —cuando no un tiempo de espera
+     * agotado a medio camino, que dejaba el mapa con dos tercios del tramo.
+     */
     suspend fun elementos(servicioId: String, refrescar: Boolean = true): List<ElementoVial> =
         withContext(Dispatchers.IO) {
             if (refrescar) {
                 runCatching {
-                    val filas = supabase.postgrest.from("v_inventario")
-                        .select {
-                            filter { eq("service_id", servicioId) }
-                            order("progresiva_m", Order.ASCENDING)
-                        }
-                        .decodeList<JsonObject>()
+                    val lista: List<ElementoVial> = supabase.postgrest.rpc(
+                        "inventario_para_campo",
+                        buildJsonObject { put("p_service_id", servicioId) },
+                    ).decodeAs()
 
                     catalogo.borrarTabla("inventario", servicioId)
                     catalogo.guardar(
-                        filas.mapNotNull { f ->
-                            val id = f["id"]?.toString()?.trim('"') ?: return@mapNotNull null
+                        lista.map { e ->
                             FilaCatalogo(
                                 tabla = "inventario",
-                                id = id,
+                                id = e.id,
                                 servicioId = servicioId,
-                                datos = f.toString(),
+                                datos = json.encodeToString(ElementoVial.serializer(), e),
                             )
                         }
                     )
+                    return@withContext lista
                 }
             }
 
