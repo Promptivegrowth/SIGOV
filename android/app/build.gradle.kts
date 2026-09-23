@@ -104,6 +104,10 @@ dependencies {
     implementation(libs.datastore.preferences)
     implementation(libs.work.runtime.ktx)
 
+    // El mapa: la misma cartografía abierta que usa el panel web, sin clave
+    // de API ni costo de licencia.
+    implementation(libs.maplibre)
+
     // Cámara, ubicación e imágenes
     implementation(libs.camera.core)
     implementation(libs.camera.camera2)

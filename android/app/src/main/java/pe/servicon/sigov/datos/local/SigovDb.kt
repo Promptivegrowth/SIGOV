@@ -186,6 +186,16 @@ interface CatalogoDao {
      */
     @Query("DELETE FROM catalogo WHERE tabla = :tabla AND id NOT IN (:vigentes)")
     suspend fun borrarLosQueYaNoEstan(tabla: String, vigentes: List<String>)
+
+    /**
+     * Vacía una tabla del espejo antes de volver a llenarla.
+     *
+     * El inventario se baja entero cada vez —son miles de filas pero pesan
+     * poco— y así un elemento dado de baja desaparece del mapa en lugar de
+     * quedarse dibujado para siempre.
+     */
+    @Query("DELETE FROM catalogo WHERE tabla = :tabla AND (:servicioId IS NULL OR servicioId = :servicioId)")
+    suspend fun borrarTabla(tabla: String, servicioId: String?)
 }
 
 @Database(

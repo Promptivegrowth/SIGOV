@@ -4783,6 +4783,65 @@ export type Database = {
           },
         ]
       }
+      v_inventario: {
+        Row: {
+          attributes: Json | null
+          client_id: string | null
+          code: string | null
+          condition: Database["public"]["Enums"]["asset_condition"] | null
+          dias_ambar: number | null
+          dias_entre_fotos: number | null
+          dias_sin_intervenir: number | null
+          dias_verde: number | null
+          foto_actual: string | null
+          foto_actual_fecha: string | null
+          foto_anterior: string | null
+          foto_anterior_fecha: string | null
+          fotos: number | null
+          id: string | null
+          install_year: number | null
+          intervenciones: number | null
+          lat: number | null
+          lng: number | null
+          name: string | null
+          notes: string | null
+          progresiva_m: number | null
+          progresiva_txt: string | null
+          section_code: string | null
+          section_id: string | null
+          section_name: string | null
+          semaforo: Database["public"]["Enums"]["semaforo_intervencion"] | null
+          service_id: string | null
+          side: Database["public"]["Enums"]["road_side"] | null
+          type_category: string | null
+          type_code: string | null
+          type_color: string | null
+          type_icon: string | null
+          type_id: string | null
+          type_name: string | null
+          ultima_intervencion: string | null
+          visitas: number | null
+        }
+        Relationships: []
+      }
+      v_asset_fotos: {
+        Row: {
+          asset_id: string | null
+          caption: string | null
+          evidence_id: string | null
+          lat: number | null
+          lng: number | null
+          orden: number | null
+          phase: Database["public"]["Enums"]["evidence_phase"] | null
+          visita: string | null
+          service_id: string | null
+          storage_path: string | null
+          taken_at: string | null
+          thumb_path: string | null
+          watermarked: boolean | null
+        }
+        Relationships: []
+      }
       v_road_assets: {
         Row: {
           attributes: Json | null
@@ -5257,11 +5316,28 @@ export type Database = {
       apply_pci_suspension: { Args: { p_pci_id: string }; Returns: Json }
       assets_geojson: {
         Args: {
-          p_conditions?: string[]
+          p_conditions?: string[] | null
+          p_section_id?: string | null
+          p_semaforos?: string[] | null
           p_service_id: string
-          p_type_codes?: string[]
+          p_type_codes?: string[] | null
         }
         Returns: Json
+      }
+      inventario_resumen: {
+        Args: { p_section_id?: string | null; p_service_id: string }
+        Returns: {
+          al_dia: number
+          category: string
+          color: string
+          critico: number
+          icon: string
+          por_vencer: number
+          sin_intervenir: number
+          total: number
+          type_code: string
+          type_name: string
+        }[]
       }
       buscar: {
         Args: { p_limit?: number; p_q: string; p_service_id: string }
@@ -5554,6 +5630,7 @@ export type Database = {
         | "importante"
         | "intolerable"
       road_side: "derecho" | "izquierdo" | "ambos" | "eje"
+      semaforo_intervencion: "al_dia" | "por_vencer" | "critico" | "sin_intervenir"
       safety_equipment_kind:
         | "extintor"
         | "botiquin"
@@ -5799,6 +5876,7 @@ export const Constants = {
         "intolerable",
       ],
       road_side: ["derecho", "izquierdo", "ambos", "eje"],
+      semaforo_intervencion: ["al_dia", "por_vencer", "critico", "sin_intervenir"],
       safety_equipment_kind: [
         "extintor",
         "botiquin",

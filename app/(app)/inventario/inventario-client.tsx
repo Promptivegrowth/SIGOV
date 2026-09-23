@@ -23,6 +23,7 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription } from '@/components/ui/dialog'
 import { ConfirmDialog } from '@/components/forms/form-dialog'
 import { AssetForm, InterventionForm } from '@/components/inventario/asset-form'
+import { MapaDeInventario } from '@/components/inventario/mapa-de-inventario'
 import { ASSET_CONDITION } from '@/lib/constants'
 import { cn, fmtDate, fmtNumber, parseFecha } from '@/lib/utils'
 
@@ -38,6 +39,8 @@ export function InventarioClient() {
   const [editing, setEditing] = React.useState<any>(null)
   const [intervening, setIntervening] = React.useState<any>(null)
   const [deleting, setDeleting] = React.useState<any>(null)
+  // El supervisor de tramo mira el mapa; quien administra el catálogo, la lista
+  const [vista, setVista] = React.useState<'mapa' | 'lista'>('mapa')
   const scrollRef = React.useRef<HTMLDivElement>(null)
 
   const types = useQuery({
@@ -129,32 +132,46 @@ export function InventarioClient() {
       <PageHeader
         icon={Boxes}
         title="Inventario vial"
-        description="Alcantarillas, guardavías, señales, postes SOS y demás elementos, ubicados por progresiva e integrados al mapa y al historial de intervenciones."
+        description="Cada elemento de la vía con su progresiva, su estado y cuándo se intervino por última vez. Lo que está en rojo es lo que hace tiempo que nadie toca."
         actions={
-          can.manage && (
-            <>
-              <Button variant="outline" asChild>
-                <Link href="/importar?kind=inventario">
-                  <Upload className="size-4" />
-                  Importar
-                </Link>
-              </Button>
-              <Button variant="outline" asChild>
-                <Link href="/mapa">
-                  <MapPin className="size-4" />
-                  Ver en el mapa
-                </Link>
-              </Button>
-              <Button onClick={() => { setEditing(null); setFormOpen(true) }}>
-                <Plus className="size-4" />
-                Nuevo elemento
-              </Button>
-            </>
-          )
+          <>
+            <div className="bg-muted inline-flex rounded-lg p-0.5">
+              {([['mapa', 'Mapa'], ['lista', 'Lista']] as const).map(([k, t]) => (
+                <button
+                  key={k}
+                  onClick={() => setVista(k)}
+                  className={cn(
+                    'rounded-md px-3 py-1.5 text-[12px] font-medium transition-all',
+                    vista === k ? 'bg-card shadow-sm' : 'text-muted-foreground hover:text-foreground'
+                  )}
+                >
+                  {t}
+                </button>
+              ))}
+            </div>
+            {can.manage && (
+              <>
+                <Button variant="outline" asChild>
+                  <Link href="/importar?kind=inventario">
+                    <Upload className="size-4" />
+                    Importar
+                  </Link>
+                </Button>
+                <Button onClick={() => { setEditing(null); setFormOpen(true) }}>
+                  <Plus className="size-4" />
+                  Nuevo elemento
+                </Button>
+              </>
+            )}
+          </>
         }
       />
 
       <PageBody className="space-y-4">
+        {vista === 'mapa' ? (
+          <MapaDeInventario />
+        ) : (
+        <>
         {assets.isLoading ? (
           <div className="grid grid-cols-1 gap-3 sm:grid-cols-2 xl:grid-cols-4">
             {Array.from({ length: 4 }).map((_, i) => <SkeletonKpi key={i} />)}
@@ -304,6 +321,8 @@ export function InventarioClient() {
               </div>
             </div>
           </Card>
+        )}
+        </>
         )}
       </PageBody>
 

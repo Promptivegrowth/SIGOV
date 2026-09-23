@@ -26,6 +26,7 @@ import androidx.compose.ui.Modifier
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import androidx.navigation.compose.currentBackStackEntryAsState
 import pe.servicon.sigov.ui.acceso.PantallaAcceso
+import pe.servicon.sigov.ui.inventario.PantallaInventario
 import pe.servicon.sigov.ui.componentes.BarraInferior
 import pe.servicon.sigov.ui.componentes.BarraViewModel
 import pe.servicon.sigov.ui.componentes.SeccionInferior
@@ -145,6 +146,7 @@ class MainActivity : ComponentActivity() {
                             alAbrirEvidencias = { nav.navigate("evidencias") },
                             alAbrirMateriales = { nav.navigate("materiales") },
                             alAbrirEquipos = { nav.navigate("equipos") },
+                            alAbrirInventario = { nav.navigate("inventario") },
                             alAbrirVehiculos = { nav.navigate("vehiculos") },
                             alAbrirCharlas = { nav.navigate("charlas") },
                             alAbrirAst = { nav.navigate("ast") },
@@ -163,6 +165,9 @@ class MainActivity : ComponentActivity() {
                     }
                     composable("vehiculos") {
                         PantallaVehiculos(alVolver = { nav.popBackStack() })
+                    }
+                    composable("inventario") {
+                        PantallaInventario(alVolver = { nav.popBackStack() })
                     }
                     composable("equipos") {
                         PantallaEquipos(alVolver = { nav.popBackStack() })
