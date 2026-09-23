@@ -7,6 +7,8 @@ import { useTheme } from 'next-themes'
 import { Layers, Maximize2, Crosshair } from 'lucide-react'
 import { MAP_STYLES, PERU_CENTER, type MapStyleKey } from '@/lib/constants'
 import { cn } from '@/lib/utils'
+import { hayWebGL } from '@/lib/webgl'
+import { SinMapa } from '@/components/mapa/sin-mapa'
 
 export interface MapCanvasHandle {
   map: MLMap | null
@@ -51,6 +53,9 @@ export const MapCanvas = React.forwardRef<MapCanvasHandle, MapCanvasProps>(funct
   const mapRef = React.useRef<MLMap | null>(null)
   const [styleKey, setStyleKey] = React.useState<MapStyleKey>(initialStyle)
   const [loaded, setLoaded] = React.useState(false)
+  // Se pregunta una vez, ya montado: en el servidor no hay navegador al que
+  // preguntarle, y responder que no allí dejaría el aviso escrito en el HTML.
+  const [puedeDibujar, setPuedeDibujar] = React.useState(true)
   const { resolvedTheme } = useTheme()
 
   React.useImperativeHandle(ref, () => ({
@@ -66,17 +71,39 @@ export const MapCanvas = React.forwardRef<MapCanvasHandle, MapCanvasProps>(funct
   React.useEffect(() => {
     if (!containerRef.current || mapRef.current) return
 
-    const map = new maplibregl.Map({
-      container: containerRef.current,
-      style: MAP_STYLES[styleKey].style as unknown as StyleSpecification,
-      center: initialCenter,
-      zoom: initialZoom,
-      attributionControl: false,
-      interactive,
-      maxZoom: 19,
-      dragRotate: false,
-      pitchWithRotate: false,
-    })
+    // MapLibre lanza desde su constructor cuando no consigue contexto
+    // WebGL, y esa excepción, sin nadie que la atrape, tumbaba la
+    // plataforma entera con «Application error». Se pregunta antes, y aun
+    // así se envuelve: entre preguntar y crear el mapa el navegador puede
+    // haberse quedado sin contextos disponibles.
+    if (!hayWebGL()) {
+      setPuedeDibujar(false)
+      return
+    }
+
+    let map: MLMap
+    try {
+      map = new maplibregl.Map({
+        container: containerRef.current,
+        style: MAP_STYLES[styleKey].style as unknown as StyleSpecification,
+        center: initialCenter,
+        zoom: initialZoom,
+        attributionControl: false,
+        interactive,
+        maxZoom: 19,
+        dragRotate: false,
+        pitchWithRotate: false,
+      })
+    } catch (fallo) {
+      console.error('No se pudo iniciar el mapa:', fallo)
+      setPuedeDibujar(false)
+      return
+    }
+
+    // Y si el contexto se pierde ya en marcha —la tarjeta gráfica se
+    // reinicia, el sistema lo recicla—, el mapa deja de pintar pero la
+    // página sigue en pie.
+    map.on('error', (e: any) => console.error('Mapa:', e?.error ?? e))
 
     map.addControl(new maplibregl.AttributionControl({ compact: true }), 'bottom-right')
     if (interactive) {
@@ -118,6 +145,10 @@ export const MapCanvas = React.forwardRef<MapCanvasHandle, MapCanvasProps>(funct
     },
     [onReady, onStyleChange]
   )
+
+  // Después de todos los ganchos: React exige que se llamen siempre en el
+  // mismo orden, y salir antes de tiempo lo rompería.
+  if (!puedeDibujar) return <SinMapa className={className} />
 
   return (
     <div className={cn('relative isolate overflow-hidden', className)}>
