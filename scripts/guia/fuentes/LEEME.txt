@@ -1,0 +1,9 @@
+Las tipografías del documento, descargadas de Google Fonts (licencia SIL Open
+Font License 1.1) y guardadas aquí para incrustarlas en el PDF.
+
+Sin esto, Chromium las pedía por red durante la impresión, no llegaban a
+tiempo y las sustituía por Segoe UI y Arial: el documento salía con la letra
+del sistema de quien lo generaba.
+
+  Inter            · Rasmus Andersson
+  Barlow Condensed · Jeremy Tribby

@@ -25,6 +25,36 @@ const LOGO = `data:image/png;base64,${b64('public/marca/logo-servicon-claro.png'
 const LOGO_OSCURO = `data:image/png;base64,${b64('public/marca/logo-servicon.png')}`
 const SIMBOLO = `data:image/png;base64,${b64('public/marca/simbolo-servicon.png')}`
 
+/**
+ * Las tipografías van dentro del archivo.
+ *
+ * Pedirlas a Google Fonts durante la impresión parecía funcionar, pero no
+ * llegaban a tiempo y Chromium las sustituía por Segoe UI y Arial: el PDF
+ * salía con la letra del sistema de quien lo generó, y en otro equipo se veía
+ * peor todavía. Incrustadas en base64 el documento se ve igual en cualquier
+ * visor y en la imprenta.
+ */
+const fuente = (archivo) =>
+  fs.readFileSync(path.join(RAIZ, 'scripts/guia/fuentes', archivo)).toString('base64')
+
+const TIPOGRAFIAS = [
+  ['Inter', 400, 'inter-400.ttf'],
+  ['Inter', 500, 'inter-500.ttf'],
+  ['Inter', 600, 'inter-600.ttf'],
+  ['Inter', 700, 'inter-700.ttf'],
+  ['Barlow Condensed', 600, 'barlow-600.ttf'],
+  ['Barlow Condensed', 700, 'barlow-700.ttf'],
+]
+  .map(
+    ([familia, peso, archivo]) => `@font-face {
+  font-family: '${familia}';
+  font-style: normal;
+  font-weight: ${peso};
+  src: url(data:font/ttf;base64,${fuente(archivo)}) format('truetype');
+}`
+  )
+  .join(String.fromCharCode(10))
+
 const esc = (s) =>
   String(s ?? '')
     .replace(/&/g, '&amp;')
@@ -95,9 +125,9 @@ function prueba(b) {
     </div>
     <div class="registro">
       <span class="registro-t">Resultado</span>
-      <span class="casilla">☐ Conforme</span>
-      <span class="casilla">☐ Con observación</span>
-      <span class="casilla">☐ No se pudo probar</span>
+      <span class="casilla"><i></i>Conforme</span>
+      <span class="casilla"><i></i>Con observación</span>
+      <span class="casilla"><i></i>No se pudo probar</span>
       <div class="lineas"><span></span><span></span></div>
     </div>
   </div>`
@@ -113,6 +143,11 @@ function bloque(b) {
     case 'controles': return controles(b)
     case 'prueba': return prueba(b)
     case 'subtitulo': return `<h4>${esc(b.titulo)}</h4>`
+    case 'clave': return `<div class="clave">
+      <span class="clave-t">${esc(b.titulo ?? 'Contraseña')}</span>
+      <span class="clave-v">${esc(b.valor)}</span>
+      ${b.nota ? `<span class="clave-n">${rico(b.nota)}</span>` : ''}
+    </div>`
     case 'ruta': return `<p class="ruta">${rico(b.texto)}</p>`
     case 'salto': return '<div class="salto"></div>'
     default: return parrafo(b.texto ?? '')
@@ -157,10 +192,9 @@ function indiceHtml(secciones) {
 const CABEZA = `<!doctype html>
 <html lang="es-PE"><head><meta charset="utf-8">
 <title>${esc(GUIA.titulo)}</title>
-<link rel="preconnect" href="https://fonts.googleapis.com">
-<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&family=Barlow+Condensed:wght@600;700&display=swap" rel="stylesheet">
 <style>
+${TIPOGRAFIAS}
+
 :root {
   --azul: #013c77;
   --azul-hondo: #012a55;
@@ -168,7 +202,7 @@ const CABEZA = `<!doctype html>
   --verde-claro: #6bb43b;
   --naranja: #f36b21;
   --tinta: #16202e;
-  --suave: #5b6675;
+  --suave: #4a5565;
   --borde: #d8dde5;
   --fondo-suave: #f4f6f9;
 }
@@ -176,13 +210,13 @@ const CABEZA = `<!doctype html>
 html, body { margin: 0; padding: 0; }
 body {
   font-family: Inter, system-ui, sans-serif;
-  font-size: 9.6pt;
-  line-height: 1.55;
+  font-size: 10.8pt;
+  line-height: 1.58;
   color: var(--tinta);
   -webkit-print-color-adjust: exact;
   print-color-adjust: exact;
 }
-@page { size: A4; margin: 17mm 15mm 16mm 15mm; }
+@page { size: A4; margin: 16mm 14mm 15mm 14mm; }
 
 /* ═══ Portada ═══ */
 .portada {
@@ -216,7 +250,7 @@ body {
 .indice h2 { font-family: 'Barlow Condensed', sans-serif; font-size: 22pt; color: var(--azul); margin: 0 0 6mm; letter-spacing: .01em; }
 .indice ol { list-style: none; margin: 0; padding: 0; counter-reset: none; }
 .indice > ol > li { margin-bottom: 3.6mm; }
-.indice a { color: var(--tinta); text-decoration: none; font-weight: 600; font-size: 10.5pt; }
+.indice a { color: var(--tinta); text-decoration: none; font-weight: 600; font-size: 11.4pt; }
 .indice .i-num {
   display: inline-block; width: 7mm; height: 7mm; line-height: 7mm; text-align: center;
   background: var(--azul); color: #fff; border-radius: 2mm; font-size: 8pt; margin-right: 3mm;
@@ -229,30 +263,46 @@ body {
 .capitulo { page-break-before: always; }
 .capitulo:first-of-type { page-break-before: auto; }
 h2 {
-  font-family: 'Barlow Condensed', sans-serif; font-size: 21pt; color: var(--azul);
+  font-family: 'Barlow Condensed', sans-serif; font-size: 23pt; color: var(--azul);
   margin: 0 0 4mm; padding-bottom: 2.5mm; border-bottom: 2px solid var(--verde);
   display: flex; align-items: baseline; gap: 4mm; letter-spacing: .005em;
 }
 .cap-num { font-size: 12pt; color: #fff; background: var(--verde); border-radius: 2mm; padding: 0 2.6mm; font-family: Inter, sans-serif; font-weight: 700; }
 h3 {
-  font-size: 12pt; color: var(--azul-hondo); margin: 7mm 0 2.5mm;
+  font-size: 13pt; color: var(--azul-hondo); margin: 7mm 0 2.5mm;
   padding-left: 3mm; border-left: 3px solid var(--naranja); page-break-after: avoid;
 }
-h4 { font-size: 10pt; margin: 5mm 0 2mm; color: var(--azul-hondo); }
+h4 { font-size: 11.4pt; margin: 5.5mm 0 2.2mm; color: var(--azul-hondo); font-weight: 600; }
 p { margin: 0 0 2.6mm; }
-.entrada { font-size: 10.4pt; color: var(--suave); margin-bottom: 5mm; }
+.entrada { font-size: 11.2pt; color: var(--suave); margin-bottom: 5mm; }
 code {
-  font-family: 'Consolas', 'Courier New', monospace; font-size: 8.6pt;
+  font-family: 'Consolas', 'Courier New', monospace; font-size: 9.4pt;
   background: var(--fondo-suave); border: 1px solid var(--borde);
   border-radius: 1mm; padding: .3mm 1.2mm;
 }
 strong { font-weight: 600; }
 .ruta {
-  font-family: 'Consolas', monospace; font-size: 8.8pt; color: var(--azul);
+  font-family: 'Consolas', monospace; font-size: 9.6pt; color: var(--azul);
   background: var(--fondo-suave); border-left: 3px solid var(--azul);
   padding: 1.8mm 3mm; margin: 0 0 3mm;
 }
 .salto { page-break-before: always; }
+
+/* ═══ La contraseña, que es lo que más se busca en este documento ═══ */
+.clave {
+  border: 2px solid var(--verde); border-radius: 2.5mm;
+  background: #f1f9f3; padding: 4mm 5mm; margin: 0 0 4.5mm;
+  text-align: center; page-break-inside: avoid;
+}
+.clave-t {
+  display: block; font-size: 9pt; font-weight: 700; text-transform: uppercase;
+  letter-spacing: .09em; color: var(--verde); margin-bottom: 1.5mm;
+}
+.clave-v {
+  display: block; font-family: 'Consolas', monospace; font-size: 21pt;
+  font-weight: 700; color: var(--azul-hondo); letter-spacing: .04em;
+}
+.clave-n { display: block; margin-top: 2mm; font-size: 9.6pt; color: var(--suave); }
 
 /* ═══ Listas ═══ */
 .lista { margin: 0 0 3mm; padding-left: 5.5mm; }
@@ -262,22 +312,22 @@ strong { font-weight: 600; }
 .aviso {
   display: grid; grid-template-columns: 30mm 1fr; gap: 3mm;
   border-left: 3px solid var(--azul); background: var(--fondo-suave);
-  padding: 2.4mm 3mm; margin: 0 0 3.4mm; font-size: 9.2pt;
+  padding: 2.6mm 3.2mm; margin: 0 0 3.6mm; font-size: 10.2pt;
   page-break-inside: avoid;
 }
-.aviso-t { font-weight: 700; font-size: 8.2pt; text-transform: uppercase; letter-spacing: .07em; color: var(--azul); }
+.aviso-t { font-weight: 700; font-size: 8.8pt; text-transform: uppercase; letter-spacing: .07em; color: var(--azul); }
 .aviso.ojo { border-left-color: var(--naranja); background: #fff6f0; }
 .aviso.ojo .aviso-t { color: #c14a08; }
 .aviso.dato { border-left-color: var(--verde); background: #f1f9f3; }
 .aviso.dato .aviso-t { color: var(--verde); }
 
 /* ═══ Tablas ═══ */
-.tabla { width: 100%; border-collapse: collapse; margin: 0 0 4mm; font-size: 9pt; page-break-inside: auto; }
+.tabla { width: 100%; border-collapse: collapse; margin: 0 0 4mm; font-size: 10pt; page-break-inside: auto; }
 .tabla th {
   background: var(--azul); color: #fff; text-align: left; font-weight: 600;
-  padding: 1.8mm 2.4mm; font-size: 8.4pt; text-transform: uppercase; letter-spacing: .04em;
+  padding: 2mm 2.6mm; font-size: 9pt; text-transform: uppercase; letter-spacing: .03em;
 }
-.tabla td { border: 1px solid var(--borde); padding: 1.8mm 2.4mm; vertical-align: top; }
+.tabla td { border: 1px solid var(--borde); padding: 2mm 2.6mm; vertical-align: top; }
 .tabla tbody tr:nth-child(even) { background: #fafbfd; }
 .tabla tr { page-break-inside: avoid; }
 .controles .ctrl { font-weight: 600; color: var(--azul-hondo); }
@@ -291,21 +341,26 @@ strong { font-weight: 600; }
   background: var(--azul); color: #fff; padding: 2mm 3mm;
   display: flex; align-items: center; gap: 3mm;
 }
-.prueba-id { font-weight: 700; font-size: 8.6pt; background: rgba(255,255,255,.18); padding: .4mm 2mm; border-radius: 1mm; letter-spacing: .04em; }
-.prueba-tit { font-weight: 600; font-size: 10pt; flex: 1; }
-.prueba-rol { font-size: 8pt; background: var(--verde); padding: .5mm 2mm; border-radius: 1mm; font-weight: 600; }
-.previo { padding: 2mm 3mm 0; font-size: 9pt; color: var(--suave); margin: 0; }
+.prueba-id { font-weight: 700; font-size: 9.4pt; background: rgba(255,255,255,.18); padding: .4mm 2mm; border-radius: 1mm; letter-spacing: .04em; }
+.prueba-tit { font-weight: 600; font-size: 11.2pt; flex: 1; }
+.prueba-rol { font-size: 8.8pt; background: var(--verde); padding: .5mm 2mm; border-radius: 1mm; font-weight: 600; }
+.previo { padding: 2.2mm 3.2mm 0; font-size: 10pt; color: var(--suave); margin: 0; }
 .pasos { margin: 2mm 0 2mm; padding: 0 3mm 0 9mm; }
 .pasos li { margin-bottom: 1.4mm; }
 .esperado { margin: 0 3mm 2.5mm; background: #f1f9f3; border-left: 3px solid var(--verde); padding: 2mm 3mm; }
-.esperado-t { display: block; font-size: 8.2pt; font-weight: 700; text-transform: uppercase; letter-spacing: .07em; color: var(--verde); margin-bottom: 1mm; }
+.esperado-t { display: block; font-size: 8.8pt; font-weight: 700; text-transform: uppercase; letter-spacing: .07em; color: var(--verde); margin-bottom: 1mm; }
 .esperado ul { margin: 0; padding-left: 4.5mm; }
 .esperado li { margin-bottom: .8mm; }
 .registro { border-top: 1px dashed var(--borde); padding: 2mm 3mm 2.5mm; background: #fcfdfe; }
-.registro-t { font-size: 8pt; font-weight: 700; text-transform: uppercase; letter-spacing: .07em; color: var(--suave); margin-right: 4mm; }
-.casilla { font-size: 8.8pt; margin-right: 5mm; }
+.registro-t { font-size: 8.6pt; font-weight: 700; text-transform: uppercase; letter-spacing: .07em; color: var(--suave); margin-right: 4mm; }
+.casilla { font-size: 9.8pt; margin-right: 6mm; white-space: nowrap; }
+.casilla i {
+  display: inline-block; width: 3.4mm; height: 3.4mm; margin-right: 1.6mm;
+  border: 1px solid #98a2b3; border-radius: .6mm; vertical-align: -.4mm;
+  background: #fff;
+}
 .lineas { margin-top: 2.5mm; }
-.lineas span { display: block; border-bottom: 1px solid var(--borde); height: 4.6mm; }
+.lineas span { display: block; border-bottom: 1px solid var(--borde); height: 5.4mm; }
 </style></head>
 <body>`
 
