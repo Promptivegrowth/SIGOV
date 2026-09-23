@@ -252,14 +252,27 @@ private fun MapaDelInventario(
                             PropertyFactory.circleRadius(
                                 Expression.interpolate(
                                     Expression.linear(), Expression.zoom(),
-                                    Expression.stop(7, 3.5f),
-                                    Expression.stop(12, 7f),
+                                    Expression.stop(6, 2f),
+                                    Expression.stop(9, 3.5f),
+                                    Expression.stop(12, 6f),
                                     Expression.stop(16, 11f),
                                 )
                             ),
-                            PropertyFactory.circleStrokeWidth(1.5f),
+                            // El borde blanco aparece al acercarse. A vista de
+                            // contrato hay dos mil setecientos puntos casi
+                            // pegados y sus bordes se fundían en una banda
+                            // blanca que tapaba los colores del semáforo.
+                            PropertyFactory.circleStrokeWidth(
+                                Expression.interpolate(
+                                    Expression.linear(), Expression.zoom(),
+                                    Expression.stop(6, 0f),
+                                    Expression.stop(10, 0f),
+                                    Expression.stop(12, 1.2f),
+                                    Expression.stop(16, 1.8f),
+                                )
+                            ),
                             PropertyFactory.circleStrokeColor(ColorAndroid.WHITE),
-                            PropertyFactory.circleOpacity(0.94f),
+                            PropertyFactory.circleOpacity(0.92f),
                         )
                     )
                     estiloListo = true
