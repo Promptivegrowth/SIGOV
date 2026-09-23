@@ -58,7 +58,27 @@ data class Pedido(
 )
 
 /** Un renglón del pedido: qué insumo y cuánto. */
-data class RenglonPedido(val insumo: Insumo, val cantidad: Double)
+/**
+ * Un renglón del pedido.
+ *
+ * Casi siempre es un insumo del catálogo. Pero el catálogo se arma en la
+ * oficina al empezar el contrato y en la vía siempre aparece algo que nadie
+ * previó —un perno, una manguera, una lata de algo—. Cuando eso pasa, el
+ * pedido no puede quedarse sin hacer: se escribe el nombre y la unidad, y
+ * el residente decide desde la web si lo incorpora al maestro.
+ */
+data class RenglonPedido(
+    val cantidad: Double,
+    val insumo: Insumo? = null,
+    /** Lo que se escribió, cuando no está en la lista. */
+    val nombreEscrito: String? = null,
+    val unidadId: String? = null,
+    val unidad: String? = null,
+) {
+    val descripcion: String get() = insumo?.name ?: nombreEscrito.orEmpty()
+
+    val simbolo: String? get() = insumo?.unidad ?: unidad
+}
 
 /**
  * Materiales e insumos.
@@ -190,10 +210,17 @@ class MaterialRepositorio @Inject constructor(
             cola.encolar(
                 tabla = "supply_request_items",
                 dependeDe = clientId,
-                etiqueta = "${renglon.insumo.name} · ${renglon.cantidad}",
+                etiqueta = "${renglon.descripcion} · ${renglon.cantidad}",
                 cuerpo = buildJsonObject {
                     put("service_id", servicioId)
-                    put("supply_id", renglon.insumo.id)
+                    // Una forma o la otra, nunca las dos: la nube tiene esa
+                    // misma regla escrita como restricción.
+                    if (renglon.insumo != null) {
+                        put("supply_id", renglon.insumo.id)
+                    } else {
+                        put("other_name", renglon.nombreEscrito?.trim().orEmpty())
+                        renglon.unidadId?.let { put("other_unit_id", it) }
+                    }
                     put("qty_requested", renglon.cantidad)
                 },
             )

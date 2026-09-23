@@ -9,6 +9,8 @@ import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.outlined.ArrowBack
+import androidx.compose.foundation.text.KeyboardOptions
+import androidx.compose.material.icons.outlined.Add
 import androidx.compose.material.icons.outlined.Close
 import androidx.compose.material.icons.outlined.Inventory2
 import androidx.compose.material.icons.outlined.Search
@@ -19,14 +21,18 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.text.input.KeyboardType
 import androidx.compose.ui.unit.dp
 import androidx.hilt.navigation.compose.hiltViewModel
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import pe.servicon.sigov.datos.Insumo
 import pe.servicon.sigov.datos.Pedido
+import pe.servicon.sigov.datos.RenglonPedido
+import pe.servicon.sigov.datos.Unidad
 import pe.servicon.sigov.ui.componentes.ArmazonDeApartado
 import pe.servicon.sigov.ui.theme.Marca
 import pe.servicon.sigov.ui.theme.Semaforo
+import pe.servicon.sigov.ui.theme.TintaSuave
 import java.util.Locale
 
 /**
@@ -118,7 +124,7 @@ fun PantallaMateriales(
 
     if (pidiendo) {
         FormularioPedido(
-            renglones = estado.canasta.size,
+            renglones = estado.enCanasta,
             guardando = estado.guardando,
             alCerrar = { pidiendo = false },
             alEnviar = { paraCuando, motivo ->
@@ -130,6 +136,8 @@ fun PantallaMateriales(
 
 @Composable
 private fun Almacen(estado: EstadoMateriales, vm: MaterialesViewModel) {
+    var escribiendo by remember { mutableStateOf(false) }
+
     Column {
         OutlinedTextField(
             value = estado.busqueda,
@@ -180,8 +188,179 @@ private fun Almacen(estado: EstadoMateriales, vm: MaterialesViewModel) {
                     alCambiar = { vm.poner(insumo, it) },
                 )
             }
+
+            if (estado.escritos.isNotEmpty()) {
+                item {
+                    Text(
+                        "Pedido aparte",
+                        style = MaterialTheme.typography.labelLarge,
+                        fontWeight = FontWeight.Bold,
+                        color = Marca.Azul,
+                        modifier = Modifier.padding(top = 14.dp, bottom = 2.dp),
+                    )
+                }
+                items(estado.escritos, key = { it.nombreEscrito.orEmpty() + it.cantidad }) { renglon ->
+                    FilaEscrita(renglon) { vm.quitarEscrito(renglon) }
+                }
+            }
+
+            item { PedirAparte(onClick = { escribiendo = true }) }
         }
     }
+
+    if (escribiendo) {
+        DialogoInsumoEscrito(
+            unidades = estado.unidades,
+            alCerrar = { escribiendo = false },
+            alAgregar = { nombre, unidadId, cantidad ->
+                vm.agregarEscrito(nombre, unidadId, cantidad)
+                escribiendo = false
+            },
+        )
+    }
+}
+
+/**
+ * La invitación a pedir lo que no está.
+ *
+ * Va al final de la lista, después de que el capataz buscó y no encontró:
+ * es justo el momento en que antes cerraba la aplicación y escribía por
+ * WhatsApp.
+ */
+@Composable
+private fun PedirAparte(onClick: () -> Unit) {
+    OutlinedCard(
+        onClick = onClick,
+        modifier = Modifier.fillMaxWidth().padding(top = 14.dp),
+        shape = RoundedCornerShape(14.dp),
+    ) {
+        Row(
+            Modifier.padding(16.dp),
+            verticalAlignment = Alignment.CenterVertically,
+        ) {
+            Icon(Icons.Outlined.Add, contentDescription = null, tint = Marca.Verde)
+            Spacer(Modifier.width(12.dp))
+            Column(Modifier.weight(1f)) {
+                Text(
+                    "¿No está en la lista?",
+                    style = MaterialTheme.typography.titleSmall,
+                    fontWeight = FontWeight.Bold,
+                )
+                Text(
+                    "Escríbelo y va en el mismo pedido.",
+                    style = MaterialTheme.typography.bodySmall,
+                    color = TintaSuave,
+                )
+            }
+        }
+    }
+}
+
+/** Un renglón que el capataz escribió, con el botón de quitarlo. */
+@Composable
+private fun FilaEscrita(renglon: RenglonPedido, alQuitar: () -> Unit) {
+    Card(
+        colors = CardDefaults.cardColors(containerColor = Marca.Verde.copy(alpha = 0.08f)),
+        shape = RoundedCornerShape(14.dp),
+        modifier = Modifier.fillMaxWidth(),
+    ) {
+        Row(
+            Modifier.padding(14.dp),
+            verticalAlignment = Alignment.CenterVertically,
+        ) {
+            Column(Modifier.weight(1f)) {
+                Text(
+                    renglon.descripcion,
+                    style = MaterialTheme.typography.titleSmall,
+                    fontWeight = FontWeight.SemiBold,
+                )
+                Text(
+                    "${cifra(renglon.cantidad)} ${renglon.simbolo.orEmpty()} · fuera del catálogo",
+                    style = MaterialTheme.typography.bodySmall,
+                    color = TintaSuave,
+                )
+            }
+            IconButton(onClick = alQuitar) {
+                Icon(Icons.Outlined.Close, contentDescription = "Quitar")
+            }
+        }
+    }
+}
+
+/**
+ * Lo que hace falta para pedir algo que no está en el catálogo: qué es,
+ * en qué se mide y cuánto.
+ *
+ * La unidad importa más de lo que parece: «tres de manguera» no le dice al
+ * almacén si son tres metros o tres rollos.
+ */
+@Composable
+private fun DialogoInsumoEscrito(
+    unidades: List<Unidad>,
+    alCerrar: () -> Unit,
+    alAgregar: (String, String?, Double) -> Unit,
+) {
+    var nombre by remember { mutableStateOf("") }
+    var cantidad by remember { mutableStateOf("") }
+    var unidadId by remember { mutableStateOf<String?>(null) }
+
+    val cantidadValida = cantidad.replace(',', '.').toDoubleOrNull()?.takeIf { it > 0 }
+
+    AlertDialog(
+        onDismissRequest = alCerrar,
+        title = { Text("Pedir algo que no está en la lista") },
+        text = {
+            Column(verticalArrangement = Arrangement.spacedBy(12.dp)) {
+                Text(
+                    "El residente lo verá en la web y decide si lo incorpora al catálogo.",
+                    style = MaterialTheme.typography.bodySmall,
+                    color = TintaSuave,
+                )
+                OutlinedTextField(
+                    value = nombre,
+                    onValueChange = { nombre = it },
+                    label = { Text("Qué necesitas") },
+                    placeholder = { Text("Manguera reforzada de media") },
+                    singleLine = true,
+                    shape = RoundedCornerShape(12.dp),
+                    modifier = Modifier.fillMaxWidth(),
+                )
+                OutlinedTextField(
+                    value = cantidad,
+                    onValueChange = { cantidad = it.filter { c -> c.isDigit() || c == '.' || c == ',' } },
+                    label = { Text("Cuánto") },
+                    singleLine = true,
+                    keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Decimal),
+                    shape = RoundedCornerShape(12.dp),
+                    modifier = Modifier.fillMaxWidth(),
+                )
+                Text(
+                    "En qué se mide",
+                    style = MaterialTheme.typography.labelMedium,
+                    color = TintaSuave,
+                )
+                Row(
+                    Modifier.fillMaxWidth().horizontalScroll(rememberScrollState()),
+                    horizontalArrangement = Arrangement.spacedBy(8.dp),
+                ) {
+                    unidades.forEach { unidad ->
+                        FilterChip(
+                            selected = unidadId == unidad.id,
+                            onClick = { unidadId = if (unidadId == unidad.id) null else unidad.id },
+                            label = { Text(unidad.symbol) },
+                        )
+                    }
+                }
+            }
+        },
+        confirmButton = {
+            TextButton(
+                onClick = { cantidadValida?.let { alAgregar(nombre, unidadId, it) } },
+                enabled = nombre.isNotBlank() && cantidadValida != null,
+            ) { Text("Agregar al pedido") }
+        },
+        dismissButton = { TextButton(onClick = alCerrar) { Text("Cancelar") } },
+    )
 }
 
 @Composable

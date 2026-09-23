@@ -5174,6 +5174,39 @@ export type Database = {
           },
         ]
       }
+      v_pedidos_fuera_de_catalogo: {
+        Row: {
+          cantidad_total: number | null
+          items: string[] | null
+          nombre: string | null
+          primera_vez: string | null
+          service_id: string | null
+          ultima_vez: string | null
+          unidad: string | null
+          unit_id: string | null
+          veces: number | null
+        }
+        Relationships: []
+      }
+      v_renglones_de_pedido: {
+        Row: {
+          category: string | null
+          codigo: string | null
+          fuera_de_catalogo: boolean | null
+          id: string | null
+          nombre: string | null
+          notes: string | null
+          qty_approved: number | null
+          qty_delivered: number | null
+          qty_requested: number | null
+          request_id: string | null
+          service_id: string | null
+          supply_id: string | null
+          unidad: string | null
+          unit_id: string | null
+        }
+        Relationships: []
+      }
       v_vencimientos: {
         Row: {
           alert_level: string | null
@@ -5323,6 +5356,17 @@ export type Database = {
           p_type_codes?: string[] | null
         }
         Returns: Json
+      }
+      adoptar_insumo: {
+        Args: {
+          p_category?: string | null
+          p_code: string
+          p_min_stock?: number | null
+          p_nombre: string
+          p_service_id: string
+          p_unit_id?: string | null
+        }
+        Returns: string
       }
       inventario_resumen: {
         Args: { p_section_id?: string | null; p_service_id: string }

@@ -3,7 +3,7 @@
 import * as React from 'react'
 import { useQuery, useQueryClient } from '@tanstack/react-query'
 import {
-  Boxes, PackageSearch, Check, X, AlertTriangle, Truck, Search,
+  Boxes, PackageSearch, Check, X, AlertTriangle, Truck, Search, Plus,
 } from 'lucide-react'
 import { createClient } from '@/lib/supabase/client'
 import { useSession } from '@/lib/hooks/use-session'
@@ -274,16 +274,19 @@ function PedidoDialog({
   const [nota, setNota] = React.useState('')
   const [cantidades, setCantidades] = React.useState<Record<string, string>>({})
   const [enviando, setEnviando] = React.useState(false)
+  /** El renglón suelto que el residente está incorporando al maestro. */
+  const [adoptando, setAdoptando] = React.useState<any>(null)
 
   const renglones = useQuery({
     queryKey: ['renglones-pedido', pedido?.id],
     enabled: !!pedido,
     queryFn: async () => {
+      // La vista resuelve el nombre y la unidad vengan del catálogo o
+      // escritos a mano por la cuadrilla, que es lo que hay que leer aquí.
       const { data, error } = await sb
-        .from('supply_request_items')
-        .select('*, supplies(name, code, unit_id, units:unit_id(symbol))')
+        .from('v_renglones_de_pedido')
+        .select('*')
         .eq('request_id', pedido.id)
-        .is('deleted_at', null)
       if (error) throw error
       return data ?? []
     },
@@ -327,6 +330,17 @@ function PedidoDialog({
   }
 
   const entregar = async () => {
+    // Lo que se pidió fuera del catálogo no tiene stock del que salir. Hay
+    // que incorporarlo al maestro primero —el botón está en su renglón—, o
+    // la salida de almacén quedaría sin insumo al que descontarse.
+    const sueltos = (renglones.data ?? []).filter((r: any) => r.fuera_de_catalogo)
+    if (sueltos.length) {
+      toast.error(
+        `Antes de entregar, añade al catálogo: ${sueltos.map((r: any) => r.nombre).join(', ')}`
+      )
+      return
+    }
+
     const aEntregar = (renglones.data ?? [])
       .map((r: any) => ({ renglon: r, cantidad: cantidadDe(r) }))
       .filter((x) => x.cantidad > 0)
@@ -400,23 +414,39 @@ function PedidoDialog({
             const pedidoQty = Number(r.qty_approved ?? r.qty_requested)
             const pendiente = pedidoQty - Number(r.qty_delivered)
             return (
-              <div key={r.id} className="flex items-center gap-3 rounded-lg border border-border p-3">
+              <div
+                key={r.id}
+                className={cn(
+                  'flex items-center gap-3 rounded-lg border p-3',
+                  r.fuera_de_catalogo ? 'border-warning/40 bg-warning/5' : 'border-border'
+                )}
+              >
                 <div className="min-w-0 flex-1">
-                  <p className="text-sm font-medium">{r.supplies?.name}</p>
+                  <p className="text-sm font-medium">{r.nombre}</p>
                   <p className="text-muted-foreground text-[12px]">
-                    Pidió {cifra(pedidoQty)} {r.supplies?.units?.symbol}
+                    Pidió {cifra(pedidoQty)} {r.unidad ?? ''}
                     {Number(r.qty_delivered) > 0 && ` · entregado ${cifra(Number(r.qty_delivered))}`}
                   </p>
+                  {r.fuera_de_catalogo && (
+                    <p className="text-warning mt-1 text-[12px]">
+                      No está en el catálogo. Lo escribió la cuadrilla.
+                    </p>
+                  )}
                 </div>
-                {!esRevision && (
+
+                {r.fuera_de_catalogo ? (
+                  <Button size="sm" variant="outline" onClick={() => setAdoptando(r)}>
+                    <Plus /> Añadir al catálogo
+                  </Button>
+                ) : !esRevision ? (
                   <Input
                     value={cantidades[r.id] ?? String(Math.max(0, pendiente))}
                     onChange={(e) => setCantidades((c) => ({ ...c, [r.id]: e.target.value }))}
                     inputMode="decimal"
                     className="w-24 text-right"
-                    aria-label={`Cantidad a entregar de ${r.supplies?.name}`}
+                    aria-label={`Cantidad a entregar de ${r.nombre}`}
                   />
-                )}
+                ) : null}
               </div>
             )
           })}
@@ -441,6 +471,150 @@ function PedidoDialog({
               <Truck /> Registrar entrega
             </Button>
           )}
+        </DialogFooter>
+      </DialogContent>
+
+      {adoptando && (
+        <AdoptarDialog
+          renglon={adoptando}
+          serviceId={pedido.service_id}
+          onClose={() => setAdoptando(null)}
+          onHecho={() => {
+            setAdoptando(null)
+            renglones.refetch()
+            onHecho()
+          }}
+        />
+      )}
+    </Dialog>
+  )
+}
+
+/**
+ * Incorporar al maestro algo que la cuadrilla pidió escrito.
+ *
+ * El catálogo se arma en la oficina al empezar el contrato, y lo que hace
+ * falta se descubre en la vía. Esto es lo que cierra el ciclo: lo que se
+ * pidió suelto una vez pasa a estar en la lista, y la próxima cuadrilla ya
+ * lo encuentra sin tener que escribirlo. Los renglones que lo pedían así
+ * se reapuntan solos al insumo nuevo, sin perder cantidad ni fecha.
+ */
+function AdoptarDialog({
+  renglon,
+  serviceId,
+  onClose,
+  onHecho,
+}: {
+  renglon: any
+  serviceId: string
+  onClose: () => void
+  onHecho: () => void
+}) {
+  const sb = React.useMemo(() => createClient(), [])
+  const [code, setCode] = React.useState('')
+  const [categoria, setCategoria] = React.useState('')
+  const [minimo, setMinimo] = React.useState('0')
+  const [unitId, setUnitId] = React.useState<string>(renglon.unit_id ?? '')
+  const [enviando, setEnviando] = React.useState(false)
+
+  const unidades = useQuery({
+    queryKey: ['unidades'],
+    queryFn: async () => {
+      const { data, error } = await sb.from('units').select('id, code, name, symbol').order('code')
+      if (error) throw error
+      return data ?? []
+    },
+  })
+
+  const categorias = useQuery({
+    queryKey: ['categorias-insumo', serviceId],
+    queryFn: async () => {
+      const { data, error } = await sb
+        .from('supplies')
+        .select('category')
+        .eq('service_id', serviceId)
+        .not('category', 'is', null)
+      if (error) throw error
+      return [...new Set((data ?? []).map((s: any) => s.category))].sort()
+    },
+  })
+
+  const adoptar = async () => {
+    if (!code.trim()) {
+      toast.error('Ponle un código: es con lo que el almacén lo va a buscar')
+      return
+    }
+    setEnviando(true)
+    const { error } = await sb.rpc('adoptar_insumo', {
+      p_service_id: serviceId,
+      p_nombre: renglon.nombre,
+      p_code: code.trim(),
+      p_unit_id: unitId || null,
+      p_category: categoria.trim() || null,
+      p_min_stock: Number(minimo.replace(',', '.')) || 0,
+    })
+    setEnviando(false)
+    if (error) { toast.error(error.message); return }
+    toast.success(`${renglon.nombre} ya está en el catálogo`)
+    onHecho()
+  }
+
+  return (
+    <Dialog open onOpenChange={(o) => !o && onClose()}>
+      <DialogContent className="sm:max-w-md">
+        <DialogHeader>
+          <DialogTitle>Añadir al catálogo</DialogTitle>
+          <DialogDescription>
+            «{renglon.nombre}» pasa a ser un insumo del contrato. Los pedidos que
+            lo piden escrito se reapuntan solos.
+          </DialogDescription>
+        </DialogHeader>
+
+        <div className="space-y-3">
+          <Field label="Código" hint="Con el que lo busca el almacén">
+            <Input
+              value={code}
+              onChange={(e) => setCode(e.target.value.toUpperCase())}
+              placeholder="MAN-050"
+              autoFocus
+            />
+          </Field>
+
+          <Field label="Unidad">
+            <select
+              value={unitId}
+              onChange={(e) => setUnitId(e.target.value)}
+              className="border-input bg-background h-9 w-full rounded-md border px-3 text-sm"
+            >
+              <option value="">Sin unidad</option>
+              {unidades.data?.map((u: any) => (
+                <option key={u.id} value={u.id}>{u.symbol} · {u.name}</option>
+              ))}
+            </select>
+          </Field>
+
+          <Field label="Categoría" hint="Opcional">
+            <Input
+              value={categoria}
+              onChange={(e) => setCategoria(e.target.value)}
+              list="categorias-insumo"
+              placeholder="Ferretería"
+            />
+            <datalist id="categorias-insumo">
+              {categorias.data?.map((c: string) => <option key={c} value={c} />)}
+            </datalist>
+          </Field>
+
+          <Field label="Stock mínimo" hint="Cuándo avisar que hay que reponer">
+            <Input value={minimo} onChange={(e) => setMinimo(e.target.value)} inputMode="decimal" />
+          </Field>
+        </div>
+
+        <DialogFooter>
+          <Button variant="outline" onClick={onClose} disabled={enviando}>Cancelar</Button>
+          <Button onClick={adoptar} disabled={enviando}>
+            <Check /> Añadir al catálogo
+          </Button>
         </DialogFooter>
       </DialogContent>
     </Dialog>
