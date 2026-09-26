@@ -15,6 +15,7 @@ import io.github.jan.supabase.storage.Storage
 import io.ktor.client.engine.okhttp.OkHttp
 import pe.servicon.sigov.BuildConfig
 import javax.inject.Singleton
+import kotlin.time.Duration.Companion.seconds
 
 /**
  * La conexión con la nube.
@@ -49,5 +50,11 @@ object RedModule {
             install(Realtime)
 
             httpEngine = OkHttp.create()
+
+            // El inventario del contrato baja entero de una vez: 7,700
+            // elementos, unos 600 KB comprimidos. Con señal de carretera no
+            // entra en los diez segundos que la librería da por defecto, y
+            // mientras tanto el mapa ya enseña lo que el equipo tenía guardado.
+            requestTimeout = 45.seconds
         }
 }

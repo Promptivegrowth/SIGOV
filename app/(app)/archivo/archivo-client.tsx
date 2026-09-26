@@ -30,6 +30,7 @@ const KINDS = {
   pci:          { label: 'PCI · OSITRAN',   color: 'var(--sem-rojo)' },
   programacion: { label: 'Programación',    color: 'var(--chart-2)' },
   reporte:      { label: 'Reporte',         color: 'var(--chart-4)' },
+  inventario:   { label: 'Inventario vial', color: 'var(--brand-green)' },
   ssoma:        { label: 'SSOMA',           color: 'var(--success)' },
   plano:        { label: 'Plano',           color: 'var(--chart-3)' },
   acta:         { label: 'Acta',            color: 'var(--info)' },

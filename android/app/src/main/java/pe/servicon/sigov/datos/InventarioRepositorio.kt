@@ -34,6 +34,8 @@ data class ElementoVial(
     @SerialName("section_id") val tramoId: String? = null,
     @SerialName("section_name") val tramo: String? = null,
     @SerialName("progresiva_m") val progresivaM: Double? = null,
+    /** Dónde termina un elemento lineal: una calzada, un guardavía, un muro. */
+    @SerialName("progresiva_fin_m") val progresivaFinM: Double? = null,
     @SerialName("progresiva_txt") val progresiva: String? = null,
     val side: String? = null,
     val lat: Double? = null,
@@ -50,6 +52,8 @@ data class ElementoVial(
     @SerialName("foto_anterior") val fotoAnterior: String? = null,
     @SerialName("foto_anterior_fecha") val fotoAnteriorFecha: String? = null,
     @SerialName("dias_entre_fotos") val diasEntreFotos: Int? = null,
+    /** Lo que el inventario oficial registra del elemento: clasificación, dimensiones… */
+    val atributos: JsonObject? = null,
 )
 
 /** Cuántos elementos hay de cada componente y cómo está su semáforo. */
@@ -68,6 +72,33 @@ data class ResumenDeTipo(
     /** Lo que el supervisor tiene que ir a ver. */
     val porAtender: Int get() = critico + sinIntervenir
 }
+
+/** Un campo del inventario oficial, con la etiqueta con que se enseña. */
+@Serializable
+data class CampoDelTipo(
+    val key: String,
+    val label: String,
+    val type: String = "text",
+)
+
+@Serializable
+private data class TipoConCampos(
+    val code: String,
+    val schema: List<CampoDelTipo> = emptyList(),
+)
+
+/** Una foto del elemento, para la galería de la ficha. */
+@Serializable
+data class FotoDeActivo(
+    val id: String,
+    @SerialName("storage_path") val ruta: String,
+    @SerialName("thumb_path") val miniatura: String? = null,
+    @SerialName("taken_at") val tomada: String? = null,
+    val caption: String? = null,
+)
+
+@Serializable
+private data class VinculoConFoto(val evidences: FotoDeActivo? = null)
 
 /** Una visita anterior al elemento. */
 @Serializable
@@ -144,6 +175,48 @@ class InventarioRepositorio @Inject constructor(
             }.getOrDefault(emptyList())
         }
 
+    /**
+     * Los campos del inventario de cada tipo de elemento, con su etiqueta.
+     *
+     * Se guardan en el equipo: la ficha enseña «Clasificación (MTC): TMC» y
+     * no «clasificacion: TMC», y eso tiene que funcionar en la quebrada, sin
+     * señal. Son dieciocho tipos y casi nunca cambian.
+     */
+    suspend fun camposPorTipo(): Map<String, List<CampoDelTipo>> = withContext(Dispatchers.IO) {
+        val frescos = runCatching {
+            supabase.postgrest.from("asset_types")
+                .select(io.github.jan.supabase.postgrest.query.Columns.list("code", "schema"))
+                .decodeList<TipoConCampos>()
+        }.getOrNull()
+        if (frescos != null) {
+            catalogo.borrarTabla("tipos_campos", null)
+            catalogo.guardar(frescos.map {
+                FilaCatalogo(tabla = "tipos_campos", id = it.code, servicioId = null,
+                    datos = json.encodeToString(TipoConCampos.serializer(), it))
+            })
+            return@withContext frescos.associate { it.code to it.schema }
+        }
+        catalogo.de("tipos_campos", null).mapNotNull {
+            runCatching { json.decodeFromString<TipoConCampos>(it.datos) }.getOrNull()
+        }.associate { it.code to it.schema }
+    }
+
+    /**
+     * Todas las fotos de un elemento: las tres vistas de una alcantarilla,
+     * una por calzada en el peaje. La comparación enseña dos; esto, todas.
+     */
+    suspend fun galeria(activoId: String): List<FotoDeActivo> = withContext(Dispatchers.IO) {
+        runCatching {
+            supabase.postgrest.from("evidence_links")
+                .select(io.github.jan.supabase.postgrest.query.Columns.raw(
+                    "evidences(id, storage_path, thumb_path, taken_at, caption)"))
+                { filter { eq("asset_id", activoId) } }
+                .decodeList<VinculoConFoto>()
+                .mapNotNull { it.evidences }
+                .sortedByDescending { it.tomada ?: "" }
+        }.getOrDefault(emptyList())
+    }
+
     /** Las visitas anteriores a un elemento. */
     suspend fun historial(activoId: String): List<IntervencionDeActivo> =
         withContext(Dispatchers.IO) {
@@ -166,6 +239,20 @@ class InventarioRepositorio @Inject constructor(
      * Se pide de a una porque la ficha enseña dos y se abren de a poco; pedir
      * las de todo el inventario sería firmar miles de rutas para ver dos.
      */
+    /**
+     * La miniatura de una foto, si la tiene.
+     *
+     * Las del inventario la tienen al lado, con el mismo nombre y «_t»: 15
+     * KB en vez de 150. En la ficha se ve igual y en carretera se nota. La
+     * grande se pide solo al ampliarla.
+     */
+    suspend fun urlDeMiniatura(ruta: String?): String? {
+        if (ruta.isNullOrBlank()) return null
+        val mini = if (ruta.contains("/inventario-") && ruta.endsWith(".webp"))
+            ruta.removeSuffix(".webp") + "_t.webp" else ruta
+        return urlDeFoto(mini) ?: urlDeFoto(ruta)
+    }
+
     suspend fun urlDeFoto(ruta: String?): String? = withContext(Dispatchers.IO) {
         if (ruta.isNullOrBlank()) return@withContext null
         runCatching {

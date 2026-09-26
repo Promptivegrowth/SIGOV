@@ -6,7 +6,7 @@ import maplibregl, { type Map as MLMap } from 'maplibre-gl'
 import { useQuery } from '@tanstack/react-query'
 import { AnimatePresence, motion } from 'motion/react'
 import {
-  X, Filter, Camera, CalendarClock, MapPin, History, ChevronDown, Layers,
+  X, Filter, Camera, CalendarClock, MapPin, History, ChevronDown, Layers, ClipboardList, Info,
 } from 'lucide-react'
 import { createClient } from '@/lib/supabase/client'
 import { useSession } from '@/lib/hooks/use-session'
@@ -16,7 +16,7 @@ import { Button } from '@/components/ui/button'
 import { Badge } from '@/components/ui/badge'
 import { Select, SelectTrigger, SelectValue, SelectContent, SelectItem } from '@/components/ui/select'
 import { SkeletonList } from '@/components/ui/skeleton'
-import { cn, fmtDate, fmtDateTime, fmtNumber } from '@/lib/utils'
+import { cn, fmtDate, fmtDateTime, fmtNumber, fmtProgresiva } from '@/lib/utils'
 import { ASSET_CONDITION } from '@/lib/constants'
 
 /**
@@ -40,6 +40,34 @@ const SEMAFOROS = {
 } as const
 
 type ClaveSemaforo = keyof typeof SEMAFOROS
+
+/**
+ * La fecha que se enseña bajo una foto.
+ *
+ * Las del Inventario Vial 2024 casi nunca traen la fecha en que se
+ * tomaron: se recortaron y perdieron los metadatos, y al guardarlas se les
+ * puso la de emisión del tomo para no dejar el dato vacío. Enseñar esa
+ * fecha bajo la foto sería decir algo que no se sabe. Se dice lo que sí:
+ * que es del inventario de ese año.
+ */
+function fechaDeFoto(ruta: string | null | undefined, fecha: string | null | undefined, caption?: string | null) {
+  const inv = ruta ? /\/inventario-(\d{4})\//.exec(ruta) : null
+  if (inv) {
+    const sinFecha = !caption || /sin fecha/i.test(caption)
+    return sinFecha ? `Inventario ${inv[1]}` : `${fmtDate(fecha)} · inventario ${inv[1]}`
+  }
+  return fecha ? fmtDate(fecha) : 'Sin fecha'
+}
+
+/** El valor de un campo del inventario, legible. */
+function valorDe(campo: { key: string; type: string }, v: any): string | null {
+  if (v == null || v === '') return null
+  if (campo.key === 'uso') return v === 'en_uso' ? 'En uso' : v === 'en_desuso' ? 'En desuso' : String(v)
+  if (campo.type === 'date') return fmtDate(v)
+  if (campo.type === 'bool') return v ? 'Sí' : 'No'
+  if (campo.type === 'number') return fmtNumber(Number(v), Number.isInteger(Number(v)) ? 0 : 2)
+  return String(v)
+}
 
 const TODOS = '__todos__'
 
@@ -96,26 +124,64 @@ export function MapaDeInventario() {
     },
   })
 
-  // ── Las dos fotos del elemento abierto ───────────────────────────────
+  // ── Lo que se abre al elegir un elemento ─────────────────────────────
+  // Las dos fotos de la comparación, todas las demás, y los datos que el
+  // inventario oficial registra de ese tipo de elemento.
   const fotos = useQuery({
     queryKey: ['inventario-fotos', elegido?.id],
     enabled: !!elegido?.id,
     queryFn: async () => {
-      const { data } = await sb.from('v_inventario')
-        .select('foto_actual, foto_actual_fecha, foto_anterior, foto_anterior_fecha, condition, intervenciones, visitas, dias_sin_intervenir, ultima_intervencion, dias_entre_fotos')
-        .eq('id', elegido.id).single()
+      const [{ data }, { data: activo }, { data: vinculos }] = await Promise.all([
+        sb.from('v_inventario')
+          .select('foto_actual, foto_actual_fecha, foto_anterior, foto_anterior_fecha, condition, intervenciones, visitas, dias_sin_intervenir, ultima_intervencion, dias_entre_fotos')
+          .eq('id', elegido.id).single(),
+        sb.from('road_assets')
+          .select('progresiva_fin_m, attributes, asset_types(schema)')
+          .eq('id', elegido.id).single(),
+        sb.from('evidence_links')
+          .select('evidences(id, storage_path, thumb_path, taken_at, caption, phase)')
+          .eq('asset_id', elegido.id),
+      ])
       if (!data) return null
 
-      const rutas = [data.foto_actual, data.foto_anterior].filter(Boolean) as string[]
+      const galeria = ((vinculos ?? []) as any[])
+        .map((v) => v.evidences)
+        .filter((e) => e && e.storage_path)
+        .sort((a, b) => String(b.taken_at).localeCompare(String(a.taken_at)))
+
+      // Se firma la miniatura cuando la hay —la ficha es pequeña y en
+      // carretera cada foto grande son 150 KB— y la grande para ampliar.
+      const rutas = new Set<string>()
+      for (const r of [data.foto_actual, data.foto_anterior]) if (r) rutas.add(r)
+      for (const g of galeria) { rutas.add(g.storage_path); if (g.thumb_path) rutas.add(g.thumb_path) }
       const urls = new Map<string, string>()
-      if (rutas.length) {
-        const { data: firmadas } = await sb.storage.from('evidencias').createSignedUrls(rutas, 3600)
+      if (rutas.size) {
+        const { data: firmadas } = await sb.storage.from('evidencias').createSignedUrls([...rutas], 3600)
         for (const f of firmadas ?? []) if (f.path && f.signedUrl) urls.set(f.path, f.signedUrl)
       }
+      const caption = new Map(galeria.map((g) => [g.storage_path, g.caption as string | null]))
+      const mini = new Map(galeria.map((g) => [g.storage_path, g.thumb_path as string | null]))
+      const firmar = (ruta: string | null) => (ruta ? urls.get(ruta) ?? null : null)
+
       return {
         ...data,
-        urlActual: data.foto_actual ? urls.get(data.foto_actual) ?? null : null,
-        urlAnterior: data.foto_anterior ? urls.get(data.foto_anterior) ?? null : null,
+        urlActual: firmar(data.foto_actual),
+        miniActual: firmar(mini.get(data.foto_actual) ?? data.foto_actual),
+        urlAnterior: firmar(data.foto_anterior),
+        miniAnterior: firmar(mini.get(data.foto_anterior) ?? data.foto_anterior),
+        captionActual: caption.get(data.foto_actual) ?? null,
+        captionAnterior: caption.get(data.foto_anterior) ?? null,
+        galeria: galeria.map((g) => ({
+          id: g.id,
+          url: firmar(g.storage_path),
+          mini: firmar(g.thumb_path ?? g.storage_path),
+          ruta: g.storage_path as string,
+          fecha: g.taken_at as string | null,
+          caption: g.caption as string | null,
+        })),
+        progresivaFin: (activo as any)?.progresiva_fin_m as number | null,
+        atributos: ((activo as any)?.attributes ?? {}) as Record<string, any>,
+        campos: (((activo as any)?.asset_types?.schema ?? []) as { key: string; label: string; type: string }[]),
       }
     },
   })
@@ -396,7 +462,14 @@ export function MapaDeInventario() {
 
                 {/* Dónde está */}
                 <div className="grid grid-cols-2 gap-2">
-                  <Dato etiqueta="Progresiva" valor={elegido.progresiva ?? '—'} />
+                  <Dato
+                    etiqueta="Progresiva"
+                    valor={
+                      fotos.data?.progresivaFin != null && fotos.data.progresivaFin !== elegido.progresiva_m
+                        ? `${elegido.progresiva} → ${fmtProgresiva(fotos.data.progresivaFin)}`
+                        : elegido.progresiva ?? '—'
+                    }
+                  />
                   <Dato etiqueta="Lado" valor={elegido.side ?? '—'} />
                   <Dato etiqueta="Tramo" valor={elegido.section ?? '—'} ancho />
                   <Dato
@@ -405,6 +478,41 @@ export function MapaDeInventario() {
                   />
                   <Dato etiqueta="Intervenciones" valor={String(elegido.intervenciones ?? 0)} />
                 </div>
+
+                {/* Lo que el inventario oficial registra de este tipo de elemento */}
+                {fotos.data && fotos.data.campos.some((c) => valorDe(c, fotos.data!.atributos[c.key]) != null) && (
+                  <div>
+                    <p className="text-muted-foreground mb-1.5 flex items-center gap-1.5 text-[10.5px] font-semibold tracking-wide uppercase">
+                      <ClipboardList className="size-3" />
+                      Datos del inventario
+                    </p>
+                    <dl className="divide-border divide-y rounded-lg border border-border">
+                      {fotos.data.campos.map((c) => {
+                        const v = valorDe(c, fotos.data!.atributos[c.key])
+                        if (v == null) return null
+                        return (
+                          <div key={c.key} className="flex items-baseline justify-between gap-3 px-2.5 py-1.5">
+                            <dt className="text-muted-foreground text-[11px]">{c.label}</dt>
+                            <dd className="text-right text-[12px] font-medium">{v}</dd>
+                          </div>
+                        )
+                      })}
+                    </dl>
+                  </div>
+                )}
+
+                {/* Cuando la coordenada del Excel no era de fiar */}
+                {fotos.data?.atributos?.ubicacion === 'progresiva' && (
+                  <p className="text-muted-foreground flex gap-1.5 rounded-lg bg-secondary/50 px-2.5 py-2 text-[11px] leading-snug">
+                    <Info className="mt-px size-3.5 shrink-0" />
+                    <span>
+                      Ubicado por su progresiva sobre la vía oficial.
+                      {fotos.data.atributos.motivo_ubicacion
+                        ? ` La coordenada del inventario quedaba ${fotos.data.atributos.motivo_ubicacion}.`
+                        : ''}
+                    </span>
+                  </p>
+                )}
 
                 {/* Las dos fotos: cómo está y cómo estaba */}
                 <div>
@@ -433,6 +541,8 @@ export function MapaDeInventario() {
                       <Foto
                         titulo="Ahora"
                         url={fotos.data.urlActual}
+                        mini={fotos.data.miniActual}
+                        pie={fechaDeFoto(fotos.data.foto_actual, fotos.data.foto_actual_fecha, fotos.data.captionActual)}
                         fecha={fotos.data.foto_actual_fecha}
                         destacada
                       />
@@ -440,6 +550,8 @@ export function MapaDeInventario() {
                         <Foto
                           titulo="Antes"
                           url={fotos.data.urlAnterior}
+                          mini={fotos.data.miniAnterior}
+                          pie={fechaDeFoto(fotos.data.foto_anterior, fotos.data.foto_anterior_fecha, fotos.data.captionAnterior)}
                           fecha={fotos.data.foto_anterior_fecha}
                         />
                       ) : (
@@ -447,6 +559,30 @@ export function MapaDeInventario() {
                           Todavía no hay una visita anterior con la que comparar
                         </div>
                       )}
+                    </div>
+                  )}
+
+                  {/* Todas las demás: las tres vistas de una alcantarilla, las
+                      calzadas de un peaje. La comparación enseña dos; aquí
+                      están todas. */}
+                  {fotos.data && fotos.data.galeria.length > 1 && (
+                    <div className="mt-2">
+                      <p className="text-muted-foreground mb-1 text-[10.5px]">
+                        Todas las fotos del elemento · {fotos.data.galeria.length}
+                      </p>
+                      <div className="grid grid-cols-4 gap-1.5">
+                        {fotos.data.galeria.map((g) => (
+                          <Foto
+                            key={g.id}
+                            url={g.url}
+                            mini={g.mini}
+                            fecha={g.fecha}
+                            pie={null}
+                            titulo={(g.caption ?? '').split(' · ')[1] ?? 'Foto'}
+                            chica
+                          />
+                        ))}
+                      </div>
                     </div>
                   )}
                 </div>
@@ -520,12 +656,17 @@ function Dato({ etiqueta, valor, ancho }: { etiqueta: string; valor: string; anc
  * ayer dicen algo distinto a dos del mismo día.
  */
 function Foto({
-  titulo, url, fecha, destacada,
+  titulo, url, mini, fecha, pie, destacada, chica,
 }: {
   titulo: string
   url: string | null
+  /** La miniatura para la ficha; la grande se carga solo al ampliar. */
+  mini?: string | null
   fecha?: string | null
+  /** Lo que va bajo la foto; null para no poner nada. */
+  pie?: string | null
   destacada?: boolean
+  chica?: boolean
 }) {
   const [abierta, setAbierta] = React.useState(false)
   if (!url) return null
@@ -539,20 +680,24 @@ function Foto({
             destacada ? 'border-primary/40' : 'border-border'
           )}
         >
-          <Image src={url} alt={titulo} fill sizes="160px" unoptimized
+          <Image src={mini ?? url} alt={titulo} fill sizes={chica ? '72px' : '160px'} unoptimized
             className="object-cover transition-transform group-hover:scale-[1.04]" />
-          <span
-            className={cn(
-              'absolute top-1 left-1 rounded px-1.5 py-0.5 text-[9.5px] font-semibold text-white',
-              destacada ? 'bg-primary/90' : 'bg-black/60'
-            )}
-          >
-            {titulo}
-          </span>
+          {!chica && (
+            <span
+              className={cn(
+                'absolute top-1 left-1 rounded px-1.5 py-0.5 text-[9.5px] font-semibold text-white',
+                destacada ? 'bg-primary/90' : 'bg-black/60'
+              )}
+            >
+              {titulo}
+            </span>
+          )}
         </div>
-        <p className="text-muted-foreground mt-1 text-[10.5px]">
-          {fecha ? fmtDate(fecha) : 'Sin fecha'}
-        </p>
+        {pie !== null && (
+          <p className="text-muted-foreground mt-1 text-[10.5px]">
+            {pie ?? (fecha ? fmtDate(fecha) : 'Sin fecha')}
+          </p>
+        )}
       </button>
 
       {abierta && (
@@ -563,7 +708,9 @@ function Foto({
           <div className="flex items-center justify-between px-4 py-3">
             <p className="text-[13px] font-medium text-white">
               {titulo}
-              {fecha && <span className="ml-2 text-white/60">{fmtDateTime(fecha)}</span>}
+              {(pie ?? (fecha ? fmtDateTime(fecha) : null)) && (
+                <span className="ml-2 text-white/60">{pie ?? fmtDateTime(fecha!)}</span>
+              )}
             </p>
             <Button variant="ghost" size="icon" onClick={() => setAbierta(false)}>
               <X className="size-5 text-white" />

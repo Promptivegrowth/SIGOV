@@ -26,7 +26,10 @@
 import fs from 'node:fs'
 import path from 'node:path'
 
-const ORIGEN = process.argv[2] || path.join(process.cwd(), 'kmz', 'doc.kml')
+// --json: en vez de la migración, las trazas ya corregidas, para quien
+// necesite medir contra ellas (el importador del inventario, por ejemplo).
+const COMO_JSON = process.argv.includes('--json')
+const ORIGEN = process.argv.slice(2).find((a) => !a.startsWith('--')) || path.join(process.cwd(), 'kmz', 'doc.kml')
 const SUR = '22222222-2222-4222-8222-222222222221'
 
 // A qué tramo del contrato corresponde cada subtramo del KMZ.
@@ -101,6 +104,28 @@ function limites(bloque) {
     else if (/^FIN ST/i.test(t.trim())) hasta ??= km(t)
   }
   return { desde, hasta }
+}
+
+/**
+ * Los hitos kilométricos del MTC que trae el archivo: «PR 852» en su punto.
+ *
+ * Sirven para calibrar. Repartir el kilometraje del tramo a lo largo de la
+ * traza supone que avanza parejo con la distancia recorrida, y donde hubo
+ * una variante eso ya no es verdad: en Montalvo el reparto dejaba
+ * alcantarillas hasta 1,4 km antes de su progresiva. Con un hito por
+ * kilómetro, cada progresiva se sitúa entre los dos hitos que la rodean.
+ */
+function hitos(bloque) {
+  const out = []
+  const re = /<Placemark>\s*<name>\s*PR\s*(\d+(?:[.,]\d+)?)\s*<\/name>[\s\S]*?<Point>[\s\S]*?<coordinates>([^<]+)<\/coordinates>/g
+  let m
+  while ((m = re.exec(bloque))) {
+    const [lng, lat] = m[2].trim().split(',').map(Number)
+    if (Number.isFinite(lat) && Number.isFinite(lng)) {
+      out.push({ km: Number(m[1].replace(',', '.')), lat, lng })
+    }
+  }
+  return out.sort((a, b) => a.km - b.km)
 }
 
 // ─── Geometría ─────────────────────────────────────────────────────────────
@@ -200,6 +225,7 @@ for (const [subtramo, code] of Object.entries(TRAMOS)) {
   puntos = simplificar(puntos, TOLERANCIA_M)
 
   resultado.push({
+    hitos: hitos(bloque),
     code,
     subtramo,
     calzadas: todas.length,
@@ -212,6 +238,11 @@ for (const [subtramo, code] of Object.entries(TRAMOS)) {
     largo: largoM(puntos),
     puntos,
   })
+}
+
+if (COMO_JSON) {
+  process.stdout.write(JSON.stringify(resultado.map(({ code, desde, hasta, puntos, hitos }) => ({ code, desde, hasta, puntos, hitos }))))
+  process.exit(0)
 }
 
 // ─── La migración ──────────────────────────────────────────────────────────

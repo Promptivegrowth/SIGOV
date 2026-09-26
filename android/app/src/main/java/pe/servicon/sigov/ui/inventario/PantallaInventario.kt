@@ -15,6 +15,8 @@ import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.outlined.Close
 import androidx.compose.material.icons.outlined.FilterList
+import androidx.compose.material.icons.outlined.Info
+import androidx.compose.material.icons.outlined.ListAlt
 import androidx.compose.material.icons.outlined.PhotoCamera
 import androidx.compose.material.icons.outlined.Refresh
 import androidx.compose.material3.*
@@ -30,6 +32,12 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.compose.ui.viewinterop.AndroidView
+import androidx.compose.ui.window.Dialog
+import androidx.compose.ui.window.DialogProperties
+import kotlinx.coroutines.launch
+import kotlinx.serialization.json.JsonPrimitive
+import kotlinx.serialization.json.contentOrNull
+import kotlinx.serialization.json.doubleOrNull
 import androidx.hilt.navigation.compose.hiltViewModel
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import coil.compose.AsyncImage
@@ -47,6 +55,7 @@ import org.maplibre.android.style.sources.GeoJsonSource
 import org.maplibre.geojson.Feature
 import org.maplibre.geojson.FeatureCollection
 import org.maplibre.geojson.Point
+import pe.servicon.sigov.datos.CampoDelTipo
 import pe.servicon.sigov.datos.ElementoVial
 import pe.servicon.sigov.ui.componentes.ArmazonDeApartado
 import pe.servicon.sigov.ui.theme.Marca
@@ -192,7 +201,7 @@ fun PantallaInventario(
     // ── La ficha del elemento ─────────────────────────────────────────
     estado.abierto?.let { elemento ->
         ModalBottomSheet(onDismissRequest = vm::cerrarFicha) {
-            FichaDelElemento(elemento, estado)
+            FichaDelElemento(elemento, estado, urlGrande = vm::urlGrande)
         }
     }
 }
@@ -213,7 +222,12 @@ private fun MapaDelInventario(
     modifier: Modifier = Modifier,
 ) {
     val contexto = LocalContext.current
-    val porId = remember(elementos) { elementos.associateBy { it.id } }
+    // El oyente de toques se registra una sola vez, con el mapa: tiene que
+    // leer siempre la lista vigente. Si se quedaba con la de la primera
+    // carga —la guardada en el equipo—, al llegar el inventario del servidor
+    // con otros elementos ningún toque abría la ficha.
+    val porId by rememberUpdatedState(remember(elementos) { elementos.associateBy { it.id } })
+    val tocar by rememberUpdatedState(alTocar)
     var mapa by remember { mutableStateOf<MapLibreMap?>(null) }
     var estiloListo by remember { mutableStateOf(false) }
 
@@ -289,7 +303,7 @@ private fun MapaDelInventario(
                     )
                     val encontrados = m.queryRenderedFeatures(caja, CAPA)
                     encontrados.firstOrNull()?.getStringProperty("id")?.let { id ->
-                        porId[id]?.let(alTocar)
+                        porId[id]?.let(tocar)
                     }
                     encontrados.isNotEmpty()
                 }
@@ -439,7 +453,18 @@ private fun HojaDeFiltros(
 // ═══ La ficha ═════════════════════════════════════════════════════════
 
 @Composable
-private fun FichaDelElemento(elemento: ElementoVial, estado: EstadoInventario) {
+private fun FichaDelElemento(
+    elemento: ElementoVial,
+    estado: EstadoInventario,
+    urlGrande: suspend (String?) -> String? = { null },
+) {
+    // La foto ampliada, cuando se toca una
+    var ampliada by remember { mutableStateOf<String?>(null) }
+    val alcance = rememberCoroutineScope()
+    val ampliar: (String?) -> Unit = { ruta ->
+        alcance.launch { ampliada = urlGrande(ruta) }
+    }
+
     val semaforo = Semaforo.de(elemento.semaforo)
     val color = COLOR_SEMAFORO[semaforo] ?: Color.Gray
 
@@ -473,13 +498,65 @@ private fun FichaDelElemento(elemento: ElementoVial, estado: EstadoInventario) {
 
         // Dónde está
         Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-            DatoFicha("Progresiva", elemento.progresiva ?: "—", Modifier.weight(1f))
+            DatoFicha(
+                "Progresiva",
+                elemento.progresivaFinM
+                    ?.takeIf { it != elemento.progresivaM }
+                    ?.let { "${elemento.progresiva ?: "—"} → ${progresivaTxt(it)}" }
+                    ?: (elemento.progresiva ?: "—"),
+                Modifier.weight(1f),
+            )
             DatoFicha("Lado", elemento.side ?: "—", Modifier.weight(1f))
         }
         DatoFicha("Tramo", elemento.tramo ?: "—", Modifier.fillMaxWidth())
         Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
             DatoFicha("Conservación", elemento.condition ?: "—", Modifier.weight(1f))
             DatoFicha("Visitas", "${elemento.visitas}", Modifier.weight(1f))
+        }
+
+        // Lo que el inventario oficial registra de este tipo de elemento
+        val campos = estado.campos[elemento.tipoCodigo].orEmpty()
+            .mapNotNull { c -> valorDelCampo(c, elemento)?.let { c.label to it } }
+        if (campos.isNotEmpty()) {
+            Column(verticalArrangement = Arrangement.spacedBy(5.dp)) {
+                Row(verticalAlignment = Alignment.CenterVertically) {
+                    Icon(Icons.Outlined.ListAlt, null, Modifier.size(14.dp), tint = TintaSuave)
+                    Spacer(Modifier.width(5.dp))
+                    Text("DATOS DEL INVENTARIO", fontSize = 10.5.sp, letterSpacing = 1.sp,
+                        fontWeight = FontWeight.SemiBold, color = TintaSuave)
+                }
+                Surface(shape = RoundedCornerShape(10.dp), color = Color(0xFFF5F7FA),
+                    modifier = Modifier.fillMaxWidth()) {
+                    Column(Modifier.padding(horizontal = 12.dp, vertical = 6.dp)) {
+                        campos.forEachIndexed { i, (etiqueta, valor) ->
+                            if (i > 0) HorizontalDivider(color = Color(0xFFE3E8EF))
+                            Row(Modifier.fillMaxWidth().padding(vertical = 6.dp),
+                                verticalAlignment = Alignment.CenterVertically) {
+                                Text(etiqueta, fontSize = 12.sp, color = TintaSuave,
+                                    modifier = Modifier.weight(1f))
+                                Text(valor, fontSize = 13.sp, fontWeight = FontWeight.Medium)
+                            }
+                        }
+                    }
+                }
+            }
+        }
+
+        // Cuando la coordenada del Excel no era de fiar
+        if (texto(elemento, "ubicacion") == "progresiva") {
+            Surface(shape = RoundedCornerShape(10.dp), color = Color(0xFFF5F7FA),
+                modifier = Modifier.fillMaxWidth()) {
+                Row(Modifier.padding(10.dp)) {
+                    Icon(Icons.Outlined.Info, null, Modifier.size(15.dp), tint = TintaSuave)
+                    Spacer(Modifier.width(7.dp))
+                    Text(
+                        "Ubicado por su progresiva sobre la vía oficial." +
+                            (texto(elemento, "motivo_ubicacion")
+                                ?.let { " La coordenada del inventario quedaba $it." } ?: ""),
+                        fontSize = 11.5.sp, color = TintaSuave,
+                    )
+                }
+            }
         }
 
         // Las dos fotos
@@ -513,11 +590,15 @@ private fun FichaDelElemento(elemento: ElementoVial, estado: EstadoInventario) {
                     }
 
                 else -> Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                    FotoDeFicha("Ahora", estado.urlActual, elemento.fotoActualFecha,
-                        Modifier.weight(1f), destacada = true)
+                    FotoDeFicha("Ahora", estado.urlActual,
+                        pieDeFoto(elemento.fotoActual, elemento.fotoActualFecha),
+                        Modifier.weight(1f), destacada = true,
+                        alTocar = { ampliar(elemento.fotoActual) })
                     if (estado.urlAnterior != null) {
-                        FotoDeFicha("Antes", estado.urlAnterior, elemento.fotoAnteriorFecha,
-                            Modifier.weight(1f))
+                        FotoDeFicha("Antes", estado.urlAnterior,
+                            pieDeFoto(elemento.fotoAnterior, elemento.fotoAnteriorFecha),
+                            Modifier.weight(1f),
+                            alTocar = { ampliar(elemento.fotoAnterior) })
                     } else {
                         Surface(shape = RoundedCornerShape(10.dp), color = Color(0xFFF5F7FA),
                             modifier = Modifier.weight(1f).aspectRatio(1f)) {
@@ -526,6 +607,29 @@ private fun FichaDelElemento(elemento: ElementoVial, estado: EstadoInventario) {
                                     fontSize = 10.5.sp, color = TintaSuave)
                             }
                         }
+                    }
+                }
+            }
+        }
+
+        // Todas las fotos: las tres vistas de una alcantarilla, las calzadas
+        // del peaje. La comparación enseña dos; aquí están todas.
+        if (estado.galeria.isNotEmpty()) {
+            Column(verticalArrangement = Arrangement.spacedBy(5.dp)) {
+                Text("Todas las fotos del elemento · ${estado.galeria.size}",
+                    fontSize = 11.sp, color = TintaSuave)
+                LazyRow(horizontalArrangement = Arrangement.spacedBy(6.dp)) {
+                    items(estado.galeria, key = { it.first.id }) { (foto, url) ->
+                        AsyncImage(
+                            model = url,
+                            contentDescription = foto.caption,
+                            contentScale = ContentScale.Crop,
+                            modifier = Modifier
+                                .size(78.dp)
+                                .clip(RoundedCornerShape(8.dp))
+                                .background(Color(0xFFE9EDF3))
+                                .clickable { ampliar(foto.ruta) },
+                        )
                     }
                 }
             }
@@ -546,6 +650,17 @@ private fun FichaDelElemento(elemento: ElementoVial, estado: EstadoInventario) {
             }
         }
     }
+
+    ampliada?.let { url ->
+        Dialog(onDismissRequest = { ampliada = null },
+            properties = DialogProperties(usePlatformDefaultWidth = false)) {
+            Box(Modifier.fillMaxSize().background(Color.Black.copy(alpha = 0.92f))
+                .clickable { ampliada = null }, Alignment.Center) {
+                AsyncImage(model = url, contentDescription = null,
+                    contentScale = ContentScale.Fit, modifier = Modifier.fillMaxWidth())
+            }
+        }
+    }
 }
 
 @Composable
@@ -562,9 +677,10 @@ private fun DatoFicha(etiqueta: String, valor: String, modifier: Modifier = Modi
 private fun FotoDeFicha(
     titulo: String,
     url: String?,
-    fecha: String?,
+    pie: String,
     modifier: Modifier = Modifier,
     destacada: Boolean = false,
+    alTocar: () -> Unit = {},
 ) {
     Column(modifier) {
         Box(
@@ -572,7 +688,8 @@ private fun FotoDeFicha(
                 .fillMaxWidth()
                 .aspectRatio(1f)
                 .clip(RoundedCornerShape(10.dp))
-                .background(Color(0xFFE9EDF3)),
+                .background(Color(0xFFE9EDF3))
+                .clickable(onClick = alTocar),
         ) {
             AsyncImage(
                 model = url,
@@ -589,7 +706,47 @@ private fun FotoDeFicha(
                     fontSize = 9.5.sp, color = Color.White, fontWeight = FontWeight.SemiBold)
             }
         }
-        Text(fecha?.take(10) ?: "Sin fecha", fontSize = 10.5.sp, color = TintaSuave,
-            modifier = Modifier.padding(top = 3.dp))
+        Text(pie, fontSize = 10.5.sp, color = TintaSuave, modifier = Modifier.padding(top = 3.dp))
+    }
+}
+
+/**
+ * Lo que va bajo una foto.
+ *
+ * Las del Inventario Vial 2024 casi nunca traen la fecha en que se tomaron;
+ * al guardarlas se les puso la de emisión del tomo para no dejar el dato
+ * vacío. Enseñarla bajo la foto sería afirmar algo que no se sabe: se dice
+ * de qué inventario es.
+ */
+private fun pieDeFoto(ruta: String?, fecha: String?): String {
+    val inv = ruta?.let { Regex("/inventario-(\\d{4})/").find(it) }
+    if (inv != null) return "Inventario ${inv.groupValues[1]}"
+    return fecha?.take(10)?.let { f ->
+        val p = f.split("-")
+        if (p.size == 3) "${p[2]}/${p[1]}/${p[0]}" else f
+    } ?: "Sin fecha"
+}
+
+private fun progresivaTxt(m: Double): String {
+    val km = (m / 1000).toInt()
+    val r = Math.round(m - km * 1000).toInt()
+    return "$km+${r.toString().padStart(3, '0')}"
+}
+
+private fun texto(e: ElementoVial, clave: String): String? =
+    (e.atributos?.get(clave) as? JsonPrimitive)?.contentOrNull?.takeIf { it.isNotBlank() }
+
+/** El valor de un campo del inventario, legible, o null si el elemento no lo tiene. */
+private fun valorDelCampo(c: CampoDelTipo, e: ElementoVial): String? {
+    val p = e.atributos?.get(c.key) as? JsonPrimitive ?: return null
+    val t = p.contentOrNull?.takeIf { it.isNotBlank() } ?: return null
+    return when {
+        c.key == "uso" -> if (t == "en_uso") "En uso" else if (t == "en_desuso") "En desuso" else t
+        c.type == "date" -> t.take(10).split("-").let { if (it.size == 3) "${it[2]}/${it[1]}/${it[0]}" else t }
+        c.type == "number" -> p.doubleOrNull?.let { d ->
+            if (d % 1.0 == 0.0) d.toLong().toString() else String.format(java.util.Locale.US, "%.2f", d)
+        } ?: t
+        c.type == "bool" -> if (t == "true") "Sí" else "No"
+        else -> t
     }
 }

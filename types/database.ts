@@ -3250,6 +3250,12 @@ export type Database = {
           },
         ]
       }
+      supply_categories: {
+        Row: { code: string; name: string; orden: number }
+        Insert: { code: string; name: string; orden?: number }
+        Update: { code?: string; name?: string; orden?: number }
+        Relationships: []
+      }
       supplies: {
         Row: {
           category: string | null
@@ -5368,6 +5374,10 @@ export type Database = {
         }
         Returns: string
       }
+      siguiente_codigo_material: {
+        Args: { p_prefijo: string; p_service_id: string }
+        Returns: string
+      }
       inventario_resumen: {
         Args: { p_section_id?: string | null; p_service_id: string }
         Returns: {
@@ -5625,6 +5635,7 @@ export type Database = {
         | "pci"
         | "programacion"
         | "reporte"
+        | "inventario"
         | "ssoma"
         | "plano"
         | "acta"
@@ -5870,6 +5881,7 @@ export const Constants = {
         "pci",
         "programacion",
         "reporte",
+        "inventario",
         "ssoma",
         "plano",
         "acta",

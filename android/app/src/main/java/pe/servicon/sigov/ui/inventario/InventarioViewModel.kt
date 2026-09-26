@@ -8,8 +8,10 @@ import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.flow.update
 import kotlinx.coroutines.launch
+import pe.servicon.sigov.datos.CampoDelTipo
 import pe.servicon.sigov.datos.CampoRepositorio
 import pe.servicon.sigov.datos.ElementoVial
+import pe.servicon.sigov.datos.FotoDeActivo
 import pe.servicon.sigov.datos.IntervencionDeActivo
 import pe.servicon.sigov.datos.InventarioRepositorio
 import pe.servicon.sigov.datos.ResumenDeTipo
@@ -46,6 +48,10 @@ data class EstadoInventario(
     val historial: List<IntervencionDeActivo> = emptyList(),
     val urlActual: String? = null,
     val urlAnterior: String? = null,
+    /** Las fotos del elemento abierto, cada una con la dirección de su miniatura. */
+    val galeria: List<Pair<FotoDeActivo, String?>> = emptyList(),
+    /** Los campos del inventario de cada tipo, para enseñarlos con su etiqueta. */
+    val campos: Map<String, List<CampoDelTipo>> = emptyMap(),
     val cargandoFicha: Boolean = false,
     val error: String? = null,
 ) {
@@ -100,6 +106,7 @@ class InventarioViewModel @Inject constructor(
                 }
 
                 val tramos = campo.tramos(servicioId)
+                val campos = inventario.camposPorTipo()
                 val frescos = inventario.elementos(servicioId, refrescar = true)
                 val resumen = inventario.resumen(servicioId, null)
 
@@ -109,6 +116,7 @@ class InventarioViewModel @Inject constructor(
                         todos = frescos.ifEmpty { guardado },
                         resumen = resumen,
                         tramos = tramos,
+                        campos = campos,
                         cargando = false,
                     )
                 }
@@ -138,30 +146,44 @@ class InventarioViewModel @Inject constructor(
 
     fun limpiarTipos() = _estado.update { it.copy(tipos = emptySet()) }
 
-    /** Abre la ficha: el historial y las dos fotos se piden al vuelo. */
+    /**
+     * Abre la ficha: el historial y las fotos se piden al vuelo.
+     *
+     * Las dos de la comparación y la galería van en miniatura: en la ficha
+     * se ven igual y en carretera cada foto grande son 150 KB.
+     */
     fun abrir(elemento: ElementoVial) {
         _estado.update {
-            it.copy(abierto = elemento, cargandoFicha = true,
-                    historial = emptyList(), urlActual = null, urlAnterior = null)
+            it.copy(abierto = elemento, cargandoFicha = true, historial = emptyList(),
+                    urlActual = null, urlAnterior = null, galeria = emptyList())
         }
         viewModelScope.launch {
             val historial = inventario.historial(elemento.id)
-            val actual = inventario.urlDeFoto(elemento.fotoActual)
-            val anterior = inventario.urlDeFoto(elemento.fotoAnterior)
+            val actual = inventario.urlDeMiniatura(elemento.fotoActual)
+            val anterior = inventario.urlDeMiniatura(elemento.fotoAnterior)
+            val fotos = inventario.galeria(elemento.id)
+            val galeria = if (fotos.size > 1)
+                fotos.map { it to inventario.urlDeMiniatura(it.ruta) }
+            else emptyList()
             _estado.update {
                 if (it.abierto?.id != elemento.id) it   // se abrió otro mientras tanto
                 else it.copy(
                     historial = historial,
                     urlActual = actual,
                     urlAnterior = anterior,
+                    galeria = galeria,
                     cargandoFicha = false,
                 )
             }
         }
     }
 
+    /** La foto grande, cuando se toca una miniatura para ampliarla. */
+    suspend fun urlGrande(ruta: String?): String? = inventario.urlDeFoto(ruta)
+
     fun cerrarFicha() = _estado.update {
-        it.copy(abierto = null, historial = emptyList(), urlActual = null, urlAnterior = null)
+        it.copy(abierto = null, historial = emptyList(), urlActual = null, urlAnterior = null,
+                galeria = emptyList())
     }
 
     fun avisoVisto() = _estado.update { it.copy(error = null) }
