@@ -11,3 +11,5 @@ captures/
 *.aab
 keystore.properties
 *.jks
+hs_err_pid*.log
+replay_pid*.log
