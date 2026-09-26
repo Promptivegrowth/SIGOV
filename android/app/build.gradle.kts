@@ -21,6 +21,16 @@ val env = Properties().apply {
 fun env(clave: String, porDefecto: String = ""): String =
     (env.getProperty(clave) ?: System.getenv(clave) ?: porDefecto).trim()
 
+/**
+ * La firma de la versión que se entrega. La clave vive fuera del repositorio
+ * y `keystore.properties` solo dice dónde está: sin ese archivo se compila
+ * igual, pero la versión de entrega sale sin firmar y no se puede instalar.
+ */
+val firma = Properties().apply {
+    val archivo = rootProject.file("keystore.properties")
+    if (archivo.exists()) archivo.inputStream().use { load(it) }
+}
+
 android {
     namespace = "pe.servicon.sigov"
     compileSdk = 34
@@ -34,9 +44,27 @@ android {
 
         testInstrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"
 
+        // El APK que se entrega lleva solo lo de los celulares (ARM). El
+        // motor del mapa para x86 —emuladores y casi ningún teléfono— son
+        // 23 MB que nadie en obra usa. Se pide con -PsoloCelulares.
+        if (project.hasProperty("soloCelulares")) {
+            ndk { abiFilters += listOf("arm64-v8a", "armeabi-v7a") }
+        }
+
         buildConfigField("String", "SUPABASE_URL", "\"${env("NEXT_PUBLIC_SUPABASE_URL")}\"")
         buildConfigField("String", "SUPABASE_ANON_KEY", "\"${env("NEXT_PUBLIC_SUPABASE_ANON_KEY")}\"")
         buildConfigField("String", "WEB_URL", "\"${env("NEXT_PUBLIC_SITE_URL", "https://sigov.vercel.app")}\"")
+    }
+
+    signingConfigs {
+        if (firma.getProperty("storeFile") != null) {
+            create("entrega") {
+                storeFile = file(firma.getProperty("storeFile"))
+                storePassword = firma.getProperty("storePassword")
+                keyAlias = firma.getProperty("keyAlias")
+                keyPassword = firma.getProperty("keyPassword")
+            }
+        }
     }
 
     buildTypes {
@@ -48,6 +76,7 @@ android {
             isMinifyEnabled = true
             isShrinkResources = true
             proguardFiles(getDefaultProguardFile("proguard-android-optimize.txt"), "proguard-rules.pro")
+            signingConfigs.findByName("entrega")?.let { signingConfig = it }
         }
     }
 
