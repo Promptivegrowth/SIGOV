@@ -526,22 +526,37 @@ function AdoptarDialog({
     },
   })
 
+  // Las categorías del maestro: cada una da el prefijo del código.
   const categorias = useQuery({
-    queryKey: ['categorias-insumo', serviceId],
+    queryKey: ['categorias-maestro'],
     queryFn: async () => {
       const { data, error } = await sb
-        .from('supplies')
-        .select('category')
-        .eq('service_id', serviceId)
-        .not('category', 'is', null)
+        .from('supply_categories')
+        .select('code, name')
+        .order('orden')
       if (error) throw error
-      return [...new Set((data ?? []).map((s: any) => s.category))].sort()
+      return (data ?? []) as { code: string; name: string }[]
+    },
+  })
+
+  // El código que le tocará si no se escribe uno: el siguiente de su
+  // categoría. Es el que pone la base al guardarlo; aquí solo se enseña.
+  const prefijo = categorias.data?.find((c) => c.name === categoria)?.code ?? 'OTR'
+  const siguiente = useQuery({
+    queryKey: ['siguiente-codigo', serviceId, prefijo],
+    queryFn: async () => {
+      const { data, error } = await sb.rpc('siguiente_codigo_material', {
+        p_service_id: serviceId,
+        p_prefijo: prefijo,
+      })
+      if (error) throw error
+      return data as string
     },
   })
 
   const adoptar = async () => {
-    if (!code.trim()) {
-      toast.error('Ponle un código: es con lo que el almacén lo va a buscar')
+    if (!categoria) {
+      toast.error('Elige su categoría: de ella sale el código')
       return
     }
     setEnviando(true)
@@ -550,7 +565,7 @@ function AdoptarDialog({
       p_nombre: renglon.nombre,
       p_code: code.trim(),
       p_unit_id: unitId || null,
-      p_category: categoria.trim() || null,
+      p_category: categoria,
       p_min_stock: Number(minimo.replace(',', '.')) || 0,
     })
     setEnviando(false)
@@ -571,12 +586,28 @@ function AdoptarDialog({
         </DialogHeader>
 
         <div className="space-y-3">
-          <Field label="Código" hint="Con el que lo busca el almacén">
+          <Field label="Categoría">
+            <select
+              value={categoria}
+              onChange={(e) => setCategoria(e.target.value)}
+              className="border-input bg-background h-9 w-full rounded-md border px-3 text-sm"
+              autoFocus
+            >
+              <option value="">Elige una…</option>
+              {categorias.data?.map((c) => (
+                <option key={c.code} value={c.name}>{c.code} · {c.name}</option>
+              ))}
+            </select>
+          </Field>
+
+          <Field
+            label="Código"
+            hint={code.trim() ? 'Con el que lo busca el almacén' : 'Si lo dejas vacío se le da el siguiente de su categoría'}
+          >
             <Input
               value={code}
               onChange={(e) => setCode(e.target.value.toUpperCase())}
-              placeholder="MAN-050"
-              autoFocus
+              placeholder={categoria && siguiente.data ? siguiente.data : 'Automático'}
             />
           </Field>
 
@@ -591,18 +622,6 @@ function AdoptarDialog({
                 <option key={u.id} value={u.id}>{u.symbol} · {u.name}</option>
               ))}
             </select>
-          </Field>
-
-          <Field label="Categoría" hint="Opcional">
-            <Input
-              value={categoria}
-              onChange={(e) => setCategoria(e.target.value)}
-              list="categorias-insumo"
-              placeholder="Ferretería"
-            />
-            <datalist id="categorias-insumo">
-              {categorias.data?.map((c: string) => <option key={c} value={c} />)}
-            </datalist>
           </Field>
 
           <Field label="Stock mínimo" hint="Cuándo avisar que hay que reponer">
