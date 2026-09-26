@@ -107,7 +107,9 @@ export function ConfiguracionClient() {
   })
 
   // ─── Definición de formularios ──────────────────────────────────────────
-  const roleOptions = (Object.keys(ROLES) as Role[]).map((r) => ({
+  // El rol de administrador solo lo da otro administrador: la API lo
+  // rechazaría igual, pero no se ofrece lo que no se puede elegir.
+  const roleOptions = (Object.keys(ROLES) as Role[]).filter((r) => can.admin || r !== 'admin').map((r) => ({
     value: r,
     label: `${ROLES[r].label}${ROLES[r].alias ? ` · ${ROLES[r].alias}` : ''}`,
     color: ROLES[r].color,
