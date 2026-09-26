@@ -167,6 +167,13 @@ export type Database = {
             foreignKeyName: "asset_interventions_asset_id_fkey"
             columns: ["asset_id"]
             isOneToOne: false
+            referencedRelation: "v_inventario"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "asset_interventions_asset_id_fkey"
+            columns: ["asset_id"]
+            isOneToOne: false
             referencedRelation: "v_road_assets"
             referencedColumns: ["id"]
           },
@@ -234,6 +241,8 @@ export type Database = {
           code: string
           color: string | null
           created_at: string
+          dias_ambar: number
+          dias_verde: number
           icon: string | null
           id: string
           is_active: boolean
@@ -246,6 +255,8 @@ export type Database = {
           code: string
           color?: string | null
           created_at?: string
+          dias_ambar?: number
+          dias_verde?: number
           icon?: string | null
           id?: string
           is_active?: boolean
@@ -258,6 +269,8 @@ export type Database = {
           code?: string
           color?: string | null
           created_at?: string
+          dias_ambar?: number
+          dias_verde?: number
           icon?: string | null
           id?: string
           is_active?: boolean
@@ -1379,6 +1392,13 @@ export type Database = {
             foreignKeyName: "evidence_links_asset_id_fkey"
             columns: ["asset_id"]
             isOneToOne: false
+            referencedRelation: "v_inventario"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "evidence_links_asset_id_fkey"
+            columns: ["asset_id"]
+            isOneToOne: false
             referencedRelation: "v_road_assets"
             referencedColumns: ["id"]
           },
@@ -1395,6 +1415,13 @@ export type Database = {
             isOneToOne: false
             referencedRelation: "evidences"
             referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "evidence_links_evidence_id_fkey"
+            columns: ["evidence_id"]
+            isOneToOne: false
+            referencedRelation: "v_asset_fotos"
+            referencedColumns: ["evidence_id"]
           },
           {
             foreignKeyName: "evidence_links_evidence_id_fkey"
@@ -1560,6 +1587,13 @@ export type Database = {
             columns: ["asset_id"]
             isOneToOne: false
             referencedRelation: "road_assets"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "evidences_asset_id_fkey"
+            columns: ["asset_id"]
+            isOneToOne: false
+            referencedRelation: "v_inventario"
             referencedColumns: ["id"]
           },
           {
@@ -2555,6 +2589,7 @@ export type Database = {
           name: string | null
           next_inspection_on: string | null
           notes: string | null
+          progresiva_fin_m: number | null
           progresiva_m: number | null
           section_id: string | null
           service_id: string
@@ -2579,6 +2614,7 @@ export type Database = {
           name?: string | null
           next_inspection_on?: string | null
           notes?: string | null
+          progresiva_fin_m?: number | null
           progresiva_m?: number | null
           section_id?: string | null
           service_id: string
@@ -2603,6 +2639,7 @@ export type Database = {
           name?: string | null
           next_inspection_on?: string | null
           notes?: string | null
+          progresiva_fin_m?: number | null
           progresiva_m?: number | null
           section_id?: string | null
           service_id?: string
@@ -3250,12 +3287,6 @@ export type Database = {
           },
         ]
       }
-      supply_categories: {
-        Row: { code: string; name: string; orden: number }
-        Insert: { code: string; name: string; orden?: number }
-        Update: { code?: string; name?: string; orden?: number }
-        Relationships: []
-      }
       supplies: {
         Row: {
           category: string | null
@@ -3332,6 +3363,24 @@ export type Database = {
           },
         ]
       }
+      supply_categories: {
+        Row: {
+          code: string
+          name: string
+          orden: number
+        }
+        Insert: {
+          code: string
+          name: string
+          orden?: number
+        }
+        Update: {
+          code?: string
+          name?: string
+          orden?: number
+        }
+        Relationships: []
+      }
       supply_request_items: {
         Row: {
           client_id: string
@@ -3339,12 +3388,14 @@ export type Database = {
           deleted_at: string | null
           id: string
           notes: string | null
+          other_name: string | null
+          other_unit_id: string | null
           qty_approved: number | null
           qty_delivered: number
           qty_requested: number
           request_id: string
           service_id: string
-          supply_id: string
+          supply_id: string | null
           updated_at: string
         }
         Insert: {
@@ -3353,12 +3404,14 @@ export type Database = {
           deleted_at?: string | null
           id?: string
           notes?: string | null
+          other_name?: string | null
+          other_unit_id?: string | null
           qty_approved?: number | null
           qty_delivered?: number
           qty_requested: number
           request_id: string
           service_id: string
-          supply_id: string
+          supply_id?: string | null
           updated_at?: string
         }
         Update: {
@@ -3367,15 +3420,24 @@ export type Database = {
           deleted_at?: string | null
           id?: string
           notes?: string | null
+          other_name?: string | null
+          other_unit_id?: string | null
           qty_approved?: number | null
           qty_delivered?: number
           qty_requested?: number
           request_id?: string
           service_id?: string
-          supply_id?: string
+          supply_id?: string | null
           updated_at?: string
         }
         Relationships: [
+          {
+            foreignKeyName: "supply_request_items_other_unit_id_fkey"
+            columns: ["other_unit_id"]
+            isOneToOne: false
+            referencedRelation: "units"
+            referencedColumns: ["id"]
+          },
           {
             foreignKeyName: "supply_request_items_request_id_fkey"
             columns: ["request_id"]
@@ -3415,6 +3477,8 @@ export type Database = {
       }
       supply_requests: {
         Row: {
+          cancelled_at: string | null
+          cancelled_by: string | null
           client_id: string
           code: string | null
           created_at: string
@@ -3436,6 +3500,8 @@ export type Database = {
           updated_at: string
         }
         Insert: {
+          cancelled_at?: string | null
+          cancelled_by?: string | null
           client_id?: string
           code?: string | null
           created_at?: string
@@ -3457,6 +3523,8 @@ export type Database = {
           updated_at?: string
         }
         Update: {
+          cancelled_at?: string | null
+          cancelled_by?: string | null
           client_id?: string
           code?: string | null
           created_at?: string
@@ -3478,6 +3546,13 @@ export type Database = {
           updated_at?: string
         }
         Relationships: [
+          {
+            foreignKeyName: "supply_requests_cancelled_by_fkey"
+            columns: ["cancelled_by"]
+            isOneToOne: false
+            referencedRelation: "profiles"
+            referencedColumns: ["id"]
+          },
           {
             foreignKeyName: "supply_requests_created_by_fkey"
             columns: ["created_by"]
@@ -4001,6 +4076,7 @@ export type Database = {
       }
       work_entries: {
         Row: {
+          accuracy_m: number | null
           activity_id: string
           client_id: string
           created_at: string
@@ -4008,10 +4084,9 @@ export type Database = {
           deleted_at: string | null
           finished_at: string | null
           geom: unknown
+          id: string
           lat: number | null
           lng: number | null
-          accuracy_m: number | null
-          id: string
           observation: string | null
           pci_item_id: string | null
           plan_item_id: string | null
@@ -4027,6 +4102,7 @@ export type Database = {
           work_order_id: string
         }
         Insert: {
+          accuracy_m?: number | null
           activity_id: string
           client_id?: string
           created_at?: string
@@ -4034,10 +4110,9 @@ export type Database = {
           deleted_at?: string | null
           finished_at?: string | null
           geom?: unknown
+          id?: string
           lat?: number | null
           lng?: number | null
-          accuracy_m?: number | null
-          id?: string
           observation?: string | null
           pci_item_id?: string | null
           plan_item_id?: string | null
@@ -4053,6 +4128,7 @@ export type Database = {
           work_order_id: string
         }
         Update: {
+          accuracy_m?: number | null
           activity_id?: string
           client_id?: string
           created_at?: string
@@ -4060,10 +4136,9 @@ export type Database = {
           deleted_at?: string | null
           finished_at?: string | null
           geom?: unknown
+          id?: string
           lat?: number | null
           lng?: number | null
-          accuracy_m?: number | null
-          id?: string
           observation?: string | null
           pci_item_id?: string | null
           plan_item_id?: string | null
@@ -4261,6 +4336,53 @@ export type Database = {
       }
     }
     Views: {
+      v_asset_fotos: {
+        Row: {
+          asset_id: string | null
+          caption: string | null
+          evidence_id: string | null
+          lat: number | null
+          lng: number | null
+          orden: number | null
+          phase: Database["public"]["Enums"]["evidence_phase"] | null
+          service_id: string | null
+          storage_path: string | null
+          taken_at: string | null
+          thumb_path: string | null
+          visita: string | null
+          watermarked: boolean | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "evidence_links_asset_id_fkey"
+            columns: ["asset_id"]
+            isOneToOne: false
+            referencedRelation: "road_assets"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "evidence_links_asset_id_fkey"
+            columns: ["asset_id"]
+            isOneToOne: false
+            referencedRelation: "v_inventario"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "evidence_links_asset_id_fkey"
+            columns: ["asset_id"]
+            isOneToOne: false
+            referencedRelation: "v_road_assets"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "evidences_service_id_fkey"
+            columns: ["service_id"]
+            isOneToOne: false
+            referencedRelation: "services"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       v_ats: {
         Row: {
           approved_at: string | null
@@ -4572,6 +4694,19 @@ export type Database = {
           },
         ]
       }
+      v_historial_de_pedido: {
+        Row: {
+          cantidad: number | null
+          detalle: string | null
+          insumo: string | null
+          ocurrio: string | null
+          paso: string | null
+          quien: string | null
+          request_id: string | null
+          service_id: string | null
+        }
+        Relationships: []
+      }
       v_hygiene_today: {
         Row: {
           bloqueador: boolean | null
@@ -4592,6 +4727,157 @@ export type Database = {
             columns: ["service_id"]
             isOneToOne: false
             referencedRelation: "services"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      v_inventario: {
+        Row: {
+          attributes: Json | null
+          client_id: string | null
+          code: string | null
+          condition: Database["public"]["Enums"]["asset_condition"] | null
+          dias_ambar: number | null
+          dias_entre_fotos: number | null
+          dias_sin_intervenir: number | null
+          dias_verde: number | null
+          foto_actual: string | null
+          foto_actual_fecha: string | null
+          foto_anterior: string | null
+          foto_anterior_fecha: string | null
+          fotos: number | null
+          id: string | null
+          install_year: number | null
+          intervenciones: number | null
+          lat: number | null
+          lng: number | null
+          name: string | null
+          notes: string | null
+          progresiva_fin_m: number | null
+          progresiva_m: number | null
+          progresiva_txt: string | null
+          section_code: string | null
+          section_id: string | null
+          section_name: string | null
+          semaforo: Database["public"]["Enums"]["semaforo_intervencion"] | null
+          service_id: string | null
+          side: Database["public"]["Enums"]["road_side"] | null
+          type_category: string | null
+          type_code: string | null
+          type_color: string | null
+          type_icon: string | null
+          type_id: string | null
+          type_name: string | null
+          ultima_intervencion: string | null
+          visitas: number | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "road_assets_section_id_fkey"
+            columns: ["section_id"]
+            isOneToOne: false
+            referencedRelation: "road_sections"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "road_assets_service_id_fkey"
+            columns: ["service_id"]
+            isOneToOne: false
+            referencedRelation: "services"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "road_assets_type_id_fkey"
+            columns: ["type_id"]
+            isOneToOne: false
+            referencedRelation: "asset_types"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      v_kardex: {
+        Row: {
+          activity_name: string | null
+          created_at: string | null
+          created_by: string | null
+          created_by_name: string | null
+          crew_id: string | null
+          crew_name: string | null
+          delta: number | null
+          document: string | null
+          id: string | null
+          kind: Database["public"]["Enums"]["stock_movement_kind"] | null
+          notes: string | null
+          occurred_on: string | null
+          qty: number | null
+          request_code: string | null
+          request_id: string | null
+          saldo: number | null
+          section_name: string | null
+          service_id: string | null
+          supplier: string | null
+          supply_category: string | null
+          supply_code: string | null
+          supply_id: string | null
+          supply_name: string | null
+          unit_cost: number | null
+          unit_symbol: string | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "stock_movements_created_by_fkey"
+            columns: ["created_by"]
+            isOneToOne: false
+            referencedRelation: "profiles"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "stock_movements_crew_id_fkey"
+            columns: ["crew_id"]
+            isOneToOne: false
+            referencedRelation: "crews"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "stock_movements_crew_id_fkey"
+            columns: ["crew_id"]
+            isOneToOne: false
+            referencedRelation: "v_hygiene_today"
+            referencedColumns: ["crew_id"]
+          },
+          {
+            foreignKeyName: "stock_movements_request_id_fkey"
+            columns: ["request_id"]
+            isOneToOne: false
+            referencedRelation: "supply_requests"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "stock_movements_request_id_fkey"
+            columns: ["request_id"]
+            isOneToOne: false
+            referencedRelation: "v_supply_requests"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "stock_movements_service_id_fkey"
+            columns: ["service_id"]
+            isOneToOne: false
+            referencedRelation: "services"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "stock_movements_supply_id_fkey"
+            columns: ["supply_id"]
+            isOneToOne: false
+            referencedRelation: "supplies"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "stock_movements_supply_id_fkey"
+            columns: ["supply_id"]
+            isOneToOne: false
+            referencedRelation: "v_supplies"
             referencedColumns: ["id"]
           },
         ]
@@ -4683,6 +4969,28 @@ export type Database = {
           },
           {
             foreignKeyName: "pci_items_service_id_fkey"
+            columns: ["service_id"]
+            isOneToOne: false
+            referencedRelation: "services"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      v_pedidos_fuera_de_catalogo: {
+        Row: {
+          cantidad_total: number | null
+          items: string[] | null
+          nombre: string | null
+          primera_vez: string | null
+          service_id: string | null
+          ultima_vez: string | null
+          unidad: string | null
+          unit_id: string | null
+          veces: number | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "supply_request_items_service_id_fkey"
             columns: ["service_id"]
             isOneToOne: false
             referencedRelation: "services"
@@ -4789,64 +5097,60 @@ export type Database = {
           },
         ]
       }
-      v_inventario: {
+      v_renglones_de_pedido: {
         Row: {
-          attributes: Json | null
-          client_id: string | null
-          code: string | null
-          condition: Database["public"]["Enums"]["asset_condition"] | null
-          dias_ambar: number | null
-          dias_entre_fotos: number | null
-          dias_sin_intervenir: number | null
-          dias_verde: number | null
-          foto_actual: string | null
-          foto_actual_fecha: string | null
-          foto_anterior: string | null
-          foto_anterior_fecha: string | null
-          fotos: number | null
+          category: string | null
+          codigo: string | null
+          fuera_de_catalogo: boolean | null
           id: string | null
-          install_year: number | null
-          intervenciones: number | null
-          lat: number | null
-          lng: number | null
-          name: string | null
+          nombre: string | null
           notes: string | null
-          progresiva_m: number | null
-          progresiva_txt: string | null
-          section_code: string | null
-          section_id: string | null
-          section_name: string | null
-          semaforo: Database["public"]["Enums"]["semaforo_intervencion"] | null
+          qty_approved: number | null
+          qty_delivered: number | null
+          qty_requested: number | null
+          request_id: string | null
           service_id: string | null
-          side: Database["public"]["Enums"]["road_side"] | null
-          type_category: string | null
-          type_code: string | null
-          type_color: string | null
-          type_icon: string | null
-          type_id: string | null
-          type_name: string | null
-          ultima_intervencion: string | null
-          visitas: number | null
+          supply_id: string | null
+          unidad: string | null
+          unit_id: string | null
         }
-        Relationships: []
-      }
-      v_asset_fotos: {
-        Row: {
-          asset_id: string | null
-          caption: string | null
-          evidence_id: string | null
-          lat: number | null
-          lng: number | null
-          orden: number | null
-          phase: Database["public"]["Enums"]["evidence_phase"] | null
-          visita: string | null
-          service_id: string | null
-          storage_path: string | null
-          taken_at: string | null
-          thumb_path: string | null
-          watermarked: boolean | null
-        }
-        Relationships: []
+        Relationships: [
+          {
+            foreignKeyName: "supply_request_items_request_id_fkey"
+            columns: ["request_id"]
+            isOneToOne: false
+            referencedRelation: "supply_requests"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "supply_request_items_request_id_fkey"
+            columns: ["request_id"]
+            isOneToOne: false
+            referencedRelation: "v_supply_requests"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "supply_request_items_service_id_fkey"
+            columns: ["service_id"]
+            isOneToOne: false
+            referencedRelation: "services"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "supply_request_items_supply_id_fkey"
+            columns: ["supply_id"]
+            isOneToOne: false
+            referencedRelation: "supplies"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "supply_request_items_supply_id_fkey"
+            columns: ["supply_id"]
+            isOneToOne: false
+            referencedRelation: "v_supplies"
+            referencedColumns: ["id"]
+          },
+        ]
       }
       v_road_assets: {
         Row: {
@@ -5048,6 +5352,8 @@ export type Database = {
       v_supply_requests: {
         Row: {
           activity_name: string | null
+          cancelled_at: string | null
+          cancelled_by_name: string | null
           client_id: string | null
           code: string | null
           created_at: string | null
@@ -5055,8 +5361,10 @@ export type Database = {
           created_by_name: string | null
           crew_id: string | null
           crew_name: string | null
+          delivered_at: string | null
           id: string | null
           item_count: number | null
+          items_fuera_de_catalogo: number | null
           needed_on: string | null
           notified_client_at: string | null
           plan_item_id: string | null
@@ -5064,6 +5372,9 @@ export type Database = {
           qty_requested: number | null
           reason: string | null
           review_note: string | null
+          reviewed_at: string | null
+          reviewed_by: string | null
+          reviewed_by_name: string | null
           section_id: string | null
           section_name: string | null
           service_id: string | null
@@ -5103,6 +5414,13 @@ export type Database = {
             columns: ["plan_item_id"]
             isOneToOne: false
             referencedRelation: "v_plan_items"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "supply_requests_reviewed_by_fkey"
+            columns: ["reviewed_by"]
+            isOneToOne: false
+            referencedRelation: "profiles"
             referencedColumns: ["id"]
           },
           {
@@ -5179,39 +5497,6 @@ export type Database = {
             referencedColumns: ["id"]
           },
         ]
-      }
-      v_pedidos_fuera_de_catalogo: {
-        Row: {
-          cantidad_total: number | null
-          items: string[] | null
-          nombre: string | null
-          primera_vez: string | null
-          service_id: string | null
-          ultima_vez: string | null
-          unidad: string | null
-          unit_id: string | null
-          veces: number | null
-        }
-        Relationships: []
-      }
-      v_renglones_de_pedido: {
-        Row: {
-          category: string | null
-          codigo: string | null
-          fuera_de_catalogo: boolean | null
-          id: string | null
-          nombre: string | null
-          notes: string | null
-          qty_approved: number | null
-          qty_delivered: number | null
-          qty_requested: number | null
-          request_id: string | null
-          service_id: string | null
-          supply_id: string | null
-          unidad: string | null
-          unit_id: string | null
-        }
-        Relationships: []
       }
       v_vencimientos: {
         Row: {
@@ -5339,6 +5624,18 @@ export type Database = {
       }
     }
     Functions: {
+      _campos_comunes_mtc: { Args: never; Returns: Json }
+      adoptar_insumo: {
+        Args: {
+          p_category?: string
+          p_code: string
+          p_min_stock?: number
+          p_nombre: string
+          p_service_id: string
+          p_unit_id?: string
+        }
+        Returns: string
+      }
       ajustes_del_servicio: { Args: { p_service_id: string }; Returns: Json }
       alertas_operativas: {
         Args: { p_service_id: string }
@@ -5353,45 +5650,19 @@ export type Database = {
         }[]
       }
       apply_pci_suspension: { Args: { p_pci_id: string }; Returns: Json }
+      asset_semaforo: {
+        Args: { p_dias_ambar: number; p_dias_verde: number; p_ultima: string }
+        Returns: Database["public"]["Enums"]["semaforo_intervencion"]
+      }
       assets_geojson: {
         Args: {
-          p_conditions?: string[] | null
-          p_section_id?: string | null
-          p_semaforos?: string[] | null
+          p_conditions?: string[]
+          p_section_id?: string
+          p_semaforos?: string[]
           p_service_id: string
-          p_type_codes?: string[] | null
+          p_type_codes?: string[]
         }
         Returns: Json
-      }
-      adoptar_insumo: {
-        Args: {
-          p_category?: string | null
-          p_code: string
-          p_min_stock?: number | null
-          p_nombre: string
-          p_service_id: string
-          p_unit_id?: string | null
-        }
-        Returns: string
-      }
-      siguiente_codigo_material: {
-        Args: { p_prefijo: string; p_service_id: string }
-        Returns: string
-      }
-      inventario_resumen: {
-        Args: { p_section_id?: string | null; p_service_id: string }
-        Returns: {
-          al_dia: number
-          category: string
-          color: string
-          critico: number
-          icon: string
-          por_vencer: number
-          sin_intervenir: number
-          total: number
-          type_code: string
-          type_name: string
-        }[]
       }
       buscar: {
         Args: { p_limit?: number; p_q: string; p_service_id: string }
@@ -5401,6 +5672,19 @@ export type Database = {
       can_write: { Args: { sid: string }; Returns: boolean }
       clear_section_geometry: { Args: { p_section_id: string }; Returns: Json }
       conductor_apto: { Args: { p_respuestas: Json }; Returns: boolean }
+      crear_pedido: {
+        Args: {
+          p_aprobar?: boolean
+          p_crew_id: string
+          p_items: Json
+          p_needed_on: string
+          p_plan_item_id: string
+          p_reason: string
+          p_section_id: string
+          p_service_id: string
+        }
+        Returns: string
+      }
       create_service: {
         Args: {
           p_client_name?: string
@@ -5458,6 +5742,15 @@ export type Database = {
         Args: { p_destino: string; p_origen: string; p_service_id: string }
         Returns: Json
       }
+      entregar_pedido: {
+        Args: {
+          p_cantidades: Json
+          p_fecha?: string
+          p_nota?: string
+          p_request_id: string
+        }
+        Returns: Database["public"]["Enums"]["supply_request_status"]
+      }
       evaluate_pci_deadlines: { Args: never; Returns: Json }
       evidence_gallery: {
         Args: {
@@ -5496,9 +5789,26 @@ export type Database = {
       }
       fmt_progresiva: { Args: { m: number }; Returns: string }
       hoy_peru: { Args: never; Returns: string }
+      inventario_para_campo: { Args: { p_service_id: string }; Returns: Json }
+      inventario_resumen: {
+        Args: { p_section_id?: string; p_service_id: string }
+        Returns: {
+          al_dia: number
+          category: string
+          color: string
+          critico: number
+          icon: string
+          por_vencer: number
+          sin_intervenir: number
+          total: number
+          type_code: string
+          type_name: string
+        }[]
+      }
       is_member: { Args: { sid: string }; Returns: boolean }
       is_platform_admin: { Args: never; Returns: boolean }
       mis_cuadrillas: { Args: { p_service_id: string }; Returns: string[] }
+      mis_servicios: { Args: never; Returns: string[] }
       my_service_ids: { Args: never; Returns: string[] }
       next_asset_code: {
         Args: { p_section_id: string; p_service_id: string; p_type_id: string }
@@ -5586,9 +5896,19 @@ export type Database = {
         Args: { p_lat: number; p_lng: number; p_section_id: string }
         Returns: number
       }
+      puede_leer_servicio: { Args: { p_service_id: string }; Returns: boolean }
       revert_pci_suspension: {
         Args: { p_suspension_id: string }
         Returns: Json
+      }
+      revisar_pedido: {
+        Args: {
+          p_aprobar: boolean
+          p_cantidades?: Json
+          p_nota: string
+          p_request_id: string
+        }
+        Returns: undefined
       }
       role_in: {
         Args: { sid: string }
@@ -5601,6 +5921,10 @@ export type Database = {
       }
       show_limit: { Args: never; Returns: number }
       show_trgm: { Args: { "": string }; Returns: string[] }
+      siguiente_codigo_material: {
+        Args: { p_prefijo: string; p_service_id: string }
+        Returns: string
+      }
       storage_service_id: { Args: { p_name: string }; Returns: string }
       vencimiento_aviso: { Args: { p_due: string }; Returns: string }
       vencimiento_semaforo: { Args: { p_due: string }; Returns: string }
@@ -5685,7 +6009,6 @@ export type Database = {
         | "importante"
         | "intolerable"
       road_side: "derecho" | "izquierdo" | "ambos" | "eje"
-      semaforo_intervencion: "al_dia" | "por_vencer" | "critico" | "sin_intervenir"
       safety_equipment_kind:
         | "extintor"
         | "botiquin"
@@ -5699,6 +6022,11 @@ export type Database = {
         | "observado"
         | "fuera_servicio"
         | "dado_de_baja"
+      semaforo_intervencion:
+        | "al_dia"
+        | "por_vencer"
+        | "critico"
+        | "sin_intervenir"
       service_status: "activo" | "pausado" | "cerrado"
       stock_movement_kind:
         | "ingreso"
@@ -5932,7 +6260,6 @@ export const Constants = {
         "intolerable",
       ],
       road_side: ["derecho", "izquierdo", "ambos", "eje"],
-      semaforo_intervencion: ["al_dia", "por_vencer", "critico", "sin_intervenir"],
       safety_equipment_kind: [
         "extintor",
         "botiquin",
@@ -5947,6 +6274,12 @@ export const Constants = {
         "observado",
         "fuera_servicio",
         "dado_de_baja",
+      ],
+      semaforo_intervencion: [
+        "al_dia",
+        "por_vencer",
+        "critico",
+        "sin_intervenir",
       ],
       service_status: ["activo", "pausado", "cerrado"],
       stock_movement_kind: [

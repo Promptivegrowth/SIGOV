@@ -101,7 +101,7 @@ export function MapaDeInventario() {
     queryFn: async () => {
       const { data, error } = await sb.rpc('inventario_resumen', {
         p_service_id: service.id,
-        p_section_id: tramo === TODOS ? null : tramo,
+        p_section_id: tramo === TODOS ? undefined : tramo,
       })
       if (error) throw error
       return (data ?? []) as any[]
@@ -114,10 +114,10 @@ export function MapaDeInventario() {
     queryFn: async () => {
       const { data, error } = await sb.rpc('assets_geojson', {
         p_service_id: service.id,
-        p_type_codes: tipos.size ? [...tipos] : null,
-        p_conditions: null,
-        p_semaforos: semaforos.size ? [...semaforos] : null,
-        p_section_id: tramo === TODOS ? null : tramo,
+        p_type_codes: tipos.size ? [...tipos] : undefined,
+        p_conditions: undefined,
+        p_semaforos: semaforos.size ? [...semaforos] : undefined,
+        p_section_id: tramo === TODOS ? undefined : tramo,
       })
       if (error) throw error
       return data as any
