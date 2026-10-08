@@ -5020,6 +5020,7 @@ export type Database = {
           created_at: string | null
           created_by: string | null
           created_by_name: string | null
+          crew_code: string | null
           crew_id: string | null
           crew_name: string | null
           crew_numero: number | null
@@ -5042,6 +5043,8 @@ export type Database = {
           section_code: string | null
           section_id: string | null
           section_name: string | null
+          sector_code: string | null
+          sector_folder: string | null
           service_id: string | null
           sha256: string | null
           side: string | null
@@ -6035,9 +6038,11 @@ export type Database = {
       v_work_entries: {
         Row: {
           activity_category: string | null
+          activity_code: string | null
           activity_color: string | null
           activity_id: string | null
           activity_name: string | null
+          activity_numero: number | null
           created_at: string | null
           created_by_name: string | null
           crew_color: string | null
@@ -6050,7 +6055,10 @@ export type Database = {
           lng: number | null
           observation: string | null
           order_status: Database["public"]["Enums"]["work_order_status"] | null
+          origen: string | null
+          pci_code: string | null
           pci_item_id: string | null
+          pci_item_number: number | null
           plan_item_id: string | null
           prog_end_m: number | null
           prog_end_txt: string | null

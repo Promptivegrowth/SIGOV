@@ -79,7 +79,7 @@ export type AvancePaquete = {
 }
 
 /** Una fila del índice: qué es cada archivo y de cuándo. */
-type FilaIndice = {
+export type FilaIndice = {
   carpeta: string
   archivo: string
   tipo: string
@@ -670,7 +670,7 @@ export async function armarPaquete(opciones: {
  * generó, y el detalle archivo por archivo. Es lo que el cliente firma como
  * cargo de recepción.
  */
-async function construirIndice(
+export async function construirIndice(
   filas: FilaIndice[],
   meta: ReportMeta,
   rango: { desde: string; hasta: string }

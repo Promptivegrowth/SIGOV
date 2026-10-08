@@ -18,6 +18,7 @@ import { armarPaquete, CARPETAS, nombreSeguro, type AvancePaquete } from '@/lib/
 import { cn, toISODate } from '@/lib/utils'
 import { toast } from 'sonner'
 import { mensajeAmigable } from '@/lib/errores'
+import { EntregaCovinca } from '@/components/paquetes/entrega-covinca'
 
 /** El valor de «sin filtrar»: Radix no admite un SelectItem de valor vacío. */
 const TODO = '__todo__'
@@ -247,7 +248,8 @@ export function PaquetesClient() {
         icon={PackageCheck}
       />
 
-      <PageBody>
+      <PageBody className="space-y-6">
+        <EntregaCovinca />
         <div className="grid gap-6 lg:grid-cols-[1fr_360px]">
           <div className="space-y-3">
             {PARTES.filter((p) => !p.soloAdmin || can.admin).map((p) => {
