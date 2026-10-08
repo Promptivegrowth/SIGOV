@@ -35,7 +35,16 @@ data class EstadoCamara(
     val guardando: Boolean = false,
     val aviso: String? = null,
     val error: String? = null,
-)
+) {
+    /**
+     * Las fases que se ofrecen. Dentro de un ítem PCI no hay «General»: la
+     * foto ya es de ese ítem y COVINCA solo pide antes, durante y después
+     * (lo pidió Elvis en la reunión del 05-10).
+     */
+    val fases: List<Fase>
+        get() = if (registro?.pciItemId != null) listOf(Fase.ANTES, Fase.DURANTE, Fase.DESPUES)
+                else Fase.entries
+}
 
 /**
  * La cámara de evidencias.
@@ -64,6 +73,8 @@ class CamaraViewModel @Inject constructor(
             }
             _estado.update {
                 it.copy(
+                    // En un ítem PCI se empieza por el «antes»
+                    fase = if (registro.pciItemId != null) Fase.ANTES else it.fase,
                     registro = registro,
                     // El formato del sello lo fija el contrato, no la app
                     ajustes = campo.ajustes(registro.servicioId),
@@ -114,6 +125,15 @@ class CamaraViewModel @Inject constructor(
             }.onFailure { fallo ->
                 _estado.update { it.copy(guardando = false, error = fallo.enCristiano()) }
             }
+        }
+    }
+
+    /** Quita una foto mal tomada (OBS-21). */
+    fun eliminar(foto: EvidenciaLocal) {
+        viewModelScope.launch {
+            runCatching { evidencias.eliminar(foto) }
+                .onSuccess { _estado.update { it.copy(aviso = "Foto eliminada.") } }
+                .onFailure { fallo -> _estado.update { it.copy(error = fallo.enCristiano()) } }
         }
     }
 

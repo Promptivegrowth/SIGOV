@@ -6,10 +6,12 @@ import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.outlined.WarningAmber
 import androidx.compose.material.icons.automirrored.outlined.ArrowBack
 import androidx.compose.material.icons.outlined.ChevronLeft
 import androidx.compose.material.icons.outlined.ChevronRight
 import androidx.compose.material.icons.outlined.CheckCircle
+import androidx.compose.material.icons.outlined.EditNote
 import androidx.compose.material.icons.outlined.EventAvailable
 import androidx.compose.material.icons.outlined.PlayArrow
 import androidx.compose.material.icons.outlined.ReportProblem
@@ -46,6 +48,7 @@ import java.util.Locale
 fun PantallaProgramacion(
     vm: ProgramacionViewModel = hiltViewModel(),
     alVolver: () -> Unit,
+    alRegistrarAvance: (ItemProgramado) -> Unit = {},
 ) {
     val estado by vm.estado.collectAsStateWithLifecycle()
     val avisos = remember { SnackbarHostState() }
@@ -56,6 +59,21 @@ fun PantallaProgramacion(
             avisos.showSnackbar(it)
             vm.avisoVisto()
         }
+    }
+
+    estado.sinAvance?.let { partida ->
+        AlertDialog(
+            onDismissRequest = vm::cerrarAvisoSinAvance,
+            icon = { Icon(Icons.Outlined.WarningAmber, contentDescription = null, tint = Marca.Naranja) },
+            title = { Text("Falta el avance") },
+            text = { Text("Primero registre el avance ejecutado de esta actividad.") },
+            confirmButton = {
+                Button(onClick = { vm.cerrarAvisoSinAvance(); alRegistrarAvance(partida) }) {
+                    Text("Registrar avance")
+                }
+            },
+            dismissButton = { TextButton(onClick = vm::cerrarAvisoSinAvance) { Text("Cancelar") } },
+        )
     }
 
     impedimento?.let { partida ->
@@ -93,7 +111,7 @@ fun PantallaProgramacion(
                     contentAlignment = Alignment.Center,
                 ) { CircularProgressIndicator() }
 
-                estado.error != null -> Box(
+                estado.error != null && estado.items.isEmpty() -> Box(
                     Modifier.fillMaxSize().padding(32.dp),
                     contentAlignment = Alignment.Center,
                 ) {
@@ -136,6 +154,7 @@ fun PantallaProgramacion(
                             alIniciar = { vm.iniciar(item) },
                             alFinalizar = { vm.finalizar(item) },
                             alReportar = { impedimento = item },
+                            alRegistrarAvance = { alRegistrarAvance(item) },
                         )
                     }
                 }
@@ -145,7 +164,7 @@ fun PantallaProgramacion(
 }
 
 @Composable
-private fun SelectorDeDia(
+internal fun SelectorDeDia(
     etiqueta: String,
     esHoy: Boolean,
     alRetroceder: () -> Unit,
@@ -216,6 +235,7 @@ private fun Partida(
     alIniciar: () -> Unit = {},
     alFinalizar: () -> Unit = {},
     alReportar: () -> Unit = {},
+    alRegistrarAvance: () -> Unit = {},
 ) {
     val avance = ((item.avance ?: 0.0) / 100.0).coerceIn(0.0, 1.0).toFloat()
 
@@ -234,14 +254,32 @@ private fun Partida(
                         style = MaterialTheme.typography.titleSmall,
                         fontWeight = FontWeight.SemiBold,
                     )
+                    // El código de partida va, pero en segundo plano (regla 1.3)
+                    item.actividadCodigo?.takeIf { it.startsWith("COV") }?.let {
+                        Text(it, style = MaterialTheme.typography.labelSmall,
+                            color = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.7f))
+                    }
                     Text(
                         listOfNotNull(
                             item.tramo,
-                            Progresiva.rango(item.progresivaInicio, item.progresivaFin),
-                        ).joinToString(" · ").ifBlank { "Sin ubicación indicada" },
+                            item.sector?.let { "sector $it" },
+                        ).joinToString(" · ").ifBlank { "Sin tramo indicado" },
                         style = MaterialTheme.typography.bodySmall,
                         color = MaterialTheme.colorScheme.onSurfaceVariant,
                     )
+                    // Todo lo que manda el supervisor, para no volver a escribirlo (OBS-02)
+                    Text(
+                        listOfNotNull(
+                            Progresiva.rango(item.progresivaInicio, item.progresivaFin),
+                            item.lado?.let { "lado $it" },
+                        ).joinToString(" · ").ifBlank { "Sin progresiva indicada" },
+                        style = MaterialTheme.typography.bodySmall,
+                        fontWeight = FontWeight.Medium,
+                    )
+                    item.supervisor?.let {
+                        Text("Programó: $it", style = MaterialTheme.typography.labelSmall,
+                            color = MaterialTheme.colorScheme.onSurfaceVariant)
+                    }
                 }
                 Column(horizontalAlignment = Alignment.End) {
                     Text(
@@ -263,7 +301,18 @@ private fun Partida(
             Row(horizontalArrangement = Arrangement.spacedBy(6.dp)) {
                 EtiquetaDeEstado(item.status)
                 // El origen importa: una partida que nace de un PCI tiene plazo
-                item.pciOrigen?.let { Etiqueta("Nace del $it", Marca.Naranja) }
+                when {
+                    item.pciItemCodigo != null -> Etiqueta(
+                        "PCI ${item.pciItemCodigo}" + (item.pciItemNumero?.let { " · ítem $it" } ?: ""), Marca.Naranja)
+                    item.pciOrigen != null -> Etiqueta("Nace del ${item.pciOrigen}", Marca.Naranja)
+                    item.origen == "E" -> Etiqueta("Emergencia", Marca.Naranja)
+                }
+            }
+
+            item.notes?.takeIf { it.isNotBlank() }?.let {
+                Spacer(Modifier.height(8.dp))
+                Text("Indicación: $it", style = MaterialTheme.typography.bodySmall,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant)
             }
 
             item.impedimento?.takeIf { it.isNotBlank() }?.let {
@@ -303,11 +352,17 @@ private fun Partida(
                             color = Marca.Naranja,
                         )
 
-                        item.estaEnCurso -> {
-                            Boton("Finalizar", Icons.Outlined.CheckCircle, Marca.VerdeBandera,
-                                ocupada, Modifier.weight(1f), alFinalizar)
-                            Boton("No se pudo", Icons.Outlined.ReportProblem, Marca.Naranja,
-                                ocupada, Modifier.weight(1f), alReportar)
+                        // Iniciar → Registrar avance → Evidencias → Finalizar, en la
+                        // misma tarjeta (OBS-02)
+                        item.estaEnCurso -> Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
+                            Boton("Registrar avance", Icons.Outlined.EditNote, Marca.Azul,
+                                ocupada, Modifier.fillMaxWidth(), alRegistrarAvance)
+                            Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                                Boton("Finalizar", Icons.Outlined.CheckCircle, Marca.VerdeBandera,
+                                    ocupada, Modifier.weight(1f), alFinalizar)
+                                Boton("No se pudo", Icons.Outlined.ReportProblem, Marca.Naranja,
+                                    ocupada, Modifier.weight(1f), alReportar)
+                            }
                         }
 
                         else -> {

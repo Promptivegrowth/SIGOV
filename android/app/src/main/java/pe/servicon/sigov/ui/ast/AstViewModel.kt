@@ -108,7 +108,7 @@ class AstViewModel @Inject constructor(
         )
         alTerminar()
         if (aptitud.apto) {
-            "AST del conductor registrado. Buen viaje."
+            "ATS del conductor registrado. Buen viaje."
         } else {
             "Registrado como NO APTO. El supervisor ya lo sabe: no manejes."
         }
@@ -141,7 +141,8 @@ class AstViewModel @Inject constructor(
             punto = runCatching { ubicacion.actual() }.getOrNull(),
         )
         alTerminar()
-        "AST de la cuadrilla registrado con ${firmas.size} firmas."
+        if (firmas.isEmpty()) "ATS de la cuadrilla registrado."
+        else "ATS de la cuadrilla registrado con ${firmas.size} firmas."
     }
 
     /** El molde de los dos registros: marcar, hacer, recargar. */

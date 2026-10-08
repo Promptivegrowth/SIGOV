@@ -8,6 +8,12 @@ import androidx.camera.core.Preview
 import androidx.camera.lifecycle.ProcessCameraProvider
 import androidx.camera.view.PreviewView
 import androidx.compose.foundation.background
+import pe.servicon.sigov.datos.local.RegistroLocal
+import pe.servicon.sigov.datos.local.EvidenciaLocal
+import pe.servicon.sigov.datos.EvidenciaEnGaleria
+import androidx.compose.foundation.rememberScrollState
+import androidx.compose.foundation.horizontalScroll
+import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.LazyRow
 import androidx.compose.foundation.lazy.items
@@ -146,7 +152,7 @@ fun PantallaCamara(
                                     }
 
                                     override fun onError(e: ImageCaptureException) {
-                                        vm.fallo("No se pudo tomar la foto: " + e.message)
+                                        vm.fallo("No se pudo tomar la foto. Vuelve a intentarlo.")
                                     }
                                 },
                             )
@@ -178,6 +184,7 @@ fun PantallaCamara(
             }
 
             Controles(
+                fases = estado.fases,
                 fase = estado.fase,
                 conMarca = estado.conMarcaDeAgua,
                 queLleva = resumenDelSello(estado.ajustes.sello),
@@ -185,13 +192,23 @@ fun PantallaCamara(
                 alAlternarMarca = vm::alternarMarca,
             )
 
+            // La foto que se tocó en la tira, para verla, ampliarla o quitarla
+            var abierta by remember { mutableStateOf<EvidenciaLocal?>(null) }
+            abierta?.let { foto ->
+                VisorDeFoto(
+                    foto = paraElVisor(foto, estado.registro),
+                    alCerrar = { abierta = null },
+                    alEliminar = { vm.eliminar(foto); abierta = null },
+                )
+            }
+
             if (estado.evidencias.isNotEmpty()) {
                 LazyRow(
                     Modifier.fillMaxWidth().background(Color.Black).padding(12.dp),
                     horizontalArrangement = Arrangement.spacedBy(8.dp),
                 ) {
                     items(estado.evidencias, key = { it.clientId }) { foto ->
-                        Box {
+                        Box(Modifier.clickable { abierta = foto }) {
                             AsyncImage(
                                 model = File(foto.rutaLocal),
                                 contentDescription = foto.fase,
@@ -201,7 +218,7 @@ fun PantallaCamara(
                                     .clip(RoundedCornerShape(10.dp)),
                             )
                             Text(
-                                Fase.entries.first { it.valor == foto.fase }.etiqueta,
+                                Fase.entries.firstOrNull { it.valor == foto.fase }?.etiqueta ?: foto.fase,
                                 style = MaterialTheme.typography.labelSmall,
                                 color = Color.White,
                                 modifier = Modifier
@@ -333,6 +350,7 @@ private fun Disparador(
 /** Fase de la obra y marca de agua: lo único que el capataz decide. */
 @Composable
 private fun Controles(
+    fases: List<Fase>,
     queLleva: String,
     fase: Fase,
     conMarca: Boolean,
@@ -346,21 +364,29 @@ private fun Controles(
             .padding(horizontal = 12.dp, vertical = 10.dp),
         verticalArrangement = Arrangement.spacedBy(8.dp),
     ) {
-        Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-            Fase.entries.forEach { opcion ->
+        // Cada botón mide lo que su palabra: con la letra del teléfono
+        // agrandada, «Después» ya no se corta (OBS-22); si no caben todos, la
+        // fila se desliza.
+        Row(
+            Modifier.fillMaxWidth().horizontalScroll(rememberScrollState()),
+            horizontalArrangement = Arrangement.spacedBy(8.dp),
+        ) {
+            fases.forEach { opcion ->
                 val elegida = opcion == fase
                 Surface(
                     onClick = { alCambiarFase(opcion) },
                     shape = RoundedCornerShape(20.dp),
                     color = if (elegida) Marca.Verde else Color.White.copy(alpha = 0.12f),
-                    modifier = Modifier.weight(1f),
+                    modifier = Modifier.defaultMinSize(minWidth = 84.dp),
                 ) {
                     Text(
                         opcion.etiqueta,
                         style = MaterialTheme.typography.labelLarge,
                         fontWeight = if (elegida) FontWeight.SemiBold else FontWeight.Normal,
                         color = Color.White,
-                        modifier = Modifier.padding(vertical = 9.dp),
+                        maxLines = 1,
+                        softWrap = false,
+                        modifier = Modifier.padding(horizontal = 16.dp, vertical = 9.dp),
                         textAlign = androidx.compose.ui.text.style.TextAlign.Center,
                     )
                 }
@@ -422,3 +448,22 @@ private fun resumenDelSello(sello: Sello): String {
             " y " + campos.last()
     }
 }
+
+/** La foto recién tomada, con lo que el visor necesita para su ficha. */
+private fun paraElVisor(foto: EvidenciaLocal, registro: RegistroLocal?) = EvidenciaEnGaleria(
+    id = foto.clientId,
+    clientId = foto.clientId,
+    servicioId = foto.servicioId,
+    phase = foto.fase,
+    ruta = foto.rutaDestino,
+    tomadaEn = java.time.Instant.ofEpochMilli(foto.tomadaEn).toString(),
+    actividad = registro?.actividadNombre,
+    tramo = registro?.tramoNombre,
+    progresiva = foto.progresiva,
+    pciCodigo = registro?.pciCodigo,
+    caption = foto.leyenda,
+    lat = foto.latitud.takeIf { it != 0.0 },
+    lng = foto.longitud.takeIf { it != 0.0 },
+    precision = foto.precision.toDouble().takeIf { it > 0 },
+    watermarked = foto.conMarcaDeAgua,
+).also { it.rutaLocal = foto.rutaLocal }

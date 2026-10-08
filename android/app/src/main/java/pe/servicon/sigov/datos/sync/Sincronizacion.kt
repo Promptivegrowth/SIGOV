@@ -8,6 +8,7 @@ import dagger.assisted.AssistedInject
 import dagger.hilt.android.qualifiers.ApplicationContext
 import io.github.jan.supabase.SupabaseClient
 import io.github.jan.supabase.postgrest.postgrest
+import io.github.jan.supabase.postgrest.rpc
 import io.github.jan.supabase.storage.storage
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.combine
@@ -17,6 +18,7 @@ import kotlinx.serialization.json.buildJsonObject
 import kotlinx.serialization.json.jsonObject
 import kotlinx.serialization.json.jsonPrimitive
 import kotlinx.serialization.json.put
+import pe.servicon.sigov.datos.enCristiano
 import pe.servicon.sigov.datos.local.ArchivoDao
 import pe.servicon.sigov.datos.local.ArchivoPendiente
 import pe.servicon.sigov.datos.local.ColaDao
@@ -84,6 +86,15 @@ class ColaRepositorio @Inject constructor(
 
     /** Lo que sigue en la cola, para mostrarlo tal cual en Sincronización. */
     val enEspera: Flow<List<EnvioPendiente>> = cola.enEspera()
+
+    /** Lo que se encoló con ese id, si el equipo todavía lo guarda. */
+    suspend fun envio(clientId: String): EnvioPendiente? = cola.porId(clientId)
+
+    /** Descarta lo que todavía no salió del teléfono: el registro y su archivo. */
+    suspend fun descartar(clientId: String) {
+        cola.borrar(clientId)
+        archivos.borrar(clientId)
+    }
 
     /** Cuántos fallaron y van a reintentarse. */
     val conError: Flow<Int> = cola.cuantosConError()
@@ -197,6 +208,26 @@ class TrabajadorSincronizacion @AssistedInject constructor(
                     }
                 }
 
+                // Una acción, no un registro: «rpc:<función>» llama a esa
+                // función de la base con el cuerpo como parámetros. Así se
+                // encolan sin señal cosas como quitar una foto, que pasan por
+                // las reglas de la base y no por un UPDATE directo.
+                if (envio.tabla.startsWith("rpc:")) {
+                    val parametros = buildJsonObject {
+                        cuerpo.forEach { (k, v) -> if (k != "client_id") put(k, v) }
+                    }
+                    supabase.postgrest.rpc(envio.tabla.removePrefix("rpc:"), parametros)
+                    cola.actualizar(
+                        envio.copy(
+                            estado = EstadoEnvio.ENVIADO,
+                            enviadoEn = System.currentTimeMillis(),
+                            ultimoError = null,
+                        )
+                    )
+                    yaSubidos += envio.clientId
+                    return@runCatching
+                }
+
                 // Si la tabla tiene llave natural, primero se mira si ese
                 // registro ya existe en la nube. Existir no es un error: el
                 // parte del día es uno solo, lo abra quien lo abra.
@@ -249,7 +280,7 @@ class TrabajadorSincronizacion @AssistedInject constructor(
                         estado = EstadoEnvio.ERROR,
                         intentos = intentos,
                         proximoIntento = System.currentTimeMillis() + espera(intentos),
-                        ultimoError = sinSecretos(fallo.message),
+                        ultimoError = fallo.enCristiano(),
                     )
                 )
             }
@@ -259,23 +290,6 @@ class TrabajadorSincronizacion @AssistedInject constructor(
         cola.limpiarViejos(ahora - 7 * 24 * 3600_000L)
 
         return if (fallaron > 0) Result.retry() else Result.success()
-    }
-
-    /**
-     * El error, sin lo que no debe verse.
-     *
-     * La biblioteca adjunta al mensaje la petición entera, con la cabecera
-     * `Authorization` y el token de sesión dentro. Ese texto se guarda y se
-     * enseña en la pantalla de Sincronización: el token quedaba a la vista de
-     * cualquiera que mirara el teléfono, o de quien recibiera la captura.
-     */
-    private fun sinSecretos(mensaje: String?): String {
-        val limpio = (mensaje ?: "Error desconocido")
-            .substringBefore("URL:")
-            .substringBefore("Headers:")
-            .replace(Regex("""Bearer\s+[A-Za-z0-9._-]+"""), "Bearer ···")
-            .trim()
-        return limpio.take(220).ifBlank { "No se pudo enviar. Reintenta más tarde." }
     }
 
     /** Cada intento falla más espaciado: de 2 segundos hasta 5 minutos. */

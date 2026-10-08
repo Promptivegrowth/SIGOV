@@ -1,5 +1,10 @@
 package pe.servicon.sigov.ui.sync
 
+import pe.servicon.sigov.datos.Conexion
+import kotlinx.coroutines.flow.asStateFlow
+import kotlinx.coroutines.flow.MutableStateFlow
+import androidx.compose.runtime.remember
+import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.LazyColumn
@@ -56,7 +61,13 @@ data class EstadoSincronizacion(
 @HiltViewModel
 class SincronizacionViewModel @Inject constructor(
     private val cola: ColaRepositorio,
+    private val conexion: Conexion,
 ) : ViewModel() {
+
+    /** Lo que se le dice al capataz al pulsar «Sincronizar ahora». */
+    private val _aviso = MutableStateFlow<String?>(null)
+    val aviso: StateFlow<String?> = _aviso.asStateFlow()
+    fun avisoVisto() { _aviso.value = null }
 
     val estado: StateFlow<EstadoSincronizacion> = combine(
         cola.enEspera,
@@ -67,8 +78,19 @@ class SincronizacionViewModel @Inject constructor(
         EstadoSincronizacion(espera, errores, fotos, ultimo)
     }.stateIn(viewModelScope, SharingStarted.WhileSubscribed(5_000), EstadoSincronizacion())
 
+    /**
+     * Sin señal, el botón no hacía nada visible y parecía roto (OBS-50).
+     * Ahora dice qué pasa: sin red, que todo queda guardado y saldrá solo;
+     * con red, que está enviando.
+     */
     fun sincronizarAhora() {
         viewModelScope.launch { cola.sincronizarAhora() }
+        _aviso.value = if (!conexion.ahora())
+            "Sin conexión. Los registros permanecerán guardados y se enviarán automáticamente al recuperar señal."
+        else if (estado.value.enEspera.isEmpty() && estado.value.fotosPendientes == 0)
+            "No hay nada pendiente: todo está en la nube."
+        else
+            "Enviando lo pendiente…"
     }
 }
 
@@ -87,12 +109,18 @@ fun PantallaSincronizacion(
 ) {
     val estado by vm.estado.collectAsStateWithLifecycle()
     val pendientes = estado.enEspera.size + estado.fotosPendientes
+    val aviso by vm.aviso.collectAsStateWithLifecycle()
+    val avisos = remember { SnackbarHostState() }
+    LaunchedEffect(aviso) {
+        aviso?.let { avisos.showSnackbar(it); vm.avisoVisto() }
+    }
 
     ArmazonDeApartado(
         titulo = "Sincronización",
         seccion = "Apartado 4.12",
         alVolver = alVolver,
         ayuda = "Lo que registraste y todavía no sale de este teléfono.",
+        avisos = avisos,
         botonFlotante = {
             ExtendedFloatingActionButton(
                 onClick = vm::sincronizarAhora,

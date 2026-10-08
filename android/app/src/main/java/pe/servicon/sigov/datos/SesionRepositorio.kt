@@ -51,6 +51,11 @@ data class Cuadrilla(
     val code: String,
     val name: String,
     @SerialName("service_id") val servicioId: String,
+    /** El subtramo al que pertenece: se precarga en el reporte diario. */
+    @SerialName("section_id") val tramoId: String? = null,
+    /** Número y sede con que la nombra la estructura documental COVINCA. */
+    val numero: Int? = null,
+    val sede: String? = null,
 )
 
 /**

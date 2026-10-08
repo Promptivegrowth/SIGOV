@@ -155,7 +155,10 @@ class MainActivity : ComponentActivity() {
                         )
                     }
                     composable("programacion") {
-                        PantallaProgramacion(alVolver = { nav.popBackStack() })
+                        PantallaProgramacion(
+                            alVolver = { nav.popBackStack() },
+                            alRegistrarAvance = { nav.navigate("parte?partida=" + it.id) },
+                        )
                     }
                     composable("pci") {
                         PantallaPci(alVolver = { nav.popBackStack() })
@@ -179,7 +182,10 @@ class MainActivity : ComponentActivity() {
                         PantallaGaleria(alVolver = { nav.popBackStack() })
                     }
                     composable("trabajos") {
-                        PantallaProgramacion(alVolver = { nav.popBackStack() })
+                        PantallaProgramacion(
+                            alVolver = { nav.popBackStack() },
+                            alRegistrarAvance = { nav.navigate("parte?partida=" + it.id) },
+                        )
                     }
                     composable("perfil") {
                         PantallaPerfil(
@@ -197,12 +203,22 @@ class MainActivity : ComponentActivity() {
                         PantallaAst(alVolver = { nav.popBackStack() })
                     }
                     composable("avance") {
-                        PantallaAvance(alVolver = { nav.popBackStack() })
+                        PantallaAvance(
+                            alVolver = { nav.popBackStack() },
+                            alAbrirParte = { nav.navigate("parte") },
+                            alAbrirEvidencias = { nav.navigate("evidencias") },
+                            alAbrirPci = { nav.navigate("pci") },
+                        )
                     }
                     composable("sincronizacion") {
                         PantallaSincronizacion(alVolver = { nav.popBackStack() })
                     }
-                    composable("parte") {
+                    composable(
+                        "parte?partida={partida}",
+                        arguments = listOf(androidx.navigation.navArgument("partida") {
+                            nullable = true; defaultValue = null
+                        }),
+                    ) {
                         PantallaParte(
                             alVolver = { nav.popBackStack() },
                             alTomarEvidencia = { registroId -> nav.navigate("evidencia/" + registroId) },

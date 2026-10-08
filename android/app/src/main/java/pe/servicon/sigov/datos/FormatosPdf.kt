@@ -115,32 +115,40 @@ class FormatosPdf @Inject constructor(
     }
 
     /**
-     * El mismo cuadro, como hoja de cálculo.
+     * El parte como Excel de verdad (.xlsx): columnas, números y fechas que
+     * se reconocen al abrirlo en Excel, WPS o Google Sheets, con filtros.
+     */
+    suspend fun armarXlsx(hojas: List<HojaXlsx>, nombreArchivo: String): File =
+        withContext(Dispatchers.IO) {
+            val carpeta = File(contexto.filesDir, "formatos").apply { mkdirs() }
+            File(carpeta, "$nombreArchivo.xlsx").also { Xlsx.escribir(it, hojas) }
+        }
+
+    /**
+     * Los mismos datos en CSV, para quien los quiera cargar en otro sistema.
      *
-     * Se escribe CSV con punto y coma y BOM: Excel en español lo abre en
-     * columnas con doble clic, sin importar nada ni pedir asistente. Un
-     * .xlsx de verdad exigiría meter una biblioteca de varios megabytes en
-     * el teléfono para ganar formato que en campo no hace falta.
+     * CSV estándar: separado por comas, decimales con punto y la primera
+     * fila son los títulos. Antes iba con punto y coma, con un bloque de
+     * datos del parte encima de la tabla y la coma decimal del teléfono: en
+     * WPS o en un Excel en inglés todo quedaba en una sola columna (OBS-38).
+     * Para abrirlo en Excel está el .xlsx; esto no se llama «Excel».
      */
     suspend fun armarCsv(
         columnas: List<String>,
         filas: List<List<String>>,
-        encabezado: List<Pair<String, String>> = emptyList(),
         nombreArchivo: String,
     ): File = withContext(Dispatchers.IO) {
         val salto = "\r\n"
-        val comilla = "\""
-        fun celda(v: String): String = comilla + v.replace(comilla, comilla + comilla) + comilla
+        fun celda(v: String): String =
+            if (v.any { it == ',' || it == '"' || it == '\n' || it == '\r' })
+                "\"" + v.replace("\"", "\"\"") + "\""
+            else v
 
         val texto = buildString {
             // La marca de orden de bytes: sin ella Excel abre las tildes rotas
-            append("\uFEFF")
-            for ((k, v) in encabezado) {
-                append(celda(k)).append(";").append(celda(v)).append(salto)
-            }
-            if (encabezado.isNotEmpty()) append(salto)
-            append(columnas.joinToString(";") { celda(it) }).append(salto)
-            for (f in filas) append(f.joinToString(";") { celda(it) }).append(salto)
+            append("﻿")
+            append(columnas.joinToString(",") { celda(it) }).append(salto)
+            for (f in filas) append(f.joinToString(",") { celda(it) }).append(salto)
         }
 
         val carpeta = File(contexto.filesDir, "formatos").apply { mkdirs() }
@@ -155,7 +163,11 @@ class FormatosPdf @Inject constructor(
             contexto, "${contexto.packageName}.fileprovider", archivo
         )
         val envio = Intent(Intent.ACTION_SEND).apply {
-            type = if (archivo.extension == "csv") "text/csv" else "application/pdf"
+            type = when (archivo.extension) {
+                "csv" -> "text/csv"
+                "xlsx" -> "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
+                else -> "application/pdf"
+            }
             putExtra(Intent.EXTRA_STREAM, uri)
             putExtra(Intent.EXTRA_SUBJECT, titulo)
             addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION)

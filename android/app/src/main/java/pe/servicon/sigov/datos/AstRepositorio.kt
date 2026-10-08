@@ -158,7 +158,7 @@ class AstRepositorio @Inject constructor(
     ): String = withContext(Dispatchers.IO) {
         require(tarea.isNotBlank()) { "Describe la tarea que se va a ejecutar." }
         require(peligros.isNotEmpty()) { "Anota al menos un peligro y su control." }
-        require(firmas.isNotEmpty()) { "El AST necesita la firma de la cuadrilla." }
+        // Las firmas van en el formato físico que se fotografía: no se exigen aquí (OBS-56)
 
         val clientId = UUID.randomUUID().toString()
         val ahora = Peru.ahora()
@@ -166,7 +166,7 @@ class AstRepositorio @Inject constructor(
         cola.encolar(
             tabla = "ats_iperc",
             clientId = clientId,
-            etiqueta = "AST · ${tarea.take(40)}",
+            etiqueta = "ATS · ${tarea.take(40)}",
             cuerpo = buildJsonObject {
                 put("service_id", servicioId)
                 put("kind", TipoAst.CUADRILLA.valor)
@@ -217,7 +217,7 @@ class AstRepositorio @Inject constructor(
         cola.encolar(
             tabla = "ats_iperc",
             clientId = clientId,
-            etiqueta = "AST de conductor · $placa",
+            etiqueta = "ATS de conductor · $placa",
             cuerpo = buildJsonObject {
                 put("service_id", servicioId)
                 put("kind", TipoAst.CONDUCTOR.valor)
@@ -264,7 +264,7 @@ class AstRepositorio @Inject constructor(
                 clientId = firmaId,
                 // La firma espera a que su AST exista en la nube
                 dependeDe = astId,
-                etiqueta = "Firma AST · ${firma.miembro.nombre}",
+                etiqueta = "Firma ATS · ${firma.miembro.nombre}",
                 cuerpo = buildJsonObject {
                     put("full_name", firma.miembro.nombre)
                     firma.miembro.dni?.let { put("dni", it) }

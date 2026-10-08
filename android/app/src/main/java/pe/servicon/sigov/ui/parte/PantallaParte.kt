@@ -1,5 +1,8 @@
 package pe.servicon.sigov.ui.parte
 
+import pe.servicon.sigov.ui.programacion.SelectorDeDia
+import pe.servicon.sigov.datos.OrigenDelTrabajo
+import pe.servicon.sigov.datos.Peru
 import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.LazyColumn
@@ -11,6 +14,7 @@ import androidx.compose.material.icons.outlined.Add
 import androidx.compose.material.icons.outlined.IosShare
 import androidx.compose.material.icons.outlined.PhotoCamera
 import androidx.compose.material.icons.outlined.PictureAsPdf
+import androidx.compose.material.icons.outlined.Description
 import androidx.compose.material.icons.outlined.TableChart
 import androidx.compose.material.icons.outlined.Straighten
 import androidx.compose.material3.*
@@ -47,6 +51,11 @@ fun PantallaParte(
     var formularioAbierto by remember { mutableStateOf(false) }
     var menuAbierto by remember { mutableStateOf(false) }
 
+    // Desde una partida («Registrar avance») el formulario se abre solo
+    LaunchedEffect(estado.partidaInicial) {
+        if (estado.partidaInicial != null) formularioAbierto = true
+    }
+
     LaunchedEffect(estado.aviso, estado.error) {
         (estado.aviso ?: estado.error)?.let {
             avisos.showSnackbar(it)
@@ -59,7 +68,7 @@ fun PantallaParte(
         seccion = "Apartado 4.6",
         alVolver = alVolver,
         cuadrilla = estado.cuadrilla.ifBlank { null },
-        ayuda = "Registra lo ejecutado hoy y genera el formato oficial.",
+        ayuda = "Registra lo ejecutado en el día y genera el formato oficial.",
         avisos = avisos,
         acciones = {
             // El formato SIG-OP-F01, armado aquí mismo: el supervisor puede
@@ -88,9 +97,14 @@ fun PantallaParte(
                                 leadingIcon = { Icon(Icons.Outlined.PictureAsPdf, null) },
                             )
                             DropdownMenuItem(
-                                text = { Text("Compartir para Excel") },
-                                onClick = { menuAbierto = false; vm.exportarCsv() },
+                                text = { Text("Exportar Excel (.xlsx)") },
+                                onClick = { menuAbierto = false; vm.exportar(comoExcel = true) },
                                 leadingIcon = { Icon(Icons.Outlined.TableChart, null) },
+                            )
+                            DropdownMenuItem(
+                                text = { Text("Exportar datos (.csv)") },
+                                onClick = { menuAbierto = false; vm.exportar(comoExcel = false) },
+                                leadingIcon = { Icon(Icons.Outlined.Description, null) },
                             )
                         }
                     }
@@ -109,14 +123,23 @@ fun PantallaParte(
             }
         },
     ) { relleno ->
+      Column(Modifier.fillMaxSize().padding(relleno)) {
+        // De qué día es el reporte: hoy, o uno anterior que quedó pendiente
+        SelectorDeDia(
+            etiqueta = Peru.fechaLarga(estado.fecha),
+            esHoy = estado.fecha == Peru.hoy(),
+            alRetroceder = { vm.cambiarFecha(-1) },
+            alAvanzar = { vm.cambiarFecha(1) },
+            alVolverAHoy = vm::volverAHoy,
+        )
         when {
             estado.cargando -> Box(
-                Modifier.fillMaxSize().padding(relleno),
+                Modifier.fillMaxSize(),
                 contentAlignment = Alignment.Center,
             ) { CircularProgressIndicator() }
 
             estado.parte == null -> Box(
-                Modifier.fillMaxSize().padding(relleno).padding(32.dp),
+                Modifier.fillMaxSize().padding(32.dp),
                 contentAlignment = Alignment.Center,
             ) {
                 Text(
@@ -126,7 +149,7 @@ fun PantallaParte(
             }
 
             else -> LazyColumn(
-                modifier = Modifier.fillMaxSize().padding(relleno),
+                modifier = Modifier.fillMaxSize(),
                 contentPadding = PaddingValues(16.dp, 16.dp, 16.dp, 96.dp),
                 verticalArrangement = Arrangement.spacedBy(12.dp),
             ) {
@@ -164,6 +187,7 @@ fun PantallaParte(
                 }
             }
         }
+      }
     }
 
     if (formularioAbierto) {
@@ -172,8 +196,10 @@ fun PantallaParte(
             tramos = estado.tramos,
             programadas = estado.programadas,
             pcis = estado.pcis,
+            tramoPorDefecto = estado.tramoPorDefecto,
+            inicial = estado.partidaInicial?.let { OrigenDelTrabajo.Programado(it) },
             guardando = estado.guardando,
-            alCerrar = { formularioAbierto = false },
+            alCerrar = { formularioAbierto = false; vm.partidaInicialAtendida() },
             alGuardar = { actividad, tramo, ini, fin, lado, cantidad, obs, origen ->
                 vm.registrar(actividad, tramo, ini, fin, lado, cantidad, obs, origen) {
                     formularioAbierto = false

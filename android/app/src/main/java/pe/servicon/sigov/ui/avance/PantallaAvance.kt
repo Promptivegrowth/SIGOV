@@ -39,6 +39,9 @@ import java.util.Locale
 fun PantallaAvance(
     vm: AvanceViewModel = hiltViewModel(),
     alVolver: () -> Unit,
+    alAbrirParte: () -> Unit = {},
+    alAbrirEvidencias: () -> Unit = {},
+    alAbrirPci: () -> Unit = {},
 ) {
     val estado by vm.estado.collectAsStateWithLifecycle()
 
@@ -69,7 +72,7 @@ fun PantallaAvance(
                 verticalArrangement = Arrangement.spacedBy(14.dp),
             ) {
                 Cumplimiento(estado)
-                Contadores(estado)
+                Contadores(estado, alAbrirParte, alAbrirEvidencias, alAbrirPci)
 
                 if (estado.partidas.isNotEmpty()) {
                     Text(
@@ -154,17 +157,35 @@ private fun Cumplimiento(estado: EstadoAvance) {
 }
 
 @Composable
-private fun Contadores(estado: EstadoAvance) {
+/**
+ * Cada cifra lleva a su detalle (OBS-48): los registros al reporte del día,
+ * las fotos a la galería y los ítems PCI a la lista de PCI. Y cada una dice
+ * lo que cuenta: «Fotos» eran los registros con al menos una foto, y «PCI
+ * abiertos» eran ítems, no documentos.
+ */
+private fun Contadores(
+    estado: EstadoAvance,
+    alAbrirParte: () -> Unit,
+    alAbrirEvidencias: () -> Unit,
+    alAbrirPci: () -> Unit,
+) {
     Row(horizontalArrangement = Arrangement.spacedBy(10.dp)) {
-        Contador("Registros", estado.registros.toString(), Marca.Azul, Modifier.weight(1f))
-        Contador("Fotos", estado.fotos.toString(), Marca.VerdeBandera, Modifier.weight(1f))
-        Contador("PCI abiertos", estado.pciAbiertos.toString(), Marca.Naranja, Modifier.weight(1f))
+        Contador("Registros", estado.registros.toString(), Marca.Azul, Modifier.weight(1f), alAbrirParte)
+        Contador("Registros con foto", estado.fotos.toString(), Marca.VerdeBandera, Modifier.weight(1f), alAbrirEvidencias)
+        Contador("Ítems PCI abiertos", estado.pciAbiertos.toString(), Marca.Naranja, Modifier.weight(1f), alAbrirPci)
     }
 }
 
 @Composable
-private fun Contador(etiqueta: String, valor: String, color: Color, modifier: Modifier = Modifier) {
+private fun Contador(
+    etiqueta: String,
+    valor: String,
+    color: Color,
+    modifier: Modifier = Modifier,
+    alTocar: () -> Unit = {},
+) {
     Surface(
+        onClick = alTocar,
         color = MaterialTheme.colorScheme.surface,
         shape = RoundedCornerShape(14.dp),
         border = CardDefaults.outlinedCardBorder(),

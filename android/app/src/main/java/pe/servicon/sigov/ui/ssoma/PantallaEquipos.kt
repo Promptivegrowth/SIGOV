@@ -24,6 +24,7 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.hilt.navigation.compose.hiltViewModel
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
+import pe.servicon.sigov.ui.componentes.ConformeONo
 import pe.servicon.sigov.datos.EquipoDeSeguridad
 import pe.servicon.sigov.ui.componentes.ArmazonDeApartado
 import pe.servicon.sigov.ui.theme.Marca
@@ -90,22 +91,9 @@ fun PantallaEquipos(
                 }
             }
 
-            Row(
-                Modifier.fillMaxWidth().padding(horizontal = 16.dp),
-                verticalAlignment = Alignment.CenterVertically,
-            ) {
-                Text(
-                    if (estado.soloMiCuadrilla) "Los de mi cuadrilla y los comunes"
-                    else "Todos los del contrato",
-                    style = MaterialTheme.typography.bodySmall,
-                    color = MaterialTheme.colorScheme.onSurfaceVariant,
-                    modifier = Modifier.weight(1f),
-                )
-                Switch(
-                    checked = !estado.soloMiCuadrilla,
-                    onCheckedChange = { vm.alternarAlcance() },
-                )
-            }
+            // El jefe ve lo de su cuadrilla y nada más: el interruptor que
+            // mostraba lo de todo el contrato se retiró (OBS-61/65). Administrar
+            // lo de todas las cuadrillas es de SSOMA, desde la web.
 
             when {
                 estado.cargando -> Box(
@@ -276,7 +264,7 @@ private fun DialogoInspeccion(
                             color = if (conforme) Marca.VerdeBandera else Semaforo.Urgente,
                         )
                     }
-                    Switch(checked = conforme, onCheckedChange = { conforme = it })
+                    ConformeONo(conforme = conforme, alCambiar = { conforme = it })
                 }
 
                 if (!conforme) {

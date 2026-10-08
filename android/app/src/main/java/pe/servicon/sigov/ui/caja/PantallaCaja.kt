@@ -131,6 +131,7 @@ fun PantallaCaja(
 
     if (formularioAbierto) {
         FormularioGasto(
+            montoMinimoComprobante = estado.montoMinimoComprobante,
             guardando = estado.guardando,
             alCerrar = { formularioAbierto = false },
             alGuardar = { importe, rubro, detalle, proveedor, ruc, tipo, numero, foto ->

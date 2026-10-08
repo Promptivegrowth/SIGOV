@@ -1,5 +1,7 @@
 package pe.servicon.sigov.datos
 
+import pe.servicon.sigov.datos.local.EstadoEnvio
+import kotlinx.serialization.json.jsonObject
 import android.content.Context
 import android.graphics.Bitmap
 import android.graphics.BitmapFactory
@@ -215,6 +217,31 @@ class EvidenciaRepositorio @Inject constructor(
         )
 
         evidencia
+    }
+
+    /**
+     * Elimina una foto mal tomada (OBS-21).
+     *
+     * Si todavía no salió del teléfono, basta con descartarla: nunca existió
+     * para nadie más. Si ya está en la nube, se da de baja allá —se vuelve a
+     * enviar con la misma llave y la fecha de baja— y queda en la auditoría.
+     * La base no deja dar de baja la foto de un ítem PCI ya validado.
+     */
+    suspend fun eliminar(foto: EvidenciaLocal) = withContext(Dispatchers.IO) {
+        val envio = cola.envio(foto.clientId)
+        if (envio != null && envio.estado != EstadoEnvio.ENVIADO) {
+            cola.descartar(foto.clientId)
+        } else {
+            // Ya en la nube: se pide a la base que la dé de baja; ella
+            // comprueba que sea de quien la tomó y que nadie la validó
+            cola.encolar(
+                tabla = "rpc:dar_de_baja_evidencia",
+                etiqueta = "Foto eliminada",
+                cuerpo = buildJsonObject { put("p_client_id", foto.clientId) },
+            )
+        }
+        partes.borrarEvidencia(foto.clientId)
+        runCatching { File(foto.rutaLocal).delete() }
     }
 
     // ─── La galería ───────────────────────────────────────────────────────

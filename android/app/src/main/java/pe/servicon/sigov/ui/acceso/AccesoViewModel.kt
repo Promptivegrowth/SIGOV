@@ -9,6 +9,7 @@ import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.flow.update
 import kotlinx.coroutines.launch
 import pe.servicon.sigov.datos.SesionRepositorio
+import pe.servicon.sigov.datos.enCristiano
 import javax.inject.Inject
 
 data class EstadoAcceso(
@@ -54,7 +55,7 @@ class AccesoViewModel @Inject constructor(
                         fallo.message?.contains("resolve", true) == true ||
                         fallo.message?.contains("timeout", true) == true ->
                             "Sin conexión. Revisa la señal e inténtalo de nuevo."
-                        else -> fallo.message ?: "No se pudo entrar."
+                        else -> fallo.enCristiano()
                     }
                     _estado.update { e -> e.copy(cargando = false, error = mensaje) }
                 }

@@ -82,7 +82,7 @@ fun FormularioDeConductor(
         ) {
             Column(Modifier.fillMaxSize()) {
                 Text(
-                    "AST del conductor",
+                    "ATS del conductor",
                     style = MaterialTheme.typography.headlineSmall,
                     modifier = Modifier.padding(20.dp, 20.dp, 20.dp, 4.dp),
                 )

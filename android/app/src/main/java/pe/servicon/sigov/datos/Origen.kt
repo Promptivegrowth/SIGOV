@@ -21,6 +21,9 @@ sealed class OrigenDelTrabajo(val clave: String) {
 
     object Emergencia : OrigenDelTrabajo("emergencia")
 
+    /** «Otros»: lo que la cuadrilla hizo además de lo programado (Elvis, 05-10). */
+    object NoProgramado : OrigenDelTrabajo("no_programado")
+
     data class Programado(val item: ItemProgramado) : OrigenDelTrabajo("programacion")
 
     data class Pci(val item: ItemPci) : OrigenDelTrabajo("pci")
@@ -33,6 +36,7 @@ sealed class OrigenDelTrabajo(val clave: String) {
     val etiqueta: String
         get() = when (this) {
             is Emergencia -> "Emergencia"
+            is NoProgramado -> "No programado"
             is Programado -> "Programación"
             is Pci -> "PCI"
         }

@@ -96,7 +96,7 @@ fun FormularioDeCuadrilla(
         ) {
             Column(Modifier.fillMaxSize()) {
                 Text(
-                    "AST de la cuadrilla",
+                    "ATS de la cuadrilla",
                     style = MaterialTheme.typography.headlineSmall,
                     modifier = Modifier.padding(20.dp, 20.dp, 20.dp, 4.dp),
                 )
@@ -275,7 +275,6 @@ fun FormularioDeCuadrilla(
                             error = when {
                                 tarea.isBlank() -> "Describe la tarea que se va a ejecutar."
                                 peligros.isEmpty() -> "Anota al menos un peligro y su control."
-                                firmas.isEmpty() -> "Falta la firma de la cuadrilla."
                                 else -> null
                             }
                             if (error == null) {
@@ -300,7 +299,7 @@ fun FormularioDeCuadrilla(
                                 color = MaterialTheme.colorScheme.onPrimary,
                             )
                         } else {
-                            Text("Registrar AST", fontWeight = FontWeight.SemiBold)
+                            Text("Registrar ATS", fontWeight = FontWeight.SemiBold)
                         }
                     }
                 }

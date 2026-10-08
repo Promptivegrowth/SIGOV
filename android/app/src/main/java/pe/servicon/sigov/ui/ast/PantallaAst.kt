@@ -79,7 +79,7 @@ fun PantallaAst(
     }
 
     ArmazonDeApartado(
-        titulo = "AST",
+        titulo = "ATS",
         seccion = "Apartado 4.9",
         alVolver = alVolver,
         cuadrilla = estado.cuadrilla.ifBlank { null },
@@ -107,7 +107,7 @@ fun PantallaAst(
 
             Tarjeta(
                 icono = Icons.Outlined.DirectionsCar,
-                titulo = "AST del conductor",
+                titulo = "ATS del conductor",
                 detalle = "Antes de mover la camioneta: descanso, alcohol, licencia y estado del vehículo.",
                 hecho = estado.deConductorHecho,
                 color = Marca.Azul,
@@ -118,7 +118,7 @@ fun PantallaAst(
 
             Tarjeta(
                 icono = Icons.Outlined.Groups,
-                titulo = "AST de la cuadrilla",
+                titulo = "ATS de la cuadrilla",
                 detalle = "Al pie del trabajo: peligros, controles, EPP y la firma de cada uno.",
                 hecho = estado.deCuadrillaHecho,
                 color = Marca.VerdeBandera,

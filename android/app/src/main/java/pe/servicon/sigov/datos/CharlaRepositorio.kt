@@ -151,7 +151,7 @@ class CharlaRepositorio @Inject constructor(
         firmas: List<FirmaDeAsistente>,
         punto: Punto?,
     ): String = withContext(Dispatchers.IO) {
-        require(firmas.isNotEmpty()) { "La charla necesita al menos una firma." }
+        // Las firmas van en el formato físico que se fotografía: no se exigen aquí (OBS-56)
 
         val clientId = UUID.randomUUID().toString()
         val ahora = Peru.ahora()

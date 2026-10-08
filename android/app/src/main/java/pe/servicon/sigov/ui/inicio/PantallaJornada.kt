@@ -142,14 +142,17 @@ fun PantallaJornada(
                 Apartado(Icons.Outlined.PhotoCamera, "Fotos / Evidencias", "Fotos con GPS y sello", verde, 0, alAbrirEvidencias),
                 Apartado(Icons.Outlined.Map, "Inventario vial", "Qué hay en tu tramo", azul, 0, alAbrirInventario),
                 Apartado(Icons.Outlined.AccountBalanceWallet, "Mi Caja", "Saldo y movimientos", azul, 0, alAbrirCaja),
-                Apartado(Icons.Outlined.Inventory2, "Materiales", "Solicitar insumos", verde, 0, alAbrirMateriales),
+                // El jefe de cuadrilla ejecuta lo programado; los materiales los
+                // pide el supervisor de campo según la programación (regla 1.2).
+                Apartado(Icons.Outlined.Inventory2, "Materiales", "Solicitar insumos", verde, 0, alAbrirMateriales)
+                    .takeIf { estado.rol != "jefe_cuadrilla" },
                 Apartado(Icons.Outlined.HealthAndSafety, "Equipos SSOMA", "Extintores, botiquines", azul, 0, alAbrirEquipos),
                 Apartado(Icons.Outlined.DirectionsCar, "Vehículos", "Papeles y revisión", verde, 0, alAbrirVehiculos),
                 Apartado(Icons.Outlined.Campaign, "Charlas e higiene", "Charla del día e higiene", azul, 0, alAbrirCharlas),
-                Apartado(Icons.Outlined.Assignment, "AST", "Antes de empezar la jornada", verde, 0, alAbrirAst),
+                Apartado(Icons.Outlined.Assignment, "ATS", "Análisis de Trabajo Seguro", verde, 0, alAbrirAst),
                 Apartado(Icons.Outlined.BarChart, "Mi Avance", "Cumplimiento del día", verde, 0, alAbrirAvance),
                 Apartado(Icons.Outlined.Sync, "Sincronización", "Registros pendientes", azul, estado.pendientes, alAbrirSincronizacion),
-            )
+            ).filterNotNull()
 
             apartados.chunked(2).forEach { pareja ->
                 // La fila se mide por el azulejo más alto y los dos se

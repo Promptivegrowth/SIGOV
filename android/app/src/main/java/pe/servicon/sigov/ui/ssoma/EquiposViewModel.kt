@@ -46,12 +46,12 @@ data class EstadoEquipos(
 ) {
     val visibles: List<EquipoDeSeguridad>
         get() = equipos
-            .filter { !soloMiCuadrilla || it.cuadrillaId == null || it.cuadrillaId == miCuadrillaId }
+            .filter { it.cuadrillaId == miCuadrillaId }
             .filter { filtro == null || urgenciaDe(it) == filtro }
 
     val conteos: Map<Urgencia, Int>
         get() = equipos
-            .filter { !soloMiCuadrilla || it.cuadrillaId == null || it.cuadrillaId == miCuadrillaId }
+            .filter { it.cuadrillaId == miCuadrillaId }
             .groupingBy { urgenciaDe(it) }
             .eachCount()
 }
@@ -76,7 +76,6 @@ class EquiposViewModel @Inject constructor(
 
     fun filtrar(urgencia: Urgencia?) = _estado.update { it.copy(filtro = urgencia) }
 
-    fun alternarAlcance() = _estado.update { it.copy(soloMiCuadrilla = !it.soloMiCuadrilla) }
 
     fun cargar() {
         _estado.update { it.copy(cargando = true, error = null) }

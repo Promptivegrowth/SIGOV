@@ -167,13 +167,16 @@ class MaterialRepositorio @Inject constructor(
             }
     }
 
+    /**
+     * Cuántos insumos lleva un pedido que todavía no salió del teléfono.
+     *
+     * Se buscaba el `request_id` en el cuerpo de cada renglón, pero ese dato
+     * se pone recién al subir, cuando el pedido ya tiene id en la nube: todo
+     * pedido en cola salía con «0 insumos» (OBS-45). El renglón sí sabe de
+     * quién depende desde que se encola.
+     */
     private suspend fun renglonesEnCola(pedidoClientId: String): Int =
-        colaDao.sinConfirmarDe("supply_request_items").count { envio ->
-            runCatching {
-                val cuerpo = json.parseToJsonElement(envio.cuerpo) as JsonObject
-                cuerpo["request_id"]?.toString()?.trim('"') == pedidoClientId
-            }.getOrDefault(false)
-        }
+        colaDao.cuantosHijos("supply_request_items", pedidoClientId)
 
     /**
      * Arma el pedido y lo encola.

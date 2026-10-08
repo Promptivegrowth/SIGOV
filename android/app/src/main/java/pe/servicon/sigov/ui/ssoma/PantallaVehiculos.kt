@@ -24,6 +24,7 @@ import androidx.compose.ui.window.Dialog
 import androidx.compose.ui.window.DialogProperties
 import androidx.hilt.navigation.compose.hiltViewModel
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
+import pe.servicon.sigov.ui.componentes.ConformeONo
 import pe.servicon.sigov.datos.PUNTOS_PREOPERACIONAL
 import pe.servicon.sigov.datos.Vehiculo
 import pe.servicon.sigov.ui.componentes.ArmazonDeApartado
@@ -63,22 +64,9 @@ fun PantallaVehiculos(
     ) { relleno ->
         Column(Modifier.fillMaxSize().padding(relleno)) {
 
-            Row(
-                Modifier.fillMaxWidth().padding(horizontal = 16.dp, vertical = 8.dp),
-                verticalAlignment = Alignment.CenterVertically,
-            ) {
-                Text(
-                    if (estado.soloMiCuadrilla) "Los de mi cuadrilla y los comunes"
-                    else "Toda la flota del contrato",
-                    style = MaterialTheme.typography.bodySmall,
-                    color = MaterialTheme.colorScheme.onSurfaceVariant,
-                    modifier = Modifier.weight(1f),
-                )
-                Switch(
-                    checked = !estado.soloMiCuadrilla,
-                    onCheckedChange = { vm.alternarAlcance() },
-                )
-            }
+            // El jefe ve lo de su cuadrilla y nada más: el interruptor que
+            // mostraba lo de todo el contrato se retiró (OBS-61/65). Administrar
+            // lo de todas las cuadrillas es de SSOMA, desde la web.
 
             when {
                 estado.cargando -> Box(
@@ -265,7 +253,9 @@ private fun Preoperacional(
             PUNTOS_PREOPERACIONAL.forEach { (clave, _) -> put(clave, true) }
         }
     }
-    var kilometraje by remember { mutableStateOf(vehiculo.kilometraje?.toString() ?: "") }
+    // Vacío a propósito: si se prellenaba con el último, el capataz lo dejaba
+    // como estaba y el kilometraje del día nunca se anotaba (OBS-68).
+    var kilometraje by remember { mutableStateOf("") }
     var hallazgo by remember { mutableStateOf("") }
     var error by remember { mutableStateOf<String?>(null) }
 
@@ -287,7 +277,7 @@ private fun Preoperacional(
                     modifier = Modifier.padding(20.dp, 20.dp, 20.dp, 4.dp),
                 )
                 Text(
-                    "Marca lo que NO está conforme",
+                    "Revisa cada punto: Conforme o No conforme",
                     style = MaterialTheme.typography.bodySmall,
                     color = MaterialTheme.colorScheme.onSurfaceVariant,
                     modifier = Modifier.padding(horizontal = 20.dp),
@@ -301,6 +291,7 @@ private fun Preoperacional(
                         value = kilometraje,
                         onValueChange = { kilometraje = it.filter(Char::isDigit) },
                         label = { Text("Kilometraje del tablero") },
+                        supportingText = vehiculo.kilometraje?.let { { Text("Último registrado: %,d km".format(it)) } },
                         suffix = { Text("km") },
                         singleLine = true,
                         keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Number),
@@ -330,10 +321,7 @@ private fun Preoperacional(
                                 else Semaforo.Urgente,
                                 modifier = Modifier.weight(1f),
                             )
-                            Switch(
-                                checked = conforme,
-                                onCheckedChange = { puntos[clave] = it },
-                            )
+                            ConformeONo(conforme = conforme, alCambiar = { puntos[clave] = it })
                         }
                     }
 
@@ -374,6 +362,8 @@ private fun Preoperacional(
                         onClick = {
                             error = when {
                                 kilometraje.isBlank() -> "Anota el kilometraje del tablero."
+                                vehiculo.kilometraje != null && (kilometraje.toIntOrNull() ?: 0) < vehiculo.kilometraje ->
+                                    "El kilometraje no puede ser menor que el último registrado (%,d km).".format(vehiculo.kilometraje)
                                 observados > 0 && hallazgo.isBlank() ->
                                     "Di qué encontraste en los $observados puntos observados."
                                 else -> null

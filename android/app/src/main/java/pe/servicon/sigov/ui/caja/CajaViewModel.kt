@@ -1,5 +1,6 @@
 package pe.servicon.sigov.ui.caja
 
+import pe.servicon.sigov.datos.CampoRepositorio
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import dagger.hilt.android.lifecycle.HiltViewModel
@@ -27,6 +28,8 @@ data class EstadoCaja(
     val guardando: Boolean = false,
     val aviso: String? = null,
     val error: String? = null,
+    /** Desde este importe el comprobante es obligatorio: lo fija administración. */
+    val montoMinimoComprobante: Double = 20.0,
 ) {
     /**
      * El saldo de verdad: el que informa el servidor menos lo que el capataz
@@ -63,6 +66,7 @@ data class EstadoCaja(
 class CajaViewModel @Inject constructor(
     private val caja: CajaRepositorio,
     private val sesion: SesionRepositorio,
+    private val campo: CampoRepositorio,
 ) : ViewModel() {
 
     private val _estado = MutableStateFlow(EstadoCaja())
@@ -80,8 +84,10 @@ class CajaViewModel @Inject constructor(
                     ?: error("Todavía no te abrieron caja chica. Pídesela a administración.")
                 val movimientos = caja.movimientos(mia.caja.id, cuadrilla.servicioId)
                 val pendientes = caja.enCola(movimientos)
+                val minimo = campo.ajustes(cuadrilla.servicioId).caja.montoMinimoComprobante
                 _estado.update {
                     it.copy(
+                        montoMinimoComprobante = minimo,
                         cargando = false,
                         caja = mia.caja,
                         saldoFresco = mia.fresca,

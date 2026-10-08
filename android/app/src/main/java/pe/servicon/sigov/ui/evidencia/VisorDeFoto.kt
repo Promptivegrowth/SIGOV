@@ -7,14 +7,17 @@ import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.outlined.Add
+import androidx.compose.material.icons.outlined.Delete
 import androidx.compose.material.icons.outlined.Close
 import androidx.compose.material.icons.outlined.GpsFixed
 import androidx.compose.material.icons.outlined.Remove
+import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
+import androidx.compose.material3.TextButton
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
@@ -41,7 +44,13 @@ import java.io.File
  * alternan entre completa y ampliada, y arrastrar mueve.
  */
 @Composable
-fun VisorDeFoto(foto: EvidenciaEnGaleria, alCerrar: () -> Unit) {
+fun VisorDeFoto(
+    foto: EvidenciaEnGaleria,
+    alCerrar: () -> Unit,
+    /** Si se puede borrar: la foto mal tomada que todavía no se validó (OBS-21). */
+    alEliminar: (() -> Unit)? = null,
+) {
+    var confirmar by remember { mutableStateOf(false) }
     var escala by remember { mutableFloatStateOf(1f) }
     var desplazamientoX by remember { mutableFloatStateOf(0f) }
     var desplazamientoY by remember { mutableFloatStateOf(0f) }
@@ -128,11 +137,35 @@ fun VisorDeFoto(foto: EvidenciaEnGaleria, alCerrar: () -> Unit) {
                 }
             }
 
-            FichaDeLaFoto(
-                foto = foto,
-                modifier = Modifier.align(Alignment.BottomCenter).navigationBarsPadding(),
-            )
+            Column(Modifier.align(Alignment.BottomCenter).navigationBarsPadding()) {
+                if (alEliminar != null) {
+                    TextButton(
+                        onClick = { confirmar = true },
+                        modifier = Modifier
+                            .align(Alignment.End)
+                            .padding(8.dp)
+                            .background(Color.Black.copy(alpha = 0.55f), RoundedCornerShape(20.dp)),
+                    ) {
+                        Icon(Icons.Outlined.Delete, contentDescription = null, tint = Marca.Naranja)
+                        Spacer(Modifier.width(6.dp))
+                        Text("Eliminar foto", color = Color.White)
+                    }
+                }
+                FichaDeLaFoto(foto = foto)
+            }
         }
+    }
+
+    if (confirmar && alEliminar != null) {
+        AlertDialog(
+            onDismissRequest = { confirmar = false },
+            title = { Text("¿Eliminar esta fotografía?") },
+            text = { Text("Sirve para quitar una foto mal tomada. No se puede deshacer.") },
+            confirmButton = {
+                TextButton(onClick = { confirmar = false; alEliminar() }) { Text("Eliminar") }
+            },
+            dismissButton = { TextButton(onClick = { confirmar = false }) { Text("Cancelar") } },
+        )
     }
 }
 

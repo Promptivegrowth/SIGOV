@@ -481,7 +481,6 @@ private fun DictarCharla(
                         onClick = {
                             error = when {
                                 tema.isBlank() -> "Escribe el tema de la charla."
-                                firmas.isEmpty() -> "Falta que firme al menos un asistente."
                                 else -> null
                             }
                             if (error == null) {

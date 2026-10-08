@@ -17,6 +17,8 @@ data class Actividad(
     val code: String,
     val name: String,
     val category: String? = null,
+    /** N.º de partida COVINCA: interno, para reportes y formatos (regla 1.3). */
+    @SerialName("numero_covinca") val numeroCovinca: Int? = null,
     @SerialName("unit_id") val unidadId: String? = null,
     @SerialName("min_photos") val fotosMinimas: Int = 2,
     @SerialName("requires_photo") val exigeFoto: Boolean = true,
@@ -62,6 +64,19 @@ data class ItemProgramado(
     val status: String = "programado",
     val notes: String? = null,
     @SerialName("pci_code") val pciOrigen: String? = null,
+    @SerialName("activity_code") val actividadCodigo: String? = null,
+    @SerialName("activity_numero") val actividadNumero: Int? = null,
+    /** Lado como lo escribe el supervisor: LI, LD, LD/LI, LD/EJE/LI… */
+    val lado: String? = null,
+    /** MR, PCI o E. */
+    val origen: String? = null,
+    @SerialName("pci_item_id") val pciItemId: String? = null,
+    @SerialName("pci_item_number") val pciItemNumero: Int? = null,
+    @SerialName("pci_item_pci_code") val pciItemCodigo: String? = null,
+    @SerialName("supervisor_name") val supervisor: String? = null,
+    @SerialName("sector_code") val sector: String? = null,
+    @SerialName("prog_start_txt") val progresivaInicioTexto: String? = null,
+    @SerialName("prog_end_txt") val progresivaFinTexto: String? = null,
     // El ciclo de vida: qué se puede hacer con la partida ahora mismo
     @SerialName("started_at") val iniciadaEn: String? = null,
     @SerialName("finished_at") val cerradaEn: String? = null,

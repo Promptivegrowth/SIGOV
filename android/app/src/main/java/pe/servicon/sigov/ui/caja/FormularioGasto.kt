@@ -37,6 +37,7 @@ import java.io.File
  */
 @Composable
 fun FormularioGasto(
+    montoMinimoComprobante: Double,
     guardando: Boolean,
     alCerrar: () -> Unit,
     alGuardar: (
@@ -197,7 +198,7 @@ fun FormularioGasto(
                     Button(
                         onClick = {
                             val adjunta = foto
-                            error = validar(importe, detalle, tipo, adjunta)
+                            error = validar(importe, detalle, tipo, adjunta, montoMinimoComprobante)
                             if (error == null) {
                                 alGuardar(
                                     importe.replace(",", ".").toDouble(),
@@ -368,16 +369,28 @@ private fun Selector(
 private fun uriDe(contexto: android.content.Context, archivo: File): Uri =
     FileProvider.getUriForFile(contexto, "${contexto.packageName}.fileprovider", archivo)
 
+/**
+ * La política de caja (OBS-39/40): desde el monto que fija administración el
+ * comprobante es obligatorio; por debajo se admite «Sin comprobante», pero
+ * con la explicación de por qué no lo hay, y va a revisión como cualquier
+ * gasto. Antes se podía registrar cualquier importe sin comprobante.
+ */
 private fun validar(
     importe: String,
     detalle: String,
     tipoComprobante: String,
     foto: File?,
+    montoMinimoComprobante: Double,
 ): String? {
     val monto = importe.replace(",", ".").toDoubleOrNull()
     return when {
         monto == null || monto <= 0 -> "Escribe el importe del gasto."
         detalle.isBlank() -> "Di en qué se gastó."
+        tipoComprobante == "sin_comprobante" && monto >= montoMinimoComprobante ->
+            "Desde S/ %.2f el comprobante es obligatorio. Toma la foto de la boleta o factura."
+                .format(montoMinimoComprobante)
+        tipoComprobante == "sin_comprobante" && detalle.trim().length < 15 ->
+            "Sin comprobante hay que justificarlo: explica en el detalle qué se compró y por qué no hay boleta."
         tipoComprobante != "sin_comprobante" && foto == null ->
             "Falta la foto del comprobante. Si de verdad no hay, elige «Sin comprobante»."
         else -> null

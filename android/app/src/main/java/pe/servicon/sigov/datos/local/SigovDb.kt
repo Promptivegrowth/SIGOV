@@ -30,6 +30,13 @@ interface ColaDao {
     @Query("SELECT * FROM cola WHERE clientId = :id")
     suspend fun porId(id: String): EnvioPendiente?
 
+    @Query("DELETE FROM cola WHERE clientId = :id")
+    suspend fun borrar(id: String)
+
+    /** Los hijos de un registro en la cola: los renglones de un pedido, por ejemplo. */
+    @Query("SELECT COUNT(*) FROM cola WHERE tabla = :tabla AND dependeDe = :padre")
+    suspend fun cuantosHijos(tabla: String, padre: String): Int
+
     /** Lo que toca intentar ahora: pendientes y fallidos cuya espera ya pasó. */
     @Query(
         """
@@ -90,6 +97,9 @@ interface ArchivoDao {
     @Query("UPDATE archivos SET subido = 1 WHERE clientId = :id")
     suspend fun marcarSubido(id: String)
 
+    @Query("DELETE FROM archivos WHERE clientId = :id")
+    suspend fun borrar(id: String)
+
     @Query("SELECT COUNT(*) FROM archivos WHERE subido = 0")
     fun cuantosSinSubir(): Flow<Int>
 }
@@ -126,6 +136,13 @@ interface ParteDao {
 
     @Query("SELECT * FROM evidencias WHERE registroClientId = :registroId ORDER BY tomadaEn")
     fun evidenciasDe(registroId: String): Flow<List<EvidenciaLocal>>
+
+    /** Avance anotado en el equipo para una partida, haya subido o no. */
+    @Query("SELECT COUNT(*) FROM registros WHERE planItemId = :planItemId")
+    suspend fun registrosDePartida(planItemId: String): Int
+
+    @Query("DELETE FROM evidencias WHERE clientId = :id")
+    suspend fun borrarEvidencia(id: String)
 
     @Query("SELECT COUNT(*) FROM evidencias WHERE registroClientId = :registroId")
     suspend fun cuantasEvidencias(registroId: String): Int

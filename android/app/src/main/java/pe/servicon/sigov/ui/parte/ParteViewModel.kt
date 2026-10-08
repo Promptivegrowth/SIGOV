@@ -1,5 +1,10 @@
 package pe.servicon.sigov.ui.parte
 
+import pe.servicon.sigov.datos.Peru
+import androidx.lifecycle.SavedStateHandle
+import pe.servicon.sigov.datos.celdaTexto
+import pe.servicon.sigov.datos.HojaXlsx
+import pe.servicon.sigov.datos.Celda
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import dagger.hilt.android.lifecycle.HiltViewModel
@@ -29,6 +34,12 @@ import javax.inject.Inject
 
 data class EstadoParte(
     val cargando: Boolean = true,
+    /** El día que se reporta: hoy por defecto, se puede cambiar (Elvis, 05-10). */
+    val fecha: LocalDate = Peru.hoy(),
+    /** El subtramo de la cuadrilla, puesto de entrada en el formulario. */
+    val tramoPorDefecto: Tramo? = null,
+    /** Llegó desde una partida con «Registrar avance»: se abre ya elegida. */
+    val partidaInicial: ItemProgramado? = null,
     val parte: ParteLocal? = null,
     val registros: List<RegistroLocal> = emptyList(),
     val actividades: List<Actividad> = emptyList(),
@@ -55,6 +66,7 @@ data class EstadoParte(
  */
 @HiltViewModel
 class ParteViewModel @Inject constructor(
+    private val ruta: SavedStateHandle,
     private val campo: CampoRepositorio,
     private val sesion: SesionRepositorio,
     private val partes: ParteDao,
@@ -64,9 +76,23 @@ class ParteViewModel @Inject constructor(
     private val _estado = MutableStateFlow(EstadoParte())
     val estado: StateFlow<EstadoParte> = _estado.asStateFlow()
 
-    init { abrir() }
+    init { abrir(Peru.hoy()) }
 
-    private fun abrir() {
+    /** Reportar otro día: el de ayer que quedó pendiente, por ejemplo. No el de mañana. */
+    fun cambiarFecha(dias: Long) {
+        val nueva = _estado.value.fecha.plusDays(dias)
+        if (nueva.isAfter(Peru.hoy())) return
+        abrir(nueva)
+    }
+
+    fun volverAHoy() = abrir(Peru.hoy())
+
+    fun partidaInicialAtendida() = _estado.update { it.copy(partidaInicial = null) }
+
+    private var vigilancia: kotlinx.coroutines.Job? = null
+
+    private fun abrir(fecha: LocalDate) {
+        _estado.update { it.copy(cargando = true, fecha = fecha, registros = emptyList(), programadas = emptyList()) }
         viewModelScope.launch {
             runCatching {
                 val cuadrilla = sesion.cuadrilla()
@@ -77,7 +103,8 @@ class ParteViewModel @Inject constructor(
                 // copia que ya está en el equipo.
                 runCatching { campo.bajarCatalogos(servicioId) }
 
-                val parte = campo.abrirParteDeHoy(servicioId, cuadrilla.id)
+                val parte = campo.abrirParteDeHoy(servicioId, cuadrilla.id, fecha)
+                val tramos = campo.tramos(servicioId)
 
                 _estado.update {
                     it.copy(
@@ -85,16 +112,25 @@ class ParteViewModel @Inject constructor(
                         parte = parte,
                         cuadrilla = cuadrilla.name,
                         actividades = campo.actividades(servicioId),
-                        tramos = campo.tramos(servicioId),
+                        tramos = tramos,
+                        tramoPorDefecto = tramos.firstOrNull { t -> t.id == cuadrilla.tramoId },
                     )
                 }
 
                 // Lo programado y los PCI llegan después: si no hay señal el
                 // parte igual se abre, solo que sin poder amarrar el origen.
                 runCatching {
-                    val programadas = campo.programacionDelDia(servicioId, cuadrilla.id)
+                    val programadas = campo.programacionDelDia(servicioId, cuadrilla.id, fecha)
                     val pcis = campo.pciAsignados(servicioId, cuadrilla.id)
-                    _estado.update { it.copy(programadas = programadas, pcis = pcis) }
+                    // Si se llegó desde una partida, se ofrece ya elegida (una sola vez)
+                    val pedida = ruta.get<String>("partida")?.also { ruta["partida"] = null }
+                    _estado.update {
+                        it.copy(
+                            programadas = programadas,
+                            pcis = pcis,
+                            partidaInicial = pedida?.let { id -> programadas.firstOrNull { p -> p.id == id } },
+                        )
+                    }
                 }
                 vigilarRegistros(parte.clientId)
             }.onFailure { fallo ->
@@ -104,17 +140,21 @@ class ParteViewModel @Inject constructor(
     }
 
     private fun vigilarRegistros(parteId: String) {
-        viewModelScope.launch {
-            campo.registrosDe(parteId).collectLatest { filas ->
-                _estado.update { it.copy(registros = filas) }
+        // Al cambiar de día se deja de mirar el parte anterior
+        vigilancia?.cancel()
+        vigilancia = viewModelScope.launch {
+            launch {
+                campo.registrosDe(parteId).collectLatest { filas ->
+                    _estado.update { it.copy(registros = filas) }
+                }
             }
-        }
-        // Las fotos se cuentan aparte: al volver de la cámara la lista se
-        // actualiza sola, sin recargar el parte.
-        viewModelScope.launch {
-            partes.conteoEvidencias(parteId).collectLatest { conteos ->
-                _estado.update { estado ->
-                    estado.copy(fotosPorRegistro = conteos.associate { it.registroClientId to it.cuantas })
+            // Las fotos se cuentan aparte: al volver de la cámara la lista se
+            // actualiza sola, sin recargar el parte.
+            launch {
+                partes.conteoEvidencias(parteId).collectLatest { conteos ->
+                    _estado.update { estado ->
+                        estado.copy(fotosPorRegistro = conteos.associate { it.registroClientId to it.cuantas })
+                    }
                 }
             }
         }
@@ -177,7 +217,7 @@ class ParteViewModel @Inject constructor(
                 val cuadrilla = sesion.cuadrilla() ?: return@runCatching
                 _estado.update {
                     it.copy(
-                        programadas = campo.programacionDelDia(cuadrilla.servicioId, cuadrilla.id),
+                        programadas = campo.programacionDelDia(cuadrilla.servicioId, cuadrilla.id, it.fecha),
                         pcis = campo.pciAsignados(cuadrilla.servicioId, cuadrilla.id),
                     )
                 }
@@ -214,17 +254,22 @@ class ParteViewModel @Inject constructor(
                         lugar = e.registros.firstNotNullOfOrNull { it.tramoNombre },
                         emitidoPor = quien,
                     ),
-                    columnas = listOf("Actividad", "Tramo", "Progresiva", "Lado", "Cantidad", "Fotos"),
-                    anchos = listOf(150f, 110f, 95f, 50f, 65f, 57f),
+                    // De dónde nace cada actividad, sus dos progresivas y la
+                    // observación que escribió la cuadrilla: antes el PDF solo
+                    // traía la nota del parte, y lo anotado en cada registro
+                    // —«PRUEBA OFFLINE» en la prueba— no salía (OBS-28/30/31).
+                    columnas = listOf("Actividad", "Origen", "Prog. inicio", "Prog. fin", "Lado",
+                        "Cantidad", "Observación", "Fotos"),
+                    anchos = listOf(118f, 62f, 50f, 50f, 38f, 52f, 107f, 30f),
                     filas = e.registros.map { r ->
                         listOf(
                             r.actividadNombre,
-                            r.tramoNombre ?: "—",
-                            listOfNotNull(r.progresivaInicio, r.progresivaFin)
-                                .joinToString(" → ") { progresiva(it) }
-                                .ifBlank { "—" },
+                            origenDe(r),
+                            r.progresivaInicio?.let { progresiva(it) } ?: "—",
+                            r.progresivaFin?.takeIf { it != r.progresivaInicio }?.let { progresiva(it) } ?: "—",
                             r.lado.replaceFirstChar { it.uppercase() },
                             "%.2f %s".format(r.cantidad, r.unidad ?: ""),
+                            r.observacion?.takeIf { it.isNotBlank() } ?: "—",
                             (e.fotosPorRegistro[r.clientId] ?: 0).toString(),
                         )
                     },
@@ -254,10 +299,11 @@ class ParteViewModel @Inject constructor(
     /**
      * El mismo parte como hoja de cálculo.
      *
-     * Lo pide la oficina cuando quiere sumar metrados de varias cuadrillas:
-     * el PDF se lee, el CSV se pega en la planilla.
+     * Dos salidas distintas y con su nombre (OBS-35 a 38): «Excel» genera un
+     * .xlsx de verdad, con números y fechas que Excel reconoce y filtros; los
+     * datos en CSV quedan aparte, para cargarlos en otro sistema.
      */
-    fun exportarCsv() {
+    fun exportar(comoExcel: Boolean) {
         val e = _estado.value
         val parte = e.parte ?: return
         _estado.update { it.copy(imprimiendo = true) }
@@ -265,38 +311,80 @@ class ParteViewModel @Inject constructor(
         viewModelScope.launch {
             runCatching {
                 val servicio = campo.contrato(parte.servicioId)
-                val archivo = formatos.armarCsv(
-                    columnas = listOf("Actividad", "Tramo", "Progresiva inicio", "Progresiva fin",
-                        "Lado", "Cantidad", "Unidad", "Origen", "Observación", "Fotos"),
-                    filas = e.registros.map { r ->
-                        listOf(
-                            r.actividadNombre,
-                            r.tramoNombre ?: "",
-                            r.progresivaInicio?.let { progresiva(it) } ?: "",
-                            r.progresivaFin?.let { progresiva(it) } ?: "",
-                            r.lado,
-                            "%.2f".format(r.cantidad),
-                            r.unidad ?: "",
-                            r.pciCodigo ?: r.origen,
-                            r.observacion ?: "",
-                            (e.fotosPorRegistro[r.clientId] ?: 0).toString(),
-                        )
-                    },
-                    encabezado = listOf(
-                        "Contrato" to (servicio?.name ?: ""),
-                        "Cliente" to (servicio?.cliente ?: ""),
-                        "Cuadrilla" to e.cuadrilla,
-                        "Fecha" to parte.fecha,
-                        "Metrado total" to "%.2f".format(e.metradoTotal),
-                    ),
-                    nombreArchivo = "PARTE_${parte.fecha}_${e.cuadrilla.filter { it.isLetterOrDigit() }}",
-                )
+                val fecha = LocalDate.parse(parte.fecha)
+                val columnas = listOf("Fecha", "Cuadrilla", "Actividad", "Origen", "Tramo",
+                    "Progresiva inicio", "Progresiva fin", "Lado", "Cantidad", "Unidad",
+                    "Observación", "Fotos")
+                val nombre = "PARTE_${parte.fecha}_${e.cuadrilla.filter { it.isLetterOrDigit() }}"
+                val archivo = if (comoExcel) {
+                    formatos.armarXlsx(
+                        nombreArchivo = nombre,
+                        hojas = listOf(HojaXlsx(
+                            nombre = "Parte ${parte.fecha}",
+                            ficha = listOf(
+                                "Contrato" to (servicio?.name ?: ""),
+                                "Cliente" to (servicio?.cliente ?: ""),
+                                "Cuadrilla" to e.cuadrilla,
+                                "Fecha" to "%02d/%02d/%d".format(fecha.dayOfMonth, fecha.monthValue, fecha.year),
+                                "Metrado total" to "%.2f".format(java.util.Locale.US, e.metradoTotal),
+                            ),
+                            columnas = columnas,
+                            anchos = listOf(11.0, 22.0, 40.0, 16.0, 26.0, 14.0, 14.0, 9.0, 11.0, 8.0, 40.0, 7.0),
+                            filas = e.registros.map { r ->
+                                listOf(
+                                    Celda.Fecha(fecha),
+                                    celdaTexto(e.cuadrilla),
+                                    celdaTexto(r.actividadNombre),
+                                    celdaTexto(origenDe(r)),
+                                    celdaTexto(r.tramoNombre),
+                                    celdaTexto(r.progresivaInicio?.let { progresiva(it) }),
+                                    celdaTexto(r.progresivaFin?.let { progresiva(it) }),
+                                    celdaTexto(r.lado),
+                                    Celda.Numero(r.cantidad),
+                                    celdaTexto(r.unidad),
+                                    celdaTexto(r.observacion),
+                                    Celda.Numero((e.fotosPorRegistro[r.clientId] ?: 0).toDouble()),
+                                )
+                            },
+                        )),
+                    )
+                } else {
+                    formatos.armarCsv(
+                        nombreArchivo = nombre,
+                        columnas = columnas,
+                        filas = e.registros.map { r ->
+                            listOf(
+                                parte.fecha,
+                                e.cuadrilla,
+                                r.actividadNombre,
+                                origenDe(r),
+                                r.tramoNombre ?: "",
+                                r.progresivaInicio?.let { progresiva(it) } ?: "",
+                                r.progresivaFin?.let { progresiva(it) } ?: "",
+                                r.lado,
+                                // Punto decimal siempre, sea cual sea el idioma del teléfono
+                                "%.2f".format(java.util.Locale.US, r.cantidad),
+                                r.unidad ?: "",
+                                r.observacion ?: "",
+                                (e.fotosPorRegistro[r.clientId] ?: 0).toString(),
+                            )
+                        },
+                    )
+                }
                 formatos.compartir(archivo, "Parte diario ${parte.fecha}")
             }.onFailure { fallo ->
                 _estado.update { it.copy(error = fallo.enCristiano()) }
             }
             _estado.update { it.copy(imprimiendo = false) }
         }
+    }
+
+    /** De dónde nace la actividad, como se lee en el formato. */
+    private fun origenDe(r: RegistroLocal): String = when (r.origen) {
+        "programacion" -> "Programación"
+        "pci" -> listOfNotNull("PCI", r.pciCodigo).joinToString(" ")
+        "no_programado" -> "No programado"
+        else -> "Emergencia"
     }
 
     /** La progresiva, como se lee en el contrato: 12+450. */

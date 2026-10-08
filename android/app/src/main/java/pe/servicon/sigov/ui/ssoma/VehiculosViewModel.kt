@@ -56,7 +56,6 @@ class VehiculosViewModel @Inject constructor(
 
     init { cargar() }
 
-    fun alternarAlcance() = _estado.update { it.copy(soloMiCuadrilla = !it.soloMiCuadrilla) }
 
     fun cargar() {
         _estado.update { it.copy(cargando = true, error = null) }

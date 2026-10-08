@@ -55,7 +55,9 @@ class CampoRepositorio @Inject constructor(
             "activities_catalog",
             supabase.postgrest.from("activities_catalog")
                 .select {
-                    filter { eq("service_id", servicioId); exact("deleted_at", null) }
+                    // Solo las vigentes: las de demostración se desactivaron al
+                    // cargar el catálogo oficial COVINCA
+                    filter { eq("service_id", servicioId); exact("deleted_at", null); eq("is_active", true) }
                     order("code", Order.ASCENDING)
                 }
                 .decodeList<JsonObject>()
@@ -170,7 +172,11 @@ class CampoRepositorio @Inject constructor(
                             eq("scheduled_on", fecha.toString())
                             cuadrillaId?.let { eq("crew_id", it) }
                         }
+                        // Orden fijo: al iniciar o finalizar una partida, la
+                        // fila cambia y sin desempate saltaba de lugar (OBS-09)
                         order("sort_order", Order.ASCENDING)
+                        order("prog_start_m", Order.ASCENDING)
+                        order("id", Order.ASCENDING)
                         range(desde, hasta)
                     }
                     .decodeList<JsonObject>()
@@ -181,6 +187,7 @@ class CampoRepositorio @Inject constructor(
             deLaCopia<ItemProgramado>("plan_items", servicioId)
                 .filter { it.fecha == fecha.toString() }
                 .filter { cuadrillaId == null || it.cuadrillaId == cuadrillaId }
+                .sortedWith(compareBy({ it.priority ?: 0 }, { it.progresivaInicio ?: 0.0 }, { it.id }))
         }
     }
 
@@ -205,6 +212,8 @@ class CampoRepositorio @Inject constructor(
                             cuadrillaId?.let { eq("assigned_crew_id", it) }
                         }
                         order("due_date", Order.ASCENDING)
+                        order("item_number", Order.ASCENDING)
+                        order("id", Order.ASCENDING)
                         range(desde, hasta)
                     }
                     .decodeList<JsonObject>()
@@ -215,7 +224,7 @@ class CampoRepositorio @Inject constructor(
             deLaCopia<ItemPci>("pci_items", servicioId)
                 .filter { it.status == "pendiente" || it.status == "en_atencion" }
                 .filter { cuadrillaId == null || it.cuadrillaId == cuadrillaId }
-                .sortedBy { it.vence ?: "9999-12-31" }
+                .sortedWith(compareBy({ it.vence ?: "9999-12-31" }, { it.numero ?: 0 }, { it.id }))
         }
     }
 
@@ -416,6 +425,7 @@ class CampoRepositorio @Inject constructor(
                 // mide en metros siempre, y sin ella el metrado llega al
                 // panel como una cifra suelta que no se sabe leer.
                 actividad.unidadId?.let { put("unit_id", it) }
+                put("origen", origen.clave)
                 origen.planItemId?.let { put("plan_item_id", it) }
                 origen.pciItemId?.let { put("pci_item_id", it) }
                 punto?.let {

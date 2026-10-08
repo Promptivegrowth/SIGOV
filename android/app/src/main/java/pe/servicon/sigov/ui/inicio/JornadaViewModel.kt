@@ -30,6 +30,8 @@ data class EstadoJornada(
     val programadas: Int = 0,
     val pci: Int = 0,
     val pendientes: Int = 0,
+    /** El rol de quien entra: decide qué apartados se le ofrecen. */
+    val rol: String = "jefe_cuadrilla",
     val error: String? = null,
     /** Mientras no se sepa la cuadrilla, no se afirma nada sobre ella */
     val cargando: Boolean = true,
@@ -82,6 +84,7 @@ class JornadaViewModel @Inject constructor(
                 _estado.update {
                     it.copy(
                         nombre = perfil?.nombre.orEmpty(),
+                        rol = perfil?.role ?: "jefe_cuadrilla",
                         cuadrilla = cuadrilla?.name.orEmpty(),
                         cuadrillaCodigo = cuadrilla?.code.orEmpty(),
                     )
