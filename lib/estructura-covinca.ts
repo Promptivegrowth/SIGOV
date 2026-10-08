@@ -16,10 +16,12 @@
 import type { SupabaseClient } from '@supabase/supabase-js'
 import { reportePdf, type ReportMeta } from './reports'
 import { construirIndice, type FilaIndice } from './paquete'
-import { rutas, nombreLibre, aCovinca } from './covinca'
+import { rutas, nombreLibre, aCovinca, semanaDe } from './covinca'
+import { programacionSemanalXlsx } from './formato-programacion'
 import { fmtDate } from './utils'
 
 export type RamasCovinca = {
+  programacion: boolean
   rutinario: boolean
   niveles: boolean
   pci: boolean
@@ -294,6 +296,37 @@ export async function armarEstructuraCovinca(opciones: {
         detalle: `${(parte as any).crews?.name ?? ''} · ${filas.length} actividades · ${(parte as any).status}`,
       })
       avisar('Reportes diarios', i + 1, (partes ?? []).length)
+    }
+  }
+
+  // ─── Programación semanal (formato PS-ST04), por semana y cuadrilla ─
+  if (ramas.programacion) {
+    avisar('Programación semanal', 0, 1)
+    // Las semanas cuyo lunes cae en el periodo: la carpeta es la del mes del lunes
+    const lunes: string[] = []
+    for (let d = new Date(semanaDe(desde).lunes + 'T12:00:00Z'); d.toISOString().slice(0, 10) <= hasta; d = new Date(d.getTime() + 7 * 86400000)) {
+      const l = d.toISOString().slice(0, 10)
+      if (l >= desde) lunes.push(l)
+    }
+    let c = sb.from('plan_items').select('crew_id, scheduled_on, crews(code, name, numero, sede)')
+      .eq('service_id', servicioId).gte('scheduled_on', lunes[0] ?? desde).lte('scheduled_on', hasta).is('deleted_at', null)
+    if (cuadrillaId) c = c.eq('crew_id', cuadrillaId)
+    const { data: filasPlan } = await c
+    const pares = new Map<string, any>()
+    for (const f of filasPlan ?? []) {
+      const l = semanaDe((f as any).scheduled_on).lunes
+      if (lunes.includes(l) && (f as any).crew_id) pares.set(l + '|' + (f as any).crew_id, { lunes: l, crewId: (f as any).crew_id, crew: (f as any).crews })
+    }
+    const logo = await fetch('/marca/logo-servicon.png').then((r) => r.arrayBuffer()).catch(() => null)
+    let hechas = 0
+    for (const par of pares.values()) {
+      const { buffer, filas } = await programacionSemanalXlsx({
+        sb, servicioId, cliente: opciones.cliente, fecha: par.lunes, cuadrillaId: par.crewId, logo,
+      })
+      const cq = cuadrillaDe({ crew_numero: par.crew?.numero, crew_sede: par.crew?.sede, crew_code: par.crew?.code, crew_name: par.crew?.name })
+      const r = rutas.programacion({ ...semanaDe(par.lunes), cuadrilla: cq.numero, sede: cq.sede, tipo: 'ACTIVIDADES' })
+      poner(r.carpeta, r.archivo, buffer, { tipo: 'Programación semanal', fecha: par.lunes, detalle: `${par.crew?.name ?? ''} · ${filas} partidas` })
+      avisar('Programación semanal', ++hechas, pares.size)
     }
   }
 

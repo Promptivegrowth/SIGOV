@@ -1,5 +1,6 @@
 'use client'
 
+import { FormatoCovinca } from '@/components/programacion/formato-covinca'
 import * as React from 'react'
 import Link from 'next/link'
 import { useQuery, useQueryClient } from '@tanstack/react-query'
@@ -7,7 +8,7 @@ import { motion } from 'motion/react'
 import {
   CalendarRange, ChevronLeft, ChevronRight, Plus, Upload, Send,
   Zap, CircleCheck, Users, LayoutGrid, List, TriangleAlert,
-  Pencil, Trash2, Search, X, CalendarDays, CopyPlus, Undo2,
+  Pencil, Trash2, Search, X, CalendarDays, CopyPlus, Undo2, FileSpreadsheet,
 } from 'lucide-react'
 import { createClient } from '@/lib/supabase/client'
 import { useSession } from '@/lib/hooks/use-session'
@@ -36,6 +37,7 @@ export function ProgramacionClient() {
   const [view, setView] = React.useState<'tablero' | 'calendario' | 'lista'>('tablero')
   const [pagina, setPagina] = React.useState(0)
   const [duplicando, setDuplicando] = React.useState(false)
+  const [formato, setFormato] = React.useState(false)
   const [itemForm, setItemForm] = React.useState<{ open: boolean; row?: any }>({ open: false })
   const [confirm, setConfirm] = React.useState<any>(null)
   const [q, setQ] = React.useState('')
@@ -322,6 +324,10 @@ export function ProgramacionClient() {
                   Importar
                 </Link>
               </Button>
+              <Button variant="outline" onClick={() => setFormato(true)} disabled={!rows.length}>
+                <FileSpreadsheet className="size-4" />
+                Formato COVINCA
+              </Button>
               <Button
                 variant="outline"
                 onClick={duplicar}
@@ -544,6 +550,14 @@ export function ProgramacionClient() {
         description={confirm?.description}
         confirmLabel="Si, retirar"
         onConfirm={async () => { await confirm?.action?.() }}
+      />
+      <FormatoCovinca
+        open={formato}
+        onClose={() => setFormato(false)}
+        plan={p}
+        lunes={toISODate(monday)}
+        cuadrillas={visibleCrews}
+        asegurarPlan={ensurePlan}
       />
     </>
   )
