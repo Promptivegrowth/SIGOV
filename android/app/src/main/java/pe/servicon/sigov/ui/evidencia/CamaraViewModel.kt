@@ -13,6 +13,11 @@ import pe.servicon.sigov.datos.enCristiano
 import pe.servicon.sigov.datos.EvidenciaRepositorio
 import pe.servicon.sigov.datos.AjustesDelServicio
 import pe.servicon.sigov.datos.CampoRepositorio
+import pe.servicon.sigov.datos.Configuracion
+import pe.servicon.sigov.datos.FechaEditada
+import pe.servicon.sigov.datos.Peru
+import pe.servicon.sigov.datos.Sello
+import java.time.LocalDateTime
 import pe.servicon.sigov.datos.Fase
 import pe.servicon.sigov.datos.SesionRepositorio
 import pe.servicon.sigov.datos.Punto
@@ -29,6 +34,10 @@ data class EstadoCamara(
     val fase: Fase = Fase.DURANTE,
     val conMarcaDeAgua: Boolean = true,
     val ajustes: AjustesDelServicio = AjustesDelServicio(),
+    /** Lo que se imprime: el contrato, o lo elegido en la configuración del equipo. */
+    val sello: Sello = Sello(),
+    /** La fecha y hora editadas del sello, si las hay. */
+    val fechaEditada: FechaEditada? = null,
     val cuadrilla: String? = null,
     val punto: Punto? = null,
     val buscandoGps: Boolean = true,
@@ -59,10 +68,40 @@ class CamaraViewModel @Inject constructor(
     private val ubicacion: Ubicacion,
     private val campo: CampoRepositorio,
     private val sesion: SesionRepositorio,
+    private val configuracion: Configuracion,
 ) : ViewModel() {
 
     private val _estado = MutableStateFlow(EstadoCamara())
     val estado: StateFlow<EstadoCamara> = _estado.asStateFlow()
+
+    init {
+        viewModelScope.launch {
+            configuracion.sello.collectLatest { _ ->
+                _estado.update { it.copy(sello = configuracion.selloEfectivo(it.ajustes.sello)) }
+            }
+        }
+        viewModelScope.launch {
+            configuracion.fechaDelSello.collectLatest { f -> _estado.update { it.copy(fechaEditada = f) } }
+        }
+    }
+
+    /**
+     * Edita la fecha y hora del sello. No se admite el futuro ni más de 30
+     * días atrás: la edición es para cerrar el día de ayer, no para fabricar
+     * fechas.
+     */
+    fun editarFecha(momento: LocalDateTime) {
+        val ahora = Peru.ahora()
+        when {
+            momento.isAfter(ahora.plusMinutes(1)) ->
+                _estado.update { it.copy(error = "El sello no puede llevar una fecha futura.") }
+            momento.isBefore(ahora.minusDays(30)) ->
+                _estado.update { it.copy(error = "Solo se puede retroceder hasta 30 días.") }
+            else -> configuracion.editarFechaDelSello(momento)
+        }
+    }
+
+    fun usarHoraReal() = configuracion.usarHoraReal()
 
     fun abrir(registroClientId: String, faseInicial: Fase? = null) {
         viewModelScope.launch {
@@ -71,13 +110,16 @@ class CamaraViewModel @Inject constructor(
                 _estado.update { it.copy(error = "No se encontró la actividad.") }
                 return@launch
             }
+            // El contrato fija el sello por omisión; el equipo puede prender o
+            // apagar lo demás en Configuración
+            val ajustes = campo.ajustes(registro.servicioId)
             _estado.update {
                 it.copy(
                     // En un ítem PCI se empieza por el «antes»
                     fase = faseInicial ?: if (registro.pciItemId != null) Fase.ANTES else it.fase,
                     registro = registro,
-                    // El formato del sello lo fija el contrato, no la app
-                    ajustes = campo.ajustes(registro.servicioId),
+                    ajustes = ajustes,
+                    sello = configuracion.selloEfectivo(ajustes.sello),
                     cuadrilla = runCatching { sesion.cuadrilla()?.name }.getOrNull(),
                 )
             }
@@ -114,7 +156,8 @@ class CamaraViewModel @Inject constructor(
                     fase = _estado.value.fase,
                     leyenda = leyenda,
                     conMarcaDeAgua = _estado.value.conMarcaDeAgua,
-                    sello = _estado.value.ajustes.sello,
+                    sello = _estado.value.sello,
+                    momentoDelSello = configuracion.momentoDelSello(),
                     cuadrilla = _estado.value.cuadrilla,
                     pciCodigo = _estado.value.registro?.pciCodigo,
                 )

@@ -1,5 +1,6 @@
 'use client'
 
+import { useSello } from '@/lib/hooks/use-sello'
 import * as React from 'react'
 import { useQuery, useQueryClient } from '@tanstack/react-query'
 import {
@@ -45,6 +46,8 @@ export function ChecklistRunner({
   onOpenChange: (v: boolean) => void
   templateId?: string
 }) {
+  // El sello del contrato: el mismo que imprime la app de campo
+  const sello = useSello()
   const { service, profile } = useSession()
   const qc = useQueryClient()
   const sb = React.useMemo(() => createClient(), [])
@@ -138,6 +141,7 @@ export function ChecklistRunner({
     setPhotoBusy(q.id)
     try {
       const sealed = await sealPhoto(file, {
+        sello,
         servicio: service.name,
         cuadrilla: catalogos.data?.crews.find((c: any) => c.id === crewId)?.name ?? null,
         actividad: tpl?.name ?? 'Checklist',

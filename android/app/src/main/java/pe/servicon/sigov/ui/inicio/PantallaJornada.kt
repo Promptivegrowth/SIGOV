@@ -52,6 +52,7 @@ fun PantallaJornada(
     alAbrirAst: () -> Unit = {},
     alAbrirAvance: () -> Unit = {},
     alAbrirSincronizacion: () -> Unit = {},
+    alAbrirConfiguracion: () -> Unit = {},
 ) {
     val estado by vm.estado.collectAsStateWithLifecycle()
 
@@ -152,6 +153,7 @@ fun PantallaJornada(
                 Apartado(Icons.Outlined.Assignment, "ATS", "Análisis de Trabajo Seguro", verde, 0, alAbrirAst),
                 Apartado(Icons.Outlined.BarChart, "Mi Avance", "Cumplimiento del día", verde, 0, alAbrirAvance),
                 Apartado(Icons.Outlined.Sync, "Sincronización", "Registros pendientes", azul, estado.pendientes, alAbrirSincronizacion),
+                Apartado(Icons.Outlined.Settings, "Configuración", "Sello de las fotos", verde, 0, alAbrirConfiguracion),
             ).filterNotNull()
 
             apartados.chunked(2).forEach { pareja ->

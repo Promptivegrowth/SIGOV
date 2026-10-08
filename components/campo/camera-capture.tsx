@@ -1,5 +1,6 @@
 'use client'
 
+import { useSello } from '@/lib/hooks/use-sello'
 import * as React from 'react'
 import { AnimatePresence, motion } from 'motion/react'
 import {
@@ -37,6 +38,8 @@ export function CameraCapture({
     usuario?: string
   }
 }) {
+  // El sello del contrato: el mismo que imprime la app de campo
+  const sello = useSello()
   const videoRef = React.useRef<HTMLVideoElement>(null)
   const streamRef = React.useRef<MediaStream | null>(null)
   const [gps, setGps] = React.useState<GpsFix | null>(null)
@@ -103,6 +106,7 @@ export function CameraCapture({
     haptic(45)
     try {
       const sealed = await sealPhoto(videoRef.current, {
+        sello,
         servicio: context.servicio,
         cuadrilla: context.cuadrilla,
         actividad: context.actividad,
@@ -126,6 +130,7 @@ export function CameraCapture({
     setBusy(true)
     try {
       const sealed = await sealPhoto(file, {
+        sello,
         servicio: context.servicio,
         cuadrilla: context.cuadrilla,
         actividad: context.actividad,

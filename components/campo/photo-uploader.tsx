@@ -1,5 +1,6 @@
 'use client'
 
+import { useSello } from '@/lib/hooks/use-sello'
 import * as React from 'react'
 import { AnimatePresence, motion } from 'motion/react'
 import {
@@ -70,6 +71,8 @@ export function PhotoUploader({
   }
   defaultPhase?: Phase
 }) {
+  // El sello del contrato: el mismo que imprime la app de campo
+  const sello = useSello()
   const [items, setItems] = React.useState<Pending[]>([])
   const [gps, setGps] = React.useState<GpsFix | null>(null)
   const [gpsError, setGpsError] = React.useState<string | null>(null)
@@ -150,6 +153,7 @@ export function PhotoUploader({
       setItems((prev) => prev.map((x) => (x.id === it.id ? { ...x, state: 'sellando' } : x)))
       try {
         const sealed = await sealPhoto(it.file, {
+          sello,
           servicio: context.servicio,
           cuadrilla: context.cuadrilla,
           actividad: context.actividad,

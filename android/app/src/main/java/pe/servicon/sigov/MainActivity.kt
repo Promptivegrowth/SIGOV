@@ -152,6 +152,7 @@ class MainActivity : ComponentActivity() {
                             alAbrirAst = { nav.navigate("ast") },
                             alAbrirAvance = { nav.navigate("avance") },
                             alAbrirSincronizacion = { nav.navigate("sincronizacion") },
+                            alAbrirConfiguracion = { nav.navigate("configuracion") },
                         )
                     }
                     composable("programacion") {
@@ -212,6 +213,9 @@ class MainActivity : ComponentActivity() {
                             alAbrirEvidencias = { nav.navigate("evidencias") },
                             alAbrirPci = { nav.navigate("pci") },
                         )
+                    }
+                    composable("configuracion") {
+                        pe.servicon.sigov.ui.configuracion.PantallaConfiguracion(alVolver = { nav.popBackStack() })
                     }
                     composable("sincronizacion") {
                         PantallaSincronizacion(alVolver = { nav.popBackStack() })

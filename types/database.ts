@@ -1539,6 +1539,7 @@ export type Database = {
           service_id: string
           sha256: string
           size_bytes: number | null
+          stamped_at: string | null
           storage_path: string
           taken_at: string
           talk_id: string | null
@@ -1572,6 +1573,7 @@ export type Database = {
           service_id: string
           sha256: string
           size_bytes?: number | null
+          stamped_at?: string | null
           storage_path: string
           taken_at: string
           talk_id?: string | null
@@ -1605,6 +1607,7 @@ export type Database = {
           service_id?: string
           sha256?: string
           size_bytes?: number | null
+          stamped_at?: string | null
           storage_path?: string
           taken_at?: string
           talk_id?: string | null
@@ -4827,7 +4830,11 @@ export type Database = {
       v_evidences: {
         Row: {
           accuracy_m: number | null
+          activity_carpeta_ns: string | null
+          activity_code: string | null
+          activity_id: string | null
           activity_name: string | null
+          altitude_m: number | null
           caption: string | null
           client_id: string | null
           created_at: string | null
@@ -4835,6 +4842,10 @@ export type Database = {
           created_by_name: string | null
           crew_id: string | null
           crew_name: string | null
+          crew_numero: number | null
+          crew_sede: string | null
+          device_model: string | null
+          fecha_sello: string | null
           height: number | null
           id: string | null
           lat: number | null
@@ -4842,7 +4853,10 @@ export type Database = {
           mime_type: string | null
           origen: string | null
           pci_code: string | null
+          pci_id: string | null
           pci_item_id: string | null
+          pci_item_number: number | null
+          pci_term_days: number | null
           phase: Database["public"]["Enums"]["evidence_phase"] | null
           progresiva_m: number | null
           section_code: string | null
@@ -4850,7 +4864,9 @@ export type Database = {
           section_name: string | null
           service_id: string | null
           sha256: string | null
+          side: string | null
           size_bytes: number | null
+          stamped_at: string | null
           storage_path: string | null
           taken_at: string | null
           thumb_path: string | null
@@ -4858,6 +4874,7 @@ export type Database = {
           width: number | null
           work_date: string | null
           work_entry_id: string | null
+          work_order_id: string | null
         }
         Relationships: [
           {
@@ -4900,6 +4917,27 @@ export type Database = {
             columns: ["work_entry_id"]
             isOneToOne: false
             referencedRelation: "work_entries"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "pci_items_pci_id_fkey"
+            columns: ["pci_id"]
+            isOneToOne: false
+            referencedRelation: "pcis"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "pci_items_pci_id_fkey"
+            columns: ["pci_id"]
+            isOneToOne: false
+            referencedRelation: "v_pci_resumen"
+            referencedColumns: ["pci_id"]
+          },
+          {
+            foreignKeyName: "work_entries_work_order_id_fkey"
+            columns: ["work_order_id"]
+            isOneToOne: false
+            referencedRelation: "work_orders"
             referencedColumns: ["id"]
           },
         ]

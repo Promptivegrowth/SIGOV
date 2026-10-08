@@ -124,14 +124,21 @@ class EvidenciaRepositorio @Inject constructor(
         sello: Sello = Sello(),
         cuadrilla: String? = null,
         pciCodigo: String? = null,
+        /**
+         * La fecha y hora que se imprimen, si el capataz las editó antes de
+         * la toma (Elvis: el PCI vencía hoy y se terminó mañana temprano).
+         * La hora real de la toma se guarda igual, aparte.
+         */
+        momentoDelSello: Instant? = null,
     ): EvidenciaLocal = withContext(Dispatchers.IO) {
         val punto = ubicacion.actual()
         val tomadaEn = Instant.now()
+        val delSello = momentoDelSello ?: tomadaEn
 
         val mapa = leerEnderezada(original)
             ?: error("No se pudo leer la fotografía. Vuelve a tomarla.")
         val sellada = if (conMarcaDeAgua && sello.activo) {
-            imprimirSello(mapa, registro, punto, tomadaEn, sello, cuadrilla, pciCodigo)
+            imprimirSello(mapa, registro, punto, delSello, sello.conFechaYHora(), cuadrilla, pciCodigo)
         } else {
             mapa
         }
@@ -142,6 +149,11 @@ class EvidenciaRepositorio @Inject constructor(
         if (sellada !== mapa) sellada.recycle()
         mapa.recycle()
         original.delete()
+
+        // Lo que no se imprime viaja dentro del archivo: coordenadas, fecha
+        // real y de qué trabajo es (OBS-18). Antes de la huella, para que la
+        // huella cubra también estos datos.
+        escribirMetadatos(destino, registro, punto, tomadaEn, delSello, fase, cuadrilla, pciCodigo)
 
         val huella = MessageDigest.getInstance("SHA-256")
             .digest(destino.readBytes())
@@ -200,6 +212,9 @@ class EvidenciaRepositorio @Inject constructor(
                 // donde se cuenta si falta la del «después».
                 registro.pciItemId?.let { put("pci_item_id", it) }
                 put("taken_at", DateTimeFormatter.ISO_INSTANT.format(tomadaEn.atOffset(ZoneOffset.UTC)))
+                momentoDelSello?.let {
+                    put("stamped_at", DateTimeFormatter.ISO_INSTANT.format(it.atOffset(ZoneOffset.UTC)))
+                }
                 put("sha256", huella)
                 put("watermarked", conMarcaDeAgua)
                 put("device_model", (Build.MANUFACTURER + " " + Build.MODEL).take(90))
@@ -371,14 +386,17 @@ class EvidenciaRepositorio @Inject constructor(
     // ─── El sello ─────────────────────────────────────────────────────────
 
     /**
-     * Imprime el sello sobre la foto: una franja al pie, legible bajo el sol,
-     * con lo que hace falta para sustentar la partida.
+     * Imprime el sello sobre la foto, abajo a la derecha, como lo llevan hoy
+     * las fotos de las cuadrillas (Elvis lo mostró en la reunión): fecha y
+     * hora, y encima solo lo que se haya prendido en la configuración. Sin
+     * franja que tape la foto: letras blancas con borde oscuro, que se leen
+     * igual sobre asfalto que sobre cielo.
      */
     private fun imprimirSello(
         foto: Bitmap,
         registro: RegistroLocal,
         punto: Punto?,
-        tomadaEn: Instant,
+        momento: Instant,
         sello: Sello,
         cuadrilla: String?,
         pciCodigo: String?,
@@ -389,82 +407,128 @@ class EvidenciaRepositorio @Inject constructor(
         val alto = lienzoMapa.height
 
         // El tamaño del texto va con la foto, no con el equipo
-        val cuerpo = (ancho * 0.026f).coerceIn(18f, 60f)
-        val margen = ancho * 0.028f
-        val interlinea = cuerpo * 1.42f
+        val lado = minOf(ancho, alto).toFloat()
+        val grande = (lado * 0.050f).coerceIn(22f, 96f)
+        val chico = grande * 0.62f
+        val margen = lado * 0.035f
 
-        // Cada línea entra solo si el contrato la pide: hay clientes que
-        // exigen la foto limpia y otros que la rechazan sin coordenadas.
-        val cuando = tomadaEn.atZone(Peru.zona).toLocalDateTime()
+        val cuando = momento.atZone(Peru.zona).toLocalDateTime()
         val lugar = listOfNotNull(
             registro.tramoNombre.takeIf { sello.tramo },
             Progresiva.rango(registro.progresivaInicio, registro.progresivaFin)
                 .takeIf { sello.progresiva },
         ).joinToString(" · ")
 
-        val lineas = listOfNotNull(
-            when {
-                sello.fecha && sello.hora -> Peru.sello(cuando)
-                sello.fecha -> Peru.fechaLarga(cuando.toLocalDate())
-                sello.hora -> "%02d:%02d".format(cuando.hour, cuando.minute)
-                else -> null
-            },
-            if (!sello.geo) null else if (punto != null) {
-                "%.6f, %.6f  ±%.0f m".format(punto.latitud, punto.longitud, punto.precision)
-            } else {
-                "Sin señal de GPS al momento de la toma"
-            },
-            lugar.ifBlank { null },
+        // De arriba abajo; la fecha y la hora cierran el bloque, al pie
+        val extras = listOfNotNull(
+            "SERVICON · SIGOV".takeIf { sello.marca },
+            cuadrilla?.takeIf { sello.cuadrilla },
             listOfNotNull(
                 pciCodigo?.takeIf { sello.pci },
                 registro.actividadNombre.takeIf { sello.actividad },
             ).joinToString(" · ").ifBlank { null },
-            cuadrilla?.takeIf { sello.cuadrilla },
+            lugar.ifBlank { null },
+            if (!sello.geo) null else if (punto != null) {
+                "%.6f, %.6f".format(java.util.Locale.US, punto.latitud, punto.longitud) +
+                    (if (sello.precision) "  ±%.0f m".format(punto.precision) else "")
+            } else {
+                "Sin señal de GPS"
+            },
         )
-
-        // Sin nada que imprimir no se pinta la franja: taparía la foto para
-        // no decir nada.
-        if (lineas.isEmpty() && !sello.marca) return lienzoMapa
-
-        val franja = interlinea * lineas.size + margen * 1.5f
-        lienzo.drawRect(
-            0f, alto - franja, ancho.toFloat(), alto.toFloat(),
-            Paint().apply { color = Color.argb(168, 0, 0, 0) },
-        )
-
-        // Una banda verde de marca: identifica la foto de un vistazo
-        lienzo.drawRect(
-            0f, alto - franja, ancho * 0.012f, alto.toFloat(),
-            Paint().apply { color = Color.rgb(0x6B, 0xB4, 0x3B) },
-        )
-
-        val texto = Paint(Paint.ANTI_ALIAS_FLAG).apply {
-            color = Color.WHITE
-            textSize = cuerpo
-            typeface = Typeface.create(Typeface.SANS_SERIF, Typeface.NORMAL)
-            setShadowLayer(cuerpo * 0.18f, 0f, 1f, Color.argb(200, 0, 0, 0))
-        }
-        val destacado = Paint(texto).apply {
-            typeface = Typeface.create(Typeface.SANS_SERIF, Typeface.BOLD)
+        val fechaHora = when {
+            sello.fecha && sello.hora -> Peru.sello(cuando)
+            sello.fecha -> cuando.toLocalDate().format(DateTimeFormatter.ofPattern("dd/MM/yyyy"))
+            sello.hora -> "%02d:%02d".format(cuando.hour, cuando.minute)
+            else -> null
         }
 
-        var y = alto - franja + margen + cuerpo
-        lineas.forEachIndexed { i, linea ->
-            lienzo.drawText(linea, margen, y, if (i == 0) destacado else texto)
-            y += interlinea
+        fun pinceles(tam: Float, negrita: Boolean): Pair<Paint, Paint> {
+            val letra = Typeface.create(Typeface.SANS_SERIF, if (negrita) Typeface.BOLD else Typeface.NORMAL)
+            val borde = Paint(Paint.ANTI_ALIAS_FLAG).apply {
+                textSize = tam; typeface = letra; color = Color.argb(220, 0, 0, 0)
+                style = Paint.Style.STROKE; strokeWidth = tam * 0.14f; strokeJoin = Paint.Join.ROUND
+            }
+            val relleno = Paint(Paint.ANTI_ALIAS_FLAG).apply {
+                textSize = tam; typeface = letra; color = Color.WHITE
+                setShadowLayer(tam * 0.10f, 0f, tam * 0.04f, Color.argb(160, 0, 0, 0))
+            }
+            return borde to relleno
         }
 
-        // La firma de quien responde por la foto
-        val marca = "SERVICON · SIGOV"
-        if (sello.marca) lienzo.drawText(
-            marca,
-            ancho - margen - destacado.measureText(marca),
-            alto - margen * 0.6f,
-            Paint(destacado).apply { color = Color.rgb(0x6B, 0xB4, 0x3B) },
-        )
+        var y = alto - margen
+        fun escribir(texto: String, tam: Float, negrita: Boolean) {
+            val (borde, relleno) = pinceles(tam, negrita)
+            val x = ancho - margen - relleno.measureText(texto)
+            lienzo.drawText(texto, x, y, borde)
+            lienzo.drawText(texto, x, y, relleno)
+            y -= tam * 1.30f
+        }
 
+        fechaHora?.let { escribir(it, grande, true) }
+        extras.asReversed().forEach { escribir(it, chico, false) }
         return lienzoMapa
     }
+
+    /**
+     * Los datos de la foto dentro del archivo (EXIF): coordenadas, fecha y
+     * hora reales, la del sello si se editó, y de qué trabajo es. Así la
+     * georreferenciación acompaña a la foto aunque no vaya impresa, y quien
+     * la abra fuera de SIGOV la puede consultar.
+     */
+    private fun escribirMetadatos(
+        archivo: File,
+        registro: RegistroLocal,
+        punto: Punto?,
+        tomadaEn: Instant,
+        delSello: Instant,
+        fase: Fase,
+        cuadrilla: String?,
+        pciCodigo: String?,
+    ) {
+        runCatching {
+            val exif = ExifInterface(archivo.absolutePath)
+            val formato = DateTimeFormatter.ofPattern("yyyy:MM:dd HH:mm:ss")
+            val real = tomadaEn.atZone(Peru.zona)
+            exif.setAttribute(ExifInterface.TAG_DATETIME_ORIGINAL, real.format(formato))
+            exif.setAttribute(ExifInterface.TAG_OFFSET_TIME_ORIGINAL, "-05:00")
+            exif.setAttribute(ExifInterface.TAG_DATETIME, delSello.atZone(Peru.zona).format(formato))
+            exif.setAttribute(ExifInterface.TAG_OFFSET_TIME, "-05:00")
+            punto?.let {
+                exif.setLatLong(it.latitud, it.longitud)
+                it.altitud?.let { alt -> exif.setAltitude(alt) }
+                exif.setAttribute(ExifInterface.TAG_GPS_H_POSITIONING_ERROR, "%d/1".format(it.precision.toInt().coerceAtLeast(0)))
+            }
+            exif.setAttribute(ExifInterface.TAG_MAKE, Build.MANUFACTURER.take(60))
+            exif.setAttribute(ExifInterface.TAG_MODEL, Build.MODEL.take(60))
+            exif.setAttribute(ExifInterface.TAG_SOFTWARE, "SIGOV - Grupo Servicon")
+            exif.setAttribute(ExifInterface.TAG_ORIENTATION, ExifInterface.ORIENTATION_NORMAL.toString())
+            val medidas = medir(archivo)
+            exif.setAttribute(ExifInterface.TAG_IMAGE_WIDTH, medidas.outWidth.toString())
+            exif.setAttribute(ExifInterface.TAG_IMAGE_LENGTH, medidas.outHeight.toString())
+            exif.setAttribute(
+                ExifInterface.TAG_IMAGE_DESCRIPTION,
+                // EXIF solo admite ASCII: sin tildes ni signos, o salen «?»
+                enAscii(listOfNotNull(
+                    registro.actividadNombre,
+                    registro.tramoNombre,
+                    Progresiva.rango(registro.progresivaInicio, registro.progresivaFin),
+                    registro.lado.takeIf { it.isNotBlank() }?.let { "lado $it" },
+                    pciCodigo,
+                    cuadrilla,
+                    fase.etiqueta,
+                    if (delSello != tomadaEn) "sello " + Peru.sello(delSello.atZone(Peru.zona).toLocalDateTime()) else null,
+                ).joinToString(" | ")).take(500),
+            )
+            exif.saveAttributes()
+        }
+    }
+
+    private fun enAscii(texto: String): String =
+        java.text.Normalizer.normalize(texto, java.text.Normalizer.Form.NFD)
+            .replace(Regex("\\p{M}+"), "")
+            .replace('–', '-').replace('—', '-').replace('·', '-').replace("→", "a")
+            .replace('ñ', 'n').replace('Ñ', 'N')
+            .filter { it.code in 32..126 }
 
     // ─── Lectura del archivo ──────────────────────────────────────────────
 

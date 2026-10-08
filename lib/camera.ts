@@ -78,8 +78,35 @@ function gpsErrorMessage(err: GeolocationPositionError): string {
 }
 
 // ─── Marca de agua ────────────────────────────────────────────────────────
+/** Qué se imprime sobre la foto: lo fija el contrato (ajustes_del_servicio). */
+export interface Sello {
+  activo?: boolean
+  fecha?: boolean
+  hora?: boolean
+  geo?: boolean
+  precision?: boolean
+  tramo?: boolean
+  progresiva?: boolean
+  actividad?: boolean
+  pci?: boolean
+  cuadrilla?: boolean
+  marca?: boolean
+}
+
+/** Solo fecha y hora: lo que pidió COVINCA (reunión con Elvis, 05-10-2026). */
+export const SELLO_POR_OMISION: Sello = {
+  activo: true, fecha: true, hora: true,
+  geo: false, precision: false, tramo: false, progresiva: false,
+  actividad: false, pci: false, cuadrilla: false, marca: false,
+}
+
 export interface WatermarkData {
   servicio: string
+  /** Qué imprimir; sin él, el sello por omisión. */
+  sello?: Sello
+  pci?: string | null
+  /** La fecha y hora editadas del sello, si las hay. */
+  stampedAt?: Date | null
   cuadrilla?: string | null
   actividad?: string | null
   tramo?: string | null
@@ -185,73 +212,55 @@ function drawWatermark(
   h: number,
   d: WatermarkData
 ) {
-  const scale = Math.max(0.35, w / 1600)
-  const pad = Math.max(8, Math.round(22 * scale))
-  const lineH = Math.max(12, Math.round(30 * scale))
-  const fontBase = Math.max(9, Math.round(23 * scale))
+  // El sello como en la app de campo (OBS-16/19): fecha y hora abajo a la
+  // derecha, y encima solo lo que el contrato haya prendido. Sin franja que
+  // tape la foto: letra blanca con borde oscuro.
+  const s: Sello = { ...SELLO_POR_OMISION, ...(d.sello ?? {}), fecha: true, hora: true }
+  if (s.activo === false) return
 
-  const left = [
-    `${d.gps.lat.toFixed(6)}, ${d.gps.lng.toFixed(6)}`,
-    `Precisión ±${d.gps.accuracy.toFixed(0)} m${d.gps.altitude != null ? ` · Alt ${d.gps.altitude.toFixed(0)} m` : ''}`,
-    d.takenAt.toLocaleString('es-PE', {
-      day: '2-digit', month: '2-digit', year: 'numeric',
-      hour: '2-digit', minute: '2-digit', second: '2-digit',
-    }),
-  ]
+  const lado = Math.min(w, h)
+  const grande = Math.max(14, Math.round(lado * 0.05))
+  const chico = Math.round(grande * 0.62)
+  const margen = Math.round(lado * 0.035)
 
-  const right = [
-    d.tramo ? `${d.tramo}${d.progresivaM != null ? ` · ${fmtProgresiva(d.progresivaM)}` : ''}` : null,
-    d.actividad ?? null,
-    [d.cuadrilla, d.fase ? d.fase.toUpperCase() : null].filter(Boolean).join(' · ') || null,
+  const momento = d.stampedAt ?? d.takenAt
+  const fecha = momento.toLocaleDateString('es-PE', {
+    day: '2-digit', month: '2-digit', year: 'numeric', timeZone: 'America/Lima',
+  })
+  const hora = momento.toLocaleTimeString('es-PE', {
+    hour: '2-digit', minute: '2-digit', hour12: false, timeZone: 'America/Lima',
+  })
+
+  const lugar = [
+    s.tramo ? d.tramo : null,
+    s.progresiva && d.progresivaM != null ? fmtProgresiva(d.progresivaM) : null,
+  ].filter(Boolean).join(' · ')
+
+  const extras = [
+    s.marca ? 'SERVICON · SIGOV' : null,
+    s.cuadrilla ? d.cuadrilla : null,
+    [s.pci ? d.pci : null, s.actividad ? d.actividad : null].filter(Boolean).join(' · ') || null,
+    lugar || null,
+    s.geo
+      ? `${d.gps.lat.toFixed(6)}, ${d.gps.lng.toFixed(6)}${s.precision ? `  ±${d.gps.accuracy.toFixed(0)} m` : ''}`
+      : null,
   ].filter(Boolean) as string[]
 
-  const rows = Math.max(left.length, right.length)
-  const boxH = rows * lineH + pad * 2 + Math.round(30 * scale)
-
-  // Banda inferior con degradado
-  const grad = ctx.createLinearGradient(0, h - boxH - 40 * scale, 0, h)
-  grad.addColorStop(0, 'rgba(6,12,32,0)')
-  grad.addColorStop(0.35, 'rgba(6,12,32,0.72)')
-  grad.addColorStop(1, 'rgba(6,12,32,0.9)')
-  ctx.fillStyle = grad
-  ctx.fillRect(0, h - boxH - 40 * scale, w, boxH + 40 * scale)
-
-  // Cinta ámbar de señalización
-  ctx.fillStyle = '#F5A314'
-  ctx.fillRect(0, h - boxH, w, Math.max(2, 3 * scale))
-
-  ctx.textBaseline = 'top'
-  ctx.shadowColor = 'rgba(0,0,0,0.55)'
-  ctx.shadowBlur = 4 * scale
-
-  // Encabezado
-  const headY = h - boxH + Math.round(12 * scale)
-  ctx.font = `700 ${Math.round(fontBase * 0.92)}px ui-sans-serif, system-ui, sans-serif`
-  ctx.fillStyle = '#F5A314'
-  ctx.textAlign = 'left'
-  ctx.fillText('SIGOV', pad, headY)
-  ctx.font = `500 ${Math.round(fontBase * 0.8)}px ui-sans-serif, system-ui, sans-serif`
-  ctx.fillStyle = 'rgba(255,255,255,0.75)'
-  ctx.fillText(d.servicio, pad + ctx.measureText('SIGOV').width + 46 * scale, headY + 2 * scale)
-
   ctx.textAlign = 'right'
-  ctx.fillStyle = 'rgba(255,255,255,0.55)'
-  ctx.font = `500 ${Math.round(fontBase * 0.72)}px ui-sans-serif, system-ui, sans-serif`
-  ctx.fillText('EVIDENCIA GEORREFERENCIADA', w - pad, headY + 4 * scale)
-
-  // Columnas de datos
-  const bodyY = headY + Math.round(34 * scale)
-  ctx.font = `600 ${fontBase}px ui-monospace, SFMono-Regular, Menlo, monospace`
-  ctx.fillStyle = '#FFFFFF'
-  ctx.textAlign = 'left'
-  left.forEach((t, i) => ctx.fillText(t, pad, bodyY + i * lineH))
-
-  ctx.textAlign = 'right'
-  ctx.font = `500 ${Math.round(fontBase * 0.95)}px ui-sans-serif, system-ui, sans-serif`
-  ctx.fillStyle = 'rgba(255,255,255,0.92)'
-  right.forEach((t, i) => ctx.fillText(t, w - pad, bodyY + i * lineH))
-
-  ctx.shadowBlur = 0
+  ctx.textBaseline = 'alphabetic'
+  ctx.lineJoin = 'round'
+  let y = h - margen
+  const escribir = (texto: string, tam: number, negrita: boolean) => {
+    ctx.font = `${negrita ? 700 : 500} ${tam}px ui-sans-serif, system-ui, sans-serif`
+    ctx.lineWidth = tam * 0.14
+    ctx.strokeStyle = 'rgba(0,0,0,0.86)'
+    ctx.strokeText(texto, w - margen, y)
+    ctx.fillStyle = '#FFFFFF'
+    ctx.fillText(texto, w - margen, y)
+    y -= tam * 1.3
+  }
+  escribir(`${fecha} ${hora}`, grande, true)
+  ;[...extras].reverse().forEach((t) => escribir(t, chico, false))
 }
 
 // ─── Cámara ───────────────────────────────────────────────────────────────

@@ -26,17 +26,23 @@ import { mensajeAmigable } from '@/lib/errores'
  * siempre. Si no, el sello dejaría de valer como sustento.
  */
 
+/**
+ * Fecha y hora van siempre (OBS-19; Elvis: «lo único que tiene que aparecer
+ * en la foto es fecha y hora»). Lo demás está disponible pero apagado por
+ * omisión: tramo, progresiva y PCI ya van en la pizarra física.
+ */
 const CAMPOS_DEL_SELLO = [
-  { clave: 'fecha', label: 'Fecha', detalle: 'El día de la toma, en hora de Perú' },
-  { clave: 'hora', label: 'Hora', detalle: 'La hora exacta, junto a la fecha' },
-  { clave: 'geo', label: 'Coordenadas', detalle: 'Latitud, longitud y precisión del GPS' },
+  { clave: 'fecha', label: 'Fecha', detalle: 'Siempre se imprime', fija: true },
+  { clave: 'hora', label: 'Hora', detalle: 'Siempre se imprime', fija: true },
+  { clave: 'geo', label: 'Coordenadas GPS', detalle: 'Latitud y longitud' },
+  { clave: 'precision', label: 'Precisión GPS', detalle: 'El ± en metros, junto a las coordenadas' },
   { clave: 'tramo', label: 'Tramo', detalle: 'El nombre del tramo donde se tomó' },
   { clave: 'progresiva', label: 'Progresiva', detalle: 'El kilometraje, como 322+073' },
   { clave: 'actividad', label: 'Actividad', detalle: 'Qué trabajo documenta la foto' },
   { clave: 'pci', label: 'Código de PCI', detalle: 'Cuando la foto sustenta un levantamiento' },
   { clave: 'cuadrilla', label: 'Cuadrilla', detalle: 'Quién ejecutó el trabajo' },
   { clave: 'marca', label: 'Firma SERVICON', detalle: 'El sello de la empresa en la esquina' },
-] as const
+] as { clave: string; label: string; detalle: string; fija?: boolean }[]
 
 export function AjustesDelServicio() {
   const { service, can } = useSession()
@@ -93,11 +99,13 @@ export function AjustesDelServicio() {
         <CardHeader className="pb-3">
           <CardTitle className="flex items-center gap-2 text-[15px]">
             <Camera className="size-4" />
-            Sello de la fotografía
+            Sello fotográfico
           </CardTitle>
           <CardDescription className="text-[12px]">
-            Qué se imprime encima de cada foto de campo. Las coordenadas, la hora
-            exacta y la huella digital se guardan siempre, lleve sello o no.
+            Qué se imprime encima de cada foto de campo, abajo a la derecha. Las
+            coordenadas, la hora real y la huella digital se guardan siempre dentro
+            del archivo y en SIGOV, aunque no se impriman. Cada capataz puede además
+            prender o apagar estos datos en la Configuración de su teléfono.
           </CardDescription>
         </CardHeader>
         <CardContent className="space-y-3">
@@ -126,9 +134,9 @@ export function AjustesDelServicio() {
                   <span className="text-muted-foreground block text-[11px] leading-snug">{c.detalle}</span>
                 </span>
                 <Switch
-                  checked={sello[c.clave] === true}
+                  checked={c.fija ? true : sello[c.clave] === true}
                   onCheckedChange={(v) => cambiar('sello', c.clave, v)}
-                  disabled={!can.manage || !selloActivo}
+                  disabled={c.fija || !can.manage || !selloActivo || (c.clave === 'precision' && sello.geo !== true)}
                 />
               </label>
             ))}

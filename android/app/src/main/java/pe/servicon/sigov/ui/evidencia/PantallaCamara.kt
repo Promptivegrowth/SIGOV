@@ -44,6 +44,17 @@ import com.google.accompanist.permissions.ExperimentalPermissionsApi
 import com.google.accompanist.permissions.isGranted
 import com.google.accompanist.permissions.rememberMultiplePermissionsState
 import pe.servicon.sigov.datos.Fase
+import pe.servicon.sigov.datos.FechaEditada
+import pe.servicon.sigov.datos.Peru
+import androidx.compose.material.icons.outlined.EditCalendar
+import androidx.compose.material.icons.outlined.Restore
+import androidx.compose.ui.text.style.TextAlign
+import kotlinx.coroutines.delay
+import java.time.Instant
+import java.time.LocalDate
+import java.time.LocalDateTime
+import java.time.LocalTime
+import java.time.ZoneOffset
 import pe.servicon.sigov.datos.Sello
 import pe.servicon.sigov.datos.Progresiva
 import pe.servicon.sigov.ui.theme.Marca
@@ -139,6 +150,16 @@ fun PantallaCamara(
                         modifier = Modifier.align(Alignment.TopCenter).padding(12.dp),
                     )
 
+                    // Lo que va a quedar impreso, donde va a quedar: abajo a la derecha
+                    if (estado.conMarcaDeAgua && estado.sello.activo) {
+                        SelloPrevio(
+                            fechaEditada = estado.fechaEditada,
+                            extras = estado.sello.extras,
+                            // Encima del disparador, para que no lo tape
+                            modifier = Modifier.align(Alignment.BottomEnd).padding(end = 12.dp, bottom = 118.dp),
+                        )
+                    }
+
                     Disparador(
                         habilitado = disparo != null && !estado.guardando,
                         guardando = estado.guardando,
@@ -189,9 +210,15 @@ fun PantallaCamara(
                 fases = estado.fases,
                 fase = estado.fase,
                 conMarca = estado.conMarcaDeAgua,
-                queLleva = resumenDelSello(estado.ajustes.sello),
+                queLleva = resumenDelSello(estado.sello),
                 alCambiarFase = vm::cambiarFase,
                 alAlternarMarca = vm::alternarMarca,
+            )
+
+            FechaDelSello(
+                editada = estado.fechaEditada,
+                alEditar = vm::editarFecha,
+                alUsarHoraReal = vm::usarHoraReal,
             )
 
             // La foto que se tocó en la tira, para verla, ampliarla o quitarla
@@ -433,21 +460,151 @@ private fun Controles(
 /** Qué campos lleva el sello, dicho en una línea. */
 private fun resumenDelSello(sello: Sello): String {
     if (!sello.activo) return "Desactivado para este contrato"
-    val campos = listOfNotNull(
-        "fecha".takeIf { sello.fecha },
-        "hora".takeIf { sello.hora && !sello.fecha },
-        "coordenadas".takeIf { sello.geo },
-        "tramo".takeIf { sello.tramo },
-        "progresiva".takeIf { sello.progresiva },
-        "actividad".takeIf { sello.actividad },
-        "PCI".takeIf { sello.pci },
-        "cuadrilla".takeIf { sello.cuadrilla },
-    )
-    return when (campos.size) {
-        0 -> "Solo la firma de la empresa"
-        1 -> campos.first().replaceFirstChar { it.uppercase() }
-        else -> campos.dropLast(1).joinToString(", ").replaceFirstChar { it.uppercase() } +
-            " y " + campos.last()
+    val extras = sello.extras
+    return when (extras.size) {
+        0 -> "Fecha y hora · lo demás se cambia en Configuración"
+        else -> "Fecha y hora, " + extras.joinToString(", ")
+    }
+}
+
+/** El reloj del sello: avanza solo, para que la vista previa no mienta. */
+@Composable
+private fun relojDelSello(editada: FechaEditada?): LocalDateTime {
+    var ahora by remember { mutableStateOf(Instant.now()) }
+    LaunchedEffect(Unit) {
+        while (true) {
+            delay(1_000)
+            ahora = Instant.now()
+        }
+    }
+    return editada?.let { it.momento.plusSeconds(java.time.Duration.between(it.editadaEn, ahora).seconds) }
+        ?: LocalDateTime.ofInstant(ahora, Peru.zona)
+}
+
+/** La fecha y hora tal como saldrán, abajo a la derecha de la foto. */
+@Composable
+private fun SelloPrevio(fechaEditada: FechaEditada?, extras: List<String>, modifier: Modifier = Modifier) {
+    val momento = relojDelSello(fechaEditada)
+    Column(modifier, horizontalAlignment = Alignment.End) {
+        if (extras.isNotEmpty()) {
+            Text(
+                "+ " + extras.joinToString(", "),
+                style = MaterialTheme.typography.labelSmall,
+                color = Color.White.copy(alpha = 0.85f),
+                textAlign = TextAlign.End,
+                modifier = Modifier.background(Color.Black.copy(alpha = 0.35f), RoundedCornerShape(6.dp))
+                    .padding(horizontal = 6.dp, vertical = 2.dp),
+            )
+            Spacer(Modifier.height(4.dp))
+        }
+        Text(
+            Peru.sello(momento),
+            style = MaterialTheme.typography.titleMedium,
+            fontWeight = FontWeight.Bold,
+            color = if (fechaEditada != null) Marca.Naranja else Color.White,
+            modifier = Modifier.background(Color.Black.copy(alpha = 0.35f), RoundedCornerShape(6.dp))
+                .padding(horizontal = 8.dp, vertical = 2.dp),
+        )
+    }
+}
+
+/**
+ * La fecha y hora del sello, editable antes de la toma y sin pedir motivo
+ * (Elvis: «simplemente que aparezca editar y coloque la fecha y la hora»).
+ * Editada se ve en naranja, para que nadie la deje puesta sin darse cuenta.
+ */
+@OptIn(ExperimentalMaterial3Api::class)
+@Composable
+private fun FechaDelSello(
+    editada: FechaEditada?,
+    alEditar: (LocalDateTime) -> Unit,
+    alUsarHoraReal: () -> Unit,
+) {
+    val momento = relojDelSello(editada)
+    var paso by remember { mutableStateOf(0) }          // 0 nada · 1 fecha · 2 hora
+    var dia by remember { mutableStateOf<LocalDate?>(null) }
+
+    Row(
+        Modifier
+            .fillMaxWidth()
+            .background(Color.Black)
+            .padding(horizontal = 12.dp, vertical = 4.dp),
+        verticalAlignment = Alignment.CenterVertically,
+        horizontalArrangement = Arrangement.spacedBy(10.dp),
+    ) {
+        Icon(
+            Icons.Outlined.EditCalendar,
+            contentDescription = null,
+            tint = if (editada != null) Marca.Naranja else Color.White.copy(alpha = 0.8f),
+            modifier = Modifier.size(18.dp),
+        )
+        Column(Modifier.weight(1f)) {
+            Text(
+                if (editada != null) "Fecha del sello editada" else "Fecha y hora del sello",
+                style = MaterialTheme.typography.bodyMedium,
+                color = if (editada != null) Marca.Naranja else Color.White,
+            )
+            Text(
+                Peru.sello(momento) + if (editada != null) "" else " · hora real",
+                style = MaterialTheme.typography.bodySmall,
+                color = Color.White.copy(alpha = 0.6f),
+            )
+        }
+        if (editada != null) {
+            TextButton(onClick = alUsarHoraReal) {
+                Icon(Icons.Outlined.Restore, contentDescription = null, modifier = Modifier.size(16.dp), tint = Color.White)
+                Spacer(Modifier.width(4.dp))
+                Text("Hora real", color = Color.White)
+            }
+        }
+        TextButton(onClick = { paso = 1 }) { Text("Editar", color = Marca.Verde) }
+    }
+
+    if (paso == 1) {
+        val hoy = Peru.hoy()
+        val estadoFecha = rememberDatePickerState(
+            initialSelectedDateMillis = momento.toLocalDate().atStartOfDay().toInstant(ZoneOffset.UTC).toEpochMilli(),
+            // Ni el futuro ni más de 30 días atrás: es para cerrar el día de ayer
+            selectableDates = object : SelectableDates {
+                override fun isSelectableDate(utcTimeMillis: Long): Boolean {
+                    val dia = Instant.ofEpochMilli(utcTimeMillis).atZone(ZoneOffset.UTC).toLocalDate()
+                    return !dia.isAfter(hoy) && !dia.isBefore(hoy.minusDays(30))
+                }
+                override fun isSelectableYear(year: Int) = year in hoy.minusDays(30).year..hoy.year
+            },
+        )
+        DatePickerDialog(
+            onDismissRequest = { paso = 0 },
+            confirmButton = {
+                TextButton(onClick = {
+                    dia = estadoFecha.selectedDateMillis?.let {
+                        Instant.ofEpochMilli(it).atZone(ZoneOffset.UTC).toLocalDate()
+                    }
+                    paso = if (dia != null) 2 else 0
+                }) { Text("Siguiente") }
+            },
+            dismissButton = { TextButton(onClick = { paso = 0 }) { Text("Cancelar") } },
+        ) { DatePicker(state = estadoFecha) }
+    }
+
+    if (paso == 2) {
+        val estadoHora = rememberTimePickerState(
+            initialHour = momento.hour,
+            initialMinute = momento.minute,
+            is24Hour = true,
+        )
+        AlertDialog(
+            onDismissRequest = { paso = 0 },
+            title = { Text("Hora del sello") },
+            text = { TimePicker(state = estadoHora) },
+            confirmButton = {
+                TextButton(onClick = {
+                    dia?.let { alEditar(LocalDateTime.of(it, LocalTime.of(estadoHora.hour, estadoHora.minute))) }
+                    paso = 0
+                }) { Text("Usar esta fecha") }
+            },
+            dismissButton = { TextButton(onClick = { paso = 0 }) { Text("Cancelar") } },
+        )
     }
 }
 
