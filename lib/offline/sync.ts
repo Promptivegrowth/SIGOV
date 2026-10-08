@@ -249,8 +249,9 @@ export async function syncNow(scope?: PullScope): Promise<SyncResult> {
 
     await purgeSynced(7)
 
-    // Registrar la sesión de sincronización en el servidor (trazabilidad)
-    if (activeScope?.serviceId && (result.pushed > 0 || result.pulled > 0)) {
+    // Registrar la sesión de sincronización en el servidor (trazabilidad).
+    // COVINCA entra como visor y solo mira: no escribe ni esta bitácora.
+    if (activeScope?.serviceId && activeScope.role !== 'visor' && (result.pushed > 0 || result.pulled > 0)) {
       try {
         const sb = createClient()
         const { data: auth } = await sb.auth.getUser()

@@ -207,7 +207,8 @@ class CampoRepositorio @Inject constructor(
                     .select {
                         filter {
                             eq("service_id", servicioId)
-                            isIn("status", listOf("pendiente", "en_atencion"))
+                            // Lo observado vuelve a la cuadrilla para subsanarlo
+                            isIn("status", listOf("pendiente", "en_atencion", "observado"))
                             // La vista llama a esta columna assigned_crew_id
                             cuadrillaId?.let { eq("assigned_crew_id", it) }
                         }
@@ -222,10 +223,143 @@ class CampoRepositorio @Inject constructor(
             filas.map { fila -> json.decodeFromString<ItemPci>(fila.toString()) }
         }.getOrElse {
             deLaCopia<ItemPci>("pci_items", servicioId)
-                .filter { it.status == "pendiente" || it.status == "en_atencion" }
+                .filter { it.estaAbierto }
                 .filter { cuadrillaId == null || it.cuadrillaId == cuadrillaId }
                 .sortedWith(compareBy({ it.vence ?: "9999-12-31" }, { it.numero ?: 0 }, { it.id }))
         }
+    }
+
+    /**
+     * Los PCI de la cuadrilla, uno por fila, con sus cuentas (OBS-05).
+     *
+     * Antes la pantalla mostraba cientos de ítems uno debajo de otro; ahora
+     * se elige primero el PCI —puede haber varios en paralelo— y recién se
+     * ven sus ítems.
+     */
+    suspend fun pciDeLaCuadrilla(servicioId: String, cuadrillaId: String?): List<ResumenPci> =
+        withContext(Dispatchers.IO) {
+            runCatching {
+                val filas = supabase.postgrest.from("v_pci_resumen")
+                    .select {
+                        filter {
+                            eq("service_id", servicioId)
+                            cuadrillaId?.let { eq("crew_id", it) }
+                        }
+                        order("code", Order.DESCENDING)
+                    }
+                    .decodeList<JsonObject>()
+                espejar("pci_resumen", servicioId, filas)
+                filas.map { json.decodeFromString<ResumenPci>(it.toString()) }
+            }.getOrElse {
+                deLaCopia<ResumenPci>("pci_resumen", servicioId)
+                    .filter { cuadrillaId == null || it.cuadrillaId == cuadrillaId }
+            }
+        }
+
+    /**
+     * Todos los ítems de la cuadrilla, en cualquier estado: los abiertos para
+     * trabajarlos y los levantados para ver si COVINCA los dio conformes.
+     */
+    suspend fun itemsPciDeLaCuadrilla(servicioId: String, cuadrillaId: String?): List<ItemPci> =
+        withContext(Dispatchers.IO) {
+            runCatching {
+                val filas = todasLasPaginas { desde, hasta ->
+                    supabase.postgrest.from("v_pci_items")
+                        .select {
+                            filter {
+                                eq("service_id", servicioId)
+                                cuadrillaId?.let { eq("assigned_crew_id", it) }
+                            }
+                            order("due_date", Order.ASCENDING)
+                            order("item_number", Order.ASCENDING)
+                            order("id", Order.ASCENDING)
+                            range(desde, hasta)
+                        }
+                        .decodeList<JsonObject>()
+                }
+                espejar("pci_items_cuadrilla", servicioId, filas)
+                filas.map { json.decodeFromString<ItemPci>(it.toString()) }
+            }.getOrElse {
+                deLaCopia<ItemPci>("pci_items_cuadrilla", servicioId)
+                    .filter { cuadrillaId == null || it.cuadrillaId == cuadrillaId }
+                    .sortedWith(compareBy({ it.vence ?: "9999-12-31" }, { it.numero ?: 0 }, { it.id }))
+            }
+        }
+
+    /**
+     * El registro de hoy que sostiene las fotos y el metrado de un ítem PCI.
+     *
+     * Se crea la primera vez que se toma una foto del ítem, con el metrado en
+     * cero: la foto del antes se toma antes de saber cuánto se va a hacer.
+     * Todo se guarda en el equipo y sale con la cola, como el resto.
+     */
+    suspend fun registroDelItemPci(servicioId: String, cuadrillaId: String?, item: ItemPci): RegistroLocal {
+        val parte = abrirParteDeHoy(servicioId, cuadrillaId)
+        partes.registroDePci(parte.clientId, item.id)?.let { return it }
+        val actividad = actividades(servicioId).firstOrNull { it.id == item.actividadId }
+            ?: Actividad(
+                id = item.actividadId ?: error("El ítem no tiene actividad. Avisa al supervisor."),
+                code = item.actividadCodigo ?: "",
+                name = item.actividad ?: item.description?.take(60) ?: "Ítem PCI",
+            )
+        return registrarActividad(
+            parte = parte,
+            actividad = actividad,
+            tramo = tramos(servicioId).firstOrNull { it.id == item.tramoId || it.name == item.tramo },
+            progresivaInicio = item.progresiva,
+            progresivaFin = item.progresivaFin,
+            lado = item.side ?: "derecho",
+            cantidad = 0.0,
+            unidad = item.unidad,
+            observacion = null,
+            origen = OrigenDelTrabajo.Pci(item),
+        )
+    }
+
+    /**
+     * El metrado ejecutado de un ítem PCI (OBS-13). Se corrige el mismo
+     * registro: la nube lo actualiza por su llave, no crea otro.
+     */
+    suspend fun fijarMetrado(registro: RegistroLocal, cantidad: Double): RegistroLocal = withContext(Dispatchers.IO) {
+        val nuevo = registro.copy(cantidad = cantidad)
+        partes.guardarRegistro(nuevo)
+        val anterior = cola.envio(registro.clientId)
+            ?.let { runCatching { json.parseToJsonElement(it.cuerpo) as JsonObject }.getOrNull() }
+        cola.encolar(
+            tabla = "work_entries",
+            clientId = registro.clientId,
+            dependeDe = registro.parteClientId,
+            etiqueta = registro.actividadNombre + " · " + cantidad,
+            cuerpo = buildJsonObject {
+                if (anterior != null) {
+                    anterior.forEach { (k, v) -> if (k != "client_id" && k != "work_order_id") put(k, v) }
+                } else {
+                    put("service_id", registro.servicioId)
+                    put("activity_id", registro.actividadId)
+                    registro.tramoId?.let { put("section_id", it) }
+                    registro.progresivaInicio?.let { put("prog_start_m", it) }
+                    registro.progresivaFin?.let { put("prog_end_m", it) }
+                    put("side", registro.lado)
+                    put("origen", registro.origen)
+                    registro.pciItemId?.let { put("pci_item_id", it) }
+                    registro.planItemId?.let { put("plan_item_id", it) }
+                }
+                put("quantity", cantidad)
+            },
+        )
+        nuevo
+    }
+
+    suspend fun validarPci(itemId: String, conforme: Boolean, nota: String?) = withContext(Dispatchers.IO) {
+        supabase.postgrest.rpc(
+            "pci_validar",
+            buildJsonObject {
+                put("p_item", itemId)
+                put("p_conforme", conforme)
+                nota?.takeIf { it.isNotBlank() }?.let { put("p_nota", it) }
+            },
+        )
+        Unit
     }
 
     // ─── El ciclo de la partida ───────────────────────────────────────────

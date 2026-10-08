@@ -64,7 +64,7 @@ class CamaraViewModel @Inject constructor(
     private val _estado = MutableStateFlow(EstadoCamara())
     val estado: StateFlow<EstadoCamara> = _estado.asStateFlow()
 
-    fun abrir(registroClientId: String) {
+    fun abrir(registroClientId: String, faseInicial: Fase? = null) {
         viewModelScope.launch {
             val registro = partes.registro(registroClientId)
             if (registro == null) {
@@ -74,7 +74,7 @@ class CamaraViewModel @Inject constructor(
             _estado.update {
                 it.copy(
                     // En un ítem PCI se empieza por el «antes»
-                    fase = if (registro.pciItemId != null) Fase.ANTES else it.fase,
+                    fase = faseInicial ?: if (registro.pciItemId != null) Fase.ANTES else it.fase,
                     registro = registro,
                     // El formato del sello lo fija el contrato, no la app
                     ajustes = campo.ajustes(registro.servicioId),

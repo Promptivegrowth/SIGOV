@@ -95,7 +95,7 @@ export function AvanceClient() {
   const avance = plan.length ? Math.round((ejecutadas / plan.length) * 100) : 0
 
   const delDia = plan.filter((p: any) => p.scheduled_on === hoy)
-  const pciAtendidos = pci.filter((p: any) => ['levantado', 'validado'].includes(p.status)).length
+  const pciAtendidos = pci.filter((p: any) => ['levantado', 'subsanado', 'validado'].includes(p.status)).length
   const pciAbiertos = pci.filter((p: any) => ['pendiente', 'en_atencion'].includes(p.status))
   // Documentos PCI distintos con algún ítem abierto: no es lo mismo «3 PCI»
   // que «314 ítems» (OBS-12).

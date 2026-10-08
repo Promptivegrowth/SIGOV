@@ -16,8 +16,10 @@ export type Database = {
     Tables: {
       activities_catalog: {
         Row: {
+          carpeta_ns: string | null
           category: string | null
           code: string
+          codigo_original: string | null
           color: string | null
           created_at: string
           created_by: string | null
@@ -28,6 +30,7 @@ export type Database = {
           is_active: boolean
           min_photos: number
           name: string
+          numero_covinca: number | null
           requires_photo: boolean
           service_id: string
           unit_id: string | null
@@ -35,8 +38,10 @@ export type Database = {
           yield_per_day: number | null
         }
         Insert: {
+          carpeta_ns?: string | null
           category?: string | null
           code: string
+          codigo_original?: string | null
           color?: string | null
           created_at?: string
           created_by?: string | null
@@ -47,6 +52,7 @@ export type Database = {
           is_active?: boolean
           min_photos?: number
           name: string
+          numero_covinca?: number | null
           requires_photo?: boolean
           service_id: string
           unit_id?: string | null
@@ -54,8 +60,10 @@ export type Database = {
           yield_per_day?: number | null
         }
         Update: {
+          carpeta_ns?: string | null
           category?: string | null
           code?: string
+          codigo_original?: string | null
           color?: string | null
           created_at?: string
           created_by?: string | null
@@ -66,6 +74,7 @@ export type Database = {
           is_active?: boolean
           min_photos?: number
           name?: string
+          numero_covinca?: number | null
           requires_photo?: boolean
           service_id?: string
           unit_id?: string | null
@@ -1062,7 +1071,10 @@ export type Database = {
           is_active: boolean
           leader_id: string | null
           name: string
+          numero: number | null
           plate: string | null
+          section_id: string | null
+          sede: string | null
           service_id: string
           supervisor_id: string | null
           updated_at: string
@@ -1078,7 +1090,10 @@ export type Database = {
           is_active?: boolean
           leader_id?: string | null
           name: string
+          numero?: number | null
           plate?: string | null
+          section_id?: string | null
+          sede?: string | null
           service_id: string
           supervisor_id?: string | null
           updated_at?: string
@@ -1094,7 +1109,10 @@ export type Database = {
           is_active?: boolean
           leader_id?: string | null
           name?: string
+          numero?: number | null
           plate?: string | null
+          section_id?: string | null
+          sede?: string | null
           service_id?: string
           supervisor_id?: string | null
           updated_at?: string
@@ -1113,6 +1131,13 @@ export type Database = {
             columns: ["leader_id"]
             isOneToOne: false
             referencedRelation: "profiles"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "crews_section_id_fkey"
+            columns: ["section_id"]
+            isOneToOne: false
+            referencedRelation: "road_sections"
             referencedColumns: ["id"]
           },
           {
@@ -1319,6 +1344,13 @@ export type Database = {
             isOneToOne: false
             referencedRelation: "pcis"
             referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "documents_pci_id_fkey"
+            columns: ["pci_id"]
+            isOneToOne: false
+            referencedRelation: "v_pci_resumen"
+            referencedColumns: ["pci_id"]
           },
           {
             foreignKeyName: "documents_section_id_fkey"
@@ -1916,6 +1948,68 @@ export type Database = {
         }
         Relationships: []
       }
+      pci_item_eventos: {
+        Row: {
+          a: Database["public"]["Enums"]["pci_item_status"]
+          cuando: string
+          de: Database["public"]["Enums"]["pci_item_status"] | null
+          id: number
+          nota: string | null
+          pci_item_id: string
+          quien: string | null
+          service_id: string
+        }
+        Insert: {
+          a: Database["public"]["Enums"]["pci_item_status"]
+          cuando?: string
+          de?: Database["public"]["Enums"]["pci_item_status"] | null
+          id?: number
+          nota?: string | null
+          pci_item_id: string
+          quien?: string | null
+          service_id: string
+        }
+        Update: {
+          a?: Database["public"]["Enums"]["pci_item_status"]
+          cuando?: string
+          de?: Database["public"]["Enums"]["pci_item_status"] | null
+          id?: number
+          nota?: string | null
+          pci_item_id?: string
+          quien?: string | null
+          service_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "pci_item_eventos_pci_item_id_fkey"
+            columns: ["pci_item_id"]
+            isOneToOne: false
+            referencedRelation: "pci_items"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "pci_item_eventos_pci_item_id_fkey"
+            columns: ["pci_item_id"]
+            isOneToOne: false
+            referencedRelation: "v_pci_items"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "pci_item_eventos_quien_fkey"
+            columns: ["quien"]
+            isOneToOne: false
+            referencedRelation: "profiles"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "pci_item_eventos_service_id_fkey"
+            columns: ["service_id"]
+            isOneToOne: false
+            referencedRelation: "services"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       pci_items: {
         Row: {
           activity_id: string | null
@@ -2067,6 +2161,13 @@ export type Database = {
             referencedColumns: ["id"]
           },
           {
+            foreignKeyName: "pci_items_pci_id_fkey"
+            columns: ["pci_id"]
+            isOneToOne: false
+            referencedRelation: "v_pci_resumen"
+            referencedColumns: ["pci_id"]
+          },
+          {
             foreignKeyName: "pci_items_section_id_fkey"
             columns: ["section_id"]
             isOneToOne: false
@@ -2202,8 +2303,11 @@ export type Database = {
           impedimento: string | null
           impedimento_at: string | null
           impedimento_by: string | null
+          lado: string | null
           notes: string | null
+          origen: string
           original_date: string | null
+          pci_item_id: string | null
           plan_id: string
           priority: number
           prog_end_m: number
@@ -2216,6 +2320,7 @@ export type Database = {
           started_at: string | null
           started_by: string | null
           status: Database["public"]["Enums"]["plan_item_status"]
+          subcontratada: boolean
           suspended_by_pci_id: string | null
           target_qty: number
           unit_id: string | null
@@ -2237,8 +2342,11 @@ export type Database = {
           impedimento?: string | null
           impedimento_at?: string | null
           impedimento_by?: string | null
+          lado?: string | null
           notes?: string | null
+          origen?: string
           original_date?: string | null
+          pci_item_id?: string | null
           plan_id: string
           priority?: number
           prog_end_m: number
@@ -2251,6 +2359,7 @@ export type Database = {
           started_at?: string | null
           started_by?: string | null
           status?: Database["public"]["Enums"]["plan_item_status"]
+          subcontratada?: boolean
           suspended_by_pci_id?: string | null
           target_qty?: number
           unit_id?: string | null
@@ -2272,8 +2381,11 @@ export type Database = {
           impedimento?: string | null
           impedimento_at?: string | null
           impedimento_by?: string | null
+          lado?: string | null
           notes?: string | null
+          origen?: string
           original_date?: string | null
+          pci_item_id?: string | null
           plan_id?: string
           priority?: number
           prog_end_m?: number
@@ -2286,6 +2398,7 @@ export type Database = {
           started_at?: string | null
           started_by?: string | null
           status?: Database["public"]["Enums"]["plan_item_status"]
+          subcontratada?: boolean
           suspended_by_pci_id?: string | null
           target_qty?: number
           unit_id?: string | null
@@ -2337,6 +2450,20 @@ export type Database = {
             referencedColumns: ["id"]
           },
           {
+            foreignKeyName: "plan_items_pci_item_id_fkey"
+            columns: ["pci_item_id"]
+            isOneToOne: false
+            referencedRelation: "pci_items"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "plan_items_pci_item_id_fkey"
+            columns: ["pci_item_id"]
+            isOneToOne: false
+            referencedRelation: "v_pci_items"
+            referencedColumns: ["id"]
+          },
+          {
             foreignKeyName: "plan_items_plan_id_fkey"
             columns: ["plan_id"]
             isOneToOne: false
@@ -2370,6 +2497,13 @@ export type Database = {
             isOneToOne: false
             referencedRelation: "pcis"
             referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "plan_items_suspended_by_pci_id_fkey"
+            columns: ["suspended_by_pci_id"]
+            isOneToOne: false
+            referencedRelation: "v_pci_resumen"
+            referencedColumns: ["pci_id"]
           },
           {
             foreignKeyName: "plan_items_unit_id_fkey"
@@ -2441,6 +2575,13 @@ export type Database = {
             isOneToOne: false
             referencedRelation: "pcis"
             referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "plan_suspensions_pci_id_fkey"
+            columns: ["pci_id"]
+            isOneToOne: false
+            referencedRelation: "v_pci_resumen"
+            referencedColumns: ["pci_id"]
           },
           {
             foreignKeyName: "plan_suspensions_plan_id_fkey"
@@ -3075,6 +3216,57 @@ export type Database = {
           },
           {
             foreignKeyName: "service_members_service_id_fkey"
+            columns: ["service_id"]
+            isOneToOne: false
+            referencedRelation: "services"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      service_sectors: {
+        Row: {
+          code: string
+          created_at: string
+          folder: string
+          id: string
+          orden: number
+          prog_end_m: number
+          prog_start_m: number
+          section_id: string
+          service_id: string
+        }
+        Insert: {
+          code: string
+          created_at?: string
+          folder: string
+          id?: string
+          orden?: number
+          prog_end_m: number
+          prog_start_m: number
+          section_id: string
+          service_id: string
+        }
+        Update: {
+          code?: string
+          created_at?: string
+          folder?: string
+          id?: string
+          orden?: number
+          prog_end_m?: number
+          prog_start_m?: number
+          section_id?: string
+          service_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "service_sectors_section_id_fkey"
+            columns: ["section_id"]
+            isOneToOne: false
+            referencedRelation: "road_sections"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "service_sectors_service_id_fkey"
             columns: ["service_id"]
             isOneToOne: false
             referencedRelation: "services"
@@ -4006,14 +4198,19 @@ export type Database = {
           created_at: string
           created_by: string | null
           deleted_at: string | null
+          emitido_on: string | null
           ends_on: string
           id: string
+          inspector: string | null
           notes: string | null
           published_at: string | null
           published_by: string | null
+          residente: string | null
+          semana_contrato: number | null
           service_id: string
           starts_on: string
           status: Database["public"]["Enums"]["plan_status"]
+          supervisor: string | null
           updated_at: string
           week: number
           year: number
@@ -4022,14 +4219,19 @@ export type Database = {
           created_at?: string
           created_by?: string | null
           deleted_at?: string | null
+          emitido_on?: string | null
           ends_on: string
           id?: string
+          inspector?: string | null
           notes?: string | null
           published_at?: string | null
           published_by?: string | null
+          residente?: string | null
+          semana_contrato?: number | null
           service_id: string
           starts_on: string
           status?: Database["public"]["Enums"]["plan_status"]
+          supervisor?: string | null
           updated_at?: string
           week: number
           year: number
@@ -4038,14 +4240,19 @@ export type Database = {
           created_at?: string
           created_by?: string | null
           deleted_at?: string | null
+          emitido_on?: string | null
           ends_on?: string
           id?: string
+          inspector?: string | null
           notes?: string | null
           published_at?: string | null
           published_by?: string | null
+          residente?: string | null
+          semana_contrato?: number | null
           service_id?: string
           starts_on?: string
           status?: Database["public"]["Enums"]["plan_status"]
+          supervisor?: string | null
           updated_at?: string
           week?: number
           year?: number
@@ -4088,6 +4295,7 @@ export type Database = {
           lat: number | null
           lng: number | null
           observation: string | null
+          origen: string | null
           pci_item_id: string | null
           plan_item_id: string | null
           prog_end_m: number | null
@@ -4114,6 +4322,7 @@ export type Database = {
           lat?: number | null
           lng?: number | null
           observation?: string | null
+          origen?: string | null
           pci_item_id?: string | null
           plan_item_id?: string | null
           prog_end_m?: number | null
@@ -4140,6 +4349,7 @@ export type Database = {
           lat?: number | null
           lng?: number | null
           observation?: string | null
+          origen?: string | null
           pci_item_id?: string | null
           plan_item_id?: string | null
           prog_end_m?: number | null
@@ -4884,6 +5094,7 @@ export type Database = {
       }
       v_pci_items: {
         Row: {
+          activity_code: string | null
           activity_id: string | null
           activity_name: string | null
           assigned_crew_id: string | null
@@ -4898,12 +5109,16 @@ export type Database = {
           evidence_count: number | null
           fotos_antes: number | null
           fotos_despues: number | null
+          fotos_durante: number | null
           id: string | null
           item_number: number | null
+          metrado_registrado: number | null
           notes: string | null
+          observacion: string | null
           pci_code: string | null
           pci_id: string | null
           pci_priority: Database["public"]["Enums"]["pci_priority"] | null
+          pci_status: Database["public"]["Enums"]["pci_status"] | null
           pci_title: string | null
           prog_end_m: number | null
           prog_end_txt: string | null
@@ -4961,6 +5176,13 @@ export type Database = {
             referencedColumns: ["id"]
           },
           {
+            foreignKeyName: "pci_items_pci_id_fkey"
+            columns: ["pci_id"]
+            isOneToOne: false
+            referencedRelation: "v_pci_resumen"
+            referencedColumns: ["pci_id"]
+          },
+          {
             foreignKeyName: "pci_items_section_id_fkey"
             columns: ["section_id"]
             isOneToOne: false
@@ -4969,6 +5191,50 @@ export type Database = {
           },
           {
             foreignKeyName: "pci_items_service_id_fkey"
+            columns: ["service_id"]
+            isOneToOne: false
+            referencedRelation: "services"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      v_pci_resumen: {
+        Row: {
+          code: string | null
+          conformes: number | null
+          crew_id: string | null
+          en_atencion: number | null
+          items: number | null
+          notified_on: string | null
+          observados: number | null
+          pci_id: string | null
+          pci_status: Database["public"]["Enums"]["pci_status"] | null
+          pendientes: number | null
+          por_validar: number | null
+          proximo_vencimiento: string | null
+          received_on: string | null
+          service_id: string | null
+          title: string | null
+          urgentes: number | null
+          vencidos: number | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "pci_items_assigned_crew_id_fkey"
+            columns: ["crew_id"]
+            isOneToOne: false
+            referencedRelation: "crews"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "pci_items_assigned_crew_id_fkey"
+            columns: ["crew_id"]
+            isOneToOne: false
+            referencedRelation: "v_hygiene_today"
+            referencedColumns: ["crew_id"]
+          },
+          {
+            foreignKeyName: "pcis_service_id_fkey"
             columns: ["service_id"]
             isOneToOne: false
             referencedRelation: "services"
@@ -5000,24 +5266,33 @@ export type Database = {
       }
       v_plan_items: {
         Row: {
+          activity_carpeta_ns: string | null
           activity_category: string | null
           activity_code: string | null
           activity_color: string | null
           activity_id: string | null
           activity_name: string | null
+          activity_numero: number | null
           created_at: string | null
           crew_color: string | null
           crew_id: string | null
           crew_name: string | null
+          crew_numero: number | null
+          crew_sede: string | null
           executed_qty: number | null
           finished_at: string | null
           finished_by_name: string | null
           id: string | null
           impedimento: string | null
           impedimento_at: string | null
+          lado: string | null
           notes: string | null
+          origen: string | null
           original_date: string | null
           pci_code: string | null
+          pci_item_id: string | null
+          pci_item_number: number | null
+          pci_item_pci_code: string | null
           plan_id: string | null
           plan_status: Database["public"]["Enums"]["plan_status"] | null
           priority: number | null
@@ -5031,11 +5306,14 @@ export type Database = {
           section_code: string | null
           section_id: string | null
           section_name: string | null
+          sector_code: string | null
           service_id: string | null
           sort_order: number | null
           started_at: string | null
           started_by_name: string | null
           status: Database["public"]["Enums"]["plan_item_status"] | null
+          subcontratada: boolean | null
+          supervisor_name: string | null
           suspended_by_pci_id: string | null
           target_qty: number | null
           unit_symbol: string | null
@@ -5068,6 +5346,20 @@ export type Database = {
             referencedColumns: ["crew_id"]
           },
           {
+            foreignKeyName: "plan_items_pci_item_id_fkey"
+            columns: ["pci_item_id"]
+            isOneToOne: false
+            referencedRelation: "pci_items"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "plan_items_pci_item_id_fkey"
+            columns: ["pci_item_id"]
+            isOneToOne: false
+            referencedRelation: "v_pci_items"
+            referencedColumns: ["id"]
+          },
+          {
             foreignKeyName: "plan_items_plan_id_fkey"
             columns: ["plan_id"]
             isOneToOne: false
@@ -5094,6 +5386,13 @@ export type Database = {
             isOneToOne: false
             referencedRelation: "pcis"
             referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "plan_items_suspended_by_pci_id_fkey"
+            columns: ["suspended_by_pci_id"]
+            isOneToOne: false
+            referencedRelation: "v_pci_resumen"
+            referencedColumns: ["pci_id"]
           },
         ]
       }
@@ -5650,6 +5949,10 @@ export type Database = {
         }[]
       }
       apply_pci_suspension: { Args: { p_pci_id: string }; Returns: Json }
+      apply_pci_suspension_sin_permiso: {
+        Args: { p_pci_id: string }
+        Returns: Json
+      }
       asset_semaforo: {
         Args: { p_dias_ambar: number; p_dias_verde: number; p_ultima: string }
         Returns: Database["public"]["Enums"]["semaforo_intervencion"]
@@ -5675,12 +5978,12 @@ export type Database = {
       crear_pedido: {
         Args: {
           p_aprobar?: boolean
-          p_crew_id: string
-          p_items: Json
-          p_needed_on: string
-          p_plan_item_id: string
-          p_reason: string
-          p_section_id: string
+          p_crew_id?: string
+          p_items?: Json
+          p_needed_on?: string
+          p_plan_item_id?: string
+          p_reason?: string
+          p_section_id?: string
           p_service_id: string
         }
         Returns: string
@@ -5697,6 +6000,10 @@ export type Database = {
           p_starts_on?: string
         }
         Returns: Json
+      }
+      dar_de_baja_evidencia: {
+        Args: { p_client_id: string }
+        Returns: undefined
       }
       dashboard_activity_production: {
         Args: { p_from?: string; p_service_id: string; p_to?: string }
@@ -5751,6 +6058,7 @@ export type Database = {
         }
         Returns: Database["public"]["Enums"]["supply_request_status"]
       }
+      estoy_activo: { Args: never; Returns: boolean }
       evaluate_pci_deadlines: { Args: never; Returns: Json }
       evidence_gallery: {
         Args: {
@@ -5887,6 +6195,18 @@ export type Database = {
         }
         Returns: Json
       }
+      pci_validar: {
+        Args: { p_conforme: boolean; p_item: string; p_nota?: string }
+        Returns: Json
+      }
+      pedido_de_campo_en_transicion: {
+        Args: {
+          p_created_by: string
+          p_service_id: string
+          p_status: Database["public"]["Enums"]["supply_request_status"]
+        }
+        Returns: boolean
+      }
       preview_pci_suspension: { Args: { p_pci_id: string }; Returns: Json }
       progresiva_con_distancia: {
         Args: { p_lat: number; p_lng: number; p_section_id: string }
@@ -5896,8 +6216,28 @@ export type Database = {
         Args: { p_lat: number; p_lng: number; p_section_id: string }
         Returns: number
       }
+      puede_atender_item: {
+        Args: { p_item: Database["public"]["Tables"]["pci_items"]["Row"] }
+        Returns: boolean
+      }
       puede_leer_servicio: { Args: { p_service_id: string }; Returns: boolean }
+      puedo_mover_partida: {
+        Args: { p_crew_id: string; p_service_id: string }
+        Returns: boolean
+      }
+      renglon_de_campo_en_transicion: {
+        Args: {
+          p_qty_approved: number
+          p_request_id: string
+          p_service_id: string
+        }
+        Returns: boolean
+      }
       revert_pci_suspension: {
+        Args: { p_suspension_id: string }
+        Returns: Json
+      }
+      revert_pci_suspension_sin_permiso: {
         Args: { p_suspension_id: string }
         Returns: Json
       }
@@ -5915,6 +6255,26 @@ export type Database = {
         Returns: Database["public"]["Enums"]["user_role"]
       }
       sections_geojson: { Args: { p_service_id: string }; Returns: Json }
+      sector_de: {
+        Args: { p_prog_m: number; p_section_id: string }
+        Returns: {
+          code: string
+          created_at: string
+          folder: string
+          id: string
+          orden: number
+          prog_end_m: number
+          prog_start_m: number
+          section_id: string
+          service_id: string
+        }
+        SetofOptions: {
+          from: "*"
+          to: "service_sectors"
+          isOneToOne: true
+          isSetofReturn: false
+        }
+      }
       set_section_geometry: {
         Args: { p_coords: Json; p_section_id: string }
         Returns: Json
@@ -5979,6 +6339,8 @@ export type Database = {
         | "levantado"
         | "validado"
         | "rechazado"
+        | "observado"
+        | "subsanado"
       pci_priority: "baja" | "media" | "alta" | "critica"
       pci_status:
         | "abierto"
@@ -6231,6 +6593,8 @@ export const Constants = {
         "levantado",
         "validado",
         "rechazado",
+        "observado",
+        "subsanado",
       ],
       pci_priority: ["baja", "media", "alta", "critica"],
       pci_status: ["abierto", "en_atencion", "levantado", "cerrado", "vencido"],

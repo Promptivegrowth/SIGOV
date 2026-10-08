@@ -156,13 +156,22 @@ export const PCI_PRIORITY = {
  */
 export const PCI_ABIERTO: readonly string[] = ['abierto', 'en_atencion', 'vencido']
 
+/**
+ * El ciclo del ítem PCI (OBS-10/14/15): la cuadrilla lo levanta, COVINCA
+ * le da conformidad o lo observa, y lo observado se subsana y vuelve a
+ * revisarse. «rechazado» queda solo por compatibilidad: ya no se usa.
+ */
 export const PCI_ITEM_STATUS = {
-  pendiente:   { label: 'Pendiente',   className: 'bg-muted text-muted-foreground' },
-  en_atencion: { label: 'En atención', className: 'bg-info/15 text-info' },
-  levantado:   { label: 'Levantado',   className: 'bg-success/15 text-success' },
-  validado:    { label: 'Validado',    className: 'bg-success/25 text-success' },
-  rechazado:   { label: 'Rechazado',   className: 'bg-destructive/15 text-destructive' },
+  pendiente:   { label: 'Pendiente',              className: 'bg-muted text-muted-foreground' },
+  en_atencion: { label: 'En ejecución',           className: 'bg-info/15 text-info' },
+  levantado:   { label: 'Por validar COVINCA',    className: 'bg-warning/20 text-warning' },
+  observado:   { label: 'Observado',              className: 'bg-destructive/15 text-destructive' },
+  subsanado:   { label: 'Subsanado · por validar', className: 'bg-warning/20 text-warning' },
+  validado:    { label: 'Conforme',               className: 'bg-success/20 text-success' },
 } as const
+
+/** Los estados en que el ítem ya salió de la cuadrilla. */
+export const PCI_ITEM_LEVANTADO: readonly string[] = ['levantado', 'subsanado', 'validado']
 
 /**
  * Los cinco estados de una partida, como los nombra la obra.

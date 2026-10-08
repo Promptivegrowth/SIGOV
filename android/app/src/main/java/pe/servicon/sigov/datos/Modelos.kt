@@ -100,6 +100,7 @@ data class ItemPci(
     val description: String? = null,
     @SerialName("pci_title") val pciTitulo: String? = null,
     @SerialName("section_name") val tramo: String? = null,
+    @SerialName("section_id") val tramoId: String? = null,
     @SerialName("prog_start_m") val progresiva: Double? = null,
     @SerialName("prog_end_m") val progresivaFin: Double? = null,
     val side: String? = null,
@@ -116,21 +117,50 @@ data class ItemPci(
     @SerialName("evidence_count") val fotos: Int = 0,
     @SerialName("fotos_antes") val fotosAntes: Int = 0,
     @SerialName("fotos_despues") val fotosDespues: Int = 0,
+    @SerialName("fotos_durante") val fotosDurante: Int = 0,
+    @SerialName("metrado_registrado") val metradoRegistrado: Double = 0.0,
+    /** Lo que observó COVINCA, si lo devolvió. */
+    val observacion: String? = null,
+    @SerialName("activity_code") val actividadCodigo: String? = null,
     @SerialName("started_at") val atendidoDesde: String? = null,
     val notes: String? = null,
 ) {
     val estaPendiente: Boolean get() = status == "pendiente"
     val estaEnAtencion: Boolean get() = status == "en_atencion"
-    val estaLevantado: Boolean get() = status in setOf("levantado", "validado")
+    val estaObservado: Boolean get() = status == "observado"
+    /** Ya salió de la cuadrilla: espera a COVINCA o ya está conforme. */
+    val estaLevantado: Boolean get() = status in setOf("levantado", "validado", "subsanado")
+    val esperaValidacion: Boolean get() = status in setOf("levantado", "subsanado")
+    val esConforme: Boolean get() = status == "validado"
+    /** Lo que sigue en manos de la cuadrilla. */
+    val estaAbierto: Boolean get() = status in setOf("pendiente", "en_atencion", "observado")
+
+    /** Las tres fotos que pide COVINCA para un ítem: antes, durante y después. */
+    val fotosCompletas: Boolean get() = fotosAntes > 0 && fotosDurante > 0 && fotosDespues > 0
 
     /**
-     * Si se puede dar por levantado ahora mismo.
-     *
-     * La foto del «después» es la que sustenta el levantamiento ante el
-     * cliente. Comprobarlo aquí evita que el capataz guarde el equipo, se
-     * vaya, y se entere del rechazo al día siguiente.
+     * Si se puede dar por levantado ahora mismo: con la foto del antes, la
+     * del después y el metrado registrado (OBS-13). Lo mismo exige la base;
+     * comprobarlo aquí evita que el capataz se entere del rechazo después.
      */
-    val puedeLevantarse: Boolean get() = !exigeEvidencia || fotosDespues > 0
+    val puedeLevantarse: Boolean
+        get() = (!exigeEvidencia || (fotosAntes > 0 && fotosDespues > 0)) && metradoRegistrado > 0
+
+    /** El estado dicho con palabras, como lo pide el consolidado (OBS-10). */
+    val estadoLegible: String
+        get() = when (status) {
+            "pendiente" -> "Pendiente"
+            "en_atencion" -> when {
+                exigeEvidencia && (fotosAntes == 0 || fotosDespues == 0) -> "En ejecución · faltan fotos"
+                metradoRegistrado <= 0 -> "En ejecución · falta el metrado"
+                else -> "Pendiente de cierre"
+            }
+            "levantado" -> "Pendiente de validación COVINCA"
+            "subsanado" -> "Subsanado · por validar"
+            "observado" -> "Observado por COVINCA"
+            "validado" -> "Conforme"
+            else -> status
+        }
 }
 
 /** El parte del día tal como lo devuelve la nube. */
@@ -145,3 +175,27 @@ data class ParteRemoto(
     val weather: String? = null,
     val notes: String? = null,
 )
+
+/** Un PCI visto por la cuadrilla: cuántos ítems suyos tiene y cómo van. */
+@Serializable
+data class ResumenPci(
+    @SerialName("pci_id") val pciId: String,
+    val code: String,
+    val title: String? = null,
+    @SerialName("pci_status") val estado: String? = null,
+    @SerialName("crew_id") val cuadrillaId: String? = null,
+    val items: Int = 0,
+    val pendientes: Int = 0,
+    @SerialName("en_atencion") val enAtencion: Int = 0,
+    @SerialName("por_validar") val porValidar: Int = 0,
+    val observados: Int = 0,
+    val conformes: Int = 0,
+    val vencidos: Int = 0,
+    val urgentes: Int = 0,
+    @SerialName("proximo_vencimiento") val proximoVencimiento: String? = null,
+) {
+    /** Lo que todavía depende de la cuadrilla. */
+    val abiertos: Int get() = pendientes + enAtencion + observados
+    val completado: Boolean get() = items > 0 && conformes == items
+}
+

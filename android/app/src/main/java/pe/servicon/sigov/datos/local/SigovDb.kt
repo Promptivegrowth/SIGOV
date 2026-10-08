@@ -137,6 +137,24 @@ interface ParteDao {
     @Query("SELECT * FROM evidencias WHERE registroClientId = :registroId ORDER BY tomadaEn")
     fun evidenciasDe(registroId: String): Flow<List<EvidenciaLocal>>
 
+    /**
+     * Las fotos de ítems PCI que siguen en el teléfono sin llegar a la nube,
+     * por ítem y fase: el capataz las tomó y tiene que verlas contadas.
+     */
+    @Query(
+        """SELECT r.pciItemId AS pciItemId, e.fase AS fase, COUNT(*) AS cuantas
+             FROM evidencias e
+             JOIN registros r ON r.clientId = e.registroClientId
+             JOIN cola c ON c.clientId = e.clientId
+            WHERE r.pciItemId IS NOT NULL AND c.estado != 'ENVIADO'
+            GROUP BY r.pciItemId, e.fase"""
+    )
+    suspend fun fotosPciPorEnviar(): List<FotosPorEnviar>
+
+    /** El registro de un ítem PCI en un parte: el que sostiene sus fotos y su metrado. */
+    @Query("SELECT * FROM registros WHERE parteClientId = :parteId AND pciItemId = :pciItemId ORDER BY creadoEn LIMIT 1")
+    suspend fun registroDePci(parteId: String, pciItemId: String): RegistroLocal?
+
     /** Avance anotado en el equipo para una partida, haya subido o no. */
     @Query("SELECT COUNT(*) FROM registros WHERE planItemId = :planItemId")
     suspend fun registrosDePartida(planItemId: String): Int

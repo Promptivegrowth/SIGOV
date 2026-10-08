@@ -60,6 +60,8 @@ import java.io.File
 @Composable
 fun PantallaCamara(
     registroClientId: String,
+    /** La fase con que se abre: desde la ficha PCI se llega con la foto ya elegida. */
+    faseInicial: Fase? = null,
     vm: CamaraViewModel = hiltViewModel(),
     alVolver: () -> Unit,
 ) {
@@ -67,7 +69,7 @@ fun PantallaCamara(
     val avisos = remember { SnackbarHostState() }
     val contexto = LocalContext.current
 
-    LaunchedEffect(registroClientId) { vm.abrir(registroClientId) }
+    LaunchedEffect(registroClientId) { vm.abrir(registroClientId, faseInicial) }
 
     LaunchedEffect(estado.aviso, estado.error) {
         (estado.aviso ?: estado.error)?.let {

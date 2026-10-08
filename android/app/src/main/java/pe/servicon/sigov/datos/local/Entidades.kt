@@ -166,3 +166,10 @@ data class ConteoEvidencias(
     val registroClientId: String,
     val cuantas: Int,
 )
+
+/** Cuántas fotos de un ítem PCI, en una fase, esperan su envío. */
+data class FotosPorEnviar(
+    val pciItemId: String,
+    val fase: String,
+    val cuantas: Int,
+)

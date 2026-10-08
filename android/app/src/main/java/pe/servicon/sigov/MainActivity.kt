@@ -161,7 +161,10 @@ class MainActivity : ComponentActivity() {
                         )
                     }
                     composable("pci") {
-                        PantallaPci(alVolver = { nav.popBackStack() })
+                        PantallaPci(
+                            alVolver = { nav.popBackStack() },
+                            alTomarFoto = { registroId, fase -> nav.navigate("evidencia/$registroId?fase=${fase.valor}") },
+                        )
                     }
                     composable("charlas") {
                         PantallaCharlas(alVolver = { nav.popBackStack() })
@@ -225,11 +228,16 @@ class MainActivity : ComponentActivity() {
                         )
                     }
                     composable(
-                        "evidencia/{registro}",
-                        arguments = listOf(navArgument("registro") { type = NavType.StringType }),
+                        "evidencia/{registro}?fase={fase}",
+                        arguments = listOf(
+                            navArgument("registro") { type = NavType.StringType },
+                            navArgument("fase") { type = NavType.StringType; nullable = true; defaultValue = null },
+                        ),
                     ) { entrada ->
+                        val fase = entrada.arguments?.getString("fase")
                         PantallaCamara(
                             registroClientId = entrada.arguments?.getString("registro").orEmpty(),
+                            faseInicial = pe.servicon.sigov.datos.Fase.entries.firstOrNull { it.valor == fase },
                             alVolver = { nav.popBackStack() },
                         )
                     }
