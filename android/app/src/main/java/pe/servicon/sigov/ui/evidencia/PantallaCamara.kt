@@ -265,7 +265,7 @@ fun PantallaCamara(
 
 /** El visor. Se ata al ciclo de vida para que la cámara se suelte al salir. */
 @Composable
-private fun VisorDeCamara(onListo: (ImageCapture) -> Unit) {
+internal fun VisorDeCamara(onListo: (ImageCapture) -> Unit) {
     val contexto = LocalContext.current
     val dueno = LocalLifecycleOwner.current
 
@@ -348,7 +348,7 @@ private fun SelloEnVivo(buscando: Boolean, coordenadas: String?, modifier: Modif
 }
 
 @Composable
-private fun Disparador(
+internal fun Disparador(
     habilitado: Boolean,
     guardando: Boolean,
     modifier: Modifier = Modifier,

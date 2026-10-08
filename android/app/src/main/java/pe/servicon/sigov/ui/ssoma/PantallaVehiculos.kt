@@ -42,6 +42,7 @@ import pe.servicon.sigov.ui.theme.Semaforo
 fun PantallaVehiculos(
     vm: VehiculosViewModel = hiltViewModel(),
     alVolver: () -> Unit,
+    alFotografiar: (Vehiculo) -> Unit = {},
 ) {
     val estado by vm.estado.collectAsStateWithLifecycle()
     val avisos = remember { SnackbarHostState() }
@@ -99,6 +100,13 @@ fun PantallaVehiculos(
                     verticalArrangement = Arrangement.spacedBy(10.dp),
                 ) {
                     items(estado.visibles, key = { it.id }) { vehiculo ->
+                        // El checklist físico del vehículo, fotografiado (OBS-67)
+                        pe.servicon.sigov.ui.documentos.AccesoAFoto(
+                            titulo = "Fotografiar el checklist de ${vehiculo.plate}",
+                            detalle = "La foto del checklist vehicular llenado en papel.",
+                            alTocar = { alFotografiar(vehiculo) },
+                        )
+                        Spacer(Modifier.height(8.dp))
                         FilaVehiculo(
                             vehiculo = vehiculo,
                             hoy = estado.hoy,

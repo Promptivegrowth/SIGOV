@@ -47,6 +47,7 @@ import pe.servicon.sigov.ui.theme.Semaforo
 fun PantallaCharlas(
     vm: CharlasViewModel = hiltViewModel(),
     alVolver: () -> Unit,
+    alFotografiar: () -> Unit = {},
 ) {
     val estado by vm.estado.collectAsStateWithLifecycle()
     val avisos = remember { SnackbarHostState() }
@@ -92,6 +93,14 @@ fun PantallaCharlas(
                 contentPadding = PaddingValues(16.dp, 16.dp, 16.dp, 96.dp),
                 verticalArrangement = Arrangement.spacedBy(10.dp),
             ) {
+                item {
+                    // Lo principal: la foto del formato de la charla (OBS-57)
+                    pe.servicon.sigov.ui.documentos.AccesoAFoto(
+                        titulo = "Fotografiar la charla de hoy",
+                        detalle = "La foto del formato de la charla de 5 minutos, con la asistencia en papel.",
+                        alTocar = alFotografiar,
+                    )
+                }
                 item { DiariaDeHoy(estado.diariaDeHoy) }
 
                 item {

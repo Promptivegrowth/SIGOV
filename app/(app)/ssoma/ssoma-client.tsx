@@ -26,6 +26,7 @@ import { Checkbox, Tip } from '@/components/ui/primitives'
 import { FormDialog, ConfirmDialog, type FormField } from '@/components/forms/form-dialog'
 import { ChecklistRunner, ChecklistTemplates } from '@/components/ssoma/checklist-runner'
 import { AtsForm } from '@/components/ssoma/ats-form'
+import { TableroDocumentos } from '@/components/ssoma/tablero-documentos'
 import { SignaturePadDialog, uploadSignature } from '@/components/shared/signature-pad'
 import { ImageViewer } from '@/components/shared/image-viewer'
 import { DateRangeTabs, rangeFromPreset, type DatePresetKey } from '@/components/shared/misc'
@@ -46,7 +47,7 @@ export function SsomaClient() {
   const { service, can, profile } = useSession()
   const qc = useQueryClient()
   const sb = React.useMemo(() => createClient(), [])
-  const [tab, setTab] = React.useState('charlas')
+  const [tab, setTab] = React.useState('documentos')
   const [detail, setDetail] = React.useState<any>(null)
   const [q, setQ] = React.useState('')
   const [crewFilter, setCrewFilter] = React.useState('todas')
@@ -202,8 +203,8 @@ export function SsomaClient() {
       <PageHeader
         icon={ShieldCheck}
         title="SSOMA"
-        description="Charlas de 5 minutos con asistencia firmada, checklists configurables y ATS/IPERC integrados al flujo diario de la cuadrilla. Todo funciona sin conexión."
-        actions={can.write && (
+        description="Los documentos del día de cada cuadrilla —ATS, charla de 5 minutos, checklist vehicular— fotografiados en campo y revisados aquí, junto con charlas, checklists y ATS."
+        actions={can.write && tab !== 'documentos' && (
           /* La acción principal sigue a la pestaña abierta: el capataz entra a
              lo que necesita en un solo toque, sin buscar por la pantalla. */
           tab === 'checklists' ? (
@@ -285,10 +286,16 @@ export function SsomaClient() {
 
         <Tabs value={tab} onValueChange={setTab}>
           <TabsList>
+            <TabsTrigger value="documentos"><CircleCheck className="size-3.5" />Documentos del día</TabsTrigger>
             <TabsTrigger value="charlas"><Megaphone className="size-3.5" />Charlas</TabsTrigger>
             <TabsTrigger value="checklists"><ClipboardCheck className="size-3.5" />Checklists</TabsTrigger>
             <TabsTrigger value="ats"><HardHat className="size-3.5" />ATS / IPERC</TabsTrigger>
           </TabsList>
+
+          {/* ── Documentos del día: el tablero de revisión ─────────────── */}
+          <TabsContent value="documentos" className="mt-4">
+            <TableroDocumentos crewFilter={crewFilter} />
+          </TabsContent>
 
           {/* ── Charlas ────────────────────────────────────────────────── */}
           <TabsContent value="charlas" className="mt-4">

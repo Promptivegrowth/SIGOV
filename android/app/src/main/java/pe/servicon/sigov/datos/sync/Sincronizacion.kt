@@ -213,6 +213,17 @@ class TrabajadorSincronizacion @AssistedInject constructor(
                 // encolan sin señal cosas como quitar una foto, que pasan por
                 // las reglas de la base y no por un UPDATE directo.
                 if (envio.tabla.startsWith("rpc:")) {
+                    // Si la acción lleva archivo (la foto de un documento), el
+                    // archivo sube primero: la base nunca apunta a una foto
+                    // que no existe. Subir de nuevo en un reintento no duplica.
+                    archivos.pendiente(envio.clientId)?.let { archivo ->
+                        val fichero = File(archivo.rutaLocal)
+                        if (fichero.exists()) {
+                            supabase.storage.from(archivo.bucket)
+                                .upload(archivo.rutaDestino, fichero.readBytes(), upsert = true)
+                            archivos.marcarSubido(archivo.clientId)
+                        }
+                    }
                     val parametros = buildJsonObject {
                         cuerpo.forEach { (k, v) -> if (k != "client_id") put(k, v) }
                     }

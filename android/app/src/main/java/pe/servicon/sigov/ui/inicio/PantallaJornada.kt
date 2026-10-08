@@ -1,5 +1,9 @@
 package pe.servicon.sigov.ui.inicio
 
+import androidx.compose.material.icons.automirrored.outlined.KeyboardArrowRight
+import androidx.compose.foundation.shape.CircleShape
+import androidx.compose.foundation.clickable
+import androidx.compose.ui.Alignment
 import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.rememberScrollState
@@ -53,6 +57,7 @@ fun PantallaJornada(
     alAbrirAvance: () -> Unit = {},
     alAbrirSincronizacion: () -> Unit = {},
     alAbrirConfiguracion: () -> Unit = {},
+    alAbrirDocumento: (pe.servicon.sigov.datos.DocumentoDelDia) -> Unit = {},
 ) {
     val estado by vm.estado.collectAsStateWithLifecycle()
 
@@ -123,6 +128,20 @@ fun PantallaJornada(
                     if (estado.pendientes == 0) Marca.VerdeBandera else Marca.Naranja,
                     Modifier.weight(1f),
                     alTocar = alAbrirSincronizacion,
+                )
+            }
+
+            // ── Los documentos del día: lo que falta, en rojo ───────────
+            if (estado.documentos.isNotEmpty()) {
+                DocumentosDelDia(
+                    documentos = estado.documentos,
+                    alTocar = { d ->
+                        when (d.tipo) {
+                            "reporte_diario" -> alAbrirParte()
+                            "higiene" -> alAbrirCharlas()
+                            else -> alAbrirDocumento(d)
+                        }
+                    },
                 )
             }
 
@@ -227,6 +246,69 @@ private fun BandaDeCampana() {
                 color = Color.White,
                 fontWeight = FontWeight.Bold,
             )
+        }
+    }
+}
+
+/**
+ * Los formatos del día (Elvis: «si no has tomado la foto, que aparezca en
+ * rojo, como son formatos diarios»). Un toque y se carga.
+ */
+@Composable
+private fun DocumentosDelDia(
+    documentos: List<pe.servicon.sigov.datos.DocumentoDelDia>,
+    alTocar: (pe.servicon.sigov.datos.DocumentoDelDia) -> Unit,
+) {
+    val faltan = documentos.count { it.falta }
+    Card(
+        shape = RoundedCornerShape(14.dp),
+        colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface),
+        border = CardDefaults.outlinedCardBorder(),
+        modifier = Modifier.fillMaxWidth(),
+    ) {
+        Column(Modifier.padding(vertical = 8.dp)) {
+            Row(
+                Modifier.fillMaxWidth().padding(horizontal = 16.dp, vertical = 4.dp),
+                verticalAlignment = Alignment.CenterVertically,
+            ) {
+                Text(
+                    "Documentos del día",
+                    style = MaterialTheme.typography.titleMedium,
+                    fontWeight = FontWeight.Bold,
+                    modifier = Modifier.weight(1f),
+                )
+                Text(
+                    if (faltan == 0) "Todo al día" else if (faltan == 1) "Falta 1" else "Faltan $faltan",
+                    style = MaterialTheme.typography.labelLarge,
+                    color = if (faltan == 0) Marca.VerdeBandera else pe.servicon.sigov.ui.theme.Semaforo.Vencido,
+                )
+            }
+            documentos.forEach { d ->
+                val color = pe.servicon.sigov.ui.documentos.colorDelEstado(d)
+                Row(
+                    Modifier
+                        .fillMaxWidth()
+                        .clickable { alTocar(d) }
+                        .padding(horizontal = 16.dp, vertical = 10.dp),
+                    verticalAlignment = Alignment.CenterVertically,
+                    horizontalArrangement = Arrangement.spacedBy(12.dp),
+                ) {
+                    Box(Modifier.size(10.dp).background(color, CircleShape))
+                    Column(Modifier.weight(1f)) {
+                        Text(d.nombre, style = MaterialTheme.typography.bodyLarge)
+                        Text(
+                            d.estadoLegible + (if (d.paginas > 0) " · ${d.paginas} pág." else ""),
+                            style = MaterialTheme.typography.bodySmall,
+                            color = color,
+                        )
+                    }
+                    Icon(
+                        if (d.esFoto && d.falta) Icons.Outlined.PhotoCamera else Icons.AutoMirrored.Outlined.KeyboardArrowRight,
+                        contentDescription = null,
+                        tint = if (d.falta) color else MaterialTheme.colorScheme.onSurfaceVariant,
+                    )
+                }
+            }
         }
     }
 }

@@ -153,6 +153,12 @@ class MainActivity : ComponentActivity() {
                             alAbrirAvance = { nav.navigate("avance") },
                             alAbrirSincronizacion = { nav.navigate("sincronizacion") },
                             alAbrirConfiguracion = { nav.navigate("configuracion") },
+                            alAbrirDocumento = { d ->
+                                nav.navigate(
+                                    "documento/${d.tipo}?vehiculo=${d.vehiculoId.orEmpty()}" +
+                                        "&titulo=${android.net.Uri.encode(d.titulo.orEmpty())}&fecha=${d.fecha}",
+                                )
+                            },
                         )
                     }
                     composable("programacion") {
@@ -168,10 +174,16 @@ class MainActivity : ComponentActivity() {
                         )
                     }
                     composable("charlas") {
-                        PantallaCharlas(alVolver = { nav.popBackStack() })
+                        PantallaCharlas(
+                            alVolver = { nav.popBackStack() },
+                            alFotografiar = { nav.navigate("documento/charla") },
+                        )
                     }
                     composable("vehiculos") {
-                        PantallaVehiculos(alVolver = { nav.popBackStack() })
+                        PantallaVehiculos(
+                            alVolver = { nav.popBackStack() },
+                            alFotografiar = { v -> nav.navigate("documento/checklist_vehicular?vehiculo=" + v.id) },
+                        )
                     }
                     composable("inventario") {
                         PantallaInventario(alVolver = { nav.popBackStack() })
@@ -204,7 +216,10 @@ class MainActivity : ComponentActivity() {
                         PantallaCaja(alVolver = { nav.popBackStack() })
                     }
                     composable("ast") {
-                        PantallaAst(alVolver = { nav.popBackStack() })
+                        PantallaAst(
+                            alVolver = { nav.popBackStack() },
+                            alFotografiar = { nav.navigate("documento/ats") },
+                        )
                     }
                     composable("avance") {
                         PantallaAvance(
@@ -213,6 +228,17 @@ class MainActivity : ComponentActivity() {
                             alAbrirEvidencias = { nav.navigate("evidencias") },
                             alAbrirPci = { nav.navigate("pci") },
                         )
+                    }
+                    composable(
+                        "documento/{tipo}?vehiculo={vehiculo}&titulo={titulo}&fecha={fecha}",
+                        arguments = listOf(
+                            navArgument("tipo") { type = NavType.StringType },
+                            navArgument("vehiculo") { type = NavType.StringType; nullable = true; defaultValue = null },
+                            navArgument("titulo") { type = NavType.StringType; nullable = true; defaultValue = null },
+                            navArgument("fecha") { type = NavType.StringType; nullable = true; defaultValue = null },
+                        ),
+                    ) {
+                        pe.servicon.sigov.ui.documentos.PantallaDocumento(alVolver = { nav.popBackStack() })
                     }
                     composable("configuracion") {
                         pe.servicon.sigov.ui.configuracion.PantallaConfiguracion(alVolver = { nav.popBackStack() })

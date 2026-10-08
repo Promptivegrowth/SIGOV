@@ -12,6 +12,8 @@ import kotlinx.coroutines.flow.collectLatest
 import pe.servicon.sigov.datos.enCristiano
 import pe.servicon.sigov.datos.CajaRepositorio
 import pe.servicon.sigov.datos.CampoRepositorio
+import pe.servicon.sigov.datos.DocumentoDelDia
+import pe.servicon.sigov.datos.DocumentosRepositorio
 import pe.servicon.sigov.datos.Peru
 import pe.servicon.sigov.datos.SesionRepositorio
 import pe.servicon.sigov.datos.sync.ColaRepositorio
@@ -32,6 +34,8 @@ data class EstadoJornada(
     val pendientes: Int = 0,
     /** El rol de quien entra: decide qué apartados se le ofrecen. */
     val rol: String = "jefe_cuadrilla",
+    /** Los formatos que la cuadrilla debe tener hoy (OBS-53, §16). */
+    val documentos: List<DocumentoDelDia> = emptyList(),
     val error: String? = null,
     /** Mientras no se sepa la cuadrilla, no se afirma nada sobre ella */
     val cargando: Boolean = true,
@@ -43,6 +47,7 @@ class JornadaViewModel @Inject constructor(
     private val colaEnvio: ColaRepositorio,
     private val campo: CampoRepositorio,
     private val caja: CajaRepositorio,
+    private val documentosRepo: DocumentosRepositorio,
 ) : ViewModel() {
 
     private val _estado = MutableStateFlow(EstadoJornada())
@@ -102,6 +107,8 @@ class JornadaViewModel @Inject constructor(
                 val pci = campo.pciAsignados(cuadrilla.servicioId, cuadrilla.id)
                 val miCaja = runCatching { caja.miCaja(cuadrilla.servicioId, cuadrilla.id) }.getOrNull()
                 val jefe = runCatching { sesion.supervisor(cuadrilla.servicioId) }.getOrNull()
+                val documentos = runCatching { documentosRepo.delDia(cuadrilla.servicioId, cuadrilla.id) }
+                    .getOrDefault(emptyList())
 
                 _estado.update {
                     it.copy(
@@ -112,6 +119,7 @@ class JornadaViewModel @Inject constructor(
                         sector = (programado.firstOrNull()?.tramo
                             ?: pci.firstOrNull()?.tramo).orEmpty(),
                         supervisor = jefe.orEmpty(),
+                        documentos = documentos,
                         saldo = miCaja?.caja?.let { c -> soles(c.balance) } ?: "—",
                         cargando = false,
                     )

@@ -1269,6 +1269,186 @@ export type Database = {
           },
         ]
       }
+      documento_paginas: {
+        Row: {
+          client_id: string
+          created_at: string
+          created_by: string | null
+          deleted_at: string | null
+          documento_id: string
+          height: number | null
+          id: string
+          lat: number | null
+          lng: number | null
+          service_id: string
+          sha256: string | null
+          size_bytes: number | null
+          storage_path: string
+          taken_at: string
+          width: number | null
+        }
+        Insert: {
+          client_id: string
+          created_at?: string
+          created_by?: string | null
+          deleted_at?: string | null
+          documento_id: string
+          height?: number | null
+          id?: string
+          lat?: number | null
+          lng?: number | null
+          service_id: string
+          sha256?: string | null
+          size_bytes?: number | null
+          storage_path: string
+          taken_at?: string
+          width?: number | null
+        }
+        Update: {
+          client_id?: string
+          created_at?: string
+          created_by?: string | null
+          deleted_at?: string | null
+          documento_id?: string
+          height?: number | null
+          id?: string
+          lat?: number | null
+          lng?: number | null
+          service_id?: string
+          sha256?: string | null
+          size_bytes?: number | null
+          storage_path?: string
+          taken_at?: string
+          width?: number | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "documento_paginas_created_by_fkey"
+            columns: ["created_by"]
+            isOneToOne: false
+            referencedRelation: "profiles"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "documento_paginas_documento_id_fkey"
+            columns: ["documento_id"]
+            isOneToOne: false
+            referencedRelation: "documentos_del_dia"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "documento_paginas_service_id_fkey"
+            columns: ["service_id"]
+            isOneToOne: false
+            referencedRelation: "services"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      documentos_del_dia: {
+        Row: {
+          created_at: string
+          created_by: string | null
+          crew_id: string
+          deleted_at: string | null
+          doc_date: string
+          estado: Database["public"]["Enums"]["revision_ssoma"]
+          id: string
+          observacion: string | null
+          revisado_en: string | null
+          revisado_por: string | null
+          service_id: string
+          tipo: Database["public"]["Enums"]["documento_tipo"]
+          titulo: string | null
+          updated_at: string
+          vehicle_id: string | null
+        }
+        Insert: {
+          created_at?: string
+          created_by?: string | null
+          crew_id: string
+          deleted_at?: string | null
+          doc_date: string
+          estado?: Database["public"]["Enums"]["revision_ssoma"]
+          id?: string
+          observacion?: string | null
+          revisado_en?: string | null
+          revisado_por?: string | null
+          service_id: string
+          tipo: Database["public"]["Enums"]["documento_tipo"]
+          titulo?: string | null
+          updated_at?: string
+          vehicle_id?: string | null
+        }
+        Update: {
+          created_at?: string
+          created_by?: string | null
+          crew_id?: string
+          deleted_at?: string | null
+          doc_date?: string
+          estado?: Database["public"]["Enums"]["revision_ssoma"]
+          id?: string
+          observacion?: string | null
+          revisado_en?: string | null
+          revisado_por?: string | null
+          service_id?: string
+          tipo?: Database["public"]["Enums"]["documento_tipo"]
+          titulo?: string | null
+          updated_at?: string
+          vehicle_id?: string | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "documentos_del_dia_created_by_fkey"
+            columns: ["created_by"]
+            isOneToOne: false
+            referencedRelation: "profiles"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "documentos_del_dia_crew_id_fkey"
+            columns: ["crew_id"]
+            isOneToOne: false
+            referencedRelation: "crews"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "documentos_del_dia_crew_id_fkey"
+            columns: ["crew_id"]
+            isOneToOne: false
+            referencedRelation: "v_hygiene_today"
+            referencedColumns: ["crew_id"]
+          },
+          {
+            foreignKeyName: "documentos_del_dia_revisado_por_fkey"
+            columns: ["revisado_por"]
+            isOneToOne: false
+            referencedRelation: "profiles"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "documentos_del_dia_service_id_fkey"
+            columns: ["service_id"]
+            isOneToOne: false
+            referencedRelation: "services"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "documentos_del_dia_vehicle_id_fkey"
+            columns: ["vehicle_id"]
+            isOneToOne: false
+            referencedRelation: "v_vehicles"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "documentos_del_dia_vehicle_id_fkey"
+            columns: ["vehicle_id"]
+            isOneToOne: false
+            referencedRelation: "vehicles"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       documents: {
         Row: {
           created_at: string
@@ -6011,6 +6191,26 @@ export type Database = {
       }
       can_manage: { Args: { sid: string }; Returns: boolean }
       can_write: { Args: { sid: string }; Returns: boolean }
+      cargar_pagina_documento: {
+        Args: {
+          p_client_id: string
+          p_crew_id: string
+          p_fecha: string
+          p_height?: number
+          p_lat?: number
+          p_lng?: number
+          p_service_id: string
+          p_sha256?: string
+          p_size_bytes?: number
+          p_storage_path: string
+          p_taken_at?: string
+          p_tipo: string
+          p_titulo?: string
+          p_vehicle_id?: string
+          p_width?: number
+        }
+        Returns: Json
+      }
       clear_section_geometry: { Args: { p_section_id: string }; Returns: Json }
       conductor_apto: { Args: { p_respuestas: Json }; Returns: boolean }
       crear_pedido: {
@@ -6082,6 +6282,10 @@ export type Database = {
       dashboard_kpis: {
         Args: { p_from?: string; p_service_id: string; p_to?: string }
         Returns: Json
+      }
+      documentos_del_dia_de: {
+        Args: { p_crew_id: string; p_fecha: string; p_service_id: string }
+        Returns: Json[]
       }
       duplicar_semana: {
         Args: { p_destino: string; p_origen: string; p_service_id: string }
@@ -6259,10 +6463,12 @@ export type Database = {
         Returns: boolean
       }
       puede_leer_servicio: { Args: { p_service_id: string }; Returns: boolean }
+      puede_revisar_ssoma: { Args: { sid: string }; Returns: boolean }
       puedo_mover_partida: {
         Args: { p_crew_id: string; p_service_id: string }
         Returns: boolean
       }
+      quitar_pagina_documento: { Args: { p_client_id: string }; Returns: Json }
       renglon_de_campo_en_transicion: {
         Args: {
           p_qty_approved: number
@@ -6277,6 +6483,10 @@ export type Database = {
       }
       revert_pci_suspension_sin_permiso: {
         Args: { p_suspension_id: string }
+        Returns: Json
+      }
+      revisar_documento: {
+        Args: { p_conforme: boolean; p_documento_id: string; p_nota?: string }
         Returns: Json
       }
       revisar_pedido: {
@@ -6323,6 +6533,30 @@ export type Database = {
         Args: { p_prefijo: string; p_service_id: string }
         Returns: string
       }
+      ssoma_tablero: {
+        Args: {
+          p_crew_id?: string
+          p_desde: string
+          p_hasta: string
+          p_service_id: string
+        }
+        Returns: {
+          crew_code: string
+          crew_id: string
+          crew_name: string
+          crew_numero: number
+          digital: boolean
+          documento_id: string
+          estado: string
+          fecha: string
+          observacion: string
+          paginas: number
+          placa: string
+          tipo: string
+          titulo: string
+          vehicle_id: string
+        }[]
+      }
       storage_service_id: { Args: { p_name: string }; Returns: string }
       vencimiento_aviso: { Args: { p_due: string }; Returns: string }
       vencimiento_semaforo: { Args: { p_due: string }; Returns: string }
@@ -6364,6 +6598,13 @@ export type Database = {
         | "fotografico"
         | "normativa"
         | "otro"
+      documento_tipo:
+        | "ats"
+        | "charla"
+        | "checklist_vehicular"
+        | "higiene"
+        | "inspeccion_equipos"
+        | "otro"
       evidence_phase: "antes" | "durante" | "despues" | "general"
       hygiene_item:
         | "bloqueador"
@@ -6402,6 +6643,11 @@ export type Database = {
         | "ticket"
         | "planilla"
         | "sin_comprobante"
+      revision_ssoma:
+        | "pendiente_revision"
+        | "conforme"
+        | "observado"
+        | "subsanado"
       risk_level:
         | "trivial"
         | "tolerable"
@@ -6617,6 +6863,14 @@ export const Constants = {
         "normativa",
         "otro",
       ],
+      documento_tipo: [
+        "ats",
+        "charla",
+        "checklist_vehicular",
+        "higiene",
+        "inspeccion_equipos",
+        "otro",
+      ],
       evidence_phase: ["antes", "durante", "despues", "general"],
       hygiene_item: [
         "bloqueador",
@@ -6653,6 +6907,12 @@ export const Constants = {
         "ticket",
         "planilla",
         "sin_comprobante",
+      ],
+      revision_ssoma: [
+        "pendiente_revision",
+        "conforme",
+        "observado",
+        "subsanado",
       ],
       risk_level: [
         "trivial",

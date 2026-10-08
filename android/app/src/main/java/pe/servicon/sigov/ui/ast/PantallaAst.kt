@@ -44,6 +44,7 @@ import pe.servicon.sigov.ui.theme.Marca
 fun PantallaAst(
     vm: AstViewModel = hiltViewModel(),
     alVolver: () -> Unit,
+    alFotografiar: () -> Unit = {},
 ) {
     val estado by vm.estado.collectAsStateWithLifecycle()
     val avisos = remember { SnackbarHostState() }
@@ -104,6 +105,14 @@ fun PantallaAst(
             estado.error?.let {
                 Aviso(it, MaterialTheme.colorScheme.error)
             }
+
+            // Lo principal: la foto del ATS llenado en papel (OBS-53).
+            // Los formularios de abajo quedan como opción.
+            pe.servicon.sigov.ui.documentos.AccesoAFoto(
+                titulo = "Fotografiar el ATS de hoy",
+                detalle = "La foto del formato llenado en papel. Los formularios de abajo son opcionales.",
+                alTocar = alFotografiar,
+            )
 
             Tarjeta(
                 icono = Icons.Outlined.DirectionsCar,
