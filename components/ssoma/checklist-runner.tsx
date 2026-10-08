@@ -25,6 +25,7 @@ import { syncNow } from '@/lib/offline/sync'
 import { getGpsFix, sealPhoto } from '@/lib/camera'
 import { cn, uuid, toISODate, fmtDate } from '@/lib/utils'
 import { toast } from 'sonner'
+import { mensajeAmigable } from '@/lib/errores'
 
 type Answer = 'ok' | 'no' | 'na'
 
@@ -176,7 +177,7 @@ export function ChecklistRunner({
       setPhotos((p) => ({ ...p, [q.id]: path }))
       toast.success('Foto sellada y añadida al checklist')
     } catch (e: any) {
-      toast.error(e?.message ?? 'No se pudo procesar la foto')
+      toast.error(mensajeAmigable(e, 'No se pudo procesar la foto'))
     } finally {
       setPhotoBusy(null)
     }
@@ -244,7 +245,7 @@ export function ChecklistRunner({
       qc.invalidateQueries({ queryKey: ['ssoma-kpis'] })
       onOpenChange(false)
     } catch (e: any) {
-      toast.error(e?.message ?? 'No se pudo guardar el checklist')
+      toast.error(mensajeAmigable(e, 'No se pudo guardar el checklist'))
     } finally {
       setSaving(false)
     }
@@ -314,7 +315,7 @@ export function ChecklistRunner({
                     setGps({ lat: f.lat, lng: f.lng, accuracy: f.accuracy })
                     toast.success(`Ubicación tomada · ±${f.accuracy.toFixed(0)} m`)
                   } catch (e: any) {
-                    toast.error(e?.message ?? 'GPS no disponible')
+                    toast.error(mensajeAmigable(e, 'GPS no disponible'))
                   } finally { setGpsBusy(false) }
                 }}
               >
@@ -587,7 +588,7 @@ export function ChecklistTemplates({
         onConfirm={async () => {
           const { error } = await sb.from('checklist_templates')
             .update({ deleted_at: new Date().toISOString() }).eq('id', deleting.id)
-          if (error) { toast.error(error.message); return }
+          if (error) { toast.error(mensajeAmigable(error)); return }
           toast.success('Plantilla eliminada')
           qc.invalidateQueries({ queryKey: ['checklist-templates'] })
           qc.invalidateQueries({ queryKey: ['checklist-runner-catalogos'] })
@@ -652,7 +653,7 @@ function TemplateEditor({
       : await sb.from('checklist_templates').insert({ ...payload, created_by: profile.id })
     setSaving(false)
     if (error) {
-      toast.error(error.message.includes('duplicate') ? `Ya existe una plantilla con el código ${code.toUpperCase()}` : error.message)
+      toast.error(error.message.includes('duplicate') ? `Ya existe una plantilla con el código ${code.toUpperCase()}` : mensajeAmigable(error))
       return
     }
     toast.success(tpl?.id ? 'Plantilla actualizada' : 'Plantilla creada')

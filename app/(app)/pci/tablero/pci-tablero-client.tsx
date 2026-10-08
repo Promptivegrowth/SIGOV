@@ -303,7 +303,7 @@ export function PciTableroClient() {
         {/* ═══ Por cuadrilla y por tramo ════════════════════════════════ */}
         <div className="grid grid-cols-1 gap-4 xl:grid-cols-2">
           <TablaCumplimiento
-            titulo="PCI por cuadrilla"
+            titulo="Ítems PCI por cuadrilla"
             descripcion="Quién arrastra los requerimientos abiertos"
             icono={Users}
             filas={(t?.por_cuadrilla ?? []).map((f: any) => ({
@@ -314,7 +314,7 @@ export function PciTableroClient() {
             cargando={tablero.isLoading}
           />
           <TablaCumplimiento
-            titulo="PCI por tramo"
+            titulo="Ítems PCI por tramo"
             descripcion="Dónde se concentran los incumplimientos"
             icono={Route}
             filas={(t?.por_tramo ?? []).map((f: any) => ({
@@ -346,7 +346,7 @@ export function PciTableroClient() {
             {tablero.isLoading ? (
               <div className="px-4"><SkeletonList rows={6} /></div>
             ) : !t?.ultimos?.length ? (
-              <EmptyState icon={ListChecks} title="Sin ítems" description="No hay PCI que cumplan con el filtro." className="py-10" />
+              <EmptyState icon={ListChecks} title="Sin ítems" description="No hay ítems de PCI que cumplan con el filtro." className="py-10" />
             ) : (
               <div className="overflow-x-auto">
                 <table className="w-full min-w-[820px] text-[12.5px]">

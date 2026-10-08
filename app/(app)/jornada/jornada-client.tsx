@@ -43,7 +43,7 @@ export function JornadaClient() {
         sb.from('v_plan_items').select('*')
           .eq('service_id', service.id).eq('scheduled_on', hoy)
           .eq('crew_id', crew?.id ?? '').order('sort_order'),
-        sb.from('v_pci_items').select('id, status, days_left, semaforo')
+        sb.from('v_pci_items').select('id, pci_id, status, days_left, semaforo')
           .eq('service_id', service.id).eq('assigned_crew_id', crew?.id ?? '')
           .in('status', ['pendiente', 'en_atencion']),
         sb.from('v_cash_boxes').select('balance, currency')
@@ -114,8 +114,10 @@ export function JornadaClient() {
   const atajos = [
     { href: '/programacion', icon: CalendarRange, titulo: 'Actividades del día',
       detalle: `${plan.length} asignadas`, tono: 'primary' as const },
-    { href: '/pci', icon: TriangleAlert, titulo: 'PCI asignados',
-      detalle: `${d?.pci.length ?? 0} por atender`, tono: 'accent' as const },
+    // Ítems y documentos por separado: «314 PCI» eran 314 ítems de un solo PCI
+    { href: '/pci', icon: TriangleAlert, titulo: 'Ítems PCI asignados',
+      detalle: `${d?.pci.length ?? 0} por atender en ${new Set((d?.pci ?? []).map((p: any) => p.pci_id)).size} PCI`,
+      tono: 'accent' as const },
     { href: '/campo', icon: FileText, titulo: 'Reporte diario',
       detalle: d?.parte ? `En ${d.parte.status}` : 'Sin abrir', tono: 'primary' as const },
     { href: '/evidencias', icon: Camera, titulo: 'Fotos y evidencias',

@@ -15,6 +15,7 @@ import { ConfirmDialog } from '@/components/forms/form-dialog'
 import { parseGeoFile, trackLength, GeoImportError, type ParsedTrack } from '@/lib/geo-import'
 import { cn, fmtNumber } from '@/lib/utils'
 import { toast } from 'sonner'
+import { mensajeAmigable } from '@/lib/errores'
 
 /**
  * Carga del trazo de un tramo desde KML, KMZ, GeoJSON o GPX.
@@ -55,7 +56,9 @@ export function SectionGeometryDialog({
       })
     } catch (e: any) {
       setTrack(null)
-      toast.error(e instanceof GeoImportError ? e.message : (e?.message ?? 'No se pudo leer el archivo'))
+      // Los avisos del lector de geometrías son nuestros y explican qué
+      // corregir en el archivo: esos van tal cual.
+      toast.error(e instanceof GeoImportError ? e.message : mensajeAmigable(e, 'No se pudo leer el archivo'))
     } finally {
       setBusy(false)
     }
@@ -69,7 +72,7 @@ export function SectionGeometryDialog({
       p_coords: track.coords as any,
     })
     setSaving(false)
-    if (error) { toast.error(error.message.replace('SIGOV: ', '')); return }
+    if (error) { toast.error(mensajeAmigable(error)); return }
     const r = data as any
     toast.success('Trazo cargado', {
       description: `${fmtNumber(r?.puntos ?? 0)} puntos · ${r?.longitud_km ?? 0} km sobre el mapa.`,
@@ -245,7 +248,7 @@ export function SectionGeometryDialog({
         confirmLabel="Quitar trazo"
         onConfirm={async () => {
           const { error } = await sb.rpc('clear_section_geometry', { p_section_id: section.id })
-          if (error) { toast.error(error.message.replace('SIGOV: ', '')); return }
+          if (error) { toast.error(mensajeAmigable(error)); return }
           toast.success('Trazo eliminado')
           qc.invalidateQueries({ queryKey: ['sections-config'] })
           qc.invalidateQueries({ queryKey: ['mapa'] })

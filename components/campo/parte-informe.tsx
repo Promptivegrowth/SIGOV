@@ -17,6 +17,7 @@ import { EVIDENCE_PHASE, WORK_ORDER_STATUS } from '@/lib/constants'
 import { descargarPdf, ORG_DEFAULT } from '@/lib/reports'
 import { cn, fmtDate, fmtDateTime, fmtNumber, fmtProgresiva } from '@/lib/utils'
 import { toast } from 'sonner'
+import { mensajeAmigable } from '@/lib/errores'
 
 /**
  * El parte diario visto como informe.
@@ -139,7 +140,7 @@ export function ParteInforme({
       )
       toast.success('Informe descargado')
     } catch (e: any) {
-      toast.error(e?.message ?? 'No se pudo generar el informe')
+      toast.error(mensajeAmigable(e, 'No se pudo generar el informe'))
     } finally {
       setBajando(false)
     }

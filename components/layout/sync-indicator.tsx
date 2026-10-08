@@ -12,6 +12,7 @@ import {
   Popover, PopoverTrigger, PopoverContent,
 } from '@/components/ui/primitives'
 import { toast } from 'sonner'
+import { mensajeAmigable } from '@/lib/errores'
 
 export function SyncIndicator({ collapsed }: { collapsed?: boolean }) {
   const [state, setState] = React.useState<SyncState>({
@@ -174,7 +175,7 @@ function FailedList() {
       {failed.map((f) => (
         <div key={f.client_id} className="text-[10.5px] leading-tight">
           <div className="text-destructive font-medium">{f.label}</div>
-          <div className="text-muted-foreground truncate">{f.last_error}</div>
+          <div className="text-muted-foreground truncate">{mensajeAmigable(f.last_error)}</div>
         </div>
       ))}
     </div>

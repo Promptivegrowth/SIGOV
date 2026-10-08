@@ -19,6 +19,7 @@ import {
   MOVIMIENTO, type TipoMovimiento, cifra, leerCifra, paraBuscar, hoyLima, estadoDeStock,
   useInsumos, useCuadrillas, useCategorias, Selector, InsumoPicker,
 } from './comun'
+import { mensajeAmigable } from '@/lib/errores'
 
 const VISTA = [
   { key: 'todos', label: 'Todos' },
@@ -218,7 +219,7 @@ export function MovimientoDialog({ serviceId, tipoInicial, insumoInicial, onClos
       notes: nota.trim() || null,
     })
     setEnviando(false)
-    if (error) { toast.error(error.message); return }
+    if (error) { toast.error(mensajeAmigable(error)); return }
     toast.success(`${MOVIMIENTO[tipo].label} registrado`)
     onHecho()
   }

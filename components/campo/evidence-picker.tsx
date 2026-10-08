@@ -20,6 +20,7 @@ import { ImageViewer } from '@/components/shared/image-viewer'
 import { EVIDENCE_PHASE } from '@/lib/constants'
 import { cn, fmtDate, fmtDateTime, fmtNumber } from '@/lib/utils'
 import { toast } from 'sonner'
+import { mensajeAmigable } from '@/lib/errores'
 
 /**
  * Galería de evidencias ya capturadas.
@@ -104,7 +105,7 @@ export function EvidencePicker({
     }))
     const { error } = await sb.from('evidence_links').upsert(rows, { ignoreDuplicates: true })
     setSaving(false)
-    if (error) { toast.error(error.message); return }
+    if (error) { toast.error(mensajeAmigable(error)); return }
     toast.success(
       `${selected.size} ${selected.size === 1 ? 'evidencia adjuntada' : 'evidencias adjuntadas'}`,
       { description: 'La foto original no se duplicó: se reutiliza el archivo ya sellado.' }

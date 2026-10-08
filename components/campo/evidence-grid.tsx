@@ -22,6 +22,7 @@ import { enqueue, enqueueBlob, getDeviceId } from '@/lib/offline/db'
 import { syncNow } from '@/lib/offline/sync'
 import type { SealedPhoto } from '@/lib/camera'
 import { toast } from 'sonner'
+import { mensajeAmigable } from '@/lib/errores'
 
 /**
  * Galería de evidencias de un registro o de un ítem de PCI.
@@ -118,7 +119,7 @@ export function EvidenceGrid({
 
   const unlink = async (linkId: string) => {
     const { error } = await sb.from('evidence_links').delete().eq('id', linkId)
-    if (error) { toast.error(error.message); return }
+    if (error) { toast.error(mensajeAmigable(error)); return }
     toast.success('Evidencia desvinculada', { description: 'La foto original no se borró.' })
     refresh()
   }

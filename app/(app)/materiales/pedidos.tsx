@@ -22,6 +22,7 @@ import {
   PEDIDO_ESTADO, cifra, leerCifra, paraBuscar, hoyLima, estadoDeStock,
   useInsumos, useCuadrillas, useUnidades, useCategorias, Selector, InsumoPicker,
 } from './comun'
+import { mensajeAmigable } from '@/lib/errores'
 
 const FILTROS = [
   { key: 'abiertos', label: 'Abiertos', estados: ['solicitado', 'aprobado', 'parcial'] },
@@ -34,10 +35,12 @@ const FILTROS = [
 /**
  * Los pedidos de materiales.
  *
- * La cuadrilla pide desde el celular; el residente o el supervisor también
- * pueden pedir desde aquí —para una cuadrilla que llamó por radio o para el
- * stock de la semana— y lo que ellos piden ya va autorizado. Cada pedido
- * guarda quién lo pidió, quién lo autorizó y quién entregó qué y cuándo.
+ * Piden el residente o el supervisor —para una cuadrilla o para el stock de
+ * la semana— y lo que ellos piden ya va autorizado. El jefe de cuadrilla ya
+ * no pide (regla 1.2): ejecuta con lo que le entregan. Los pedidos que algún
+ * celular dejó en cola antes del cambio igual llegan aquí, como «solicitado».
+ * Cada pedido guarda quién lo pidió, quién lo autorizó y quién entregó qué y
+ * cuándo.
  */
 export function PedidosTab({ serviceId, can, profileId }: {
   serviceId: string
@@ -105,7 +108,9 @@ export function PedidosTab({ serviceId, can, profileId }: {
           <Search className="text-muted-foreground pointer-events-none absolute top-1/2 left-3 size-4 -translate-y-1/2" />
           <Input value={q} onChange={(e) => setQ(e.target.value)} placeholder="Número, cuadrilla, motivo…" className="pl-9" />
         </div>
-        {can.write && (
+        {/* Regla 1.2: pedir es del supervisor o el residente, no del jefe
+            de cuadrilla; por eso basta `write` para ver, pero no para pedir. */}
+        {can.manage && (
           <Button onClick={() => setNuevo(true)}>
             <Plus /> Nuevo pedido
           </Button>
@@ -120,7 +125,7 @@ export function PedidosTab({ serviceId, can, profileId }: {
           title={pedidos.data?.length ? 'Ningún pedido en este filtro' : 'Sin pedidos'}
           description={pedidos.data?.length
             ? 'Prueba con «Todos» o con otra búsqueda.'
-            : 'Los pedidos de las cuadrillas llegan aquí desde el celular. También puedes crear uno.'}
+            : can.manage ? 'Crea el primer pedido para una cuadrilla o para el almacén.' : 'Todavía no se ha pedido nada.'}
         />
       )}
 
@@ -272,7 +277,7 @@ function DetallePedido({ pedidoId, serviceId, can, profileId, onClose, onCambio 
       p_cantidades: Object.fromEntries(renglones.map((r) => [r.id, valor(r)])),
     })
     setEnviando(false)
-    if (error) { toast.error(error.message); return }
+    if (error) { toast.error(mensajeAmigable(error)); return }
     toast.success(aprobar ? 'Pedido autorizado' : 'Pedido rechazado')
     recargar()
   }
@@ -292,7 +297,7 @@ function DetallePedido({ pedidoId, serviceId, can, profileId, onClose, onCambio 
       p_fecha: fecha || undefined,
     })
     setEnviando(false)
-    if (error) { toast.error(error.message); return }
+    if (error) { toast.error(mensajeAmigable(error)); return }
     toast.success(data === 'parcial' ? 'Entrega parcial registrada' : 'Pedido entregado')
     recargar()
   }
@@ -305,7 +310,7 @@ function DetallePedido({ pedidoId, serviceId, can, profileId, onClose, onCambio 
       .eq('id', pedidoId)
     setEnviando(false)
     setConfirmarAnular(false)
-    if (error) { toast.error(error.message); return }
+    if (error) { toast.error(mensajeAmigable(error)); return }
     toast.success('Pedido anulado')
     recargar()
   }
@@ -566,7 +571,7 @@ function NuevoPedido({ serviceId, puedeAprobar, onClose, onCreado }: {
       p_aprobar: puedeAprobar && aprobar,
     } as any)
     setEnviando(false)
-    if (error) { toast.error(error.message); return }
+    if (error) { toast.error(mensajeAmigable(error)); return }
     toast.success(puedeAprobar && aprobar ? 'Pedido creado y autorizado' : 'Pedido enviado para revisión')
     onCreado(data as string)
   }
@@ -740,7 +745,7 @@ function AdoptarDialog({ renglon, serviceId, onClose, onHecho }: {
       p_min_stock: leerCifra(minimo) || 0,
     })
     setEnviando(false)
-    if (error) { toast.error(error.message); return }
+    if (error) { toast.error(mensajeAmigable(error)); return }
     toast.success(`${renglon.nombre} ya está en el catálogo`)
     onHecho()
   }

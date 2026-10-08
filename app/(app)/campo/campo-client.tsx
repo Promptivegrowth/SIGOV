@@ -23,6 +23,7 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@
 import { WORK_ORDER_STATUS } from '@/lib/constants'
 import { cn, fmtDate, fmtNumber, fmtRelative, toISODate } from '@/lib/utils'
 import { toast } from 'sonner'
+import { mensajeAmigable } from '@/lib/errores'
 
 export function CampoClient() {
   const { service, crew, role, can, profile, hasModule } = useSession()
@@ -110,7 +111,7 @@ export function CampoClient() {
       })
       .select('id')
       .single()
-    if (error) return toast.error(error.message)
+    if (error) return toast.error(mensajeAmigable(error))
     toast.success('Parte diario creado')
     qc.invalidateQueries({ queryKey: ['work-orders'] })
     window.location.href = `/campo/${data.id}`

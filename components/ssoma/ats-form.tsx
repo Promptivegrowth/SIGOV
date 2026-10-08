@@ -22,6 +22,7 @@ import { syncNow } from '@/lib/offline/sync'
 import { getGpsFix } from '@/lib/camera'
 import { cn, uuid, toISODate, parseProgresiva, fmtProgresiva } from '@/lib/utils'
 import { toast } from 'sonner'
+import { mensajeAmigable } from '@/lib/errores'
 
 /** Escalas IPERC del MTC simplificadas a 4 niveles, como las usa la supervisión. */
 const PROBABILIDAD = [
@@ -213,7 +214,7 @@ export function AtsForm({
         description: `A ${Math.round(Number(r.distancia_m))} m del eje · GPS ±${f.accuracy.toFixed(0)} m`,
       })
     } catch (e: any) {
-      toast.error(e?.message ?? 'GPS no disponible')
+      toast.error(mensajeAmigable(e, 'GPS no disponible'))
     } finally {
       setGpsBusy(false)
     }
@@ -324,7 +325,7 @@ export function AtsForm({
       qc.invalidateQueries({ queryKey: ['ssoma-kpis'] })
       onOpenChange(false)
     } catch (e: any) {
-      toast.error(e?.message ?? 'No se pudo guardar el ATS')
+      toast.error(mensajeAmigable(e, 'No se pudo guardar el ATS'))
     } finally {
       setSaving(false)
     }

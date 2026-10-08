@@ -24,6 +24,7 @@ import { ArbolDeArchivo } from '@/components/archivo/arbol-de-archivo'
 import { Tip } from '@/components/ui/primitives'
 import { cn, fmtDate, fmtNumber, bytes, fmtRelative, toISODate, debounce } from '@/lib/utils'
 import { toast } from 'sonner'
+import { mensajeAmigable } from '@/lib/errores'
 
 const KINDS = {
   contrato:     { label: 'Contrato',        color: 'var(--chart-1)' },
@@ -120,7 +121,7 @@ export function ArchivoClient() {
 
   const remove = async (doc: any) => {
     const { error } = await sb.from('documents').update({ deleted_at: new Date().toISOString() }).eq('id', doc.id)
-    if (error) { toast.error(error.message); return }
+    if (error) { toast.error(mensajeAmigable(error)); return }
     await sb.storage.from('documentos').remove([doc.storage_path])
     toast.success('Documento eliminado')
     qc.invalidateQueries({ queryKey: ['documents'] })
@@ -470,7 +471,7 @@ function UploadDialog({
       toast.error(
         upErr.message.includes('mime')
           ? 'Tipo de archivo no permitido. Se aceptan PDF, Excel, Word, CSV e imágenes.'
-          : upErr.message
+          : mensajeAmigable(upErr, 'No se pudo subir el archivo.')
       )
       return
     }
@@ -494,7 +495,7 @@ function UploadDialog({
     setBusy(false)
     if (error) {
       await sb.storage.from('documentos').remove([path])
-      toast.error(error.message)
+      toast.error(mensajeAmigable(error))
       return
     }
 
@@ -630,7 +631,7 @@ function EditDialog({ doc, onClose, onDone }: { doc: any; onClose: () => void; o
       })
       .eq('id', doc.id)
     setBusy(false)
-    if (error) { toast.error(error.message); return }
+    if (error) { toast.error(mensajeAmigable(error)); return }
     toast.success('Documento actualizado')
     onDone()
     onClose()

@@ -21,6 +21,7 @@ import { SkeletonList } from '@/components/ui/skeleton'
 import { EmptyState, DateRangeTabs, rangeFromPreset, type DatePresetKey } from '@/components/shared/misc'
 import { cn, fmtDate } from '@/lib/utils'
 import { toast } from 'sonner'
+import { mensajeAmigable } from '@/lib/errores'
 
 /** Los estados de un movimiento, con el tono que les corresponde. */
 const MOVIMIENTO_ESTADO = {
@@ -130,7 +131,7 @@ export function CajaClient() {
         reviewed_at: new Date().toISOString(),
       })
       .eq('id', id)
-    if (error) { toast.error(error.message); return }
+    if (error) { toast.error(mensajeAmigable(error)); return }
     toast.success(
       estado === 'aprobado' ? 'Gasto aprobado'
         : estado === 'observado' ? 'Gasto observado, el capataz lo verá en su celular'
@@ -512,7 +513,7 @@ function DepositoDialog({
       .select('id')
       .single()
 
-    if (errMov) { toast.error(errMov.message); setEnviando(false); return }
+    if (errMov) { toast.error(mensajeAmigable(errMov)); setEnviando(false); return }
 
     const { error } = await sb
       .from('deposit_requests')
@@ -528,7 +529,7 @@ function DepositoDialog({
       .eq('id', solicitud.id)
 
     setEnviando(false)
-    if (error) { toast.error(error.message); return }
+    if (error) { toast.error(mensajeAmigable(error)); return }
     toast.success('Depósito registrado. El capataz verá el saldo actualizado.')
     onHecho()
   }
@@ -546,7 +547,7 @@ function DepositoDialog({
       })
       .eq('id', solicitud.id)
     setEnviando(false)
-    if (error) { toast.error(error.message); return }
+    if (error) { toast.error(mensajeAmigable(error)); return }
     toast.success('Solicitud rechazada')
     onHecho()
   }

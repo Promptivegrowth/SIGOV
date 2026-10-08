@@ -12,6 +12,7 @@ import { LogoEnMovimiento } from '@/components/shared/preloader'
 import { DEMO_USERS, DEMO_PASSWORD, ROLES, APP } from '@/lib/constants'
 import { cn, initials } from '@/lib/utils'
 import { toast } from 'sonner'
+import { mensajeAmigable } from '@/lib/errores'
 
 const DEMO_MODE = process.env.NEXT_PUBLIC_DEMO_MODE === 'true'
 
@@ -49,7 +50,7 @@ export function LoginClient() {
         setError(
           error.message === 'Invalid login credentials'
             ? 'Credenciales incorrectas. Verifica el correo y la contraseña.'
-            : error.message
+            : mensajeAmigable(error, 'No se pudo iniciar sesión. Inténtalo de nuevo.')
         )
         setLoading(null)
         return

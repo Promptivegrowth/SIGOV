@@ -16,6 +16,7 @@ import { descargarExcel, type ReportMeta } from '@/lib/reports'
 import { toast } from 'sonner'
 import { MOVIMIENTO, type TipoMovimiento, cifra, paraBuscar, hoyLima, useCuadrillas, Selector } from './comun'
 import { TablaKardex } from './almacen'
+import { mensajeAmigable } from '@/lib/errores'
 
 const haceDias = (n: number) => {
   const d = new Date(hoyLima() + 'T12:00:00')
@@ -208,7 +209,7 @@ function AnularMovimiento({ fila, onClose, onHecho }: { fila: any; onClose: () =
       })
       .eq('id', fila.id)
     setEnviando(false)
-    if (error) { toast.error(error.message); return }
+    if (error) { toast.error(mensajeAmigable(error)); return }
     toast.success('Movimiento anulado')
     onHecho()
   }

@@ -18,6 +18,7 @@ import { descargarPdf, descargarExcel, type ReportMeta } from '@/lib/reports'
 import { cn, fmtDate, fmtNumber, fmtProgresiva, truncate, toISODate } from '@/lib/utils'
 import { SEMAFORO } from '@/lib/constants'
 import { toast } from 'sonner'
+import { mensajeAmigable } from '@/lib/errores'
 
 type ReportKey = 'diario' | 'metrados' | 'pci' | 'ssoma' | 'inventario' | 'caja' | 'materiales'
 
@@ -407,7 +408,7 @@ export function ReportesClient() {
 
       toast.success(`Reporte ${format === 'pdf' ? 'PDF' : 'Excel'} generado`)
     } catch (e: any) {
-      toast.error(e?.message ?? 'No se pudo generar el reporte')
+      toast.error(mensajeAmigable(e, 'No se pudo generar el reporte'))
     } finally {
       setBusy(null)
     }

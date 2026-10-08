@@ -55,6 +55,7 @@ interface FilaCuadrilla {
   actividades: number
   ejecutadas: number
   avance: number
+  /** Ítems de PCI sin levantar de la cuadrilla (no documentos PCI) */
   pci_abiertos: number
   estado: string
 }
@@ -149,11 +150,11 @@ export function SupervisorDashboard() {
               <StatCard index={3} label="Culminadas" value={Number(r?.culminadas ?? 0)} icon={ClipboardCheck} tone="success" hint={`de ${fmtNumber(r?.asignadas ?? 0)} programadas`} />
               <StatCard
                 index={4}
-                label="PCI vencidos"
+                label="Ítems de PCI vencidos"
                 value={Number(r?.pci_vencidos ?? 0)}
                 icon={TriangleAlert}
                 tone={Number(r?.pci_vencidos ?? 0) > 0 ? 'danger' : 'success'}
-                hint={`${fmtNumber(r?.pci_activos ?? 0)} sin levantar`}
+                hint={`${fmtNumber(r?.pci_activos ?? 0)} ítems abiertos en ${fmtNumber(r?.pcis_abiertos ?? 0)} PCI`}
                 href="/pci"
               />
               <StatCard
@@ -198,7 +199,11 @@ export function SupervisorDashboard() {
           <Card>
             <CardHeader className="pb-1">
               <CardTitle className="text-[15px]">Estado de los PCI</CardTitle>
-              <CardDescription className="text-[12px]">Requerimientos de tus cuadrillas</CardDescription>
+              <CardDescription className="text-[12px]">
+                {resumen.isLoading
+                  ? 'Ítems de tus cuadrillas'
+                  : `${fmtNumber(r?.pcis_abiertos ?? 0)} PCI abiertos · cifras por ítem`}
+              </CardDescription>
             </CardHeader>
             <CardContent className="flex flex-col items-center gap-4 pb-6">
               {resumen.isLoading ? (
@@ -210,9 +215,9 @@ export function SupervisorDashboard() {
                     detalle="levantados"
                   />
                   <div className="grid w-full grid-cols-3 gap-2 text-center">
-                    <Mini label="Abiertos" value={Number(r?.pci_activos ?? 0)} />
-                    <Mini label="Atendidos" value={Number(r?.pci_atendidos ?? 0)} tone="success" />
-                    <Mini label="Vencidos" value={Number(r?.pci_vencidos ?? 0)} tone="danger" />
+                    <Mini label="Ítems abiertos" value={Number(r?.pci_activos ?? 0)} />
+                    <Mini label="Ítems atendidos" value={Number(r?.pci_atendidos ?? 0)} tone="success" />
+                    <Mini label="Ítems vencidos" value={Number(r?.pci_vencidos ?? 0)} tone="danger" />
                   </div>
                 </>
               )}
@@ -428,7 +433,7 @@ function TablaCuadrillas({
                   <th className="px-3 py-2 font-medium">Jefe</th>
                   <th className="px-3 py-2 text-right font-medium">Actividades</th>
                   <th className="px-3 py-2 font-medium">Avance</th>
-                  <th className="px-3 py-2 text-right font-medium">PCI abiertos</th>
+                  <th className="px-3 py-2 text-right font-medium">Ítems PCI abiertos</th>
                   <th className="px-4 py-2 font-medium">Estado</th>
                 </tr>
               </thead>
@@ -507,7 +512,7 @@ function AlertasDelSupervisor({
       show: vencidos > 0,
       tone: 'danger' as const,
       icon: CircleAlert,
-      title: `${fmtNumber(vencidos)} PCI vencidos en tus cuadrillas`,
+      title: `${fmtNumber(vencidos)} ítems de PCI vencidos en tus cuadrillas`,
       body: 'Pasaron la fecha límite. Cada día suma penalidad.',
       href: '/pci/tablero',
       cta: 'Atender',

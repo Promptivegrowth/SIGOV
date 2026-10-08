@@ -16,6 +16,7 @@ import { createClient } from '@/lib/supabase/client'
 import { fmtDate, cn, truncate } from '@/lib/utils'
 import { PCI_PRIORITY } from '@/lib/constants'
 import { toast } from 'sonner'
+import { mensajeAmigable } from '@/lib/errores'
 
 /**
  * MOTOR DE REPROGRAMACIÓN POR PCI PRIORITARIO
@@ -56,7 +57,7 @@ export function SuspensionDialog({
     const { data, error } = await sb.rpc('apply_pci_suspension', { p_pci_id: pci.id })
     setApplying(false)
     if (error) {
-      toast.error(error.message)
+      toast.error(mensajeAmigable(error))
       return
     }
     const r = data as any
@@ -82,7 +83,7 @@ export function SuspensionDialog({
     if (!susp) return toast.error('No hay una suspensión activa para revertir')
 
     const { data, error } = await sb.rpc('revert_pci_suspension', { p_suspension_id: susp.id })
-    if (error) return toast.error(error.message)
+    if (error) return toast.error(mensajeAmigable(error))
     toast.success(`Reprogramación revertida (${(data as any)?.restored ?? 0} ítems restaurados)`)
     setResult(null)
     onApplied?.()

@@ -12,6 +12,7 @@ import {
 import { createClient } from '@/lib/supabase/client'
 import { cn } from '@/lib/utils'
 import { toast } from 'sonner'
+import { mensajeAmigable } from '@/lib/errores'
 
 /**
  * Captura de firma manuscrita con el dedo o el mouse.
@@ -97,7 +98,7 @@ export function SignaturePadDialog({
       await onSigned(blob)
       onOpenChange(false)
     } catch (e: any) {
-      toast.error(e?.message ?? 'No se pudo guardar la firma')
+      toast.error(mensajeAmigable(e, 'No se pudo guardar la firma'))
     } finally {
       setSaving(false)
     }
@@ -172,6 +173,6 @@ export async function uploadSignature(
     contentType: 'image/png',
     upsert: true,
   })
-  if (error) throw new Error(`No se pudo guardar la firma: ${error.message}`)
+  if (error) throw new Error(`No se pudo guardar la firma. ${mensajeAmigable(error)}`)
   return path
 }

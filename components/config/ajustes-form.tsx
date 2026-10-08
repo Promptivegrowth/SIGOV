@@ -12,6 +12,7 @@ import { Input } from '@/components/ui/input'
 import { Switch } from '@/components/ui/primitives'
 import { SkeletonList } from '@/components/ui/skeleton'
 import { cn } from '@/lib/utils'
+import { mensajeAmigable } from '@/lib/errores'
 
 /**
  * Los ajustes del contrato.
@@ -72,7 +73,7 @@ export function AjustesDelServicio() {
       .update({ settings: borrador })
       .eq('id', service.id)
     setGuardando(false)
-    if (error) { toast.error(error.message); return }
+    if (error) { toast.error(mensajeAmigable(error)); return }
     toast.success('Ajustes guardados', {
       description: 'Las cuadrillas los reciben al sincronizar.',
     })

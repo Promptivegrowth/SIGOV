@@ -87,9 +87,11 @@ export const NAV: NavItem[] = [
     icon: HardHat, roles: ['admin','supervisor','jefe_cuadrilla','visor'], module: 'campo', field: true, badge: 'sync' },
   { href: '/caja',         label: 'Caja chica',    labelPorRol: { jefe_cuadrilla: 'Registro de Gastos / Mi Caja' },
     icon: Wallet, roles: ['admin','supervisor','jefe_cuadrilla'], module: 'caja' },
+  // Regla 1.2: pedir materiales no es tarea del Jefe de Cuadrilla, así que
+  // el apartado no figura en su menú (la base tampoco le deja crear pedidos).
   { href: '/materiales',   label: 'Materiales',
-    labelPorRol: { jefe_cuadrilla: 'Materiales / Insumos', admin: 'Materiales / Insumos', visor: 'Materiales / Insumos' },
-    icon: Package, roles: ['admin','supervisor','jefe_cuadrilla','visor'], module: 'materiales' },
+    labelPorRol: { admin: 'Materiales / Insumos', visor: 'Materiales / Insumos' },
+    icon: Package, roles: ['admin','supervisor','visor'], module: 'materiales' },
   { href: '/evidencias',   label: 'Fotos / Evidencias',
     labelPorRol: { visor: 'Fotografías', ing_seguridad: 'Evidencias SSOMA' },
     icon: Camera, roles: ['admin','supervisor','ing_seguridad','jefe_cuadrilla','visor'], module: 'campo' },
@@ -146,6 +148,13 @@ export const PCI_PRIORITY = {
   alta:    { label: 'Alta',    className: 'bg-warning/20 text-warning' },
   critica: { label: 'Crítica', className: 'bg-destructive/15 text-destructive' },
 } as const
+
+/**
+ * Estados del PCI (el documento) que siguen abiertos. «Vencido» también: un
+ * PCI vencido es el que más urge cerrar, no uno que ya salió de la lista.
+ * Solo se da por cerrado cuando sus ítems se levantaron (o se cerró a mano).
+ */
+export const PCI_ABIERTO: readonly string[] = ['abierto', 'en_atencion', 'vencido']
 
 export const PCI_ITEM_STATUS = {
   pendiente:   { label: 'Pendiente',   className: 'bg-muted text-muted-foreground' },

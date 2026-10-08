@@ -26,6 +26,7 @@ import { descargarPdf, descargarExcel, type ReportMeta } from '@/lib/reports'
 import { PCI_PRIORITY, PCI_ITEM_STATUS, SEMAFORO, type Semaforo } from '@/lib/constants'
 import { cn, fmtDate, fmtNumber, truncate, toISODate } from '@/lib/utils'
 import { toast } from 'sonner'
+import { mensajeAmigable } from '@/lib/errores'
 
 export function PciDetailClient({ pciId }: { pciId: string }) {
   const { service, can, profile } = useSession()
@@ -110,7 +111,7 @@ export function PciDetailClient({ pciId }: { pciId: string }) {
   const bulkAssign = async (crewId: string) => {
     const ids = [...selected]
     const { error } = await sb.from('pci_items').update({ assigned_crew_id: crewId }).in('id', ids)
-    if (error) return toast.error(error.message)
+    if (error) return toast.error(mensajeAmigable(error))
     toast.success(`${ids.length} ítems asignados`)
     setSelected(new Set())
     qc.invalidateQueries({ queryKey: ['pci-items', pciId] })
@@ -170,7 +171,7 @@ export function PciDetailClient({ pciId }: { pciId: string }) {
       }
       toast.success('Reporte generado')
     } catch (e: any) {
-      toast.error(e?.message ?? 'No se pudo generar el reporte')
+      toast.error(mensajeAmigable(e, 'No se pudo generar el reporte'))
     } finally {
       setExporting(null)
     }

@@ -11,6 +11,7 @@ import { Input, Field } from '@/components/ui/input'
 import { Switch } from '@/components/ui/primitives'
 import { cn } from '@/lib/utils'
 import { toast } from 'sonner'
+import { mensajeAmigable } from '@/lib/errores'
 
 const MODULOS: { key: string; label: string; hint: string }[] = [
   { key: 'programacion', label: 'Programación', hint: 'Plan semanal y órdenes de trabajo' },
@@ -77,7 +78,7 @@ export function ServiceForm({
       p_modules: modules as any,
     })
     setSaving(false)
-    if (error) { toast.error(error.message.replace('SIGOV: ', '')); return }
+    if (error) { toast.error(mensajeAmigable(error)); return }
 
     const r = data as any
     toast.success(`Servicio ${r?.code} creado`, {

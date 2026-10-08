@@ -26,6 +26,7 @@ import { AssetForm, InterventionForm } from '@/components/inventario/asset-form'
 import { MapaDeInventario } from '@/components/inventario/mapa-de-inventario'
 import { ASSET_CONDITION } from '@/lib/constants'
 import { cn, fmtDate, fmtNumber, parseFecha } from '@/lib/utils'
+import { mensajeAmigable } from '@/lib/errores'
 
 export function InventarioClient() {
   const { service, can } = useSession()
@@ -473,7 +474,7 @@ export function InventarioClient() {
             .from('road_assets')
             .update({ deleted_at: new Date().toISOString() })
             .eq('id', deleting.id)
-          if (error) { toast.error(error.message); return }
+          if (error) { toast.error(mensajeAmigable(error)); return }
           toast.success('Elemento eliminado del inventario')
           qc.invalidateQueries({ queryKey: ['assets'] })
           setDeleting(null)

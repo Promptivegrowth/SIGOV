@@ -19,6 +19,7 @@ import {
   MAX_ACCURACY_M, type GpsFix, type SealedPhoto,
 } from '@/lib/camera'
 import { toast } from 'sonner'
+import { mensajeAmigable } from '@/lib/errores'
 
 type Phase = 'antes' | 'durante' | 'despues' | 'general'
 
@@ -82,7 +83,7 @@ export function PhotoUploader({
     if (!open) return
     setGpsError(null)
     const stop = watchGps((fix) => setGps((prev) => (!prev || fix.accuracy < prev.accuracy ? fix : prev)))
-    getGpsFix().catch((e) => setGpsError(e.message))
+    getGpsFix().catch((e) => setGpsError(mensajeAmigable(e, 'No se pudo obtener la ubicación')))
     return stop
   }, [open])
 
@@ -168,7 +169,7 @@ export function PhotoUploader({
         )
       } catch (e: any) {
         setItems((prev) =>
-          prev.map((x) => (x.id === it.id ? { ...x, state: 'error', error: e?.message ?? 'Error al procesar' } : x))
+          prev.map((x) => (x.id === it.id ? { ...x, state: 'error', error: mensajeAmigable(e, 'No se pudo procesar la foto') } : x))
         )
       }
     }

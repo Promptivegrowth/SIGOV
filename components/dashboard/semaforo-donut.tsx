@@ -29,7 +29,7 @@ export function SemaforoDonut({ data, total }: { data: Record<string, any>; tota
   return (
     <Card className="flex h-full flex-col">
       <CardHeader className="pb-1">
-        <CardTitle className="text-[15px]">Semáforo de PCIs</CardTitle>
+        <CardTitle className="text-[15px]">Semáforo de ítems PCI</CardTitle>
         <CardDescription className="text-[12px]">
           {fmtNumber(total)} ítems · {fmtNumber(pendientes)} sin levantar
         </CardDescription>

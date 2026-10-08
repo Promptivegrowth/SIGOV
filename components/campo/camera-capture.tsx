@@ -15,6 +15,7 @@ import {
 } from '@/lib/camera'
 import { EVIDENCE_PHASE } from '@/lib/constants'
 import { toast } from 'sonner'
+import { mensajeAmigable } from '@/lib/errores'
 
 type Phase = 'antes' | 'durante' | 'despues' | 'general'
 
@@ -114,7 +115,7 @@ export function CameraCapture({
       })
       setPreview({ url: URL.createObjectURL(sealed.blob), sealed })
     } catch (e: any) {
-      toast.error(e?.message ?? 'No se pudo procesar la foto')
+      toast.error(mensajeAmigable(e, 'No se pudo procesar la foto'))
     } finally {
       setBusy(false)
     }

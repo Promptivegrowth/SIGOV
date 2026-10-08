@@ -138,7 +138,9 @@ function PanelGeneral() {
                 value={Number(k?.pci?.vencidos ?? 0)}
                 icon={TriangleAlert}
                 tone={Number(k?.pci?.vencidos ?? 0) > 0 ? 'danger' : 'success'}
-                hint={`${fmtNumber(k?.pci?.por_vencer_7d ?? 0)} vencen en 7 días`}
+                // Ítems y PCI son cifras distintas: la tarjeta cuenta ítems y
+                // la nota dice cuántos documentos siguen abiertos (OBS-12).
+                hint={`${fmtNumber(k?.pci?.pcis_abiertos ?? 0)} PCI abiertos · ${fmtNumber(k?.pci?.por_vencer_7d ?? 0)} ítems vencen en 7 días`}
                 href="/pci"
               />
               <StatCard

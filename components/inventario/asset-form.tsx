@@ -17,6 +17,7 @@ import { ASSET_CONDITION } from '@/lib/constants'
 import { cn, parseProgresiva, fmtProgresiva, toISODate } from '@/lib/utils'
 import { getGpsFix } from '@/lib/camera'
 import { toast } from 'sonner'
+import { mensajeAmigable } from '@/lib/errores'
 
 /**
  * Alta y edición de un elemento del inventario vial.
@@ -163,7 +164,7 @@ export function AssetForm({
         description: `A ${Math.round(Number(r.distancia_m))} m del eje · GPS ±${fix.accuracy.toFixed(0)} m`,
       })
     } catch (e: any) {
-      toast.error(e?.message ?? 'No se pudo obtener la ubicación')
+      toast.error(mensajeAmigable(e, 'No se pudo obtener la ubicación'))
     } finally {
       setGpsBusy(false)
     }
@@ -218,7 +219,7 @@ export function AssetForm({
       toast.error(
         error.message.includes('duplicate') || error.message.includes('road_assets_service_id_code_key')
           ? `Ya existe un elemento con el código ${code.trim()}`
-          : error.message
+          : mensajeAmigable(error)
       )
       return
     }
@@ -477,7 +478,7 @@ export function InterventionForm({
       created_by: profile.id,
     })
     setSaving(false)
-    if (error) { toast.error(error.message); return }
+    if (error) { toast.error(mensajeAmigable(error)); return }
 
     toast.success('Intervención registrada', {
       description: `El estado del elemento pasó a ${ASSET_CONDITION[after as keyof typeof ASSET_CONDITION].label.toLowerCase()}.`,

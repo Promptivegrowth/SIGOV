@@ -17,6 +17,7 @@ import { Select, SelectTrigger, SelectValue, SelectContent, SelectItem } from '@
 import { armarPaquete, CARPETAS, nombreSeguro, type AvancePaquete } from '@/lib/paquete'
 import { cn, toISODate } from '@/lib/utils'
 import { toast } from 'sonner'
+import { mensajeAmigable } from '@/lib/errores'
 
 /** El valor de «sin filtrar»: Radix no admite un SelectItem de valor vacío. */
 const TODO = '__todo__'
@@ -231,7 +232,7 @@ export function PaquetesClient() {
         description: `${(zip.size / 1048576).toFixed(1)} MB · revisa el INDICE.xlsx`,
       })
     } catch (e: any) {
-      toast.error('No se pudo armar el paquete', { description: e?.message })
+      toast.error('No se pudo armar el paquete', { description: mensajeAmigable(e, 'Inténtalo de nuevo.') })
     } finally {
       setArmando(false)
       setAvance(null)

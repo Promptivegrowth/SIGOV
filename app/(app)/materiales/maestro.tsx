@@ -15,6 +15,7 @@ import { EmptyState } from '@/components/shared/misc'
 import { cn, fmtDate } from '@/lib/utils'
 import { toast } from 'sonner'
 import { cifra, leerCifra, paraBuscar, useCategorias, useUnidades, Selector } from './comun'
+import { mensajeAmigable } from '@/lib/errores'
 
 /**
  * El maestro de materiales: de aquí nacen los insumos.
@@ -220,7 +221,7 @@ function InsumoDialog({ serviceId, insumo, onClose, onHecho }: {
         ? 'Ya hay un insumo con ese nombre en el maestro'
         : error.message.includes('ux_supplies_servicio_codigo') || error.message.includes('supplies_code_key')
           ? 'Ese código ya está usado'
-          : error.message)
+          : mensajeAmigable(error))
       return
     }
     toast.success(insumo ? 'Insumo actualizado' : `Insumo creado con el código ${data?.code}`)
@@ -315,7 +316,7 @@ function ActivarDialog({ insumo, onClose, onHecho }: {
       .update({ is_active: !desactivar, updated_at: new Date().toISOString() })
       .eq('id', insumo.id)
     setEnviando(false)
-    if (error) { toast.error(error.message); return }
+    if (error) { toast.error(mensajeAmigable(error)); return }
     toast.success(desactivar ? `${insumo.code} desactivado` : `${insumo.code} reactivado`)
     onHecho()
   }

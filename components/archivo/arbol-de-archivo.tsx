@@ -21,6 +21,7 @@ import {
 import { cn, fmtDate } from '@/lib/utils'
 import { PLAN_ITEM_STATUS, WORK_ORDER_STATUS, PCI_ITEM_STATUS } from '@/lib/constants'
 import { toast } from 'sonner'
+import { mensajeAmigable } from '@/lib/errores'
 
 /**
  * El archivo, como lo pide el apartado 11.1.
@@ -174,7 +175,7 @@ export function ArbolDeArchivo({ desde, hasta }: { desde: string; hasta: string 
       }
       await descargarFormato(clave, datos)
     } catch (e: any) {
-      toast.error('No se pudo generar el documento', { description: e?.message })
+      toast.error('No se pudo generar el documento', { description: mensajeAmigable(e, 'Inténtalo de nuevo.') })
     } finally {
       setBajando(null)
     }

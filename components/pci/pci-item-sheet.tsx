@@ -22,6 +22,7 @@ import { enqueue, enqueueBlob, getDeviceId } from '@/lib/offline/db'
 import { syncNow } from '@/lib/offline/sync'
 import type { SealedPhoto } from '@/lib/camera'
 import { toast } from 'sonner'
+import { mensajeAmigable } from '@/lib/errores'
 
 /**
  * Ficha de un ítem de PCI: revisar, adjuntar evidencia, levantar y validar.
@@ -73,7 +74,7 @@ export function PciItemSheet({
       toast.error(
         error.message.includes('sin evidencia')
           ? 'No se puede levantar este ítem sin evidencia fotográfica. Adjunta al menos una foto.'
-          : error.message
+          : mensajeAmigable(error)
       )
       return
     }
@@ -94,7 +95,7 @@ export function PciItemSheet({
       .update({ assigned_crew_id: crewId || null, notes: notes || null })
       .eq('id', item.id)
     setBusy(false)
-    if (error) { toast.error(error.message); return }
+    if (error) { toast.error(mensajeAmigable(error)); return }
     toast.success('Ítem actualizado')
     refresh()
   }

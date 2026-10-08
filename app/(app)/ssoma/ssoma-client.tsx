@@ -32,6 +32,7 @@ import { DateRangeTabs, rangeFromPreset, type DatePresetKey } from '@/components
 import { descargarPdf, ORG_DEFAULT } from '@/lib/reports'
 import { cn, fmtDate, fmtNumber, fmtRelative, truncate, toISODate } from '@/lib/utils'
 import { toast } from 'sonner'
+import { mensajeAmigable } from '@/lib/errores'
 
 const RISK_COLORS: Record<string, string> = {
   trivial: 'var(--sem-verde)',
@@ -108,7 +109,7 @@ export function SsomaClient() {
     const { data, error } = talkForm.row
       ? await sb.from('safety_talks').update(payload).eq('id', talkForm.row.id).select('id').single()
       : await sb.from('safety_talks').insert({ ...payload, created_by: profile.id }).select('id').single()
-    if (error) { toast.error(error.message); return }
+    if (error) { toast.error(mensajeAmigable(error)); return }
     toast.success(talkForm.row ? 'Charla actualizada' : 'Charla registrada', {
       description: talkForm.row ? undefined : 'Ahora registra la asistencia del equipo.',
     })
@@ -122,7 +123,7 @@ export function SsomaClient() {
   const deleteTalk = async (row: any) => {
     const { error } = await sb.from('safety_talks')
       .update({ deleted_at: new Date().toISOString() }).eq('id', row.id)
-    if (error) { toast.error(error.message); return }
+    if (error) { toast.error(mensajeAmigable(error)); return }
     toast.success('Charla eliminada')
     qc.invalidateQueries()
   }
@@ -581,7 +582,7 @@ function AttendanceDialog({
           path = await uploadSignature(service.id, `charlas/${talk.id}`, m.id, blob)
         } catch (e: any) {
           setSaving(false)
-          toast.error(e?.message ?? 'No se pudo subir la firma')
+          toast.error(mensajeAmigable(e, 'No se pudo subir la firma'))
           return
         }
       }
@@ -599,7 +600,7 @@ function AttendanceDialog({
 
     const { error } = await sb.from('talk_attendance').upsert(rows, { onConflict: 'talk_id,full_name' })
     setSaving(false)
-    if (error) { toast.error(error.message); return }
+    if (error) { toast.error(mensajeAmigable(error)); return }
     const conFirma = rows.filter((r) => r.signature_path).length
     toast.success(rows.length + ' asistencias registradas', {
       description: conFirma
@@ -818,7 +819,7 @@ Contenido tratado: ${t.content}` : ''),
       )
       toast.success('Acta descargada')
     } catch (e: any) {
-      toast.error(e?.message ?? 'No se pudo generar el acta')
+      toast.error(mensajeAmigable(e, 'No se pudo generar el acta'))
     } finally {
       setBajando(false)
     }
@@ -879,7 +880,7 @@ Contenido tratado: ${t.content}` : ''),
       )
       toast.success('Informe descargado')
     } catch (e: any) {
-      toast.error(e?.message ?? 'No se pudo generar el informe')
+      toast.error(mensajeAmigable(e, 'No se pudo generar el informe'))
     } finally {
       setBajando(false)
     }
@@ -975,7 +976,7 @@ Contenido tratado: ${t.content}` : ''),
       )
       toast.success('Informe descargado')
     } catch (e: any) {
-      toast.error(e?.message ?? 'No se pudo generar el informe')
+      toast.error(mensajeAmigable(e, 'No se pudo generar el informe'))
     } finally {
       setBajando(false)
     }

@@ -24,6 +24,7 @@ import { FormDialog, ConfirmDialog, type FormField } from '@/components/forms/fo
 import { PLAN_ITEM_STATUS } from '@/lib/constants'
 import { cn, fmtDate, fmtNumber, startOfWeek, toISODate, addDays, isoWeek, truncate, parseProgresiva, fmtProgresiva } from '@/lib/utils'
 import { toast } from 'sonner'
+import { mensajeAmigable } from '@/lib/errores'
 
 const DIAS = ['Lunes', 'Martes', 'Miércoles', 'Jueves', 'Viernes', 'Sábado', 'Domingo']
 
@@ -162,7 +163,9 @@ export function ProgramacionClient() {
       status: 'borrador',
       created_by: profile.id,
     }).select('id').single()
-    if (error) throw new Error(error.message)
+    // Se relanza el error tal cual —con su código— para que el aviso lo
+    // pueda traducir; un Error nuevo solo con el texto lo perdía.
+    if (error) throw error
     return data.id
   }
 
@@ -192,18 +195,18 @@ export function ProgramacionClient() {
       const { error } = itemForm.row
         ? await sb.from('plan_items').update(payload).eq('id', itemForm.row.id)
         : await sb.from('plan_items').insert({ ...payload, created_by: profile.id })
-      if (error) { toast.error(error.message); return }
+      if (error) { toast.error(mensajeAmigable(error)); return }
       toast.success(itemForm.row ? 'Actividad actualizada' : 'Actividad programada')
       qc.invalidateQueries()
     } catch (e: any) {
-      toast.error(e?.message ?? 'No se pudo guardar')
+      toast.error(mensajeAmigable(e, 'No se pudo guardar'))
     }
   }
 
   const deleteItem = async (row: any) => {
     const { error } = await sb.from('plan_items')
       .update({ deleted_at: new Date().toISOString() }).eq('id', row.id)
-    if (error) { toast.error(error.message); return }
+    if (error) { toast.error(mensajeAmigable(error)); return }
     toast.success('Actividad retirada de la programación')
     qc.invalidateQueries()
   }
@@ -221,7 +224,7 @@ export function ProgramacionClient() {
       p_aceptar: aceptar,
       p_nota: nota ?? undefined,
     })
-    if (error) { toast.error(error.message); return }
+    if (error) { toast.error(mensajeAmigable(error)); return }
     toast.success(
       aceptar ? 'Partida validada' : 'Partida devuelta a campo',
       {
@@ -242,11 +245,11 @@ export function ProgramacionClient() {
         published_at: new Date().toISOString(),
         published_by: profile.id,
       }).eq('id', planId)
-      if (error) { toast.error(error.message); return }
+      if (error) { toast.error(mensajeAmigable(error)); return }
       toast.success('Programación publicada', { description: 'Las cuadrillas ya la ven en sus celulares.' })
       qc.invalidateQueries()
     } catch (e: any) {
-      toast.error(e?.message ?? 'No se pudo publicar')
+      toast.error(mensajeAmigable(e, 'No se pudo publicar'))
     }
   }
 
@@ -266,7 +269,7 @@ export function ProgramacionClient() {
         p_origen: toISODate(monday),
         p_destino: toISODate(destino),
       })
-      if (error) { toast.error(error.message); return }
+      if (error) { toast.error(mensajeAmigable(error)); return }
       const r = data as any
       if (r?.existentes > 0) {
         toast.warning('La semana siguiente ya tiene programación', { description: r.mensaje })
@@ -280,7 +283,7 @@ export function ProgramacionClient() {
       qc.invalidateQueries()
       setOffset((v) => v + 1)
     } catch (e: any) {
-      toast.error(e?.message ?? 'No se pudo duplicar la semana')
+      toast.error(mensajeAmigable(e, 'No se pudo duplicar la semana'))
     } finally {
       setDuplicando(false)
     }

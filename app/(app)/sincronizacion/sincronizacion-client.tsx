@@ -13,6 +13,7 @@ import { db } from '@/lib/offline/db'
 import { syncNow } from '@/lib/offline/sync'
 import { useSession } from '@/lib/hooks/use-session'
 import { fmtRelative, fmtNumber, cn } from '@/lib/utils'
+import { mensajeAmigable } from '@/lib/errores'
 
 /**
  * Sincronización (apartado 4.12).
@@ -74,7 +75,7 @@ export function SincronizacionClient() {
           : 'No quedó nada por enviar.',
       })
     } catch (e: any) {
-      toast.error('No se pudo sincronizar', { description: e?.message })
+      toast.error('No se pudo sincronizar', { description: mensajeAmigable(e, 'Inténtalo de nuevo.') })
     } finally {
       setSincronizando(false)
     }
@@ -156,7 +157,8 @@ export function SincronizacionClient() {
                         </span>
                         {fallo && p.last_error && (
                           <span className="text-muted-foreground mt-0.5 block truncate text-[10.5px]">
-                            {p.last_error}
+                            {/* Se guarda el error crudo para soporte; aquí, en castellano */}
+                            {mensajeAmigable(p.last_error)}
                           </span>
                         )}
                       </span>

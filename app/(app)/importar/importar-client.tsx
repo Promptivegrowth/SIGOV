@@ -175,24 +175,75 @@ export function ImportarClient() {
       .single()
 
     let inserted = 0
+    let updated = 0
     let failed = 0
     const errors: any[] = []
 
     try {
       const payload = valid.map((v) => buildRow(schema.key, v, service.id, profile.id, pciId, pcis.data))
+
+      // Tandas a escribir. Lo normal es una sola (upsert de todo). El PCI va
+      // aparte: volver a subir el mismo Excel no puede devolver a «pendiente»
+      // lo que la cuadrilla ya atendió, levantó o le validaron (OBS-07).
+      type Tanda = {
+        filas: any[]
+        opciones: { onConflict: string; ignoreDuplicates?: boolean; defaultToNull?: boolean }
+        nuevas: boolean
+      }
+      const tandas: Tanda[] = []
+
+      if (schema.key === 'pci') {
+        const existentes = await numerosDeItemExistentes(sb, pciId)
+        const nuevos = payload.filter((r) => !existentes.has(r.item_number))
+        // Del ítem que ya existe solo se refresca lo que describe el Excel, y
+        // solo las columnas que se mapearon: una columna sin asignar no borra
+        // lo que ya había. Estado, plazo, vencimiento, cuadrilla, fechas de
+        // cierre y validación y evidencias no se tocan.
+        const descriptivas = PCI_DESCRIPTIVOS.filter(
+          (d) => d.campo === 'description' || mapping[d.origen]
+        )
+        const viejos = payload
+          .filter((r) => existentes.has(r.item_number))
+          .map((r) => {
+            // Las NOT NULL viajan igual: Postgres valida la fila propuesta
+            // antes de ver que choca con la existente.
+            const fila: any = { service_id: r.service_id, pci_id: r.pci_id, item_number: r.item_number }
+            for (const d of descriptivas) fila[d.campo] = r[d.campo]
+            return fila
+          })
+        // ignoreDuplicates: si alguien creó el mismo ítem entre la lectura y
+        // la escritura, se respeta el suyo en vez de pisarle el estado.
+        tandas.push({ filas: nuevos, opciones: { onConflict: 'pci_id,item_number', ignoreDuplicates: true }, nuevas: true })
+        // defaultToNull=false: lo que no va en la fila no se escribe como NULL.
+        tandas.push({ filas: viejos, opciones: { onConflict: 'pci_id,item_number', defaultToNull: false }, nuevas: false })
+      } else {
+        tandas.push({ filas: payload, opciones: { onConflict: onConflictFor(schema.key) }, nuevas: true })
+      }
+
       // Lotes de 200 para no exceder el límite del request
-      for (let i = 0; i < payload.length; i += 200) {
-        const chunk = payload.slice(i, i + 200)
-        const { error, count } = await sb
-          .from(schema.table as any)
-          .upsert(chunk, { onConflict: onConflictFor(schema.key), count: 'exact' })
-        if (error) {
-          failed += chunk.length
-          errors.push({ lote: i / 200 + 1, error: error.message })
-        } else {
-          inserted += count ?? chunk.length
+      let lote = 0
+      for (const t of tandas) {
+        for (let i = 0; i < t.filas.length; i += 200) {
+          lote++
+          const chunk = t.filas.slice(i, i + 200)
+          const { error, count } = await sb
+            .from(schema.table as any)
+            .upsert(chunk, { ...t.opciones, count: 'exact' })
+          if (error) {
+            failed += chunk.length
+            errors.push({ lote, error: error.message })
+          } else if (t.nuevas) {
+            inserted += count ?? chunk.length
+          } else {
+            updated += count ?? chunk.length
+          }
         }
       }
+    } catch (e: any) {
+      // Fallo antes o fuera de los lotes (p. ej. al leer los ítems que ya
+      // existen): lo que no se llegó a escribir cuenta como fallido.
+      failed = Math.max(valid.length - inserted - updated, 0)
+      errors.push({ error: e?.message ?? String(e) })
     } finally {
       await sb
         .from('import_batches')
@@ -205,12 +256,17 @@ export function ImportarClient() {
         })
         .eq('id', batch.data!.id)
 
-      setResult({ inserted, failed, issues: issues.length })
+      setResult({ inserted, updated, failed, issues: issues.length })
       setImporting(false)
       setStep('resultado')
       qc.invalidateQueries()
-      if (!failed) toast.success(`${inserted} registros importados`)
-      else toast.error(`${failed} registros fallaron`)
+      if (!failed) {
+        toast.success(
+          updated
+            ? `${inserted} ${inserted === 1 ? 'registro nuevo' : 'registros nuevos'} · ${updated} ${updated === 1 ? 'actualizado' : 'actualizados'}`
+            : `${inserted} ${inserted === 1 ? 'registro importado' : 'registros importados'}`
+        )
+      } else toast.error(`${failed} registros no se pudieron guardar`)
     }
   }
 
@@ -556,7 +612,16 @@ export function ImportarClient() {
                     {result.failed ? 'Importación con errores' : 'Importación completada'}
                   </h3>
                   <p className="text-muted-foreground mt-1.5 max-w-md text-[13px]">
-                    Se importaron <strong className="text-foreground">{fmtNumber(result.inserted)}</strong> registros.
+                    {result.inserted === 1 ? 'Se importó ' : 'Se importaron '}
+                    <strong className="text-foreground">{fmtNumber(result.inserted)}</strong>
+                    {result.inserted === 1 ? ' registro nuevo.' : ' registros nuevos.'}
+                    {result.updated > 0 && (
+                      <>
+                        {' '}<strong className="text-foreground">{fmtNumber(result.updated)}</strong>
+                        {result.updated === 1 ? ' ítem ya existía' : ' ítems ya existían'}: se actualizó su
+                        descripción y se conservaron su estado, plazo, cuadrilla y evidencias.
+                      </>
+                    )}
                     {result.issues > 0 && ` ${fmtNumber(result.issues)} filas se omitieron por errores de validación.`}
                   </p>
                   <div className="mt-6 flex gap-2">
@@ -613,6 +678,42 @@ function Steps({ step }: { step: Step }) {
       ))}
     </ol>
   )
+}
+
+// Columnas del ítem PCI que el Excel «describe» y que una reimportación puede
+// refrescar: `campo` es la columna de pci_items y `origen` el campo del
+// esquema de importación del que sale (lo que el usuario mapea).
+const PCI_DESCRIPTIVOS = [
+  { campo: 'description', origen: 'description' },
+  { campo: 'section_id', origen: 'section_code' },
+  { campo: 'prog_start_m', origen: 'prog_start_m' },
+  { campo: 'activity_id', origen: 'activity_code' },
+  { campo: 'quantity', origen: 'quantity' },
+] as const
+
+// N.º de los ítems que el PCI ya tiene (borrados incluidos: la llave única
+// pci_id+item_number también los cuenta). Se pide por páginas porque un PCI
+// puede pasar de las 1000 filas que devuelve la API de una vez.
+async function numerosDeItemExistentes(
+  sb: ReturnType<typeof createClient>,
+  pciId: string
+): Promise<Set<number>> {
+  const numeros = new Set<number>()
+  const pagina = 1000
+  for (let desde = 0; ; desde += pagina) {
+    const { data, error } = await sb
+      .from('pci_items')
+      .select('item_number')
+      .eq('pci_id', pciId)
+      .order('item_number')
+      .range(desde, desde + pagina - 1)
+    // Si no se puede saber qué existe, mejor no escribir nada que arriesgarse
+    // a tratar como nuevo un ítem que ya se atendió.
+    if (error) throw error
+    for (const r of data ?? []) numeros.add(Number(r.item_number))
+    if (!data || data.length < pagina) break
+  }
+  return numeros
 }
 
 function onConflictFor(kind: ImportKind['key']): string {

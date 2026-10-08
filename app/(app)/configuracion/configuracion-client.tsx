@@ -25,6 +25,7 @@ import { cn, fmtDate, fmtNumber, fmtRelative, initials, bytes, parseProgresiva, 
 import { storageEstimate } from '@/lib/offline/db'
 import { pushSupported, pushPermission, enablePush, isStandalone, isIOS } from '@/lib/push'
 import { toast } from 'sonner'
+import { mensajeAmigable } from '@/lib/errores'
 
 export function ConfiguracionClient() {
   const { service, services, can, profile, switchService } = useSession()
@@ -199,7 +200,7 @@ export function ConfiguracionClient() {
       body: JSON.stringify({ ...v, id: userForm.row?.profiles?.id, service_id: service.id }),
     })
     const json = await res.json()
-    if (!res.ok) { toast.error(json.error ?? 'No se pudo guardar el usuario'); return }
+    if (!res.ok) { toast.error(mensajeAmigable(json.error, 'No se pudo guardar el usuario')); return }
     if (!isEdit && json.password) setNewCred({ email: json.email, password: json.password })
     toast.success(isEdit ? 'Usuario actualizado' : 'Usuario creado')
     refresh()
@@ -217,7 +218,7 @@ export function ConfiguracionClient() {
     const { error } = crewForm.row
       ? await sb.from('crews').update(payload).eq('id', crewForm.row.id)
       : await sb.from('crews').insert({ ...payload, created_by: profile.id })
-    if (error) { toast.error(error.message); return }
+    if (error) { toast.error(mensajeAmigable(error)); return }
     toast.success(crewForm.row ? 'Cuadrilla actualizada' : 'Cuadrilla creada')
     refresh()
   }
@@ -229,7 +230,7 @@ export function ConfiguracionClient() {
       dni: v.dni || null,
       position: v.position,
     })
-    if (error) { toast.error(error.message); return }
+    if (error) { toast.error(mensajeAmigable(error)); return }
     toast.success('Integrante agregado')
     refresh()
   }
@@ -252,7 +253,7 @@ export function ConfiguracionClient() {
     const { error } = sectionForm.row
       ? await sb.from('road_sections').update(payload).eq('id', sectionForm.row.id)
       : await sb.from('road_sections').insert({ ...payload, created_by: profile.id })
-    if (error) { toast.error(error.message); return }
+    if (error) { toast.error(mensajeAmigable(error)); return }
     toast.success(sectionForm.row ? 'Tramo actualizado' : 'Tramo creado')
     refresh()
   }
@@ -275,7 +276,7 @@ export function ConfiguracionClient() {
       action: async () => {
         const { error } = await sb.from(table)
           .update({ deleted_at: new Date().toISOString() }).eq('id', row.id)
-        if (error) { toast.error(error.message); return }
+        if (error) { toast.error(mensajeAmigable(error)); return }
         toast.success(`${etiqueta[0].toUpperCase()}${etiqueta.slice(1)} eliminada`)
         refresh()
       },
@@ -295,7 +296,7 @@ export function ConfiguracionClient() {
     const { error } = activityForm.row
       ? await sb.from('activities_catalog').update(payload).eq('id', activityForm.row.id)
       : await sb.from('activities_catalog').insert({ ...payload, created_by: profile.id })
-    if (error) { toast.error(error.message); return }
+    if (error) { toast.error(mensajeAmigable(error)); return }
     toast.success(activityForm.row ? 'Actividad actualizada' : 'Actividad creada')
     refresh()
   }
@@ -419,7 +420,7 @@ export function ConfiguracionClient() {
                                         action: async () => {
                                           const res = await fetch(`/api/usuarios?id=${p.id}&service_id=${service.id}`, { method: 'DELETE' })
                                           const j = await res.json()
-                                          if (!res.ok) { toast.error(j.error); return }
+                                          if (!res.ok) { toast.error(mensajeAmigable(j.error)); return }
                                           toast.success('Usuario retirado del servicio')
                                           refresh()
                                         },
@@ -553,7 +554,7 @@ export function ConfiguracionClient() {
                                 description: 'Se quita de la cuadrilla. El historial de trabajo se conserva.',
                                 action: async () => {
                                   const { error } = await sb.from('crew_members').delete().eq('id', m.id)
-                                  if (error) { toast.error(error.message); return }
+                                  if (error) { toast.error(mensajeAmigable(error)); return }
                                   toast.success('Integrante retirado')
                                   refresh()
                                 },
@@ -964,7 +965,7 @@ export function ConfiguracionClient() {
             body: JSON.stringify({ id: passForm.row.profiles.id, service_id: service.id, new_password: v.new_password }),
           })
           const j = await res.json()
-          if (!res.ok) { toast.error(j.error); return }
+          if (!res.ok) { toast.error(mensajeAmigable(j.error)); return }
           toast.success('Contraseña restablecida')
         }}
       />

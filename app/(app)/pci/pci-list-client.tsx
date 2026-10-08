@@ -20,9 +20,10 @@ import { Input } from '@/components/ui/input'
 import { SkeletonKpi, SkeletonList } from '@/components/ui/skeleton'
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select'
 import { FormDialog, type FormField } from '@/components/forms/form-dialog'
-import { PCI_PRIORITY, SEMAFORO } from '@/lib/constants'
+import { PCI_ABIERTO, PCI_PRIORITY, SEMAFORO } from '@/lib/constants'
 import { cn, fmtDate, fmtNumber, truncate, toISODate } from '@/lib/utils'
 import { toast } from 'sonner'
+import { mensajeAmigable } from '@/lib/errores'
 
 export function PciListClient() {
   const { service, can, profile } = useSession()
@@ -66,7 +67,7 @@ export function PciListClient() {
     }).select('id').single()
 
     if (error) {
-      toast.error(error.message.includes('duplicate') ? 'Ya existe un PCI con ese código' : error.message)
+      toast.error(error.code === '23505' ? 'Ya existe un PCI con ese código' : mensajeAmigable(error))
       return
     }
     toast.success('PCI creado', { description: 'Ahora importa sus ítems desde Excel o agrégalos a mano.' })
@@ -89,14 +90,22 @@ export function PciListClient() {
   const { data: semaforos } = useQuery({
     queryKey: ['pci-semaforos', service.id],
     queryFn: async () => {
-      const { data } = await sb
-        .from('v_pci_items')
-        .select('pci_id, semaforo')
-        .eq('service_id', service.id)
+      // Por páginas: la API corta en 1000 filas y un contrato con varios PCI
+      // grandes las pasa de largo; sin esto los totales se quedaban cortos.
       const acc: Record<string, Record<string, number>> = {}
-      for (const r of data ?? []) {
-        acc[r.pci_id!] ??= {}
-        acc[r.pci_id!][r.semaforo!] = (acc[r.pci_id!][r.semaforo!] ?? 0) + 1
+      const pagina = 1000
+      for (let desde = 0; ; desde += pagina) {
+        const { data } = await sb
+          .from('v_pci_items')
+          .select('pci_id, semaforo')
+          .eq('service_id', service.id)
+          .order('id')
+          .range(desde, desde + pagina - 1)
+        for (const r of data ?? []) {
+          acc[r.pci_id!] ??= {}
+          acc[r.pci_id!][r.semaforo!] = (acc[r.pci_id!][r.semaforo!] ?? 0) + 1
+        }
+        if (!data || data.length < pagina) break
       }
       return acc
     },
@@ -117,12 +126,17 @@ export function PciListClient() {
       },
       {} as Record<string, number>
     )
+    const items = Object.values(all).reduce((a, b) => a + b, 0)
     return {
-      items: Object.values(all).reduce((a, b) => a + b, 0),
+      items,
       vencidos: all.vencido ?? 0,
       criticos: all.rojo ?? 0,
       levantados: all.ok ?? 0,
-      abiertos: (data ?? []).filter((p: any) => ['abierto', 'en_atencion'].includes(p.status)).length,
+      itemsAbiertos: items - (all.ok ?? 0),
+      // Un PCI vencido sigue abierto: solo se cierra cuando todos sus ítems
+      // se levantan. Contar solo 'abierto'/'en_atencion' dejaba el contador
+      // en 0 justo cuando más PCI había por atender (OBS-12).
+      abiertos: (data ?? []).filter((p: any) => PCI_ABIERTO.includes(p.status)).length,
     }
   }, [semaforos, data])
 
@@ -170,8 +184,8 @@ export function PciListClient() {
           </div>
         ) : (
           <div className="grid grid-cols-1 gap-3 sm:grid-cols-2 xl:grid-cols-4">
-            <StatCard index={0} label="PCIs abiertos" value={totals.abiertos} icon={FileText} tone="primary" hint={`${data?.length ?? 0} en total`} />
-            <StatCard index={1} label="Ítems totales" value={totals.items} icon={Filter} hint={`${fmtNumber(totals.levantados)} levantados`} />
+            <StatCard index={0} label="N.º de PCI abiertos" value={totals.abiertos} icon={FileText} tone="primary" hint={`de ${fmtNumber(data?.length ?? 0)} PCI registrados`} />
+            <StatCard index={1} label="N.º de ítems PCI abiertos" value={totals.itemsAbiertos} icon={Filter} hint={`de ${fmtNumber(totals.items)} ítems · ${fmtNumber(totals.levantados)} levantados`} />
             <StatCard index={2} label="Ítems críticos" value={totals.criticos} icon={Timer} tone="warning" hint="20% o menos del plazo" />
             <StatCard index={3} label="Ítems vencidos" value={totals.vencidos} icon={TriangleAlert} tone={totals.vencidos ? 'danger' : 'success'} hint="pasaron la fecha límite" />
           </div>
@@ -291,7 +305,7 @@ function PciCard({ pci, semaforo }: { pci: any; semaforo: Record<string, number>
               )}
               {overdue > 0 && (
                 <Badge variant="destructive" className="gap-1">
-                  {overdue} vencido{overdue === 1 ? '' : 's'}
+                  {overdue} ítem{overdue === 1 ? '' : 's'} vencido{overdue === 1 ? '' : 's'}
                 </Badge>
               )}
             </div>

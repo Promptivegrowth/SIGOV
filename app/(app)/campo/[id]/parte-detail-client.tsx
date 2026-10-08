@@ -31,6 +31,7 @@ import { enqueue, enqueueBlob, getDeviceId } from '@/lib/offline/db'
 import { syncNow } from '@/lib/offline/sync'
 import { getGpsFix, haptic, type SealedPhoto } from '@/lib/camera'
 import { toast } from 'sonner'
+import { mensajeAmigable } from '@/lib/errores'
 
 export function ParteDetailClient({ orderId }: { orderId: string }) {
   const { service, profile, can, role } = useSession()
@@ -46,7 +47,7 @@ export function ParteDetailClient({ orderId }: { orderId: string }) {
   const deleteEntry = async (entry: any) => {
     const { error } = await sb.from('work_entries')
       .update({ deleted_at: new Date().toISOString() }).eq('id', entry.id)
-    if (error) { toast.error(error.message); return }
+    if (error) { toast.error(mensajeAmigable(error)); return }
     toast.success('Registro eliminado')
     qc.invalidateQueries({ queryKey: ['work-entries', orderId] })
   }
@@ -105,7 +106,7 @@ export function ParteDetailClient({ orderId }: { orderId: string }) {
       .from('work_orders')
       .update({ status: 'enviado', submitted_at: new Date().toISOString() })
       .eq('id', orderId)
-    if (error) return toast.error(error.message)
+    if (error) return toast.error(mensajeAmigable(error))
     haptic([30, 40, 30])
     toast.success('Parte enviado al supervisor')
     qc.invalidateQueries({ queryKey: ['work-order', orderId] })
@@ -121,7 +122,7 @@ export function ParteDetailClient({ orderId }: { orderId: string }) {
         review_notes: notes ?? null,
       })
       .eq('id', orderId)
-    if (error) return toast.error(error.message)
+    if (error) return toast.error(mensajeAmigable(error))
     toast.success(approve ? 'Parte validado' : 'Parte observado')
     setReviewOpen(false)
     qc.invalidateQueries({ queryKey: ['work-order', orderId] })
@@ -480,7 +481,7 @@ function EntryDialog({
         toast.warning('No se pudo calcular la progresiva sobre este tramo')
       }
     } catch (e: any) {
-      toast.error(e?.message ?? 'No se pudo obtener la ubicación')
+      toast.error(mensajeAmigable(e, 'No se pudo obtener la ubicación'))
     } finally {
       setGpsBusy(false)
     }
@@ -505,7 +506,7 @@ function EntryDialog({
         observation: obs || null,
       }).eq('id', editing.id)
       setSaving(false)
-      if (error) { toast.error(error.message); return }
+      if (error) { toast.error(mensajeAmigable(error)); return }
       haptic(40)
       toast.success('Registro actualizado')
       onCreated()

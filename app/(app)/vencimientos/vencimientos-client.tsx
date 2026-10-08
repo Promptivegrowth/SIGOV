@@ -22,6 +22,7 @@ import { SkeletonList } from '@/components/ui/skeleton'
 import { EmptyState } from '@/components/shared/misc'
 import { cn, fmtDate } from '@/lib/utils'
 import { toast } from 'sonner'
+import { mensajeAmigable } from '@/lib/errores'
 
 /**
  * Los cuatro escalones de aviso que pidió Elvis.
@@ -38,7 +39,7 @@ const ORIGEN = {
   equipo:     { label: 'Equipos',    icon: FireExtinguisher },
   inspeccion: { label: 'Inspección', icon: Wrench },
   vehiculo:   { label: 'Vehículos',  icon: Truck },
-  pci:        { label: 'PCI',        icon: TriangleAlert },
+  pci:        { label: 'Ítems PCI',  icon: TriangleAlert },
 }
 
 const TIPO_VEHICULO: Record<string, string> = {
@@ -188,7 +189,7 @@ export function VencimientosClient() {
     <>
       <PageHeader
         title="Vencimientos"
-        description="Todo lo que tiene fecha límite: equipos de seguridad, sus inspecciones y los PCIs abiertos"
+        description="Todo lo que tiene fecha límite: equipos de seguridad, sus inspecciones y los ítems de PCI abiertos"
         icon={CalendarClock}
       />
 
@@ -503,7 +504,7 @@ function RenovarDialog({
       })
       .eq('id', equipo.id)
 
-    if (error) { toast.error(error.message); setEnviando(false); return }
+    if (error) { toast.error(mensajeAmigable(error)); setEnviando(false); return }
 
     // Las observaciones quedan cerradas: el equipo se renovó
     await sb

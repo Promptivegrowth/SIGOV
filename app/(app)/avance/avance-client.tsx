@@ -39,14 +39,28 @@ export function AvanceClient() {
   const datos = useQuery({
     queryKey: ['mi-avance', service.id, crew?.id, semana.desde],
     queryFn: async () => {
+      // Los ítems PCI van todos, por páginas: con el tope de 60 de antes
+      // una cuadrilla con 314 ítems veía «Asignados 60» (OBS-12).
+      const itemsPci = async () => {
+        const filas: any[] = []
+        const pagina = 1000
+        for (let desde = 0; ; desde += pagina) {
+          const { data } = await sb.from('v_pci_items')
+            .select('id, pci_id, pci_code, item_number, description, status, days_left, semaforo, due_date, fotos_antes, fotos_despues, requires_evidence')
+            .eq('service_id', service.id).eq('assigned_crew_id', crew?.id ?? '')
+            .order('due_date').order('item_number').order('id')
+            .range(desde, desde + pagina - 1)
+          filas.push(...(data ?? []))
+          if (!data || data.length < pagina) break
+        }
+        return { data: filas }
+      }
       const [plan, pci, fotos] = await Promise.all([
         sb.from('v_plan_items').select('*')
           .eq('service_id', service.id).eq('crew_id', crew?.id ?? '')
           .gte('scheduled_on', semana.desde).lte('scheduled_on', semana.hasta)
           .order('scheduled_on'),
-        sb.from('v_pci_items').select('id, pci_code, item_number, description, status, days_left, semaforo, due_date, fotos_antes, fotos_despues, requires_evidence')
-          .eq('service_id', service.id).eq('assigned_crew_id', crew?.id ?? '')
-          .order('due_date').limit(60),
+        itemsPci(),
         sb.from('v_evidences').select('id, phase, work_date, activity_name')
           .eq('service_id', service.id).eq('crew_id', crew?.id ?? '')
           .gte('work_date', semana.desde).lte('work_date', semana.hasta).limit(400),
@@ -83,6 +97,9 @@ export function AvanceClient() {
   const delDia = plan.filter((p: any) => p.scheduled_on === hoy)
   const pciAtendidos = pci.filter((p: any) => ['levantado', 'validado'].includes(p.status)).length
   const pciAbiertos = pci.filter((p: any) => ['pendiente', 'en_atencion'].includes(p.status))
+  // Documentos PCI distintos con algún ítem abierto: no es lo mismo «3 PCI»
+  // que «314 ítems» (OBS-12).
+  const pcisAbiertos = new Set(pciAbiertos.map((p: any) => p.pci_id)).size
 
   // La evidencia se cuenta por actividad, no por foto suelta: lo que el
   // cliente exige es el antes y el después de cada trabajo.
@@ -127,8 +144,10 @@ export function AvanceClient() {
               <Card>
                 <CardHeader className="flex-row items-start gap-2 pb-1">
                   <div className="min-w-0">
-                    <CardTitle className="text-[15px]">PCI</CardTitle>
-                    <CardDescription className="text-[12px]">Requerimientos de tu cuadrilla</CardDescription>
+                    <CardTitle className="text-[15px]">Ítems PCI</CardTitle>
+                    <CardDescription className="text-[12px]">
+                      {pcisAbiertos} PCI abierto{pcisAbiertos === 1 ? '' : 's'} · cifras por ítem
+                    </CardDescription>
                   </div>
                   <CardAction className="ml-auto shrink-0">
                     <Button variant="outline" size="sm" asChild>
@@ -137,10 +156,10 @@ export function AvanceClient() {
                   </CardAction>
                 </CardHeader>
                 <CardContent className="space-y-2.5 pt-2">
-                  <Fila label="Asignados" valor={pci.length} />
-                  <Fila label="Atendidos" valor={pciAtendidos} tono="success" />
-                  <Fila label="Abiertos" valor={pciAbiertos.length} tono="warning" />
-                  <Fila label="Vencidos"
+                  <Fila label="Ítems asignados" valor={pci.length} />
+                  <Fila label="Ítems atendidos" valor={pciAtendidos} tono="success" />
+                  <Fila label="Ítems abiertos" valor={pciAbiertos.length} tono="warning" />
+                  <Fila label="Ítems vencidos"
                     valor={pciAbiertos.filter((p: any) => (p.days_left ?? 1) < 0).length} tono="danger" />
                 </CardContent>
               </Card>
@@ -222,7 +241,7 @@ export function AvanceClient() {
             {pciAbiertos.length > 0 && (
               <Card>
                 <CardHeader className="pb-2">
-                  <CardTitle className="text-[15px]">PCI por atender</CardTitle>
+                  <CardTitle className="text-[15px]">Ítems PCI por atender</CardTitle>
                   <CardDescription className="text-[12px]">Lo que vence primero va arriba</CardDescription>
                 </CardHeader>
                 <CardContent className="px-3 pb-3">

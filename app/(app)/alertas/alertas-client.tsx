@@ -151,7 +151,7 @@ export function AlertasClient() {
               <div>
                 <p className="text-[13.5px] font-semibold">La operación está al día</p>
                 <p className="text-muted-foreground text-[12px]">
-                  Sin PCI vencidos, sin partes por validar y sin documentos por caducar.
+                  Sin ítems de PCI vencidos, sin partes por validar y sin documentos por caducar.
                 </p>
               </div>
             </div>

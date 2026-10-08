@@ -25,6 +25,7 @@ import {
   datosDeParte, datosDeAst, datosDeCharla, datosDeVehiculo,
   datosDeEquipo, datosDeHigiene,
 } from '@/lib/formatos'
+import { mensajeAmigable } from '@/lib/errores'
 
 /**
  * Los formatos oficiales de SERVICON (apartado 14).
@@ -232,7 +233,7 @@ export function FormatosClient() {
         await imprimirFormato(clave, datos)
       }
     } catch (e: any) {
-      toast.error('No se pudo generar el formato', { description: e?.message })
+      toast.error('No se pudo generar el formato', { description: mensajeAmigable(e, 'Inténtalo de nuevo.') })
     } finally {
       setOcupado(null)
     }
