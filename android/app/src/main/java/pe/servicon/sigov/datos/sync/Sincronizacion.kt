@@ -46,6 +46,7 @@ private val LLAVE_DEL_PADRE: Map<String, Map<String, String>> = mapOf(
     "checklist_responses" to mapOf("work_orders" to "work_order_id"),
     "supply_request_items" to mapOf("supply_requests" to "request_id"),
     "talk_attendance" to mapOf("safety_talks" to "talk_id"),
+    "movimientos_cuadrilla" to mapOf("work_entries" to "work_entry_id", "work_orders" to "work_order_id"),
 )
 
 /**
@@ -194,7 +195,9 @@ class TrabajadorSincronizacion @AssistedInject constructor(
             cola.actualizar(envio.copy(estado = EstadoEnvio.ENVIANDO))
 
             runCatching {
+                // Las llaves con «_» son solo para mostrar en el teléfono
                 var cuerpo = Json.decodeFromString(JsonObject.serializer(), envio.cuerpo)
+                    .let { o -> JsonObject(o.filterKeys { !it.startsWith("_") }) }
 
                 // Si depende de un padre, se le pega el identificador real
                 envio.dependeDe?.let { padreId ->

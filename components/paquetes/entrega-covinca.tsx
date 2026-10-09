@@ -18,6 +18,7 @@ const TODAS = '__todas__'
 
 const RAMAS: { clave: keyof RamasCovinca; titulo: string; ruta: string }[] = [
   { clave: 'programacion', titulo: 'Programación semanal (formato PS-ST04)', ruta: '…/PROGRAMACION_SEMANAL_DE_ACTIVIDADES_Y_RECURSOS/CUADRILLA_n_SEDE/' },
+  { clave: 'materiales', titulo: 'Seguimiento diario de materiales (Formato 8)', ruta: '…/SEGUIMIENTO_DIARIO_DE_MATERIALES/<mes>/' },
   { clave: 'rutinario', titulo: 'Fotos del día por cuadrilla', ruta: 'MANTENIMIENTO_RUTINARIO/<mes>/CUADRILLA_n_SEDE/<DD>/' },
   { clave: 'niveles', titulo: 'Niveles de servicio por sector y actividad', ruta: '…/NIVELES_DE_SERVICIO_<mes>/SECTOR_…/<CARPETA>/' },
   { clave: 'reportes', titulo: 'Reportes diarios en PDF', ruta: '…/REPORTES_DIARIOS_CHARLAS_ATS/…/REPORTE_DIARIO/' },
@@ -41,7 +42,7 @@ export function EntregaCovinca() {
   const sb = React.useMemo(() => createClient(), [])
   const [mes, setMes] = React.useState(() => new Date(Date.now() - 5 * 3600e3).toISOString().slice(0, 7))
   const [cuadrilla, setCuadrilla] = React.useState(TODAS)
-  const [ramas, setRamas] = React.useState<RamasCovinca>({ programacion: true, rutinario: true, niveles: true, reportes: true, documentos: true, pci: true })
+  const [ramas, setRamas] = React.useState<RamasCovinca>({ programacion: true, materiales: true, rutinario: true, niveles: true, reportes: true, documentos: true, pci: true })
   const [avance, setAvance] = React.useState<AvanceCovinca | null>(null)
 
   const cuadrillas = useQuery({

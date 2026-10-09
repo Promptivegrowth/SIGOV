@@ -49,6 +49,10 @@ data class EstadoParte(
     val pcis: List<ItemPci> = emptyList(),
     val cuadrilla: String = "",
     val fotosPorRegistro: Map<String, Int> = emptyMap(),
+    /** Material usado en el día (Formato 8) y lo que la cuadrilla tiene. */
+    val consumos: List<pe.servicon.sigov.datos.Consumo> = emptyList(),
+    val stockCuadrilla: List<pe.servicon.sigov.datos.StockDeCuadrilla> = emptyList(),
+    val insumos: List<pe.servicon.sigov.datos.Insumo> = emptyList(),
     val guardando: Boolean = false,
     /** Mientras se arma el PDF del parte */
     val imprimiendo: Boolean = false,
@@ -71,6 +75,8 @@ class ParteViewModel @Inject constructor(
     private val sesion: SesionRepositorio,
     private val partes: ParteDao,
     private val formatos: FormatosPdf,
+    private val consumoRepo: pe.servicon.sigov.datos.ConsumoRepositorio,
+    private val materialRepo: pe.servicon.sigov.datos.MaterialRepositorio,
 ) : ViewModel() {
 
     private val _estado = MutableStateFlow(EstadoParte())
@@ -133,6 +139,7 @@ class ParteViewModel @Inject constructor(
                     }
                 }
                 vigilarRegistros(parte.clientId)
+                cargarMateriales()
             }.onFailure { fallo ->
                 _estado.update { it.copy(cargando = false, error = fallo.enCristiano()) }
             }
@@ -392,4 +399,41 @@ class ParteViewModel @Inject constructor(
         "%d+%03d".format((metros / 1000).toInt(), (metros % 1000).toInt())
 
     fun avisoVisto() = _estado.update { it.copy(aviso = null, error = null) }
+
+    /** Lo usado hoy, el stock de la cuadrilla y el catálogo para elegir. */
+    fun cargarMateriales() {
+        viewModelScope.launch {
+            runCatching {
+                val cuadrilla = sesion.cuadrilla() ?: return@runCatching
+                val fecha = _estado.value.fecha
+                val consumos = consumoRepo.delDia(cuadrilla.servicioId, cuadrilla.id, fecha, _estado.value.registros)
+                val stock = consumoRepo.stock(cuadrilla.servicioId, cuadrilla.id)
+                val insumos = runCatching { materialRepo.insumos(cuadrilla.servicioId) }.getOrDefault(emptyList())
+                _estado.update { it.copy(consumos = consumos, stockCuadrilla = stock, insumos = insumos) }
+            }
+        }
+    }
+
+    fun registrarConsumo(insumoId: String, nombre: String, unidad: String?, cantidad: Double, registro: RegistroLocal?) {
+        viewModelScope.launch {
+            runCatching {
+                val cuadrilla = sesion.cuadrilla() ?: error("Tu usuario no dirige ninguna cuadrilla.")
+                consumoRepo.registrar(
+                    cuadrilla.servicioId, cuadrilla.id, _estado.value.fecha, insumoId, nombre, unidad, cantidad,
+                    registro, _estado.value.parte?.clientId,
+                )
+            }.onSuccess {
+                _estado.update { it.copy(aviso = "Material anotado. Se enviará al haber señal.") }
+                cargarMateriales()
+            }.onFailure { f -> _estado.update { it.copy(error = f.enCristiano()) } }
+        }
+    }
+
+    fun descartarConsumo(c: pe.servicon.sigov.datos.Consumo) {
+        viewModelScope.launch {
+            runCatching { consumoRepo.descartar(c.clientId) }
+                .onSuccess { _estado.update { it.copy(aviso = "Material quitado.") }; cargarMateriales() }
+                .onFailure { f -> _estado.update { it.copy(error = f.enCristiano()) } }
+        }
+    }
 }

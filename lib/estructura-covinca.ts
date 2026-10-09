@@ -18,10 +18,12 @@ import { reportePdf, type ReportMeta } from './reports'
 import { construirIndice, type FilaIndice } from './paquete'
 import { rutas, nombreLibre, aCovinca, semanaDe } from './covinca'
 import { programacionSemanalXlsx } from './formato-programacion'
+import { f8Xlsx } from './formato-f8'
 import { fmtDate } from './utils'
 
 export type RamasCovinca = {
   programacion: boolean
+  materiales: boolean
   rutinario: boolean
   niveles: boolean
   pci: boolean
@@ -327,6 +329,21 @@ export async function armarEstructuraCovinca(opciones: {
       const r = rutas.programacion({ ...semanaDe(par.lunes), cuadrilla: cq.numero, sede: cq.sede, tipo: 'ACTIVIDADES' })
       poner(r.carpeta, r.archivo, buffer, { tipo: 'Programación semanal', fecha: par.lunes, detalle: `${par.crew?.name ?? ''} · ${filas} partidas` })
       avisar('Programación semanal', ++hechas, pares.size)
+    }
+  }
+
+  // ─── Seguimiento diario de materiales (Formato 8), un libro por mes ───
+  if (ramas.materiales) {
+    const meses = new Set<string>()
+    for (let d = new Date(desde + 'T12:00:00Z'); d.toISOString().slice(0, 10) <= hasta; d = new Date(d.getTime() + 86400000)) meses.add(d.toISOString().slice(0, 7))
+    const logo = await fetch('/marca/logo-servicon.png').then((r) => r.arrayBuffer()).catch(() => null)
+    let hechos = 0
+    for (const mes of meses) {
+      avisar('Seguimiento de materiales', hechos, meses.size)
+      const { buffer, cuadrillas, movimientos } = await f8Xlsx({ sb, servicioId, mes, cuadrillaId, logo })
+      const r = rutas.materiales({ mes, cuadrillas })
+      poner(r.carpeta, r.archivo, buffer, { tipo: 'Seguimiento diario de materiales (F8)', fecha: mes, detalle: `${cuadrillas} cuadrillas · ${movimientos} movimientos` })
+      avisar('Seguimiento de materiales', ++hechos, meses.size)
     }
   }
 

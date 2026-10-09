@@ -15,6 +15,7 @@ import { PedidosTab } from './pedidos'
 import { AlmacenTab } from './almacen'
 import { MovimientosTab } from './movimientos'
 import { MaestroTab } from './maestro'
+import { CuadrillasTab } from './cuadrillas'
 
 /**
  * Materiales desde administración.
@@ -25,6 +26,8 @@ import { MaestroTab } from './maestro'
  * · Almacén: cuánto hay de cada insumo; aquí entran las compras y se
  *   registran ajustes, mermas y devoluciones.
  * · Movimientos: el kárdex de todo el almacén, para auditar y exportar.
+ * · Cuadrillas: lo que tiene cada cuadrilla, lo que consumió en campo y
+ *   el Formato 8 del mes.
  * · Maestro: de dónde nacen los insumos, con su código correlativo; aquí se
  *   crean, se editan y se desactivan.
  */
@@ -85,6 +88,7 @@ export function MaterialesClient() {
             </TabsTrigger>
             <TabsTrigger value="almacen">Almacén</TabsTrigger>
             <TabsTrigger value="movimientos">Movimientos</TabsTrigger>
+            <TabsTrigger value="cuadrillas">Cuadrillas</TabsTrigger>
             <TabsTrigger value="maestro">Maestro</TabsTrigger>
           </TabsList>
 
@@ -96,6 +100,9 @@ export function MaterialesClient() {
           </TabsContent>
           <TabsContent value="movimientos" className="mt-4">
             <MovimientosTab service={service} profileName={profile.full_name} can={can} />
+          </TabsContent>
+          <TabsContent value="cuadrillas" className="mt-4">
+            <CuadrillasTab serviceId={service.id} can={can} />
           </TabsContent>
           <TabsContent value="maestro" className="mt-4">
             <MaestroTab serviceId={service.id} can={can} />

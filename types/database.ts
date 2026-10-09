@@ -2032,6 +2032,141 @@ export type Database = {
           },
         ]
       }
+      movimientos_cuadrilla: {
+        Row: {
+          client_id: string
+          created_at: string
+          created_by: string | null
+          crew_destino_id: string | null
+          crew_id: string
+          deleted_at: string | null
+          id: string
+          notes: string | null
+          occurred_on: string
+          qty: number
+          service_id: string
+          supply_id: string
+          tipo: Database["public"]["Enums"]["mov_cuadrilla_tipo"]
+          updated_at: string
+          work_entry_id: string | null
+          work_order_id: string | null
+        }
+        Insert: {
+          client_id?: string
+          created_at?: string
+          created_by?: string | null
+          crew_destino_id?: string | null
+          crew_id: string
+          deleted_at?: string | null
+          id?: string
+          notes?: string | null
+          occurred_on?: string
+          qty: number
+          service_id: string
+          supply_id: string
+          tipo: Database["public"]["Enums"]["mov_cuadrilla_tipo"]
+          updated_at?: string
+          work_entry_id?: string | null
+          work_order_id?: string | null
+        }
+        Update: {
+          client_id?: string
+          created_at?: string
+          created_by?: string | null
+          crew_destino_id?: string | null
+          crew_id?: string
+          deleted_at?: string | null
+          id?: string
+          notes?: string | null
+          occurred_on?: string
+          qty?: number
+          service_id?: string
+          supply_id?: string
+          tipo?: Database["public"]["Enums"]["mov_cuadrilla_tipo"]
+          updated_at?: string
+          work_entry_id?: string | null
+          work_order_id?: string | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "movimientos_cuadrilla_created_by_fkey"
+            columns: ["created_by"]
+            isOneToOne: false
+            referencedRelation: "profiles"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "movimientos_cuadrilla_crew_destino_id_fkey"
+            columns: ["crew_destino_id"]
+            isOneToOne: false
+            referencedRelation: "crews"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "movimientos_cuadrilla_crew_destino_id_fkey"
+            columns: ["crew_destino_id"]
+            isOneToOne: false
+            referencedRelation: "v_hygiene_today"
+            referencedColumns: ["crew_id"]
+          },
+          {
+            foreignKeyName: "movimientos_cuadrilla_crew_id_fkey"
+            columns: ["crew_id"]
+            isOneToOne: false
+            referencedRelation: "crews"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "movimientos_cuadrilla_crew_id_fkey"
+            columns: ["crew_id"]
+            isOneToOne: false
+            referencedRelation: "v_hygiene_today"
+            referencedColumns: ["crew_id"]
+          },
+          {
+            foreignKeyName: "movimientos_cuadrilla_service_id_fkey"
+            columns: ["service_id"]
+            isOneToOne: false
+            referencedRelation: "services"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "movimientos_cuadrilla_supply_id_fkey"
+            columns: ["supply_id"]
+            isOneToOne: false
+            referencedRelation: "supplies"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "movimientos_cuadrilla_supply_id_fkey"
+            columns: ["supply_id"]
+            isOneToOne: false
+            referencedRelation: "v_supplies"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "movimientos_cuadrilla_work_entry_id_fkey"
+            columns: ["work_entry_id"]
+            isOneToOne: false
+            referencedRelation: "v_work_entries"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "movimientos_cuadrilla_work_entry_id_fkey"
+            columns: ["work_entry_id"]
+            isOneToOne: false
+            referencedRelation: "work_entries"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "movimientos_cuadrilla_work_order_id_fkey"
+            columns: ["work_order_id"]
+            isOneToOne: false
+            referencedRelation: "work_orders"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       notifications: {
         Row: {
           body: string | null
@@ -5313,6 +5448,30 @@ export type Database = {
           },
         ]
       }
+      v_kardex_cuadrilla: {
+        Row: {
+          created_at: string | null
+          crew_code: string | null
+          crew_id: string | null
+          crew_name: string | null
+          crew_numero: number | null
+          crew_sede: string | null
+          documento: string | null
+          entrada: number | null
+          id: string | null
+          notes: string | null
+          occurred_on: string | null
+          salida: number | null
+          service_id: string | null
+          supply_category: string | null
+          supply_code: string | null
+          supply_id: string | null
+          supply_name: string | null
+          tipo: string | null
+          unit_symbol: string | null
+        }
+        Relationships: []
+      }
       v_pci_items: {
         Row: {
           activity_code: string | null
@@ -5835,6 +5994,23 @@ export type Database = {
             referencedColumns: ["id"]
           },
         ]
+      }
+      v_stock_cuadrilla: {
+        Row: {
+          crew_code: string | null
+          crew_id: string | null
+          crew_name: string | null
+          entradas: number | null
+          salidas: number | null
+          service_id: string | null
+          stock: number | null
+          supply_category: string | null
+          supply_code: string | null
+          supply_id: string | null
+          supply_name: string | null
+          unit_symbol: string | null
+        }
+        Relationships: []
       }
       v_supplies: {
         Row: {
@@ -6620,6 +6796,12 @@ export type Database = {
         | "hidratacion"
         | "desinfeccion_unidad"
         | "orden_limpieza"
+      mov_cuadrilla_tipo:
+        | "saldo_inicial"
+        | "consumo"
+        | "traslado"
+        | "merma"
+        | "ajuste"
       pci_item_status:
         | "pendiente"
         | "en_atencion"
@@ -6886,6 +7068,13 @@ export const Constants = {
         "hidratacion",
         "desinfeccion_unidad",
         "orden_limpieza",
+      ],
+      mov_cuadrilla_tipo: [
+        "saldo_inicial",
+        "consumo",
+        "traslado",
+        "merma",
+        "ajuste",
       ],
       pci_item_status: [
         "pendiente",

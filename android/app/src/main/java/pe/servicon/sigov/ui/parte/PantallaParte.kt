@@ -49,6 +49,7 @@ fun PantallaParte(
     val estado by vm.estado.collectAsStateWithLifecycle()
     val avisos = remember { SnackbarHostState() }
     var formularioAbierto by remember { mutableStateOf(false) }
+    var anotandoMaterial by remember { mutableStateOf(false) }
     var menuAbierto by remember { mutableStateOf(false) }
 
     // Desde una partida («Registrar avance») el formulario se abre solo
@@ -185,9 +186,29 @@ fun PantallaParte(
                         )
                     }
                 }
+                item {
+                    MaterialesUsados(
+                        consumos = estado.consumos,
+                        alAgregar = { anotandoMaterial = true },
+                        alQuitar = vm::descartarConsumo,
+                    )
+                }
             }
         }
       }
+    }
+
+    if (anotandoMaterial) {
+        DialogoMaterialUsado(
+            stock = estado.stockCuadrilla,
+            insumos = estado.insumos,
+            registros = estado.registros,
+            alCerrar = { anotandoMaterial = false },
+            alGuardar = { id, nombre, unidad, cantidad, registro ->
+                vm.registrarConsumo(id, nombre, unidad, cantidad, registro)
+                anotandoMaterial = false
+            },
+        )
     }
 
     if (formularioAbierto) {
