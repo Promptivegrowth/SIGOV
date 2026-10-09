@@ -28,10 +28,16 @@ data class EstadoVehiculos(
     val aviso: String? = null,
     val error: String? = null,
 ) {
+    /**
+     * Solo los asignados hoy a la cuadrilla (OBS-65/70): el titular, el de
+     * reemplazo o el temporal. Los de otras cuadrillas no se ven.
+     */
     val visibles: List<Vehiculo>
-        get() = vehiculos.filter {
-            !soloMiCuadrilla || it.cuadrillaId == null || it.cuadrillaId == miCuadrillaId
-        }
+        get() = vehiculos.filter { it.cuadrillaId != null && it.cuadrillaId == miCuadrillaId }
+            .sortedBy { if (it.esTitular) 0 else 1 }
+
+    /** Una cuadrilla usa 1 o 2 vehículos: con dos ya no se da de alta otro. */
+    val puedeAgregar: Boolean get() = visibles.size < 2
 
     /** Los que todavía no se revisaron hoy: es lo que falta antes de salir. */
     val sinRevisarHoy: Int get() = visibles.count { !it.revisadoHoy(hoy) }
@@ -113,4 +119,36 @@ class VehiculosViewModel @Inject constructor(
     }
 
     fun avisoVisto() = _estado.update { it.copy(aviso = null, error = null) }
+
+    private fun accion(exito: String, bloque: suspend (cuadrillaId: String) -> Unit, alTerminar: () -> Unit) {
+        _estado.update { it.copy(guardando = true) }
+        viewModelScope.launch {
+            runCatching {
+                val cuadrilla = sesion.cuadrilla() ?: error("Tu usuario no dirige ninguna cuadrilla.")
+                bloque(cuadrilla.id)
+            }.onSuccess {
+                _estado.update { it.copy(guardando = false, aviso = exito) }
+                alTerminar()
+                cargar()
+            }.onFailure { fallo ->
+                _estado.update { it.copy(guardando = false, error = fallo.enCristiano()) }
+            }
+        }
+    }
+
+    fun registrarReemplazo(
+        titular: Vehiculo, placa: String, tipo: String, marca: String?, modelo: String?,
+        motivo: String, km: Int, observacion: String?, alTerminar: () -> Unit,
+    ) = accion("Reemplazo registrado. Haz su revisión antes de salir.", { c ->
+        ssoma.registrarReemplazo(c, titular, placa, tipo, marca, modelo, motivo, km, observacion)
+    }, alTerminar)
+
+    fun devolverTitular(reemplazo: Vehiculo, km: Int?, alTerminar: () -> Unit) =
+        accion("Volvió el titular. El reemplazo quedó cerrado.", { ssoma.devolverTitular(reemplazo, km) }, alTerminar)
+
+    fun altaTemporal(
+        placa: String, tipo: String, marca: String?, modelo: String?, km: Int, observacion: String?, alTerminar: () -> Unit,
+    ) = accion("Vehículo temporal registrado. El supervisor lo validará.", { c ->
+        ssoma.altaTemporal(c, placa, tipo, marca, modelo, km, observacion)
+    }, alTerminar)
 }

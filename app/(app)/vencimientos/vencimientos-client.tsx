@@ -1,5 +1,6 @@
 'use client'
 
+import { UsoDeVehiculos } from '@/components/vehiculos/uso-de-vehiculos'
 import * as React from 'react'
 import Link from 'next/link'
 import { useQuery, useQueryClient } from '@tanstack/react-query'
@@ -225,7 +226,13 @@ export function VencimientosClient() {
             <TabsTrigger value="agenda">Qué vence</TabsTrigger>
             <TabsTrigger value="equipos">Equipos</TabsTrigger>
             <TabsTrigger value="flota">Flota</TabsTrigger>
+            <TabsTrigger value="uso">Uso por cuadrilla</TabsTrigger>
           </TabsList>
+
+          {/* ─── Qué vehículo usó cada cuadrilla (OBS-72/73) ─────────── */}
+          <TabsContent value="uso" className="mt-4">
+            <UsoDeVehiculos />
+          </TabsContent>
 
           {/* ─── Agenda unificada ─────────────────────────────────────── */}
           <TabsContent value="agenda" className="mt-4 space-y-2">

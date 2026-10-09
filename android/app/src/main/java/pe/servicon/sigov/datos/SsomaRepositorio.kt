@@ -12,6 +12,7 @@ import kotlinx.serialization.json.Json
 import kotlinx.serialization.json.JsonObject
 import kotlinx.serialization.json.buildJsonObject
 import kotlinx.serialization.json.put
+import io.github.jan.supabase.postgrest.rpc
 import pe.servicon.sigov.datos.local.CatalogoDao
 import pe.servicon.sigov.datos.local.FilaCatalogo
 import pe.servicon.sigov.datos.sync.ColaRepositorio
@@ -79,7 +80,29 @@ data class Vehiculo(
     @SerialName("first_due") val primerVencimiento: String? = null,
     val semaforo: String = "ok",
     @SerialName("last_check_on") val ultimaRevision: String? = null,
+    // La asignación vigente a la cuadrilla (OBS-70 a 74)
+    @SerialName("model_year") val anio: Int? = null,
+    @SerialName("next_service_on") val proximoServicioEl: String? = null,
+    @SerialName("is_temporary") val temporal: Boolean = false,
+    @SerialName("validation_status") val validacion: String = "validado",
+    @SerialName("assignment_id") val asignacionId: String? = null,
+    @SerialName("assignment_kind") val asignacion: String? = null,
+    @SerialName("assignment_start_on") val asignadoDesde: String? = null,
+    @SerialName("assignment_reason") val motivoAsignacion: String? = null,
+    @SerialName("replaces_plate") val reemplazaA: String? = null,
+    @SerialName("assignment_odometer_start") val kmInicialAsignacion: Int? = null,
 ) {
+    val esReemplazo: Boolean get() = asignacion == "reemplazo"
+    val esTitular: Boolean get() = asignacion == "titular"
+
+    val estadoLegible: String
+        get() = when (status) {
+            "operativo" -> "Operativo"
+            "taller" -> "En taller"
+            "inoperativo" -> "Inoperativo"
+            else -> status
+        }
+
     val tipo: String
         get() = when (kind) {
             "camioneta" -> "Camioneta"
@@ -218,6 +241,55 @@ class SsomaRepositorio @Inject constructor(
     }
 
     /**
+     * Registra el vehículo de reemplazo (OBS-71). Necesita señal: la base
+     * cierra la asignación del titular, lo manda al taller y abre la nueva.
+     */
+    suspend fun registrarReemplazo(
+        cuadrillaId: String, titular: Vehiculo, placa: String, tipo: String, marca: String?, modelo: String?,
+        motivo: String, km: Int, observacion: String?,
+    ) = withContext(Dispatchers.IO) {
+        supabase.postgrest.rpc("registrar_reemplazo", buildJsonObject {
+            put("p_crew", cuadrillaId)
+            put("p_titular", titular.id)
+            put("p_placa", placa)
+            put("p_tipo", tipo)
+            marca?.let { put("p_marca", it) }
+            modelo?.let { put("p_modelo", it) }
+            put("p_fecha", Peru.hoy().toString())
+            put("p_motivo", motivo)
+            put("p_km", km)
+            observacion?.let { put("p_obs", it) }
+        })
+        Unit
+    }
+
+    /** Vuelve el titular: se cierra el reemplazo. */
+    suspend fun devolverTitular(reemplazo: Vehiculo, km: Int?) = withContext(Dispatchers.IO) {
+        supabase.postgrest.rpc("devolver_titular", buildJsonObject {
+            put("p_asignacion", reemplazo.asignacionId ?: error("Ese vehículo no tiene asignación vigente."))
+            put("p_fecha", Peru.hoy().toString())
+            km?.let { put("p_km_reemplazo", it) }
+        })
+        Unit
+    }
+
+    /** Alta rápida de un vehículo temporal (OBS-72), pendiente de validación. */
+    suspend fun altaTemporal(
+        cuadrillaId: String, placa: String, tipo: String, marca: String?, modelo: String?, km: Int, observacion: String?,
+    ) = withContext(Dispatchers.IO) {
+        supabase.postgrest.rpc("alta_vehiculo_temporal", buildJsonObject {
+            put("p_crew", cuadrillaId)
+            put("p_placa", placa)
+            put("p_tipo", tipo)
+            marca?.let { put("p_marca", it) }
+            modelo?.let { put("p_modelo", it) }
+            put("p_km", km)
+            observacion?.let { put("p_obs", it) }
+        })
+        Unit
+    }
+
+    /**
      * La revisión de antes de salir.
      *
      * Se guarda entera —punto por punto— y no solo el resultado: cuando hay
@@ -240,6 +312,8 @@ class SsomaRepositorio @Inject constructor(
             cuerpo = buildJsonObject {
                 put("service_id", vehiculo.servicioId)
                 put("vehicle_id", vehiculo.id)
+                vehiculo.cuadrillaId?.let { put("crew_id", it) }
+                vehiculo.asignacionId?.let { put("assignment_id", it) }
                 put("checked_on", Peru.hoy().toString())
                 put("conforme", conforme)
                 kilometraje?.let { put("odometer_km", it) }

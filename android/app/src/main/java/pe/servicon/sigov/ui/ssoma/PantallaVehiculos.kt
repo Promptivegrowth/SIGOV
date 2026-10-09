@@ -47,8 +47,15 @@ fun PantallaVehiculos(
     val estado by vm.estado.collectAsStateWithLifecycle()
     val avisos = remember { SnackbarHostState() }
     var revisando by remember { mutableStateOf<Vehiculo?>(null) }
+    // Reemplazo de un titular (o null con nuevoTemporal) y devolución
+    var reemplazando by remember { mutableStateOf<Vehiculo?>(null) }
+    var nuevoTemporal by remember { mutableStateOf(false) }
+    var devolviendo by remember { mutableStateOf<Vehiculo?>(null) }
 
-    LaunchedEffect(estado.aviso, estado.error) {
+    // Con un diálogo abierto el error va dentro de él (abajo quedaría tapado)
+    val dialogoAbierto = reemplazando != null || nuevoTemporal || devolviendo != null
+    LaunchedEffect(estado.aviso, estado.error, dialogoAbierto) {
+        if (dialogoAbierto && estado.error != null) return@LaunchedEffect
         (estado.aviso ?: estado.error)?.let {
             avisos.showSnackbar(it)
             vm.avisoVisto()
@@ -99,6 +106,15 @@ fun PantallaVehiculos(
                     contentPadding = PaddingValues(16.dp, 4.dp, 16.dp, 24.dp),
                     verticalArrangement = Arrangement.spacedBy(10.dp),
                 ) {
+                    if (estado.puedeAgregar) {
+                        item {
+                            OutlinedButton(
+                                onClick = { nuevoTemporal = true },
+                                modifier = Modifier.fillMaxWidth().height(48.dp),
+                                shape = RoundedCornerShape(10.dp),
+                            ) { Text("Registrar vehículo temporal") }
+                        }
+                    }
                     items(estado.visibles, key = { it.id }) { vehiculo ->
                         // El checklist físico del vehículo, fotografiado (OBS-67)
                         pe.servicon.sigov.ui.documentos.AccesoAFoto(
@@ -111,6 +127,8 @@ fun PantallaVehiculos(
                             vehiculo = vehiculo,
                             hoy = estado.hoy,
                             alRevisar = { revisando = vehiculo },
+                            alReemplazar = { reemplazando = vehiculo },
+                            alDevolver = { devolviendo = vehiculo },
                         )
                     }
                 }
@@ -128,10 +146,40 @@ fun PantallaVehiculos(
             },
         )
     }
+
+    if (reemplazando != null || nuevoTemporal) {
+        DialogoVehiculoNuevo(
+            titular = reemplazando,
+            guardando = estado.guardando,
+            error = estado.error,
+            alCerrar = { reemplazando = null; nuevoTemporal = false; vm.avisoVisto() },
+            alGuardar = { placa, tipo, marca, modelo, motivo, km, obs ->
+                val titular = reemplazando
+                val cerrar = { reemplazando = null; nuevoTemporal = false }
+                if (titular != null) vm.registrarReemplazo(titular, placa, tipo, marca, modelo, motivo, km, obs, cerrar)
+                else vm.altaTemporal(placa, tipo, marca, modelo, km, obs, cerrar)
+            },
+        )
+    }
+    devolviendo?.let { v ->
+        DialogoDevolverTitular(
+            reemplazo = v,
+            guardando = estado.guardando,
+            error = estado.error,
+            alCerrar = { devolviendo = null; vm.avisoVisto() },
+            alConfirmar = { km -> vm.devolverTitular(v, km) { devolviendo = null } },
+        )
+    }
 }
 
 @Composable
-private fun FilaVehiculo(vehiculo: Vehiculo, hoy: String, alRevisar: () -> Unit) {
+private fun FilaVehiculo(
+    vehiculo: Vehiculo,
+    hoy: String,
+    alRevisar: () -> Unit,
+    alReemplazar: () -> Unit = {},
+    alDevolver: () -> Unit = {},
+) {
     val color = colorDeSemaforo(vehiculo.semaforo)
     val revisado = vehiculo.revisadoHoy(hoy)
 
@@ -156,12 +204,22 @@ private fun FilaVehiculo(vehiculo: Vehiculo, hoy: String, alRevisar: () -> Unit)
                         Text(
                             listOfNotNull(
                                 vehiculo.tipo,
-                                listOfNotNull(vehiculo.brand, vehiculo.model).joinToString(" ")
+                                listOfNotNull(vehiculo.brand, vehiculo.model, vehiculo.anio?.toString()).joinToString(" ")
                                     .ifBlank { null },
-                                vehiculo.cuadrilla,
+                                vehiculo.estadoLegible,
                             ).joinToString(" · "),
                             style = MaterialTheme.typography.bodySmall,
                             color = MaterialTheme.colorScheme.onSurfaceVariant,
+                        )
+                        // De dónde viene: titular, reemplazo de otro o temporal (OBS-70 a 72)
+                        Text(
+                            when {
+                                vehiculo.esReemplazo -> "Reemplazo de ${vehiculo.reemplazaA ?: "titular"} desde ${vehiculo.asignadoDesde?.let { it.substring(8, 10) + "/" + it.substring(5, 7) } ?: "hoy"}"
+                                vehiculo.asignacion == "temporal" -> "Temporal" + if (vehiculo.validacion == "pendiente") " · por validar" else ""
+                                else -> "Titular de la cuadrilla"
+                            },
+                            style = MaterialTheme.typography.labelMedium,
+                            color = if (vehiculo.esTitular) Marca.Azul else Marca.Naranja,
                         )
                     }
                     if (revisado) {
@@ -185,6 +243,16 @@ private fun FilaVehiculo(vehiculo: Vehiculo, hoy: String, alRevisar: () -> Unit)
                 }
 
                 Spacer(Modifier.height(10.dp))
+                // Lo útil para el jefe (OBS-66)
+                Text(
+                    listOfNotNull(
+                        vehiculo.kilometraje?.let { "Km actual: ${"%,d".format(it)}" },
+                        vehiculo.kmProximoServicio?.let { "Próx. mantenimiento: ${"%,d".format(it)} km" },
+                        vehiculo.proximoServicioEl?.let { "o el ${it.substring(8, 10)}/${it.substring(5, 7)}/${it.substring(0, 4)}" },
+                    ).joinToString(" · ").ifBlank { "Kilometraje sin registrar" },
+                    style = MaterialTheme.typography.bodySmall,
+                )
+                Spacer(Modifier.height(6.dp))
                 Papel("SOAT", vehiculo.soat)
                 Papel("Revisión técnica", vehiculo.revisionTecnica)
                 Papel("Póliza", vehiculo.poliza)
@@ -208,6 +276,13 @@ private fun FilaVehiculo(vehiculo: Vehiculo, hoy: String, alRevisar: () -> Unit)
                 ) {
                     Text(if (revisado) "Volver a revisar" else "Revisión antes de salir")
                 }
+                Spacer(Modifier.height(6.dp))
+                TextButton(
+                    onClick = if (vehiculo.esReemplazo) alDevolver else alReemplazar,
+                    modifier = Modifier.fillMaxWidth(),
+                ) {
+                    Text(if (vehiculo.esReemplazo) "Volvió ${vehiculo.reemplazaA ?: "el titular"}" else "Registrar vehículo de reemplazo")
+                }
             }
         }
     }
@@ -216,7 +291,10 @@ private fun FilaVehiculo(vehiculo: Vehiculo, hoy: String, alRevisar: () -> Unit)
 /** Una línea por papel, con su fecha y su color. */
 @Composable
 private fun Papel(nombre: String, fecha: String?) {
-    if (fecha == null) return
+    if (fecha == null) {
+        Text("$nombre: sin registrar", style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
+        return
+    }
     val dias = runCatching {
         java.time.temporal.ChronoUnit.DAYS.between(
             java.time.LocalDate.now(pe.servicon.sigov.datos.Peru.zona),

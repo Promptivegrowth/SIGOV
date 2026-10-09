@@ -1060,6 +1060,127 @@ export type Database = {
           },
         ]
       }
+      crew_vehicle_assignments: {
+        Row: {
+          created_at: string
+          created_by: string | null
+          crew_id: string
+          end_on: string | null
+          end_reason: string | null
+          id: string
+          kind: string
+          notes: string | null
+          odometer_end: number | null
+          odometer_start: number | null
+          reason: string | null
+          replaces_id: string | null
+          service_id: string
+          start_on: string
+          updated_at: string
+          vehicle_id: string
+        }
+        Insert: {
+          created_at?: string
+          created_by?: string | null
+          crew_id: string
+          end_on?: string | null
+          end_reason?: string | null
+          id?: string
+          kind?: string
+          notes?: string | null
+          odometer_end?: number | null
+          odometer_start?: number | null
+          reason?: string | null
+          replaces_id?: string | null
+          service_id: string
+          start_on?: string
+          updated_at?: string
+          vehicle_id: string
+        }
+        Update: {
+          created_at?: string
+          created_by?: string | null
+          crew_id?: string
+          end_on?: string | null
+          end_reason?: string | null
+          id?: string
+          kind?: string
+          notes?: string | null
+          odometer_end?: number | null
+          odometer_start?: number | null
+          reason?: string | null
+          replaces_id?: string | null
+          service_id?: string
+          start_on?: string
+          updated_at?: string
+          vehicle_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "crew_vehicle_assignments_created_by_fkey"
+            columns: ["created_by"]
+            isOneToOne: false
+            referencedRelation: "profiles"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "crew_vehicle_assignments_crew_id_fkey"
+            columns: ["crew_id"]
+            isOneToOne: false
+            referencedRelation: "crews"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "crew_vehicle_assignments_crew_id_fkey"
+            columns: ["crew_id"]
+            isOneToOne: false
+            referencedRelation: "v_hygiene_today"
+            referencedColumns: ["crew_id"]
+          },
+          {
+            foreignKeyName: "crew_vehicle_assignments_replaces_id_fkey"
+            columns: ["replaces_id"]
+            isOneToOne: false
+            referencedRelation: "crew_vehicle_assignments"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "crew_vehicle_assignments_replaces_id_fkey"
+            columns: ["replaces_id"]
+            isOneToOne: false
+            referencedRelation: "v_uso_de_vehiculos"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "crew_vehicle_assignments_replaces_id_fkey"
+            columns: ["replaces_id"]
+            isOneToOne: false
+            referencedRelation: "v_vehicles"
+            referencedColumns: ["assignment_id"]
+          },
+          {
+            foreignKeyName: "crew_vehicle_assignments_service_id_fkey"
+            columns: ["service_id"]
+            isOneToOne: false
+            referencedRelation: "services"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "crew_vehicle_assignments_vehicle_id_fkey"
+            columns: ["vehicle_id"]
+            isOneToOne: false
+            referencedRelation: "v_vehicles"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "crew_vehicle_assignments_vehicle_id_fkey"
+            columns: ["vehicle_id"]
+            isOneToOne: false
+            referencedRelation: "vehicles"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       crews: {
         Row: {
           code: string
@@ -4303,14 +4424,17 @@ export type Database = {
       }
       vehicle_checks: {
         Row: {
+          assignment_id: string | null
           checked_on: string
           client_id: string
           conforme: boolean
           created_at: string
           created_by: string | null
+          crew_id: string | null
           deleted_at: string | null
           driver_id: string | null
           findings: string | null
+          general_status: string | null
           id: string
           items: Json
           lat: number | null
@@ -4321,14 +4445,17 @@ export type Database = {
           vehicle_id: string
         }
         Insert: {
+          assignment_id?: string | null
           checked_on?: string
           client_id?: string
           conforme?: boolean
           created_at?: string
           created_by?: string | null
+          crew_id?: string | null
           deleted_at?: string | null
           driver_id?: string | null
           findings?: string | null
+          general_status?: string | null
           id?: string
           items?: Json
           lat?: number | null
@@ -4339,14 +4466,17 @@ export type Database = {
           vehicle_id: string
         }
         Update: {
+          assignment_id?: string | null
           checked_on?: string
           client_id?: string
           conforme?: boolean
           created_at?: string
           created_by?: string | null
+          crew_id?: string | null
           deleted_at?: string | null
           driver_id?: string | null
           findings?: string | null
+          general_status?: string | null
           id?: string
           items?: Json
           lat?: number | null
@@ -4358,11 +4488,46 @@ export type Database = {
         }
         Relationships: [
           {
+            foreignKeyName: "vehicle_checks_assignment_id_fkey"
+            columns: ["assignment_id"]
+            isOneToOne: false
+            referencedRelation: "crew_vehicle_assignments"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "vehicle_checks_assignment_id_fkey"
+            columns: ["assignment_id"]
+            isOneToOne: false
+            referencedRelation: "v_uso_de_vehiculos"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "vehicle_checks_assignment_id_fkey"
+            columns: ["assignment_id"]
+            isOneToOne: false
+            referencedRelation: "v_vehicles"
+            referencedColumns: ["assignment_id"]
+          },
+          {
             foreignKeyName: "vehicle_checks_created_by_fkey"
             columns: ["created_by"]
             isOneToOne: false
             referencedRelation: "profiles"
             referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "vehicle_checks_crew_id_fkey"
+            columns: ["crew_id"]
+            isOneToOne: false
+            referencedRelation: "crews"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "vehicle_checks_crew_id_fkey"
+            columns: ["crew_id"]
+            isOneToOne: false
+            referencedRelation: "v_hygiene_today"
+            referencedColumns: ["crew_id"]
           },
           {
             foreignKeyName: "vehicle_checks_driver_id_fkey"
@@ -4406,11 +4571,13 @@ export type Database = {
           driver_id: string | null
           id: string
           inspection_expires_on: string | null
+          is_temporary: boolean
           kind: Database["public"]["Enums"]["vehicle_kind"]
           last_service_on: string | null
           model: string | null
           model_year: number | null
           next_service_km: number | null
+          next_service_on: string | null
           notes: string | null
           odometer_km: number | null
           owner: string | null
@@ -4420,6 +4587,7 @@ export type Database = {
           soat_expires_on: string | null
           status: Database["public"]["Enums"]["vehicle_status"]
           updated_at: string
+          validation_status: string
         }
         Insert: {
           brand?: string | null
@@ -4432,11 +4600,13 @@ export type Database = {
           driver_id?: string | null
           id?: string
           inspection_expires_on?: string | null
+          is_temporary?: boolean
           kind?: Database["public"]["Enums"]["vehicle_kind"]
           last_service_on?: string | null
           model?: string | null
           model_year?: number | null
           next_service_km?: number | null
+          next_service_on?: string | null
           notes?: string | null
           odometer_km?: number | null
           owner?: string | null
@@ -4446,6 +4616,7 @@ export type Database = {
           soat_expires_on?: string | null
           status?: Database["public"]["Enums"]["vehicle_status"]
           updated_at?: string
+          validation_status?: string
         }
         Update: {
           brand?: string | null
@@ -4458,11 +4629,13 @@ export type Database = {
           driver_id?: string | null
           id?: string
           inspection_expires_on?: string | null
+          is_temporary?: boolean
           kind?: Database["public"]["Enums"]["vehicle_kind"]
           last_service_on?: string | null
           model?: string | null
           model_year?: number | null
           next_service_km?: number | null
+          next_service_on?: string | null
           notes?: string | null
           odometer_km?: number | null
           owner?: string | null
@@ -4472,6 +4645,7 @@ export type Database = {
           soat_expires_on?: string | null
           status?: Database["public"]["Enums"]["vehicle_status"]
           updated_at?: string
+          validation_status?: string
         }
         Relationships: [
           {
@@ -6135,8 +6309,76 @@ export type Database = {
           },
         ]
       }
+      v_uso_de_vehiculos: {
+        Row: {
+          assignment_kind: string | null
+          brand: string | null
+          checklists: number | null
+          crew_code: string | null
+          crew_id: string | null
+          crew_name: string | null
+          dias: number | null
+          end_on: string | null
+          end_reason: string | null
+          id: string | null
+          is_temporary: boolean | null
+          kind: Database["public"]["Enums"]["vehicle_kind"] | null
+          km_final: number | null
+          km_inicial: number | null
+          model: string | null
+          notes: string | null
+          plate: string | null
+          reason: string | null
+          reemplaza_a: string | null
+          service_id: string | null
+          start_on: string | null
+          vehicle_id: string | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "crew_vehicle_assignments_crew_id_fkey"
+            columns: ["crew_id"]
+            isOneToOne: false
+            referencedRelation: "crews"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "crew_vehicle_assignments_crew_id_fkey"
+            columns: ["crew_id"]
+            isOneToOne: false
+            referencedRelation: "v_hygiene_today"
+            referencedColumns: ["crew_id"]
+          },
+          {
+            foreignKeyName: "crew_vehicle_assignments_service_id_fkey"
+            columns: ["service_id"]
+            isOneToOne: false
+            referencedRelation: "services"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "crew_vehicle_assignments_vehicle_id_fkey"
+            columns: ["vehicle_id"]
+            isOneToOne: false
+            referencedRelation: "v_vehicles"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "crew_vehicle_assignments_vehicle_id_fkey"
+            columns: ["vehicle_id"]
+            isOneToOne: false
+            referencedRelation: "vehicles"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       v_vehicles: {
         Row: {
+          assignment_id: string | null
+          assignment_kind: string | null
+          assignment_odometer_start: number | null
+          assignment_reason: string | null
+          assignment_start_on: string | null
           brand: string | null
           code: string | null
           crew_id: string | null
@@ -6146,6 +6388,7 @@ export type Database = {
           first_due: string | null
           id: string | null
           inspection_expires_on: string | null
+          is_temporary: boolean | null
           kind: Database["public"]["Enums"]["vehicle_kind"] | null
           km_to_service: number | null
           last_check_on: string | null
@@ -6153,31 +6396,20 @@ export type Database = {
           model: string | null
           model_year: number | null
           next_service_km: number | null
+          next_service_on: string | null
           notes: string | null
           odometer_km: number | null
           owner: string | null
           plate: string | null
           policy_expires_on: string | null
+          replaces_plate: string | null
           semaforo: string | null
           service_id: string | null
           soat_expires_on: string | null
           status: Database["public"]["Enums"]["vehicle_status"] | null
+          validation_status: string | null
         }
         Relationships: [
-          {
-            foreignKeyName: "vehicles_crew_id_fkey"
-            columns: ["crew_id"]
-            isOneToOne: false
-            referencedRelation: "crews"
-            referencedColumns: ["id"]
-          },
-          {
-            foreignKeyName: "vehicles_crew_id_fkey"
-            columns: ["crew_id"]
-            isOneToOne: false
-            referencedRelation: "v_hygiene_today"
-            referencedColumns: ["crew_id"]
-          },
           {
             foreignKeyName: "vehicles_driver_id_fkey"
             columns: ["driver_id"]
@@ -6363,6 +6595,18 @@ export type Database = {
           url: string
         }[]
       }
+      alta_vehiculo_temporal: {
+        Args: {
+          p_crew: string
+          p_km?: number
+          p_marca?: string
+          p_modelo?: string
+          p_obs?: string
+          p_placa: string
+          p_tipo?: string
+        }
+        Returns: Json
+      }
       apply_pci_suspension: { Args: { p_pci_id: string }; Returns: Json }
       apply_pci_suspension_sin_permiso: {
         Args: { p_pci_id: string }
@@ -6478,6 +6722,14 @@ export type Database = {
       }
       dashboard_kpis: {
         Args: { p_from?: string; p_service_id: string; p_to?: string }
+        Returns: Json
+      }
+      devolver_titular: {
+        Args: {
+          p_asignacion: string
+          p_fecha?: string
+          p_km_reemplazo?: number
+        }
         Returns: Json
       }
       documentos_del_dia_de: {
@@ -6696,6 +6948,7 @@ export type Database = {
         Returns: boolean
       }
       puede_leer_servicio: { Args: { p_service_id: string }; Returns: boolean }
+      puede_llevar_cuadrilla: { Args: { p_crew: string }; Returns: boolean }
       puede_llevar_parte: {
         Args: { p: Database["public"]["Tables"]["work_orders"]["Row"] }
         Returns: boolean
@@ -6706,6 +6959,21 @@ export type Database = {
         Returns: boolean
       }
       quitar_pagina_documento: { Args: { p_client_id: string }; Returns: Json }
+      registrar_reemplazo: {
+        Args: {
+          p_crew: string
+          p_fecha?: string
+          p_km?: number
+          p_marca?: string
+          p_modelo?: string
+          p_motivo?: string
+          p_obs?: string
+          p_placa: string
+          p_tipo?: string
+          p_titular: string
+        }
+        Returns: Json
+      }
       renglon_de_campo_en_transicion: {
         Args: {
           p_qty_approved: number
@@ -6799,6 +7067,21 @@ export type Database = {
         }[]
       }
       storage_service_id: { Args: { p_name: string }; Returns: string }
+      validar_vehiculo: {
+        Args: { p_aceptar: boolean; p_vehiculo: string }
+        Returns: Json
+      }
+      vehiculo_por_placa: {
+        Args: {
+          p_km: number
+          p_marca: string
+          p_modelo: string
+          p_placa: string
+          p_service: string
+          p_tipo: string
+        }
+        Returns: string
+      }
       vencimiento_aviso: { Args: { p_due: string }; Returns: string }
       vencimiento_semaforo: { Args: { p_due: string }; Returns: string }
       work_entries_geojson: {
