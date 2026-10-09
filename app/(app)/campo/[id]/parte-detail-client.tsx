@@ -102,10 +102,8 @@ export function ParteDetailClient({ orderId }: { orderId: string }) {
 
   // ── Enviar a validación ───────────────────────────────────────────────
   const submit = async () => {
-    const { error } = await sb
-      .from('work_orders')
-      .update({ status: 'enviado', submitted_at: new Date().toISOString() })
-      .eq('id', orderId)
+    // Por la función de la base: exige actividades y avisa al supervisor
+    const { error } = await sb.rpc('enviar_parte' as any, { p_id: orderId } as any)
     if (error) return toast.error(mensajeAmigable(error))
     haptic([30, 40, 30])
     toast.success('Parte enviado al supervisor')
@@ -113,15 +111,8 @@ export function ParteDetailClient({ orderId }: { orderId: string }) {
   }
 
   const review = async (approve: boolean, notes?: string) => {
-    const { error } = await sb
-      .from('work_orders')
-      .update({
-        status: approve ? 'validado' : 'observado',
-        reviewed_at: new Date().toISOString(),
-        reviewed_by: profile.id,
-        review_notes: notes ?? null,
-      })
-      .eq('id', orderId)
+    // Solo el supervisor valida u observa (la base lo exige); observar pide motivo
+    const { error } = await sb.rpc('revisar_parte' as any, { p_id: orderId, p_validar: approve, p_nota: notes ?? null } as any)
     if (error) return toast.error(mensajeAmigable(error))
     toast.success(approve ? 'Parte validado' : 'Parte observado')
     setReviewOpen(false)

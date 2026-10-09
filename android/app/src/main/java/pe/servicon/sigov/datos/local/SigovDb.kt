@@ -109,6 +109,9 @@ interface ParteDao {
     @Insert(onConflict = OnConflictStrategy.REPLACE)
     suspend fun guardar(parte: ParteLocal)
 
+    @Query("SELECT * FROM partes WHERE clientId = :id")
+    suspend fun parteDe(id: String): ParteLocal?
+
     @Query("SELECT * FROM partes WHERE fecha = :fecha AND cuadrillaId = :cuadrillaId LIMIT 1")
     suspend fun delDia(fecha: String, cuadrillaId: String?): ParteLocal?
 

@@ -53,6 +53,8 @@ data class EstadoParte(
     val consumos: List<pe.servicon.sigov.datos.Consumo> = emptyList(),
     val stockCuadrilla: List<pe.servicon.sigov.datos.StockDeCuadrilla> = emptyList(),
     val insumos: List<pe.servicon.sigov.datos.Insumo> = emptyList(),
+    /** Lo que observó el supervisor al devolver el parte. */
+    val observacion: String? = null,
     val guardando: Boolean = false,
     /** Mientras se arma el PDF del parte */
     val imprimiendo: Boolean = false,
@@ -140,6 +142,7 @@ class ParteViewModel @Inject constructor(
                 }
                 vigilarRegistros(parte.clientId)
                 cargarMateriales()
+                refrescarEstado()
             }.onFailure { fallo ->
                 _estado.update { it.copy(cargando = false, error = fallo.enCristiano()) }
             }
@@ -265,11 +268,13 @@ class ParteViewModel @Inject constructor(
                     // observación que escribió la cuadrilla: antes el PDF solo
                     // traía la nota del parte, y lo anotado en cada registro
                     // —«PRUEBA OFFLINE» en la prueba— no salía (OBS-28/30/31).
-                    columnas = listOf("Actividad", "Origen", "Prog. inicio", "Prog. fin", "Lado",
+                    // Con el código de partida COVINCA (OBS-29)
+                    columnas = listOf("Código", "Actividad", "Origen", "Prog. inicio", "Prog. fin", "Lado",
                         "Cantidad", "Observación", "Fotos"),
-                    anchos = listOf(118f, 62f, 50f, 50f, 38f, 52f, 107f, 30f),
+                    anchos = listOf(48f, 100f, 54f, 46f, 46f, 34f, 48f, 101f, 30f),
                     filas = e.registros.map { r ->
                         listOf(
+                            e.actividades.firstOrNull { a -> a.id == r.actividadId }?.code ?: "—",
                             r.actividadNombre,
                             origenDe(r),
                             r.progresivaInicio?.let { progresiva(it) } ?: "—",
@@ -399,6 +404,41 @@ class ParteViewModel @Inject constructor(
         "%d+%03d".format((metros / 1000).toInt(), (metros % 1000).toInt())
 
     fun avisoVisto() = _estado.update { it.copy(aviso = null, error = null) }
+
+    /** El estado en la nube: enviado, validado u observado (con su nota). */
+    fun refrescarEstado() {
+        viewModelScope.launch {
+            val parte = _estado.value.parte ?: return@launch
+            val remoto = campo.parteEnLaNube(parte) ?: return@launch
+            val local = partes.parteDe(parte.clientId) ?: parte
+            _estado.update {
+                it.copy(parte = local, observacion = remoto.observacion?.takeIf { remoto.status == "observado" })
+            }
+        }
+    }
+
+    fun guardarDatosDelDia(clima: String?, inicio: String?, fin: String?, personal: Int?, notas: String?) {
+        val parte = _estado.value.parte ?: return
+        viewModelScope.launch {
+            runCatching { campo.guardarDatosDelDia(parte, clima, inicio, fin, personal, notas) }
+                .onSuccess { nuevo -> _estado.update { it.copy(parte = nuevo, aviso = "Datos del día guardados.") } }
+                .onFailure { f -> _estado.update { it.copy(error = f.enCristiano()) } }
+        }
+    }
+
+    /** Cierra el día y lo manda al supervisor. */
+    fun enviar() {
+        val parte = _estado.value.parte ?: return
+        if (_estado.value.registros.isEmpty()) {
+            _estado.update { it.copy(error = "Registra al menos una actividad antes de enviar el reporte.") }
+            return
+        }
+        viewModelScope.launch {
+            runCatching { campo.enviarParte(parte) }
+                .onSuccess { nuevo -> _estado.update { it.copy(parte = nuevo, observacion = null, aviso = "Reporte enviado al supervisor.") } }
+                .onFailure { f -> _estado.update { it.copy(error = f.enCristiano()) } }
+        }
+    }
 
     /** Lo usado hoy, el stock de la cuadrilla y el catálogo para elegir. */
     fun cargarMateriales() {

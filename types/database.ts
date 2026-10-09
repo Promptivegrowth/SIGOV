@@ -6326,6 +6326,19 @@ export type Database = {
     }
     Functions: {
       _campos_comunes_mtc: { Args: never; Returns: Json }
+      actualizar_parte: {
+        Args: {
+          p_clima?: string
+          p_crew_id?: string
+          p_fecha?: string
+          p_hora_fin?: string
+          p_hora_inicio?: string
+          p_id: string
+          p_notas?: string
+          p_personal?: number
+        }
+        Returns: Json
+      }
       adoptar_insumo: {
         Args: {
           p_category?: string
@@ -6484,6 +6497,10 @@ export type Database = {
         }
         Returns: Database["public"]["Enums"]["supply_request_status"]
       }
+      enviar_parte: {
+        Args: { p_crew_id?: string; p_fecha?: string; p_id: string }
+        Returns: Json
+      }
       estoy_activo: { Args: never; Returns: boolean }
       evaluate_pci_deadlines: { Args: never; Returns: Json }
       evidence_gallery: {
@@ -6589,6 +6606,38 @@ export type Database = {
         }[]
       }
       parse_progresiva: { Args: { p: string }; Returns: number }
+      parte_por: {
+        Args: { p_crew_id?: string; p_fecha?: string; p_id: string }
+        Returns: {
+          client_id: string
+          created_at: string
+          created_by: string | null
+          crew_id: string
+          deleted_at: string | null
+          device_id: string | null
+          end_time: string | null
+          headcount: number | null
+          id: string
+          notes: string | null
+          review_notes: string | null
+          reviewed_at: string | null
+          reviewed_by: string | null
+          service_id: string
+          start_time: string | null
+          status: Database["public"]["Enums"]["work_order_status"]
+          submitted_at: string | null
+          synced_at: string
+          updated_at: string
+          weather: string | null
+          work_date: string
+        }
+        SetofOptions: {
+          from: "*"
+          to: "work_orders"
+          isOneToOne: true
+          isSetofReturn: false
+        }
+      }
       partida_finalizar: { Args: { p_item: string }; Returns: Json }
       partida_impedimento: {
         Args: { p_item: string; p_motivo: string }
@@ -6647,6 +6696,10 @@ export type Database = {
         Returns: boolean
       }
       puede_leer_servicio: { Args: { p_service_id: string }; Returns: boolean }
+      puede_llevar_parte: {
+        Args: { p: Database["public"]["Tables"]["work_orders"]["Row"] }
+        Returns: boolean
+      }
       puede_revisar_ssoma: { Args: { sid: string }; Returns: boolean }
       puedo_mover_partida: {
         Args: { p_crew_id: string; p_service_id: string }
@@ -6671,6 +6724,10 @@ export type Database = {
       }
       revisar_documento: {
         Args: { p_conforme: boolean; p_documento_id: string; p_nota?: string }
+        Returns: Json
+      }
+      revisar_parte: {
+        Args: { p_id: string; p_nota?: string; p_validar: boolean }
         Returns: Json
       }
       revisar_pedido: {

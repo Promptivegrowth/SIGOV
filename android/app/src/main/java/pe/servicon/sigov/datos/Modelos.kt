@@ -174,6 +174,11 @@ data class ParteRemoto(
     val status: String = "borrador",
     val weather: String? = null,
     val notes: String? = null,
+    @SerialName("start_time") val horaInicio: String? = null,
+    @SerialName("end_time") val horaFin: String? = null,
+    val headcount: Int? = null,
+    /** Lo que observó el supervisor, si lo devolvió. */
+    @SerialName("review_notes") val observacion: String? = null,
 )
 
 /** Un PCI visto por la cuadrilla: cuántos ítems suyos tiene y cómo van. */

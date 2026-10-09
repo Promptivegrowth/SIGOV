@@ -488,6 +488,88 @@ class CampoRepositorio @Inject constructor(
 
     fun registrosDe(parteClientId: String) = partes.registrosDe(parteClientId)
 
+    /**
+     * El parte como está en la nube: su estado (enviado, validado,
+     * observado) y lo que observó el supervisor. Se busca por cuadrilla y
+     * fecha: el teléfono pudo abrirlo con su propio id. Sin señal, null.
+     */
+    suspend fun parteEnLaNube(parte: ParteLocal): ParteRemoto? = withContext(Dispatchers.IO) {
+        val cuadrilla = parte.cuadrillaId ?: return@withContext null
+        runCatching {
+            supabase.postgrest.from("work_orders")
+                .select {
+                    filter {
+                        eq("service_id", parte.servicioId)
+                        eq("crew_id", cuadrilla)
+                        eq("work_date", parte.fecha)
+                        exact("deleted_at", null)
+                    }
+                    limit(1)
+                }
+                .decodeList<ParteRemoto>()
+                .firstOrNull()
+        }.getOrNull()?.also { remoto ->
+            // El estado de la nube manda; los datos del día, si el teléfono no los tiene
+            partes.guardar(
+                parte.copy(
+                    estado = remoto.status,
+                    clima = parte.clima ?: remoto.weather,
+                    horaInicio = parte.horaInicio ?: remoto.horaInicio?.take(5),
+                    horaFin = parte.horaFin ?: remoto.horaFin?.take(5),
+                    personal = parte.personal ?: remoto.headcount,
+                    notas = parte.notas ?: remoto.notes,
+                )
+            )
+        }
+    }
+
+    /** Clima, horario, personal y notas del día (OBS-27/33). */
+    suspend fun guardarDatosDelDia(
+        parte: ParteLocal, clima: String?, horaInicio: String?, horaFin: String?, personal: Int?, notas: String?,
+    ): ParteLocal = withContext(Dispatchers.IO) {
+        val nuevo = parte.copy(
+            clima = clima, horaInicio = horaInicio, horaFin = horaFin, personal = personal, notas = notas,
+            actualizadoEn = System.currentTimeMillis(),
+        )
+        partes.guardar(nuevo)
+        cola.encolar(
+            tabla = "rpc:actualizar_parte",
+            dependeDe = parte.clientId.takeIf { cola.envio(it) != null },
+            etiqueta = "Datos del parte ${parte.fecha}",
+            cuerpo = buildJsonObject {
+                put("p_id", parte.clientId)
+                parte.cuadrillaId?.let { put("p_crew_id", it) }
+                put("p_fecha", parte.fecha)
+                clima?.let { put("p_clima", it) }
+                horaInicio?.let { put("p_hora_inicio", it) }
+                horaFin?.let { put("p_hora_fin", it) }
+                personal?.let { put("p_personal", it) }
+                notas?.let { put("p_notas", it) }
+            },
+        )
+        nuevo
+    }
+
+    /**
+     * Cierra el parte y lo manda al supervisor (OBS-34). Sale con la cola,
+     * detrás de las actividades que se anotaron antes.
+     */
+    suspend fun enviarParte(parte: ParteLocal): ParteLocal = withContext(Dispatchers.IO) {
+        val nuevo = parte.copy(estado = "enviado", actualizadoEn = System.currentTimeMillis())
+        partes.guardar(nuevo)
+        cola.encolar(
+            tabla = "rpc:enviar_parte",
+            dependeDe = parte.clientId.takeIf { cola.envio(it) != null },
+            etiqueta = "Enviar parte ${parte.fecha}",
+            cuerpo = buildJsonObject {
+                put("p_id", parte.clientId)
+                parte.cuadrillaId?.let { put("p_crew_id", it) }
+                put("p_fecha", parte.fecha)
+            },
+        )
+        nuevo
+    }
+
     fun partesRecientes() = partes.recientes()
 
     /**

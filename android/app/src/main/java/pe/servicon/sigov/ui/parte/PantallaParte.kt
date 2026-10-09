@@ -50,6 +50,8 @@ fun PantallaParte(
     val avisos = remember { SnackbarHostState() }
     var formularioAbierto by remember { mutableStateOf(false) }
     var anotandoMaterial by remember { mutableStateOf(false) }
+    var editandoDatos by remember { mutableStateOf(false) }
+    var confirmandoEnvio by remember { mutableStateOf(false) }
     var menuAbierto by remember { mutableStateOf(false) }
 
     // Desde una partida («Registrar avance») el formulario se abre solo
@@ -113,7 +115,8 @@ fun PantallaParte(
             }
         },
         botonFlotante = {
-            if (!estado.cargando && estado.parte != null) {
+            // Enviado o validado, el día está cerrado: ya no se agregan actividades
+            if (!estado.cargando && estado.parte != null && estado.parte!!.editable) {
                 ExtendedFloatingActionButton(
                     onClick = { formularioAbierto = true },
                     containerColor = Marca.Verde,
@@ -155,6 +158,8 @@ fun PantallaParte(
                 verticalArrangement = Arrangement.spacedBy(12.dp),
             ) {
                 item { Resumen(estado) }
+                estado.observacion?.let { nota -> item { ObservacionDelSupervisor(nota) } }
+                estado.parte?.let { p -> item { DatosDelDia(p, alEditar = { editandoDatos = true }) } }
 
                 if (estado.registros.isEmpty()) {
                     item {
@@ -193,9 +198,37 @@ fun PantallaParte(
                         alQuitar = vm::descartarConsumo,
                     )
                 }
+                if (estado.parte?.editable == true && estado.registros.isNotEmpty()) {
+                    item {
+                        BotonEnviar(reenviar = estado.parte?.estado == "observado", alTocar = { confirmandoEnvio = true })
+                    }
+                }
             }
         }
       }
+    }
+
+    if (editandoDatos) {
+        estado.parte?.let { p ->
+            DialogoDatosDelDia(
+                parte = p,
+                alCerrar = { editandoDatos = false },
+                alGuardar = { clima, inicio, fin, personal, notas ->
+                    vm.guardarDatosDelDia(clima, inicio, fin, personal, notas)
+                    editandoDatos = false
+                },
+            )
+        }
+    }
+
+    if (confirmandoEnvio) {
+        DialogoEnviar(
+            registros = estado.registros.size,
+            sinFotos = estado.registros.count { (estado.fotosPorRegistro[it.clientId] ?: 0) == 0 },
+            faltanDatos = estado.parte?.let { it.clima == null || it.horaInicio == null || it.personal == null } ?: false,
+            alCerrar = { confirmandoEnvio = false },
+            alEnviar = { vm.enviar(); confirmandoEnvio = false },
+        )
     }
 
     if (anotandoMaterial) {
@@ -243,7 +276,7 @@ private fun Resumen(estado: EstadoParte) {
         ) {
             Dato("Registros", estado.registros.size.toString())
             Dato("Metrado", String.format(Locale("es", "PE"), "%.1f", estado.metradoTotal))
-            Dato("Estado", estado.parte?.estado?.replaceFirstChar { it.uppercase() } ?: "—")
+            Dato("Estado", estadoDelParte(estado.parte?.estado))
         }
     }
 }
