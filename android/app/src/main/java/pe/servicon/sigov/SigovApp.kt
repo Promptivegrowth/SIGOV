@@ -5,6 +5,7 @@ import androidx.hilt.work.HiltWorkerFactory
 import androidx.work.Configuration
 import dagger.hilt.android.HiltAndroidApp
 import pe.servicon.sigov.datos.sync.programarSincronizacionPeriodica
+import pe.servicon.sigov.datos.programarAvisos
 import javax.inject.Inject
 
 /**
@@ -28,5 +29,7 @@ class SigovApp : Application(), Configuration.Provider {
         super.onCreate()
         // Un repaso cada cuarto de hora, por si algo quedó sin subir
         programarSincronizacionPeriodica(this)
+        // Y los avisos (PCI por vencer, observaciones), aunque la app esté cerrada
+        programarAvisos(this)
     }
 }

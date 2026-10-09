@@ -1,5 +1,6 @@
 'use client'
 
+import { usePlazosPci, etiquetaPlazo } from '@/lib/hooks/use-plazos-pci'
 import * as React from 'react'
 import Link from 'next/link'
 import { useSearchParams } from 'next/navigation'
@@ -113,6 +114,17 @@ export function PciDetailClient({ pciId }: { pciId: string }) {
     const { error } = await sb.from('pci_items').update({ assigned_crew_id: crewId }).in('id', ids)
     if (error) return toast.error(mensajeAmigable(error))
     toast.success(`${ids.length} ítems asignados`)
+    setSelected(new Set())
+    qc.invalidateQueries({ queryKey: ['pci-items', pciId] })
+  }
+
+  // El plazo se elige de la lista cerrada del contrato (OBS-08)
+  const { plazos } = usePlazosPci()
+  const bulkPlazo = async (plazo: string) => {
+    const ids = [...selected]
+    const { data, error } = await sb.rpc('pci_fijar_plazo' as any, { p_items: ids, p_plazo: Number(plazo) } as any)
+    if (error) return toast.error(mensajeAmigable(error))
+    toast.success(`Plazo de ${etiquetaPlazo(Number(plazo))} fijado`, { description: `${(data as any)?.items ?? ids.length} ítems; su vencimiento se recalculó` })
     setSelected(new Set())
     qc.invalidateQueries({ queryKey: ['pci-items', pciId] })
   }
@@ -322,6 +334,14 @@ export function PciDetailClient({ pciId }: { pciId: string }) {
                     </span>
                   </SelectItem>
                 ))}
+              </SelectContent>
+            </Select>
+            <Select onValueChange={bulkPlazo}>
+              <SelectTrigger size="sm" className="w-44">
+                <SelectValue placeholder="Fijar plazo…" />
+              </SelectTrigger>
+              <SelectContent>
+                {plazos.map((d) => <SelectItem key={d} value={String(d)}>{etiquetaPlazo(d)}</SelectItem>)}
               </SelectContent>
             </Select>
             <Button variant="ghost" size="sm" onClick={() => setSelected(new Set())}>

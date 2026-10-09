@@ -36,6 +36,8 @@ data class EstadoJornada(
     val rol: String = "jefe_cuadrilla",
     /** Los formatos que la cuadrilla debe tener hoy (OBS-53, §16). */
     val documentos: List<DocumentoDelDia> = emptyList(),
+    /** Avisos sin leer: la campana de arriba. */
+    val avisos: Int = 0,
     val error: String? = null,
     /** Mientras no se sepa la cuadrilla, no se afirma nada sobre ella */
     val cargando: Boolean = true,
@@ -48,6 +50,7 @@ class JornadaViewModel @Inject constructor(
     private val campo: CampoRepositorio,
     private val caja: CajaRepositorio,
     private val documentosRepo: DocumentosRepositorio,
+    private val avisosRepo: pe.servicon.sigov.datos.AvisosRepositorio,
 ) : ViewModel() {
 
     private val _estado = MutableStateFlow(EstadoJornada())
@@ -63,6 +66,9 @@ class JornadaViewModel @Inject constructor(
         }
         cargar()
         vigilarPendientes()
+        viewModelScope.launch {
+            avisosRepo.sinLeer.collectLatest { n -> _estado.update { it.copy(avisos = n) } }
+        }
     }
 
     /** Cuántos registros esperan señal, en vivo. */
@@ -109,6 +115,8 @@ class JornadaViewModel @Inject constructor(
                 val jefe = runCatching { sesion.supervisor(cuadrilla.servicioId) }.getOrNull()
                 val documentos = runCatching { documentosRepo.delDia(cuadrilla.servicioId, cuadrilla.id) }
                     .getOrDefault(emptyList())
+                // Los avisos: la campana y, si hay nuevos, la notificación del teléfono
+                runCatching { avisosRepo.notificarNuevos() }
 
                 _estado.update {
                     it.copy(

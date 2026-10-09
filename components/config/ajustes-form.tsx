@@ -204,8 +204,32 @@ export function AjustesDelServicio() {
               <Input
                 type="number"
                 min={1}
-                value={actual?.alertas?.dias_aviso_pci ?? 7}
+                value={actual?.alertas?.dias_aviso_pci ?? 2}
                 onChange={(e) => cambiar('alertas', 'dias_aviso_pci', Number(e.target.value))}
+                disabled={!can.manage}
+              />
+            </label>
+            {/* Los plazos que admite el contrato (OBS-08) y la tolerancia antes
+                de la alerta crítica «PCI fuera de plazo» (OBS-11) */}
+            <label className="block">
+              <span className="text-muted-foreground mb-1.5 block text-[11.5px] font-medium uppercase tracking-wide">
+                Plazos de PCI (días, separados por coma)
+              </span>
+              <Input
+                value={(actual?.pci?.plazos ?? [1, 2, 3, 7, 14]).join(', ')}
+                onChange={(e) => cambiar('pci', 'plazos', e.target.value.split(',').map((x) => Number(x.trim())).filter((n) => Number.isInteger(n) && n > 0))}
+                disabled={!can.manage}
+              />
+            </label>
+            <label className="block">
+              <span className="text-muted-foreground mb-1.5 block text-[11.5px] font-medium uppercase tracking-wide">
+                Tolerancia antes de la alerta crítica (días)
+              </span>
+              <Input
+                type="number"
+                min={0}
+                value={actual?.pci?.tolerancia ?? 1}
+                onChange={(e) => cambiar('pci', 'tolerancia', Number(e.target.value))}
                 disabled={!can.manage}
               />
             </label>

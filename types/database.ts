@@ -6900,6 +6900,10 @@ export type Database = {
         Args: { p_aceptar?: boolean; p_item: string; p_nota?: string }
         Returns: Json
       }
+      pci_fijar_plazo: {
+        Args: { p_items: string[]; p_motivo?: string; p_plazo: number }
+        Returns: Json
+      }
       pci_geojson: { Args: { p_service_id: string }; Returns: Json }
       pci_iniciar_atencion: { Args: { p_item: string }; Returns: Json }
       pci_item_semaforo: {

@@ -58,7 +58,16 @@ fun PantallaJornada(
     alAbrirSincronizacion: () -> Unit = {},
     alAbrirConfiguracion: () -> Unit = {},
     alAbrirDocumento: (pe.servicon.sigov.datos.DocumentoDelDia) -> Unit = {},
+    alAbrirAvisos: () -> Unit = {},
 ) {
+    // Android 13+: permiso para mostrar los avisos como notificación del teléfono
+    val pedirPermiso = androidx.activity.compose.rememberLauncherForActivityResult(
+        androidx.activity.result.contract.ActivityResultContracts.RequestPermission(),
+    ) { }
+    androidx.compose.runtime.LaunchedEffect(Unit) {
+        if (android.os.Build.VERSION.SDK_INT >= 33) pedirPermiso.launch(android.Manifest.permission.POST_NOTIFICATIONS)
+    }
+
     val estado by vm.estado.collectAsStateWithLifecycle()
 
     // El color de fondo se declara aquí: sin él se transparenta el fondo de
@@ -72,6 +81,14 @@ fun PantallaJornada(
             persona = estado.nombre.ifBlank { null },
             cuadrilla = estado.cuadrilla.ifBlank { null },
             acciones = {
+                // La campana: avisos de PCI, observaciones del supervisor, COVINCA y SSOMA
+                IconButton(onClick = alAbrirAvisos) {
+                    BadgedBox(badge = {
+                        if (estado.avisos > 0) Badge { Text(if (estado.avisos > 99) "99+" else estado.avisos.toString()) }
+                    }) {
+                        Icon(Icons.Outlined.Notifications, contentDescription = "Avisos", tint = Marca.Azul)
+                    }
+                }
                 IconButton(onClick = { vm.salir(alSalir) }) {
                     Icon(
                         Icons.Outlined.Logout,

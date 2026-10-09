@@ -153,6 +153,7 @@ class MainActivity : ComponentActivity() {
                             alAbrirAvance = { nav.navigate("avance") },
                             alAbrirSincronizacion = { nav.navigate("sincronizacion") },
                             alAbrirConfiguracion = { nav.navigate("configuracion") },
+                            alAbrirAvisos = { nav.navigate("avisos") },
                             alAbrirDocumento = { d ->
                                 nav.navigate(
                                     "documento/${d.tipo}?vehiculo=${d.vehiculoId.orEmpty()}" +
@@ -239,6 +240,12 @@ class MainActivity : ComponentActivity() {
                         ),
                     ) {
                         pe.servicon.sigov.ui.documentos.PantallaDocumento(alVolver = { nav.popBackStack() })
+                    }
+                    composable("avisos") {
+                        pe.servicon.sigov.ui.avisos.PantallaAvisos(
+                            alVolver = { nav.popBackStack() },
+                            alIr = { destino -> if (destino != "jornada") nav.navigate(destino) else nav.popBackStack() },
+                        )
                     }
                     composable("configuracion") {
                         pe.servicon.sigov.ui.configuracion.PantallaConfiguracion(alVolver = { nav.popBackStack() })

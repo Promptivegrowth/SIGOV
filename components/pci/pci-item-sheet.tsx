@@ -23,6 +23,7 @@ import { syncNow } from '@/lib/offline/sync'
 import type { SealedPhoto } from '@/lib/camera'
 import { toast } from 'sonner'
 import { mensajeAmigable } from '@/lib/errores'
+import { usePlazosPci, etiquetaPlazo } from '@/lib/hooks/use-plazos-pci'
 
 type Funcion = 'pci_iniciar_atencion' | 'pci_levantar' | 'pci_validar'
 
@@ -75,6 +76,9 @@ export function PciItemSheet({
     },
   })
 
+  // Antes del retorno temprano: los hooks no pueden depender de que haya ítem
+  const { plazos } = usePlazosPci()
+
   if (!item) return null
 
   const st = PCI_ITEM_STATUS[item.status as keyof typeof PCI_ITEM_STATUS] ?? PCI_ITEM_STATUS.pendiente
@@ -122,6 +126,16 @@ export function PciItemSheet({
       { p_item: item.id, p_conforme: conforme, p_nota: observacion.trim() || null },
       conforme ? 'Ítem conforme' : 'Ítem observado: vuelve a la cuadrilla',
     )
+  }
+
+  const fijarPlazo = async (plazo: string) => {
+    setBusy(true)
+    const { error } = await sb.rpc('pci_fijar_plazo' as any, { p_items: [item.id], p_plazo: Number(plazo) } as any)
+    setBusy(false)
+    if (error) { toast.error(mensajeAmigable(error)); return }
+    toast.success(`Plazo de ${etiquetaPlazo(Number(plazo))}`, { description: 'El vencimiento se recalculó desde la recepción del PCI.' })
+    refresh()
+    onClose()
   }
 
   const saveAssignment = async () => {
@@ -234,6 +248,16 @@ export function PciItemSheet({
                             {c.name}
                           </span>
                         </SelectItem>
+                      ))}
+                    </SelectContent>
+                  </Select>
+                </Field>
+                <Field label="Plazo" hint="Uno de los plazos del contrato; el vencimiento se recalcula">
+                  <Select value={String(item.term_days)} onValueChange={fijarPlazo}>
+                    <SelectTrigger className="h-10"><SelectValue /></SelectTrigger>
+                    <SelectContent>
+                      {(plazos.includes(Number(item.term_days)) ? plazos : [Number(item.term_days), ...plazos]).map((d) => (
+                        <SelectItem key={d} value={String(d)}>{etiquetaPlazo(d)}{!plazos.includes(d) ? ' (fuera de la lista)' : ''}</SelectItem>
                       ))}
                     </SelectContent>
                   </Select>
