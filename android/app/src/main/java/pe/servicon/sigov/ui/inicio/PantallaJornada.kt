@@ -53,6 +53,7 @@ fun PantallaJornada(
     alAbrirInventario: () -> Unit = {},
     alAbrirVehiculos: () -> Unit = {},
     alAbrirCharlas: () -> Unit = {},
+    alAbrirHigiene: () -> Unit = {},
     alAbrirAst: () -> Unit = {},
     alAbrirAvance: () -> Unit = {},
     alAbrirSincronizacion: () -> Unit = {},
@@ -155,7 +156,7 @@ fun PantallaJornada(
                     alTocar = { d ->
                         when (d.tipo) {
                             "reporte_diario" -> alAbrirParte()
-                            "higiene" -> alAbrirCharlas()
+                            "higiene" -> alAbrirHigiene()
                             else -> alAbrirDocumento(d)
                         }
                     },
@@ -185,7 +186,8 @@ fun PantallaJornada(
                     .takeIf { estado.rol != "jefe_cuadrilla" },
                 Apartado(Icons.Outlined.HealthAndSafety, "Equipos SSOMA", "Extintores, botiquines", azul, 0, alAbrirEquipos),
                 Apartado(Icons.Outlined.DirectionsCar, "Vehículos", "Papeles y revisión", verde, 0, alAbrirVehiculos),
-                Apartado(Icons.Outlined.Campaign, "Charlas e higiene", "Charla del día e higiene", azul, 0, alAbrirCharlas),
+                Apartado(Icons.Outlined.Campaign, "Charlas", "Charla de 5 minutos", azul, 0, alAbrirCharlas),
+                Apartado(Icons.Outlined.CleanHands, "Higiene", "Checklist del día", verde, 0, alAbrirHigiene),
                 Apartado(Icons.Outlined.Assignment, "ATS", "Análisis de Trabajo Seguro", verde, 0, alAbrirAst),
                 Apartado(Icons.Outlined.BarChart, "Mi Avance", "Cumplimiento del día", verde, 0, alAbrirAvance),
                 Apartado(Icons.Outlined.Sync, "Sincronización", "Registros pendientes", azul, estado.pendientes, alAbrirSincronizacion),

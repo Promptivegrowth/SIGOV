@@ -149,6 +149,7 @@ class MainActivity : ComponentActivity() {
                             alAbrirInventario = { nav.navigate("inventario") },
                             alAbrirVehiculos = { nav.navigate("vehiculos") },
                             alAbrirCharlas = { nav.navigate("charlas") },
+                            alAbrirHigiene = { nav.navigate("higiene") },
                             alAbrirAst = { nav.navigate("ast") },
                             alAbrirAvance = { nav.navigate("avance") },
                             alAbrirSincronizacion = { nav.navigate("sincronizacion") },
@@ -244,6 +245,9 @@ class MainActivity : ComponentActivity() {
                         ),
                     ) {
                         pe.servicon.sigov.ui.documentos.PantallaDocumento(alVolver = { nav.popBackStack() })
+                    }
+                    composable("higiene") {
+                        pe.servicon.sigov.ui.higiene.PantallaHigiene(alVolver = { nav.popBackStack() })
                     }
                     composable("avisos") {
                         pe.servicon.sigov.ui.avisos.PantallaAvisos(

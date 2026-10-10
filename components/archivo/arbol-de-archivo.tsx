@@ -474,7 +474,7 @@ async function construir(
       sembrar(raiz, [fmtDate(h.checked_on), h.crews?.name, 'Elementos de higiene'], {
         id: h.id,
         etiqueta: h.item ?? 'Elemento',
-        detalle: h.done ? 'Conforme' : 'Pendiente',
+        detalle: h.done ? 'Sí cumple' : 'No cumple',
       })
     }
     for (const e of equipos.data ?? []) {

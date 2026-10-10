@@ -30,7 +30,6 @@ import androidx.hilt.navigation.compose.hiltViewModel
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import pe.servicon.sigov.datos.Charla
 import pe.servicon.sigov.datos.MiembroDeCuadrilla
-import pe.servicon.sigov.datos.PuntoDeHigiene
 import pe.servicon.sigov.datos.TipoCharla
 import pe.servicon.sigov.ui.componentes.ArmazonDeApartado
 import pe.servicon.sigov.ui.theme.Marca
@@ -61,11 +60,11 @@ fun PantallaCharlas(
     }
 
     ArmazonDeApartado(
-        titulo = "Charlas e higiene",
-        seccion = "Apartado 6.4 y 6.5",
+        titulo = "Charlas",
+        seccion = "Apartado 6.4",
         alVolver = alVolver,
         cuadrilla = estado.cuadrilla.ifBlank { null },
-        ayuda = "La charla del día con sus firmas y la higiene de la cuadrilla.",
+        ayuda = "La charla del día con sus firmas. La higiene tiene su propio checklist.",
         avisos = avisos,
         botonFlotante = {
             ExtendedFloatingActionButton(
@@ -103,21 +102,6 @@ fun PantallaCharlas(
                 }
                 item { DiariaDeHoy(estado.diariaDeHoy) }
 
-                item {
-                    Text(
-                        "Higiene de hoy · ${estado.higieneCumplidos} de ${PuntoDeHigiene.entries.size}",
-                        style = MaterialTheme.typography.titleMedium,
-                        modifier = Modifier.padding(top = 6.dp),
-                    )
-                }
-                items(PuntoDeHigiene.entries, key = { it.valor }) { punto ->
-                    FilaHigiene(
-                        punto = punto,
-                        cumplido = estado.higieneCumple(punto),
-                        alMarcar = { vm.marcarHigiene(punto, estado.miembros.size.takeIf { it > 0 }) },
-                    )
-                }
-
                 if (estado.charlas.isNotEmpty()) {
                     item {
                         Text(
@@ -141,52 +125,6 @@ fun PantallaCharlas(
                 vm.registrar(tipo, tema, contenido, minutos, lugar, firmas) { dictando = false }
             },
         )
-    }
-}
-
-/**
- * Un punto de higiene del día.
- *
- * Una vez marcado no se puede desmarcar desde el celular: lo que se registró
- * en obra es un hecho, y deshacerlo es cosa del supervisor desde la web.
- */
-@Composable
-private fun FilaHigiene(punto: PuntoDeHigiene, cumplido: Boolean, alMarcar: () -> Unit) {
-    val color = if (cumplido) Marca.VerdeBandera else Marca.Naranja
-
-    Surface(
-        onClick = { if (!cumplido) alMarcar() },
-        enabled = !cumplido,
-        shape = RoundedCornerShape(12.dp),
-        color = if (cumplido) Marca.VerdeBandera.copy(alpha = 0.08f)
-        else MaterialTheme.colorScheme.surface,
-        border = CardDefaults.outlinedCardBorder(),
-        modifier = Modifier.fillMaxWidth(),
-    ) {
-        Row(
-            Modifier.padding(14.dp),
-            verticalAlignment = Alignment.CenterVertically,
-            horizontalArrangement = Arrangement.spacedBy(12.dp),
-        ) {
-            Icon(
-                if (cumplido) Icons.Outlined.CheckCircle else Icons.Outlined.WaterDrop,
-                contentDescription = null,
-                tint = color,
-            )
-            Column(Modifier.weight(1f)) {
-                Text(punto.etiqueta, style = MaterialTheme.typography.bodyMedium)
-                Text(
-                    punto.detalle,
-                    style = MaterialTheme.typography.bodySmall,
-                    color = MaterialTheme.colorScheme.onSurfaceVariant,
-                )
-            }
-            Text(
-                if (cumplido) "Hecho" else "Marcar",
-                style = MaterialTheme.typography.labelMedium,
-                color = color,
-            )
-        }
     }
 }
 

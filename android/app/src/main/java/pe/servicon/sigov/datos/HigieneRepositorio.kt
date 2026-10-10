@@ -33,6 +33,15 @@ enum class PuntoDeHigiene(val valor: String, val etiqueta: String, val detalle: 
     ORDEN("orden_limpieza", "Orden y limpieza", "Zona de trabajo despejada al cerrar"),
 }
 
+/** La respuesta a un punto del checklist: Sí o No, con su porqué. */
+data class RespuestaHigiene(
+    val cumple: Boolean,
+    val nota: String? = null,
+    val personas: Int? = null,
+    /** Guardada en el equipo y todavía sin subir. */
+    val porEnviar: Boolean = false,
+)
+
 /** Cómo va la higiene de hoy en una cuadrilla. */
 @Serializable
 data class HigieneDelDia(
@@ -141,6 +150,91 @@ class HigieneRepositorio @Inject constructor(
                 supabase.usuarioActual()?.let { put("created_by", it) }
             },
         )
+    }
+
+    /**
+     * Las respuestas de hoy, punto por punto (OBS-58): Sí, No o sin responder.
+     * Lo guardado en el equipo y sin subir manda sobre la nube, porque es lo
+     * último que contestó el capataz.
+     */
+    suspend fun respuestasDeHoy(servicioId: String, cuadrillaId: String): Map<String, RespuestaHigiene> =
+        withContext(Dispatchers.IO) {
+            val hoy = Peru.hoy().toString()
+            val nube = runCatching {
+                val filas = supabase.postgrest.from("hygiene_checks")
+                    .select {
+                        filter {
+                            eq("crew_id", cuadrillaId)
+                            eq("checked_on", hoy)
+                            exact("deleted_at", null)
+                        }
+                    }
+                    .decodeList<JsonObject>()
+                catalogo.guardar(
+                    filas.mapNotNull { f ->
+                        val item = f["item"]?.toString()?.trim('"') ?: return@mapNotNull null
+                        FilaCatalogo("hygiene_checks", "$cuadrillaId|$hoy|$item", servicioId, f.toString())
+                    }
+                )
+                filas
+            }.getOrElse {
+                catalogo.de("hygiene_checks", servicioId)
+                    .filter { it.id.startsWith("$cuadrillaId|$hoy|") }
+                    .mapNotNull { runCatching { json.parseToJsonElement(it.datos) as JsonObject }.getOrNull() }
+            }
+            val enCola = colaDao.sinConfirmarDe("hygiene_checks").mapNotNull { envio ->
+                runCatching { json.parseToJsonElement(envio.cuerpo) as JsonObject }.getOrNull()
+                    ?.takeIf { it["checked_on"]?.toString()?.trim('"') == hoy }
+                    ?.let { it to true }
+            }
+            (nube.map { it to false } + enCola).mapNotNull { (f, local) ->
+                val item = f["item"]?.toString()?.trim('"') ?: return@mapNotNull null
+                item to RespuestaHigiene(
+                    cumple = f["done"]?.toString() == "true",
+                    nota = f["notes"]?.toString()?.trim('"')?.takeIf { it != "null" && it.isNotBlank() },
+                    personas = f["people_count"]?.toString()?.toIntOrNull(),
+                    porEnviar = local,
+                )
+            }.toMap()
+        }
+
+    /**
+     * Guarda el checklist completo. Cada punto conserva su identificador del
+     * día, así que volver a guardarlo corrige la respuesta en vez de duplicarla.
+     */
+    suspend fun guardarChecklist(
+        servicioId: String,
+        cuadrillaId: String,
+        respuestas: Map<PuntoDeHigiene, Boolean>,
+        notas: Map<PuntoDeHigiene, String>,
+        personas: Int?,
+        ubicacion: Punto?,
+    ) = withContext(Dispatchers.IO) {
+        respuestas.forEach { (punto, cumple) ->
+            val clientId = UUID.nameUUIDFromBytes(
+                "$cuadrillaId|${Peru.hoy()}|${punto.valor}".toByteArray()
+            ).toString()
+            cola.encolar(
+                tabla = "hygiene_checks",
+                etiqueta = "Higiene · ${punto.etiqueta} · ${if (cumple) "Sí" else "No"}",
+                clientId = clientId,
+                cuerpo = buildJsonObject {
+                    put("service_id", servicioId)
+                    put("crew_id", cuadrillaId)
+                    put("checked_on", Peru.hoy().toString())
+                    put("item", punto.valor)
+                    put("done", cumple)
+                    personas?.let { put("people_count", it) }
+                    // El porqué solo vale para un «No»: al corregir a «Sí» se borra
+                    put("notes", notas[punto]?.trim()?.takeIf { !cumple && it.isNotBlank() })
+                    ubicacion?.let {
+                        put("lat", it.latitud)
+                        put("lng", it.longitud)
+                    }
+                    supabase.usuarioActual()?.let { put("created_by", it) }
+                },
+            )
+        }
     }
 
     private suspend fun guardarCopia(servicioId: String, filas: List<JsonObject>) {

@@ -12,9 +12,6 @@ import kotlinx.coroutines.launch
 import pe.servicon.sigov.datos.Charla
 import pe.servicon.sigov.datos.CharlaRepositorio
 import pe.servicon.sigov.datos.FirmaDeAsistente
-import pe.servicon.sigov.datos.HigieneDelDia
-import pe.servicon.sigov.datos.HigieneRepositorio
-import pe.servicon.sigov.datos.PuntoDeHigiene
 import pe.servicon.sigov.datos.MiembroDeCuadrilla
 import pe.servicon.sigov.datos.Peru
 import pe.servicon.sigov.datos.SesionRepositorio
@@ -27,9 +24,6 @@ data class EstadoCharlas(
     val cargando: Boolean = true,
     val charlas: List<Charla> = emptyList(),
     val miembros: List<MiembroDeCuadrilla> = emptyList(),
-    val higiene: HigieneDelDia? = null,
-    /** Lo marcado y sin subir: cuenta como hecho, aunque la nube no lo sepa. */
-    val higieneEnCola: Set<String> = emptySet(),
     val cuadrilla: String = "",
     val hoy: String = Peru.hoy().toString(),
     val guardando: Boolean = false,
@@ -39,12 +33,6 @@ data class EstadoCharlas(
     /** Si ya se dictó la charla diaria: es la que se exige todos los días. */
     val diariaDeHoy: Charla?
         get() = charlas.firstOrNull { it.fecha == hoy && it.kind == "diaria" }
-
-    fun higieneCumple(punto: PuntoDeHigiene): Boolean =
-        higiene?.cumple(punto) == true || punto.valor in higieneEnCola
-
-    val higieneCumplidos: Int
-        get() = PuntoDeHigiene.entries.count { higieneCumple(it) }
 }
 
 /**
@@ -56,7 +44,6 @@ data class EstadoCharlas(
 @HiltViewModel
 class CharlasViewModel @Inject constructor(
     private val charla: CharlaRepositorio,
-    private val higiene: HigieneRepositorio,
     private val sesion: SesionRepositorio,
     private val ubicacion: Ubicacion,
 ) : ViewModel() {
@@ -74,15 +61,11 @@ class CharlasViewModel @Inject constructor(
                     ?: error("Tu usuario no dirige ninguna cuadrilla. Avisa al coordinador.")
                 val charlas = charla.charlas(cuadrilla.servicioId, cuadrilla.id)
                 val miembros = charla.miembros(cuadrilla.servicioId, cuadrilla.id)
-                val delDia = higiene.deHoy(cuadrilla.servicioId, cuadrilla.id)
-                val pendientes = higiene.enCola()
                 _estado.update {
                     it.copy(
                         cargando = false,
                         charlas = charlas,
                         miembros = miembros,
-                        higiene = delDia,
-                        higieneEnCola = pendientes,
                         cuadrilla = cuadrilla.name,
                         hoy = Peru.hoy().toString(),
                     )
@@ -130,28 +113,6 @@ class CharlasViewModel @Inject constructor(
                 }
                 alTerminar()
                 cargar()
-            }.onFailure { fallo ->
-                _estado.update { it.copy(guardando = false, error = fallo.enCristiano()) }
-            }
-        }
-    }
-
-    /** Marca un punto de higiene del día. */
-    fun marcarHigiene(punto: PuntoDeHigiene, personas: Int?) {
-        _estado.update { it.copy(guardando = true) }
-        viewModelScope.launch {
-            runCatching {
-                val cuadrilla = sesion.cuadrilla() ?: error("Sin cuadrilla asignada.")
-                val donde = runCatching { ubicacion.actual() }.getOrNull()
-                higiene.marcar(cuadrilla.servicioId, cuadrilla.id, punto, personas, null, donde)
-            }.onSuccess {
-                _estado.update {
-                    it.copy(
-                        guardando = false,
-                        higieneEnCola = it.higieneEnCola + punto.valor,
-                        aviso = "${punto.etiqueta}: registrado.",
-                    )
-                }
             }.onFailure { fallo ->
                 _estado.update { it.copy(guardando = false, error = fallo.enCristiano()) }
             }
