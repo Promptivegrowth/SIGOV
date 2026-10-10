@@ -10,6 +10,7 @@
     "lint": "eslint",
     "typecheck": "tsc --noEmit",
     "test:covinca": "tsx scripts/probar-covinca.ts",
+    "test:importar": "tsx scripts/probar-importar.ts",
     "db:push": "supabase db push",
     "db:reset": "supabase db reset",
     "db:seed": "tsx scripts/seed.ts",

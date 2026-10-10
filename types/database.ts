@@ -2660,6 +2660,8 @@ export type Database = {
           items_total: number
           notified_on: string
           priority: Database["public"]["Enums"]["pci_priority"]
+          published_at: string | null
+          published_by: string | null
           received_on: string | null
           service_id: string
           source: string | null
@@ -2682,6 +2684,8 @@ export type Database = {
           items_total?: number
           notified_on: string
           priority?: Database["public"]["Enums"]["pci_priority"]
+          published_at?: string | null
+          published_by?: string | null
           received_on?: string | null
           service_id: string
           source?: string | null
@@ -2704,6 +2708,8 @@ export type Database = {
           items_total?: number
           notified_on?: string
           priority?: Database["public"]["Enums"]["pci_priority"]
+          published_at?: string | null
+          published_by?: string | null
           received_on?: string | null
           service_id?: string
           source?: string | null
@@ -2717,6 +2723,13 @@ export type Database = {
           {
             foreignKeyName: "pcis_created_by_fkey"
             columns: ["created_by"]
+            isOneToOne: false
+            referencedRelation: "profiles"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "pcis_published_by_fkey"
+            columns: ["published_by"]
             isOneToOne: false
             referencedRelation: "profiles"
             referencedColumns: ["id"]
@@ -6831,6 +6844,10 @@ export type Database = {
       }
       is_member: { Args: { sid: string }; Returns: boolean }
       is_platform_admin: { Args: never; Returns: boolean }
+      mi_avance: {
+        Args: { p_crew_id: string; p_desde: string; p_hasta: string }
+        Returns: Json
+      }
       mis_cuadrillas: { Args: { p_service_id: string }; Returns: string[] }
       mis_servicios: { Args: never; Returns: string[] }
       my_service_ids: { Args: never; Returns: string[] }
@@ -6951,6 +6968,7 @@ export type Database = {
         Args: { p_conforme: boolean; p_item: string; p_nota?: string }
         Returns: Json
       }
+      pcis_visibles: { Args: never; Returns: string[] }
       pedido_de_campo_en_transicion: {
         Args: {
           p_created_by: string
@@ -6968,6 +6986,7 @@ export type Database = {
         Args: { p_lat: number; p_lng: number; p_section_id: string }
         Returns: number
       }
+      publicar_pci: { Args: { p_pci_id: string }; Returns: Json }
       puede_atender_item: {
         Args: { p_item: Database["public"]["Tables"]["pci_items"]["Row"] }
         Returns: boolean

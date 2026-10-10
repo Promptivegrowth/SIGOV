@@ -24,6 +24,7 @@ import { PCI_ABIERTO, PCI_PRIORITY, SEMAFORO } from '@/lib/constants'
 import { cn, fmtDate, fmtNumber, truncate, toISODate } from '@/lib/utils'
 import { toast } from 'sonner'
 import { mensajeAmigable } from '@/lib/errores'
+import { usePlazosPci, etiquetaPlazo } from '@/lib/hooks/use-plazos-pci'
 
 export function PciListClient() {
   const { service, can, profile } = useSession()
@@ -32,6 +33,7 @@ export function PciListClient() {
   const [q, setQ] = React.useState('')
   const [priority, setPriority] = React.useState<string>('todas')
   const [newOpen, setNewOpen] = React.useState(false)
+  const { plazos } = usePlazosPci()
 
   const pciFields: FormField[] = [
     { name: 'code', label: 'Código del PCI', type: 'text', required: true, placeholder: 'PCI-2026-048' },
@@ -47,7 +49,10 @@ export function PciListClient() {
       name: 'priority', label: 'Prioridad', type: 'select', required: true, defaultValue: 'media',
       options: Object.entries(PCI_PRIORITY).map(([k, v]) => ({ value: k, label: v.label })),
     },
-    { name: 'default_days', label: 'Plazo base (días)', type: 'number', required: true, defaultValue: 15, min: 1, max: 365,
+    // Solo los plazos del contrato (OBS-08): son las carpetas de COVINCA
+    { name: 'default_days', label: 'Plazo base', type: 'select', required: true,
+      defaultValue: String(plazos.includes(7) ? 7 : plazos[plazos.length - 1]),
+      options: plazos.map((d) => ({ value: String(d), label: etiquetaPlazo(d) })),
       hint: 'Se aplica a los ítems que no traigan plazo propio' },
   ]
 
@@ -61,7 +66,7 @@ export function PciListClient() {
       notified_on: v.notified_on,
       received_on: v.received_on || null,
       priority: v.priority,
-      default_days: Number(v.default_days) || 15,
+      default_days: Number(v.default_days) || 7,
       status: 'abierto',
       created_by: profile.id,
     }).select('id').single()
@@ -70,7 +75,9 @@ export function PciListClient() {
       toast.error(error.code === '23505' ? 'Ya existe un PCI con ese código' : mensajeAmigable(error))
       return
     }
-    toast.success('PCI creado', { description: 'Ahora importa sus ítems desde Excel o agrégalos a mano.' })
+    toast.success('PCI creado como borrador', {
+      description: 'Importa sus ítems, asígnalos a las cuadrillas y publícalo: hasta entonces las cuadrillas no lo ven.',
+    })
     qc.invalidateQueries()
   }
 
@@ -297,6 +304,9 @@ function PciCard({ pci, semaforo }: { pci: any; semaforo: Record<string, number>
             <div className="flex flex-wrap items-center gap-2">
               <span className="font-mono text-[13px] font-bold tracking-tight">{pci.code}</span>
               <Badge className={prio.className}>{prio.label}</Badge>
+              {!pci.published_at && (
+                <Badge variant="warning" title="Las cuadrillas no lo ven hasta que se publique">Borrador</Badge>
+              )}
               {pci.suspends_plan && (
                 <Badge variant="outline" className="border-destructive/40 text-destructive gap-1">
                   <Zap className="size-2.5" />
@@ -319,7 +329,7 @@ function PciCard({ pci, semaforo }: { pci: any; semaforo: Record<string, number>
                 Notificado {fmtDate(pci.notified_on)}
               </span>
               <span>Fuente: {pci.source}</span>
-              <span>Plazo base: {pci.default_days} días</span>
+              <span>Plazo base: {etiquetaPlazo(pci.default_days)}</span>
             </div>
           </div>
 

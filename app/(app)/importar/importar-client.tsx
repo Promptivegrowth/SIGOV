@@ -23,6 +23,11 @@ import {
 } from '@/lib/import-schemas'
 import { cn, fmtDate, fmtNumber, fmtRelative, toISODate, parseFecha } from '@/lib/utils'
 import { toast } from 'sonner'
+import Link from 'next/link'
+import { usePlazosPci, etiquetaPlazo } from '@/lib/hooks/use-plazos-pci'
+
+/** «Detectar el PCI desde la columna del Excel» en vez de elegir uno. */
+const PCI_DESDE_EXCEL = '__excel__'
 
 type Step = 'tipo' | 'archivo' | 'mapeo' | 'validacion' | 'resultado'
 
@@ -44,6 +49,7 @@ export function ImportarClient() {
   const [importing, setImporting] = React.useState(false)
   const [result, setResult] = React.useState<any>(null)
   const [pciId, setPciId] = React.useState<string>('')
+  const { plazos } = usePlazosPci()
 
   const schema = kind ? IMPORT_KINDS[kind] : null
 
@@ -72,7 +78,11 @@ export function ImportarClient() {
         condition: new Map(
           ['bueno', 'regular', 'malo', 'critico', 'no_evaluado'].map((c) => [normKey(c), c])
         ),
-        side: new Map(['derecho', 'izquierdo', 'ambos', 'eje'].map((c) => [normKey(c), c])),
+        side: new Map([
+          ...['derecho', 'izquierdo', 'ambos', 'eje'].map((c) => [normKey(c), c] as const),
+          ...([['ld', 'derecho'], ['d', 'derecho'], ['li', 'izquierdo'], ['i', 'izquierdo'],
+              ['ldli', 'ambos'], ['lild', 'ambos'], ['ambos', 'ambos'], ['ldejeli', 'ambos'], ['e', 'eje']] as const),
+        ]),
       }
     },
     staleTime: 5 * 60_000,
@@ -84,7 +94,7 @@ export function ImportarClient() {
     queryFn: async () => {
       const { data } = await sb
         .from('pcis')
-        .select('id, code, title, notified_on, default_days')
+        .select('id, code, title, notified_on, received_on, default_days, published_at')
         .eq('service_id', service.id)
         .is('deleted_at', null)
         .order('notified_on', { ascending: false })
@@ -144,6 +154,19 @@ export function ImportarClient() {
         }
         out[f.key] = value
       }
+      // OBS-08: el plazo es de la lista cerrada del contrato (las carpetas de COVINCA)
+      if (schema.key === 'pci' && out.term_days != null && !plazos.includes(Number(out.term_days))) {
+        problems.push({
+          row: i + 2,
+          field: 'Plazo (días)',
+          message: `${out.term_days} días no es un plazo del contrato (${plazos.map(etiquetaPlazo).join(', ')})`,
+        })
+        rowOk = false
+      }
+      if (schema.key === 'pci' && pciId === PCI_DESDE_EXCEL && !out.pci_code) {
+        problems.push({ row: i + 2, field: 'N.º de PCI', message: 'Falta el número de PCI de la fila' })
+        rowOk = false
+      }
       if (rowOk) ok.push(out)
     })
 
@@ -179,8 +202,43 @@ export function ImportarClient() {
     let failed = 0
     const errors: any[] = []
 
+    const pcisTocados: { id: string; code: string; nuevo: boolean; publicado: boolean }[] = []
     try {
-      const payload = valid.map((v) => buildRow(schema.key, v, service.id, profile.id, pciId, pcis.data))
+      // OBS-07: cada fila va al PCI elegido o al de su columna «N.º de PCI»;
+      // el PCI que no existe se crea como borrador con la fecha de recepción.
+      const destinoDe = new Map<any, any>()
+      if (schema.key === 'pci') {
+        if (pciId === PCI_DESDE_EXCEL) {
+          const codigos = [...new Set(valid.map((v) => String(v.pci_code).trim()))]
+          for (const code of codigos) {
+            let pci = (pcis.data ?? []).find((p: any) => normKey(p.code) === normKey(code))
+            const nuevo = !pci
+            if (!pci) {
+              const primera = valid.find((v) => String(v.pci_code).trim() === code)
+              const recibido = primera?.received_on ?? toISODate(new Date())
+              const { data, error } = await sb.from('pcis').insert({
+                service_id: service.id,
+                code,
+                title: /^pci/i.test(code) ? code : `PCI ${code}`,
+                notified_on: recibido,
+                received_on: recibido,
+                default_days: plazos.includes(7) ? 7 : plazos[plazos.length - 1],
+                status: 'abierto',
+                created_by: profile.id,
+              }).select('id, code, title, notified_on, received_on, default_days, published_at').single()
+              if (error) throw new Error(`No se pudo crear el PCI ${code}: ${error.message}`)
+              pci = data
+            }
+            pcisTocados.push({ id: pci.id, code: pci.code, nuevo, publicado: !!pci.published_at })
+            for (const v of valid) if (String(v.pci_code).trim() === code) destinoDe.set(v, pci)
+          }
+        } else {
+          const pci = (pcis.data ?? []).find((p: any) => p.id === pciId)
+          if (pci) pcisTocados.push({ id: pci.id, code: pci.code, nuevo: false, publicado: !!pci.published_at })
+          for (const v of valid) destinoDe.set(v, pci)
+        }
+      }
+      const payload = valid.map((v) => buildRow(schema.key, v, service.id, profile.id, destinoDe.get(v)))
 
       // Tandas a escribir. Lo normal es una sola (upsert de todo). El PCI va
       // aparte: volver a subir el mismo Excel no puede devolver a «pendiente»
@@ -192,9 +250,10 @@ export function ImportarClient() {
       }
       const tandas: Tanda[] = []
 
-      if (schema.key === 'pci') {
-        const existentes = await numerosDeItemExistentes(sb, pciId)
-        const nuevos = payload.filter((r) => !existentes.has(r.item_number))
+      if (schema.key === 'pci') for (const destino of pcisTocados) {
+        const delPci = payload.filter((r) => r.pci_id === destino.id)
+        const existentes = await numerosDeItemExistentes(sb, destino.id)
+        const nuevos = delPci.filter((r) => !existentes.has(r.item_number))
         // Del ítem que ya existe solo se refresca lo que describe el Excel, y
         // solo las columnas que se mapearon: una columna sin asignar no borra
         // lo que ya había. Estado, plazo, vencimiento, cuadrilla, fechas de
@@ -202,7 +261,7 @@ export function ImportarClient() {
         const descriptivas = PCI_DESCRIPTIVOS.filter(
           (d) => d.campo === 'description' || mapping[d.origen]
         )
-        const viejos = payload
+        const viejos = delPci
           .filter((r) => existentes.has(r.item_number))
           .map((r) => {
             // Las NOT NULL viajan igual: Postgres valida la fila propuesta
@@ -216,6 +275,20 @@ export function ImportarClient() {
         tandas.push({ filas: nuevos, opciones: { onConflict: 'pci_id,item_number', ignoreDuplicates: true }, nuevas: true })
         // defaultToNull=false: lo que no va en la fila no se escribe como NULL.
         tandas.push({ filas: viejos, opciones: { onConflict: 'pci_id,item_number', defaultToNull: false }, nuevas: false })
+        // La cuadrilla del Excel solo se pone a los ítems que no tenían una:
+        // reimportar no le quita el trabajo a la cuadrilla que ya lo atiende.
+        if (mapping.crew_code) {
+          const porCuadrilla = new Map<string, number[]>()
+          for (const r of delPci) {
+            if (!existentes.has(r.item_number) || !r.assigned_crew_id) continue
+            porCuadrilla.set(r.assigned_crew_id, [...(porCuadrilla.get(r.assigned_crew_id) ?? []), r.item_number])
+          }
+          for (const [crew, numeros] of porCuadrilla) {
+            const { error } = await sb.from('pci_items').update({ assigned_crew_id: crew })
+              .eq('pci_id', destino.id).in('item_number', numeros).is('assigned_crew_id', null)
+            if (error) errors.push({ error: `Cuadrilla de ${destino.code}: ${error.message}` })
+          }
+        }
       } else {
         tandas.push({ filas: payload, opciones: { onConflict: onConflictFor(schema.key) }, nuevas: true })
       }
@@ -256,7 +329,7 @@ export function ImportarClient() {
         })
         .eq('id', batch.data!.id)
 
-      setResult({ inserted, updated, failed, issues: issues.length })
+      setResult({ inserted, updated, failed, issues: issues.length, pcis: pcisTocados })
       setImporting(false)
       setStep('resultado')
       qc.invalidateQueries()
@@ -284,7 +357,9 @@ export function ImportarClient() {
     setIssues([]); setValid([]); setResult(null); setStep(kind ? 'archivo' : 'tipo')
   }
 
-  const requiredMissing = schema?.fields.filter((f) => f.required && !mapping[f.key]) ?? []
+  const requiredMissing = schema?.fields.filter(
+    (f) => (f.required || (f.key === 'pci_code' && pciId === PCI_DESDE_EXCEL)) && !mapping[f.key]
+  ) ?? []
 
   return (
     <>
@@ -355,6 +430,9 @@ export function ImportarClient() {
                         <SelectValue placeholder="Selecciona el PCI…" />
                       </SelectTrigger>
                       <SelectContent>
+                        <SelectItem value={PCI_DESDE_EXCEL}>
+                          Tomarlo de la columna «N.º de PCI» del Excel (crea los que falten)
+                        </SelectItem>
                         {(pcis.data ?? []).map((p: any) => (
                           <SelectItem key={p.id} value={p.id}>
                             {p.code} · {p.title.slice(0, 50)}
@@ -619,11 +697,36 @@ export function ImportarClient() {
                       <>
                         {' '}<strong className="text-foreground">{fmtNumber(result.updated)}</strong>
                         {result.updated === 1 ? ' ítem ya existía' : ' ítems ya existían'}: se actualizó su
-                        descripción y se conservaron su estado, plazo, cuadrilla y evidencias.
+                        descripción y se conservaron su estado, plazo y evidencias. La cuadrilla del Excel
+                        solo se asignó a los que no tenían una.
                       </>
                     )}
                     {result.issues > 0 && ` ${fmtNumber(result.issues)} filas se omitieron por errores de validación.`}
                   </p>
+                  {result.pcis?.length > 0 && (
+                    <div className="mt-5 w-full max-w-md space-y-2 text-left">
+                      <p className="text-muted-foreground text-[12px]">
+                        Revisa los ítems, asígnalos a las cuadrillas y publica cada PCI: hasta entonces las
+                        cuadrillas no lo ven.
+                      </p>
+                      {result.pcis.map((p: any) => (
+                        <Link
+                          key={p.id}
+                          href={`/pci/${p.id}`}
+                          className="flex items-center justify-between rounded-lg border border-border px-3 py-2 text-[13px] hover:border-primary/40"
+                        >
+                          <span className="font-mono font-semibold">{p.code}</span>
+                          <span className="flex items-center gap-2">
+                            {p.nuevo && <Badge variant="secondary">Nuevo</Badge>}
+                            <Badge variant={p.publicado ? 'success' : 'warning'}>
+                              {p.publicado ? 'Publicado' : 'Borrador: revisar y publicar'}
+                            </Badge>
+                            <ArrowRight className="size-3.5" />
+                          </span>
+                        </Link>
+                      ))}
+                    </div>
+                  )}
                   <div className="mt-6 flex gap-2">
                     <Button variant="outline" onClick={reset}>
                       <Upload className="size-4" />
@@ -687,8 +790,11 @@ const PCI_DESCRIPTIVOS = [
   { campo: 'description', origen: 'description' },
   { campo: 'section_id', origen: 'section_code' },
   { campo: 'prog_start_m', origen: 'prog_start_m' },
+  { campo: 'prog_end_m', origen: 'prog_end_m' },
+  { campo: 'side', origen: 'side' },
   { campo: 'activity_id', origen: 'activity_code' },
   { campo: 'quantity', origen: 'quantity' },
+  { campo: 'notes', origen: 'notes' },
 ] as const
 
 // N.º de los ítems que el PCI ya tiene (borrados incluidos: la llave única
@@ -730,8 +836,7 @@ function buildRow(
   v: any,
   serviceId: string,
   userId: string,
-  pciId: string,
-  pcis?: any[]
+  pci?: any
 ): any {
   const base = { service_id: serviceId, created_by: userId }
 
@@ -749,19 +854,25 @@ function buildRow(
         status: 'programado',
       }
     case 'pci': {
-      const pci = pcis?.find((p) => p.id === pciId)
-      const notified = pci?.notified_on ? (parseFecha(pci.notified_on) ?? new Date()) : new Date()
-      const term = v.term_days ?? pci?.default_days ?? 15
-      const due = new Date(notified.getTime() + term * 86400000)
+      // El vencimiento corre desde la recepción (o la notificación), igual
+      // que cuando se fija el plazo en el detalle (pci_fijar_plazo).
+      const desdeTexto = pci?.received_on ?? pci?.notified_on
+      const desde = desdeTexto ? (parseFecha(desdeTexto) ?? new Date()) : new Date()
+      const term = v.term_days ?? pci?.default_days ?? 7
+      const due = new Date(desde.getTime() + term * 86400000)
       return {
         ...base,
-        pci_id: pciId,
+        pci_id: pci?.id,
         item_number: v.item_number,
         description: v.description,
         section_id: v.section_code ?? null,
         prog_start_m: v.prog_start_m ?? null,
+        prog_end_m: v.prog_end_m ?? v.prog_start_m ?? null,
+        side: v.side ?? null,
         activity_id: v.activity_code ?? null,
         quantity: v.quantity ?? null,
+        notes: v.notes ?? null,
+        assigned_crew_id: v.crew_code ?? null,
         term_days: term,
         due_date: toISODate(due),
         status: 'pendiente',

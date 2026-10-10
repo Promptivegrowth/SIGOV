@@ -8,7 +8,7 @@ import { useQuery, useQueryClient } from '@tanstack/react-query'
 import { useVirtualizer } from '@tanstack/react-virtual'
 import {
   ArrowLeft, TriangleAlert, Zap, Search, Camera, CircleCheck,
-  Download, Users, RotateCcw, ChevronDown,
+  Download, Users, RotateCcw, ChevronDown, Send,
 } from 'lucide-react'
 import { createClient, fetchAll } from '@/lib/supabase/client'
 import { useSession } from '@/lib/hooks/use-session'
@@ -129,6 +129,28 @@ export function PciDetailClient({ pciId }: { pciId: string }) {
     qc.invalidateQueries({ queryKey: ['pci-items', pciId] })
   }
 
+  // OBS-07: el PCI es borrador hasta que se publica; recién ahí lo ven las
+  // cuadrillas y a cada jefe le llega el aviso. Volver a publicar tras
+  // reasignar avisa solo a los jefes que faltaban.
+  const [publicando, setPublicando] = React.useState(false)
+  const publicar = async () => {
+    setPublicando(true)
+    const { data, error } = await sb.rpc('publicar_pci', { p_pci_id: pciId })
+    setPublicando(false)
+    if (error) return toast.error(mensajeAmigable(error))
+    const r = data as { avisados: number; sin_cuadrilla: number }
+    const yaEstaba = !!pci.data?.published_at
+    toast.success(yaEstaba ? 'Aviso enviado a los jefes que faltaban' : 'PCI publicado a las cuadrillas', {
+      description: [
+        r.avisados === 0 ? 'Ningún jefe nuevo por avisar' : `${r.avisados} jefe${r.avisados === 1 ? '' : 's'} de cuadrilla avisado${r.avisados === 1 ? '' : 's'}`,
+        r.sin_cuadrilla > 0 && `${r.sin_cuadrilla} ítem${r.sin_cuadrilla === 1 ? '' : 's'} sin cuadrilla: nadie los verá hasta asignarlos`,
+      ].filter(Boolean).join(' · '),
+      duration: 8000,
+    })
+    qc.invalidateQueries({ queryKey: ['pci', pciId] })
+    qc.invalidateQueries({ queryKey: ['pcis'] })
+  }
+
   const exportar = async (format: 'pdf' | 'excel') => {
     setExporting(format)
     try {
@@ -214,6 +236,17 @@ export function PciDetailClient({ pciId }: { pciId: string }) {
                 Volver
               </Link>
             </Button>
+            {can.manage && p && (
+              <Button
+                variant={p.published_at ? 'outline' : 'default'}
+                loading={publicando}
+                onClick={publicar}
+                title={p.published_at ? 'Avisa a los jefes de cuadrilla que recibieron ítems después de publicar' : undefined}
+              >
+                <Send className="size-4" />
+                {p.published_at ? 'Avisar a nuevas cuadrillas' : 'Publicar a las cuadrillas'}
+              </Button>
+            )}
             {can.manage && ['alta', 'critica'].includes(p?.priority ?? '') && (
               <Button
                 variant={p?.suspension_applied_at ? 'outline' : 'destructive'}
@@ -237,6 +270,15 @@ export function PciDetailClient({ pciId }: { pciId: string }) {
         {p && (
           <div className="flex flex-wrap items-center gap-x-6 gap-y-3">
             <Badge className={prio!.className}>Prioridad {prio!.label}</Badge>
+            {p.published_at ? (
+              <span className="text-muted-foreground text-[12.5px]">
+                Publicado el <strong className="text-foreground">{fmtDate(p.published_at)}</strong>
+              </span>
+            ) : (
+              <Badge variant="warning" title="Las cuadrillas no lo ven hasta que se publique">
+                Borrador · sin publicar
+              </Badge>
+            )}
             <span className="text-muted-foreground text-[12.5px]">
               Notificado el <strong className="text-foreground">{fmtDate(p.notified_on)}</strong>
             </span>

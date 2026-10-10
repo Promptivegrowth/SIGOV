@@ -64,27 +64,42 @@ export const IMPORT_KINDS: Record<ImportKind['key'], ImportKind> = {
   pci: {
     key: 'pci',
     label: 'PCIs · ítems OSITRAN',
-    description: 'Ítems de un PCI con su plazo individual. Soporta cientos de filas.',
+    description: 'Ítems de uno o varios PCI: número de PCI, actividad, progresivas, lado, plazo y cuadrilla.',
     table: 'pci_items',
+    // OBS-07: lo que el importador tiene que reconocer del Excel del PCI
     fields: [
+      { key: 'pci_code', label: 'N.º de PCI', required: false, type: 'text',
+        aliases: ['pci', 'nropci', 'numeropci', 'codigopci', 'npci', 'pcin'],
+        hint: 'Si el Excel trae varios PCI o el PCI aún no existe en SIGOV' },
       { key: 'item_number', label: 'N.º de ítem', required: true, type: 'number',
         aliases: ['item', 'nro', 'numero', 'n', 'correlativo'] },
       { key: 'description', label: 'Descripción', required: true, type: 'text',
-        aliases: ['descripcion', 'detalle', 'observacion', 'incumplimiento'] },
+        aliases: ['descripcion', 'detalle', 'incumplimiento', 'deficiencia'] },
       { key: 'section_code', label: 'Tramo', required: false, type: 'lookup', lookup: 'section',
-        aliases: ['tramo', 'seccion', 'ruta'] },
-      { key: 'prog_start_m', label: 'Progresiva', required: false, type: 'progresiva',
-        aliases: ['progresiva', 'km', 'ubicacion', 'progini'] },
-      { key: 'term_days', label: 'Plazo (días)', required: true, type: 'number',
-        aliases: ['plazo', 'plazodias', 'dias', 'diasplazo'] },
+        aliases: ['tramo', 'seccion', 'ruta', 'sector'] },
+      { key: 'prog_start_m', label: 'Progresiva inicio', required: false, type: 'progresiva',
+        aliases: ['progresiva', 'progresivainicio', 'progini', 'kminicio', 'km', 'desde', 'ubicacion'] },
+      { key: 'prog_end_m', label: 'Progresiva fin', required: false, type: 'progresiva',
+        aliases: ['progresivafin', 'progfin', 'kmfin', 'hasta'] },
+      { key: 'side', label: 'Lado', required: false, type: 'lookup', lookup: 'side',
+        aliases: ['lado'], hint: 'LD, LI, LD-LI (ambos) o EJE' },
+      { key: 'term_days', label: 'Plazo (días)', required: false, type: 'number',
+        aliases: ['plazo', 'plazodias', 'dias', 'diasplazo'],
+        hint: 'Uno de los plazos del contrato; si falta, el plazo base del PCI' },
       { key: 'activity_code', label: 'Actividad', required: false, type: 'lookup', lookup: 'activity',
-        aliases: ['actividad', 'partida', 'solucion'] },
+        aliases: ['actividad', 'partida', 'solucion', 'codigo'] },
       { key: 'quantity', label: 'Cantidad', required: false, type: 'number',
         aliases: ['cantidad', 'metrado'] },
+      { key: 'notes', label: 'Observaciones', required: false, type: 'text',
+        aliases: ['observaciones', 'observacion', 'notas', 'nota', 'comentario'] },
+      { key: 'crew_code', label: 'Cuadrilla', required: false, type: 'lookup', lookup: 'crew',
+        aliases: ['cuadrilla', 'crew'], hint: 'Código o nombre de la cuadrilla que lo atiende' },
+      { key: 'received_on', label: 'Fecha de recepción', required: false, type: 'date',
+        aliases: ['fecharecepcion', 'recepcion', 'recibido'], hint: 'Solo para crear un PCI nuevo' },
     ],
     sample: [
-      { Item: 1, Descripcion: 'Alcantarilla obstruida al 60%', Tramo: 'T-01', Progresiva: '18+320', Plazo: 15, Actividad: 'MR-05', Cantidad: 1 },
-      { Item: 2, Descripcion: 'Señal preventiva P-1A ilegible', Tramo: 'T-02', Progresiva: '112+740', Plazo: 30, Actividad: 'MR-10', Cantidad: 1 },
+      { PCI: 'PCI-2026-050', Item: 1, Descripcion: 'Alcantarilla obstruida al 60%', Tramo: 'T-01', 'Progresiva inicio': '1318+320', 'Progresiva fin': '1318+340', Lado: 'LD', Plazo: 7, Actividad: 'COV-OD-001', Cantidad: 1, Observaciones: 'Limpiar entrada y salida', Cuadrilla: 'CUA-01' },
+      { PCI: 'PCI-2026-050', Item: 2, Descripcion: 'Señal preventiva P-1A ilegible', Tramo: 'T-02', 'Progresiva inicio': '1320+740', 'Progresiva fin': '', Lado: 'LI', Plazo: 3, Actividad: 'COV-SV-004', Cantidad: 1, Observaciones: '', Cuadrilla: 'CUA-01' },
     ],
   },
 
@@ -139,14 +154,21 @@ export function autoMap(headers: string[], fields: ImportField[]): Record<string
   const map: Record<string, string> = {}
   const used = new Set<string>()
 
+  // Primero las coincidencias exactas de todos los campos y recién después
+  // las parciales: si no, un campo que se evalúa antes (N.º de PCI) se queda
+  // por parecido con la columna «Número» que era exactamente la del ítem.
   for (const f of fields) {
     const candidates = [f.key, f.label, ...f.aliases].map(norm)
     const hit = headers.find((h) => !used.has(h) && candidates.includes(norm(h)))
     if (hit) {
       map[f.key] = hit
       used.add(hit)
-      continue
     }
+  }
+
+  for (const f of fields) {
+    if (map[f.key]) continue
+    const candidates = [f.key, f.label, ...f.aliases].map(norm)
     // coincidencia parcial
     const partial = headers.find(
       (h) => !used.has(h) && candidates.some((c) => norm(h).includes(c) || c.includes(norm(h)))
@@ -209,10 +231,11 @@ export function coerce(
       if (!table) return { value: String(value) }
       const key = norm(String(value))
       const found = table.get(key)
+      // Aunque el campo sea opcional, un valor escrito que no existe es un
+      // error: una errata en «Cuadrilla» dejaba el ítem sin asignar y nadie
+      // se enteraba. La celda vacía sí es válida (se resolvió arriba).
       if (!found) {
-        return field.required
-          ? { value: null, error: `${field.label}: "${value}" no existe en el catálogo` }
-          : { value: null }
+        return { value: null, error: `${field.label}: "${value}" no existe en el catálogo` }
       }
       return { value: found }
     }
