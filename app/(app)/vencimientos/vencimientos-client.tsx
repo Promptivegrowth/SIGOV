@@ -1,12 +1,13 @@
 'use client'
 
 import { UsoDeVehiculos } from '@/components/vehiculos/uso-de-vehiculos'
+import { EquipoDialog, HistorialEquipoDialog, usePuedeAdministrarEquipos } from '@/components/ssoma/equipo-dialog'
 import * as React from 'react'
 import Link from 'next/link'
 import { useQuery, useQueryClient } from '@tanstack/react-query'
 import {
   CalendarClock, FireExtinguisher, BriefcaseMedical, Droplets, ShieldAlert,
-  TriangleAlert, CheckCircle2, Wrench, Truck, CircleCheck,
+  TriangleAlert, CheckCircle2, Wrench, Truck, CircleCheck, Plus,
 } from 'lucide-react'
 import { createClient } from '@/lib/supabase/client'
 import { useSession } from '@/lib/hooks/use-session'
@@ -20,6 +21,7 @@ import {
   Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription, DialogFooter,
 } from '@/components/ui/dialog'
 import { SkeletonList } from '@/components/ui/skeleton'
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select'
 import { EmptyState } from '@/components/shared/misc'
 import { cn, fmtDate } from '@/lib/utils'
 import { toast } from 'sonner'
@@ -112,6 +114,12 @@ export function VencimientosClient() {
   // ilegible; se muestra de a tandas y el resto se pide.
   const [cuantos, setCuantos] = React.useState(40)
   const [renovando, setRenovando] = React.useState<any>(null)
+  // OBS-63: el inventario de equipos lo administra SSOMA
+  const puedeEquipos = usePuedeAdministrarEquipos()
+  const [editando, setEditando] = React.useState<{ equipo: any | null } | null>(null)
+  const [historial, setHistorial] = React.useState<any>(null)
+  const [buscarEquipo, setBuscarEquipo] = React.useState('')
+  const [cuadrillaEquipo, setCuadrillaEquipo] = React.useState('todas')
 
   const vencimientos = useQuery({
     queryKey: ['vencimientos', service.id],
@@ -152,6 +160,15 @@ export function VencimientosClient() {
       if (error) throw error
       return data ?? []
     },
+  })
+
+  const equiposVisibles = (equipos.data ?? []).filter((e: any) => {
+    if (cuadrillaEquipo === 'ninguna' && e.crew_id) return false
+    if (!['todas', 'ninguna'].includes(cuadrillaEquipo) && e.crew_id !== cuadrillaEquipo) return false
+    if (!buscarEquipo) return true
+    const t = buscarEquipo.toLowerCase()
+    return [e.code, TIPO_EQUIPO[e.kind], e.location, e.capacity, e.crew_name]
+      .some((x) => String(x ?? '').toLowerCase().includes(t))
   })
 
   const refrescar = () => {
@@ -315,9 +332,34 @@ export function VencimientosClient() {
 
           {/* ─── Equipos ──────────────────────────────────────────────── */}
           <TabsContent value="equipos" className="mt-4 space-y-2">
+            <div className="flex flex-wrap items-center gap-2">
+              <Input
+                id="buscar-equipo"
+                placeholder="Buscar por código, tipo o ubicación…"
+                value={buscarEquipo}
+                onChange={(e) => setBuscarEquipo(e.target.value)}
+                className="max-w-xs"
+              />
+              <Select value={cuadrillaEquipo} onValueChange={setCuadrillaEquipo}>
+                <SelectTrigger className="w-60"><SelectValue /></SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="todas">Todas las cuadrillas</SelectItem>
+                  <SelectItem value="ninguna">Sin cuadrilla (almacén u oficina)</SelectItem>
+                  {[...new Map((equipos.data ?? []).filter((e: any) => e.crew_id).map((e: any) => [e.crew_id, e.crew_name])).entries()]
+                    .map(([id, nombre]) => <SelectItem key={id as string} value={id as string}>{nombre as string}</SelectItem>)}
+                </SelectContent>
+              </Select>
+              <span className="text-muted-foreground ml-auto text-[12px]">{equiposVisibles.length} equipos</span>
+              {puedeEquipos && (
+                <Button size="sm" onClick={() => setEditando({ equipo: null })}>
+                  <Plus className="size-4" /> Nuevo equipo
+                </Button>
+              )}
+            </div>
+
             {equipos.isLoading && <SkeletonList rows={6} />}
 
-            {equipos.data?.map((e: any) => {
+            {equiposVisibles.map((e: any) => {
               const Icono = ICONO_EQUIPO[e.kind] ?? ShieldAlert
               return (
                 <Card key={e.id}>
@@ -350,9 +392,15 @@ export function VencimientosClient() {
                       </p>
                     </div>
 
-                    {can.manage && (
-                      <Button size="sm" onClick={() => setRenovando(e)}>Renovar</Button>
-                    )}
+                    <div className="flex gap-1.5">
+                      <Button size="sm" variant="ghost" onClick={() => setHistorial(e)}>Historial</Button>
+                      {puedeEquipos && (
+                        <>
+                          <Button size="sm" variant="outline" onClick={() => setEditando({ equipo: e })}>Editar</Button>
+                          <Button size="sm" onClick={() => setRenovando(e)}>Renovar</Button>
+                        </>
+                      )}
+                    </div>
                   </CardContent>
                 </Card>
               )
@@ -437,6 +485,14 @@ export function VencimientosClient() {
         onClose={() => setRenovando(null)}
         onHecho={() => { setRenovando(null); refrescar() }}
       />
+
+      <EquipoDialog
+        abierto={!!editando}
+        equipo={editando?.equipo ?? null}
+        onClose={() => setEditando(null)}
+        onHecho={() => { setEditando(null); refrescar() }}
+      />
+      <HistorialEquipoDialog equipo={historial} onClose={() => setHistorial(null)} />
     </>
   )
 }

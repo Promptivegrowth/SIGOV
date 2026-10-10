@@ -159,17 +159,19 @@ class SsomaRepositorio @Inject constructor(
     private val json = Json { ignoreUnknownKeys = true; encodeDefaults = true }
 
     /**
-     * Los equipos de la cuadrilla, más los que no tienen dueño asignado.
-     *
-     * Los del almacén y la oficina también se ven: si el capataz pasa por ahí
-     * y nota un extintor vencido, tiene que poder decirlo.
+     * Los equipos de la cuadrilla (OBS-61): el jefe solo ve y revisa los
+     * suyos; el inventario del contrato lo administra SSOMA desde la web.
+     * La base aplica lo mismo, así que el filtro aquí solo ahorra datos.
      */
     suspend fun equipos(servicioId: String, cuadrillaId: String?): List<EquipoDeSeguridad> =
         withContext(Dispatchers.IO) {
             runCatching {
                 val filas = supabase.postgrest.from("v_safety_equipment")
                     .select {
-                        filter { eq("service_id", servicioId) }
+                        filter {
+                            eq("service_id", servicioId)
+                            cuadrillaId?.let { eq("crew_id", it) }
+                        }
                         order("expires_on", Order.ASCENDING)
                         limit(300)
                     }

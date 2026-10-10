@@ -37,7 +37,6 @@ data class EstadoEquipos(
     val cargando: Boolean = true,
     val equipos: List<EquipoDeSeguridad> = emptyList(),
     val filtro: Urgencia? = null,
-    val soloMiCuadrilla: Boolean = true,
     val miCuadrillaId: String? = null,
     val cuadrilla: String = "",
     val guardando: Boolean = false,
