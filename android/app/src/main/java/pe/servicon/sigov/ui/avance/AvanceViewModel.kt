@@ -8,7 +8,12 @@ import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.flow.update
 import kotlinx.coroutines.launch
+import kotlinx.coroutines.flow.first
+import pe.servicon.sigov.datos.AvanceRepositorio
 import pe.servicon.sigov.datos.CampoRepositorio
+import pe.servicon.sigov.datos.Peru
+import pe.servicon.sigov.datos.ResumenAvance
+import pe.servicon.sigov.datos.sync.ColaRepositorio
 import pe.servicon.sigov.datos.SesionRepositorio
 import pe.servicon.sigov.datos.enCristiano
 import pe.servicon.sigov.datos.local.ParteDao
@@ -35,6 +40,16 @@ data class EstadoAvance(
     val pciAbiertos: Int = 0,
     val partidas: List<AvanceDePartida> = emptyList(),
     val error: String? = null,
+    /** 0 = esta semana, -1 = la anterior… */
+    val semana: Int = 0,
+    val cargandoSemana: Boolean = true,
+    val resumen: ResumenAvance? = null,
+    /** Si el resumen viene de la copia guardada, desde cuándo (milisegundos). */
+    val copiaDe: Long? = null,
+    val errorSemana: String? = null,
+    /** Lo anotado en el celular que todavía no llegó a la nube. */
+    val porSincronizar: Int = 0,
+    val conError: Int = 0,
 ) {
     /**
      * Cumplimiento por partidas cerradas, no por metrado.
@@ -52,12 +67,60 @@ class AvanceViewModel @Inject constructor(
     private val campo: CampoRepositorio,
     private val sesion: SesionRepositorio,
     private val partes: ParteDao,
+    private val avance: AvanceRepositorio,
+    private val cola: ColaRepositorio,
 ) : ViewModel() {
 
     private val _estado = MutableStateFlow(EstadoAvance())
     val estado: StateFlow<EstadoAvance> = _estado.asStateFlow()
 
-    init { cargar() }
+    init {
+        cargar()
+        cargarSemana()
+    }
+
+    /** Cambia la semana del resumen: -1 la anterior, +1 la siguiente (sin pasar de la actual). */
+    fun moverSemana(paso: Int) {
+        val nueva = (_estado.value.semana + paso).coerceAtMost(0)
+        if (nueva == _estado.value.semana) return
+        _estado.update { it.copy(semana = nueva) }
+        cargarSemana()
+    }
+
+    fun refrescar() {
+        cargar()
+        cargarSemana()
+    }
+
+    private fun cargarSemana() {
+        val semana = _estado.value.semana
+        _estado.update { it.copy(cargandoSemana = true, errorSemana = null) }
+        viewModelScope.launch {
+            runCatching {
+                val cuadrilla = sesion.cuadrilla()
+                    ?: error("Tu usuario no dirige ninguna cuadrilla. Avisa al coordinador.")
+                val (desde, hasta) = AvanceRepositorio.semanaDe(Peru.hoy().plusWeeks(semana.toLong()))
+                val r = avance.resumen(cuadrilla.servicioId, cuadrilla.id, desde, hasta)
+                val pendientes = cola.pendientes.first()
+                val errores = cola.conError.first()
+                Triple(r, pendientes, errores)
+            }.onSuccess { (r, pendientes, errores) ->
+                if (_estado.value.semana != semana) return@onSuccess
+                _estado.update {
+                    it.copy(
+                        cargandoSemana = false,
+                        resumen = r?.resumen,
+                        copiaDe = r?.takeIf { x -> !x.fresco }?.guardadoEn,
+                        errorSemana = if (r == null) "Sin señal y sin una copia guardada de esta semana." else null,
+                        porSincronizar = pendientes,
+                        conError = errores,
+                    )
+                }
+            }.onFailure { f ->
+                _estado.update { it.copy(cargandoSemana = false, errorSemana = f.enCristiano()) }
+            }
+        }
+    }
 
     private fun cargar() {
         viewModelScope.launch {

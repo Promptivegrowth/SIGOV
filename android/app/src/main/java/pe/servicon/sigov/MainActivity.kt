@@ -228,6 +228,10 @@ class MainActivity : ComponentActivity() {
                             alAbrirParte = { nav.navigate("parte") },
                             alAbrirEvidencias = { nav.navigate("evidencias") },
                             alAbrirPci = { nav.navigate("pci") },
+                            alAbrirProgramacion = { nav.navigate("programacion") },
+                            alAbrirCaja = { nav.navigate("caja") },
+                            alAbrirMateriales = { nav.navigate("materiales") },
+                            alAbrirSincronizacion = { nav.navigate("sincronizacion") },
                         )
                     }
                     composable(
