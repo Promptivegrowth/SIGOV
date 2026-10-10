@@ -31,12 +31,18 @@ const MOVIMIENTO_ESTADO = {
   anulado:    { label: 'Anulado',     variant: 'outline' as const },
 }
 
+/** Los seis estados que pidió Elvis (OBS-41). «Atendido» es el depósito hecho. */
 const SOLICITUD_ESTADO = {
-  solicitado: { label: 'Solicitado', variant: 'warning' as const },
-  aprobado:   { label: 'Aprobado',   variant: 'info' as const },
-  depositado: { label: 'Depositado', variant: 'success' as const },
-  rechazado:  { label: 'Rechazado',  variant: 'destructive' as const },
+  solicitado:    { label: 'Solicitado',    variant: 'warning' as const },
+  en_evaluacion: { label: 'En evaluación', variant: 'info' as const },
+  aprobado:      { label: 'Aprobado',      variant: 'info' as const },
+  observado:     { label: 'Observado',     variant: 'destructive' as const },
+  depositado:    { label: 'Atendido',      variant: 'success' as const },
+  rechazado:     { label: 'Rechazado',     variant: 'destructive' as const },
 }
+
+/** Lo que administración todavía tiene que mover. */
+const SOLICITUD_ABIERTA = ['solicitado', 'en_evaluacion', 'aprobado']
 
 const soles = (n: number) =>
   'S/ ' + new Intl.NumberFormat('es-PE', { minimumFractionDigits: 2, maximumFractionDigits: 2 }).format(n ?? 0)
@@ -104,7 +110,10 @@ export function CajaClient() {
         .order('created_at', { ascending: false })
         .limit(100)
       if (error) throw error
-      return data ?? []
+      // Lo abierto arriba y, dentro de eso, lo urgente primero
+      const peso = (s: any) =>
+        (SOLICITUD_ABIERTA.includes(s.status) ? 0 : 2) + (s.priority === 'urgente' ? 0 : 1)
+      return [...(data ?? [])].sort((a: any, b: any) => peso(a) - peso(b))
     },
   })
 
@@ -142,7 +151,7 @@ export function CajaClient() {
   }
 
   const pendientes = movimientos.data?.filter((m: any) => m.status === 'registrado') ?? []
-  const solicitudesAbiertas = solicitudes.data?.filter((s: any) => s.status === 'solicitado') ?? []
+  const solicitudesAbiertas = solicitudes.data?.filter((s: any) => SOLICITUD_ABIERTA.includes(s.status)) ?? []
 
   return (
     <>
@@ -299,11 +308,15 @@ export function CajaClient() {
                       <div className="flex flex-wrap items-center gap-2">
                         <p className="font-medium">{s.reason}</p>
                         <Badge variant={estado?.variant ?? 'outline'}>{estado?.label ?? s.status}</Badge>
+                        {s.priority === 'urgente' && <Badge variant="destructive">Urgente</Badge>}
                       </div>
                       <p className="text-muted-foreground mt-0.5 text-[13px]">
                         {[
                           s.cash_boxes?.code,
                           fmtDate(s.created_at),
+                          s.needed_by && `Para el ${fmtDate(s.needed_by)}`,
+                          s.approved_amount != null && Number(s.approved_amount) !== Number(s.amount)
+                            && `${s.status === 'depositado' ? 'Depositado' : 'Aprobado'} ${soles(Number(s.approved_amount))}`,
                           s.bank_reference && `Operación ${s.bank_reference}`,
                         ].filter(Boolean).join(' · ')}
                       </p>
@@ -314,7 +327,7 @@ export function CajaClient() {
 
                     <p className="text-lg font-bold tabular-nums">{soles(Number(s.amount))}</p>
 
-                    {can.manage && s.status === 'solicitado' && (
+                    {can.manage && !['depositado', 'rechazado'].includes(s.status) && (
                       <Button size="sm" onClick={() => setResolviendo(s)}>
                         <Banknote /> Responder
                       </Button>
@@ -452,13 +465,13 @@ function RevisionDialog({
 /**
  * Responder una solicitud de depósito.
  *
- * Aprobar no es solo cambiar un estado: si se depositó, el dinero tiene que
- * entrar a la caja como movimiento, o el saldo del capataz no sube.
+ * Administración la mueve por sus estados —en evaluación, aprobada,
+ * observada, rechazada— hasta atenderla. Atender no es solo cambiar un
+ * estado: el dinero entra a la caja como movimiento en la misma operación,
+ * o el saldo del capataz no sube.
  */
 function DepositoDialog({
   solicitud,
-  profileId,
-  serviceId,
   onClose,
   onHecho,
 }: {
@@ -475,82 +488,61 @@ function DepositoDialog({
   const [enviando, setEnviando] = React.useState(false)
 
   React.useEffect(() => {
-    setMonto(solicitud ? String(solicitud.amount) : '')
+    setMonto(solicitud ? String(solicitud.approved_amount ?? solicitud.amount) : '')
     setOperacion('')
     setNota('')
   }, [solicitud?.id])
 
   if (!solicitud) return null
 
+  const importe = () => {
+    const n = Number(monto.replace(',', '.'))
+    return Number.isFinite(n) && n > 0 ? n : null
+  }
+
   const depositar = async () => {
-    const importe = Number(monto.replace(',', '.'))
-    if (!Number.isFinite(importe) || importe <= 0) {
-      toast.error('Escribe el monto depositado')
-      return
-    }
-    if (!operacion.trim()) {
-      toast.error('Falta el número de operación del abono')
-      return
-    }
+    const n = importe()
+    if (n == null) { toast.error('Escribe el monto depositado'); return }
+    if (!operacion.trim()) { toast.error('Falta el número de operación del abono'); return }
     setEnviando(true)
-
-    // El ingreso entra ya aprobado: administración es quien lo hizo
-    const { data: movimiento, error: errMov } = await sb
-      .from('cash_movements')
-      .insert({
-        service_id: serviceId,
-        cash_box_id: solicitud.cash_box_id,
-        kind: 'deposito',
-        status: 'aprobado',
-        amount: importe,
-        description: `Depósito a caja · ${solicitud.reason}`,
-        receipt_kind: 'recibo',
-        receipt_number: operacion.trim(),
-        created_by: profileId,
-        reviewed_by: profileId,
-        reviewed_at: new Date().toISOString(),
-      })
-      .select('id')
-      .single()
-
-    if (errMov) { toast.error(mensajeAmigable(errMov)); setEnviando(false); return }
-
-    const { error } = await sb
-      .from('deposit_requests')
-      .update({
-        status: 'depositado',
-        approved_amount: importe,
-        bank_reference: operacion.trim(),
-        resolution_note: nota.trim() || null,
-        resolved_by: profileId,
-        resolved_at: new Date().toISOString(),
-        movement_id: movimiento.id,
-      })
-      .eq('id', solicitud.id)
-
+    const { error } = await sb.rpc('atender_solicitud_deposito', {
+      p_id: solicitud.id,
+      p_monto: n,
+      p_operacion: operacion.trim(),
+      p_nota: nota.trim() || undefined,
+    })
     setEnviando(false)
     if (error) { toast.error(mensajeAmigable(error)); return }
     toast.success('Depósito registrado. El capataz verá el saldo actualizado.')
     onHecho()
   }
 
-  const rechazar = async () => {
-    if (!nota.trim()) { toast.error('Escribe por qué se rechaza'); return }
+  const mover = async (estado: 'en_evaluacion' | 'aprobado' | 'observado' | 'rechazado') => {
+    if ((estado === 'observado' || estado === 'rechazado') && !nota.trim()) {
+      toast.error(estado === 'observado' ? 'Escribe qué debe corregir' : 'Escribe por qué se rechaza')
+      return
+    }
+    const cambios: { status: typeof estado; resolution_note?: string; approved_amount?: number } = { status: estado }
+    if (nota.trim()) cambios.resolution_note = nota.trim()
+    if (estado === 'aprobado') {
+      const n = importe()
+      if (n == null) { toast.error('Escribe el monto que apruebas'); return }
+      cambios.approved_amount = n
+    }
     setEnviando(true)
-    const { error } = await sb
-      .from('deposit_requests')
-      .update({
-        status: 'rechazado',
-        resolution_note: nota.trim(),
-        resolved_by: profileId,
-        resolved_at: new Date().toISOString(),
-      })
-      .eq('id', solicitud.id)
+    const { error } = await sb.from('deposit_requests').update(cambios).eq('id', solicitud.id)
     setEnviando(false)
     if (error) { toast.error(mensajeAmigable(error)); return }
-    toast.success('Solicitud rechazada')
+    toast.success({
+      en_evaluacion: 'Solicitud en evaluación',
+      aprobado: 'Solicitud aprobada. Falta registrar el depósito.',
+      observado: 'Solicitud observada. El capataz la corregirá desde su celular.',
+      rechazado: 'Solicitud rechazada',
+    }[estado])
     onHecho()
   }
+
+  const estado = SOLICITUD_ESTADO[solicitud.status as keyof typeof SOLICITUD_ESTADO]
 
   return (
     <Dialog open onOpenChange={(o) => !o && onClose()}>
@@ -559,14 +551,15 @@ function DepositoDialog({
           <DialogTitle>Responder solicitud</DialogTitle>
           <DialogDescription>
             {solicitud.reason} · pidió {soles(Number(solicitud.amount))}
+            {solicitud.priority === 'urgente' && ' · URGENTE'} · {estado?.label ?? solicitud.status}
           </DialogDescription>
         </DialogHeader>
 
-        <Field label="Monto depositado">
+        <Field label="Monto" hint="El que apruebas o el que depositaste">
           <Input value={monto} onChange={(e) => setMonto(e.target.value)} inputMode="decimal" />
         </Field>
 
-        <Field label="Número de operación" hint="El que devuelve el banco al hacer el abono">
+        <Field label="Número de operación" hint="Solo para registrar el depósito">
           <Input
             value={operacion}
             onChange={(e) => setOperacion(e.target.value)}
@@ -574,16 +567,34 @@ function DepositoDialog({
           />
         </Field>
 
-        <Field label="Nota" hint="Obligatoria si rechazas la solicitud">
+        <Field label="Nota para el capataz" hint="Obligatoria si la observas o la rechazas">
           <Textarea value={nota} onChange={(e) => setNota(e.target.value)} rows={2} />
         </Field>
 
-        <DialogFooter className="flex-col gap-2 sm:flex-row">
-          <Button variant="outline" disabled={enviando} onClick={rechazar}>
+        <div className="flex flex-wrap gap-2">
+          {solicitud.status === 'solicitado' && (
+            <Button size="sm" variant="outline" disabled={enviando} onClick={() => mover('en_evaluacion')}>
+              <Eye /> En evaluación
+            </Button>
+          )}
+          {solicitud.status !== 'aprobado' && (
+            <Button size="sm" variant="outline" disabled={enviando} onClick={() => mover('aprobado')}>
+              <Check /> Aprobar
+            </Button>
+          )}
+          {solicitud.status !== 'observado' && (
+            <Button size="sm" variant="outline" disabled={enviando} onClick={() => mover('observado')}>
+              <AlertTriangle /> Observar
+            </Button>
+          )}
+          <Button size="sm" variant="outline" disabled={enviando} onClick={() => mover('rechazado')}>
             <X /> Rechazar
           </Button>
+        </div>
+
+        <DialogFooter>
           <Button disabled={enviando} onClick={depositar}>
-            <Check /> Registrar depósito
+            <Banknote /> Registrar depósito
           </Button>
         </DialogFooter>
       </DialogContent>

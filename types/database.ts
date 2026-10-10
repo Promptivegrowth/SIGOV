@@ -1290,6 +1290,7 @@ export type Database = {
           id: string
           movement_id: string | null
           needed_by: string | null
+          priority: string
           reason: string
           resolution_note: string | null
           resolved_at: string | null
@@ -1310,6 +1311,7 @@ export type Database = {
           id?: string
           movement_id?: string | null
           needed_by?: string | null
+          priority?: string
           reason: string
           resolution_note?: string | null
           resolved_at?: string | null
@@ -1330,6 +1332,7 @@ export type Database = {
           id?: string
           movement_id?: string | null
           needed_by?: string | null
+          priority?: string
           reason?: string
           resolution_note?: string | null
           resolved_at?: string | null
@@ -6626,6 +6629,15 @@ export type Database = {
         }
         Returns: Json
       }
+      atender_solicitud_deposito: {
+        Args: {
+          p_id: string
+          p_monto: number
+          p_nota?: string
+          p_operacion: string
+        }
+        Returns: Json
+      }
       buscar: {
         Args: { p_limit?: number; p_q: string; p_service_id: string }
         Returns: Json
@@ -6654,6 +6666,15 @@ export type Database = {
       }
       clear_section_geometry: { Args: { p_section_id: string }; Returns: Json }
       conductor_apto: { Args: { p_respuestas: Json }; Returns: boolean }
+      corregir_solicitud_deposito: {
+        Args: {
+          p_id: string
+          p_monto: number
+          p_motivo: string
+          p_prioridad?: string
+        }
+        Returns: undefined
+      }
       crear_pedido: {
         Args: {
           p_aprobar?: boolean
@@ -7111,7 +7132,9 @@ export type Database = {
       cash_movement_status: "registrado" | "observado" | "aprobado" | "anulado"
       deposit_request_status:
         | "solicitado"
+        | "en_evaluacion"
         | "aprobado"
+        | "observado"
         | "depositado"
         | "rechazado"
       document_kind:
@@ -7380,7 +7403,9 @@ export const Constants = {
       cash_movement_status: ["registrado", "observado", "aprobado", "anulado"],
       deposit_request_status: [
         "solicitado",
+        "en_evaluacion",
         "aprobado",
+        "observado",
         "depositado",
         "rechazado",
       ],

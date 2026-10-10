@@ -64,6 +64,45 @@ data class Movimiento(
     @SerialName("review_note") val observacion: String? = null,
 )
 
+/**
+ * Una solicitud de depósito y lo que respondió administración (OBS-41).
+ *
+ * `status` es el de la base, más dos propios del celular: «en_cola» (pedida
+ * sin señal) y «corrigiendo» (corregida sin señal).
+ */
+@Serializable
+data class PedidoDeDeposito(
+    val id: String,
+    @SerialName("client_id") val clientId: String? = null,
+    @SerialName("cash_box_id") val cajaId: String? = null,
+    val status: String,
+    val amount: Double,
+    val reason: String,
+    val priority: String = "normal",
+    @SerialName("needed_by") val paraCuando: String? = null,
+    @SerialName("approved_amount") val montoAprobado: Double? = null,
+    @SerialName("resolution_note") val nota: String? = null,
+    @SerialName("bank_reference") val operacion: String? = null,
+    @SerialName("created_at") val creado: String = "",
+    @SerialName("resolved_at") val respondido: String? = null,
+) {
+    val urgente: Boolean get() = priority == "urgente"
+    /** Solo una observada se corrige: es lo que administración pidió. */
+    val corregible: Boolean get() = status == "observado"
+}
+
+/** Los estados como los nombró Elvis; «depositado» es «Atendido». */
+val ESTADOS_DE_DEPOSITO = mapOf(
+    "en_cola" to "Esperando señal",
+    "corrigiendo" to "Corrección por enviar",
+    "solicitado" to "Solicitado",
+    "en_evaluacion" to "En evaluación",
+    "aprobado" to "Aprobado",
+    "depositado" to "Atendido",
+    "observado" to "Observado",
+    "rechazado" to "Rechazado",
+)
+
 /** Los rubros con los que se clasifica un gasto de obra. */
 val RUBROS_DE_GASTO = listOf(
     "Combustible",
@@ -255,12 +294,101 @@ class CajaRepositorio @Inject constructor(
         clientId
     }
 
+    /**
+     * Mis solicitudes de depósito: las de la nube, las que siguen en el
+     * equipo y las correcciones que todavía no salieron.
+     */
+    suspend fun misSolicitudes(cajaId: String, servicioId: String): List<PedidoDeDeposito> =
+        withContext(Dispatchers.IO) {
+            val nube = runCatching {
+                val filas = supabase.postgrest.from("deposit_requests")
+                    .select {
+                        filter {
+                            eq("cash_box_id", cajaId)
+                            exact("deleted_at", null)
+                        }
+                        order("created_at", Order.DESCENDING)
+                        limit(50)
+                    }
+                    .decodeList<JsonObject>()
+                guardarCopia("deposit_requests", servicioId, filas)
+                filas.map { json.decodeFromString<PedidoDeDeposito>(it.toString()) }
+            }.getOrElse {
+                catalogo.de("deposit_requests", servicioId)
+                    .mapNotNull { runCatching { json.decodeFromString<PedidoDeDeposito>(it.datos) }.getOrNull() }
+                    .filter { it.cajaId == cajaId }
+                    .sortedByDescending { it.creado }
+            }
+
+            fun texto(cuerpo: JsonObject, clave: String) =
+                cuerpo[clave]?.toString()?.trim('"')?.takeIf { it != "null" }
+
+            // Pedidas sin señal: todavía no existen en la nube
+            val confirmados = nube.mapNotNull { it.clientId }.toSet()
+            val enCola = colaDao.sinConfirmarDe("deposit_requests")
+                .filter { it.clientId !in confirmados }
+                .mapNotNull { envio ->
+                    runCatching {
+                        val c = json.parseToJsonElement(envio.cuerpo) as JsonObject
+                        if (texto(c, "cash_box_id") != cajaId) return@runCatching null
+                        PedidoDeDeposito(
+                            id = envio.clientId,
+                            clientId = envio.clientId,
+                            cajaId = cajaId,
+                            status = "en_cola",
+                            amount = texto(c, "amount")?.toDoubleOrNull() ?: return@runCatching null,
+                            reason = texto(c, "reason") ?: envio.etiqueta,
+                            priority = texto(c, "priority") ?: "normal",
+                            paraCuando = texto(c, "needed_by"),
+                            creado = java.time.Instant.ofEpochMilli(envio.creadoEn).toString(),
+                        )
+                    }.getOrNull()
+                }
+
+            // Corregidas sin señal: se muestran ya corregidas
+            val correcciones = colaDao.sinConfirmarDe(TABLA_CORRECCION)
+                .mapNotNull { envio ->
+                    runCatching { json.parseToJsonElement(envio.cuerpo) as JsonObject }.getOrNull()
+                }
+                .associateBy { texto(it, "p_id") }
+
+            enCola + nube.map { p ->
+                val c = correcciones[p.id] ?: return@map p
+                p.copy(
+                    status = "corrigiendo",
+                    amount = texto(c, "p_monto")?.toDoubleOrNull() ?: p.amount,
+                    reason = texto(c, "p_motivo") ?: p.reason,
+                    priority = texto(c, "p_prioridad") ?: p.priority,
+                )
+            }
+        }
+
+    /** Corrige una solicitud observada. Viaja con la cola, como todo. */
+    suspend fun corregirDeposito(
+        pedido: PedidoDeDeposito,
+        importe: Double,
+        motivo: String,
+        prioridad: String,
+    ): String = withContext(Dispatchers.IO) {
+        cola.encolar(
+            tabla = TABLA_CORRECCION,
+            etiqueta = "Corrección de depósito · S/ $importe",
+            cuerpo = buildJsonObject {
+                put("p_id", pedido.id)
+                put("p_monto", importe)
+                put("p_motivo", motivo)
+                put("p_prioridad", prioridad)
+            },
+        )
+    }
+
     /** Pide plata a administración. Queda con fecha y motivo, no por WhatsApp. */
     suspend fun pedirDeposito(
         caja: Caja,
         importe: Double,
         motivo: String,
         paraCuando: String?,
+        prioridad: String = "normal",
     ): String = withContext(Dispatchers.IO) {
         cola.encolar(
             tabla = "deposit_requests",
@@ -271,10 +399,15 @@ class CajaRepositorio @Inject constructor(
                 put("status", "solicitado")
                 put("amount", importe)
                 put("reason", motivo)
+                put("priority", prioridad)
                 paraCuando?.let { put("needed_by", it) }
                 supabase.usuarioActual()?.let { put("created_by", it) }
             },
         )
+    }
+
+    private companion object {
+        const val TABLA_CORRECCION = "rpc:corregir_solicitud_deposito"
     }
 
     private suspend fun guardarCopia(tabla: String, servicioId: String, filas: List<JsonObject>) {

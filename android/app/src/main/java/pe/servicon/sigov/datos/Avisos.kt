@@ -59,6 +59,7 @@ data class Aviso(
             type.startsWith("parte") -> "parte"
             type.startsWith("ssoma") -> "jornada"
             type.startsWith("vehiculo") -> "vehiculos"
+            type.startsWith("deposito") -> "caja"
             else -> null
         }
 }

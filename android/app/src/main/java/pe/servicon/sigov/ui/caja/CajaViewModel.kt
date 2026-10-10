@@ -12,6 +12,7 @@ import kotlinx.coroutines.launch
 import pe.servicon.sigov.datos.Caja
 import pe.servicon.sigov.datos.CajaRepositorio
 import pe.servicon.sigov.datos.Movimiento
+import pe.servicon.sigov.datos.PedidoDeDeposito
 import pe.servicon.sigov.datos.SesionRepositorio
 import pe.servicon.sigov.datos.enCristiano
 import java.io.File
@@ -23,6 +24,8 @@ data class EstadoCaja(
     val movimientos: List<Movimiento> = emptyList(),
     /** Anotados en el equipo y todavía sin subir. */
     val enCola: List<Movimiento> = emptyList(),
+    /** Mis solicitudes de depósito, con su estado (OBS-41). */
+    val solicitudes: List<PedidoDeDeposito> = emptyList(),
     /** Si el saldo lo acaba de calcular el servidor o viene de la copia. */
     val saldoFresco: Boolean = true,
     val guardando: Boolean = false,
@@ -84,6 +87,7 @@ class CajaViewModel @Inject constructor(
                     ?: error("Todavía no te abrieron caja chica. Pídesela a administración.")
                 val movimientos = caja.movimientos(mia.caja.id, cuadrilla.servicioId)
                 val pendientes = caja.enCola(movimientos)
+                val solicitudes = caja.misSolicitudes(mia.caja.id, cuadrilla.servicioId)
                 val minimo = campo.ajustes(cuadrilla.servicioId).caja.montoMinimoComprobante
                 _estado.update {
                     it.copy(
@@ -93,6 +97,7 @@ class CajaViewModel @Inject constructor(
                         saldoFresco = mia.fresca,
                         movimientos = movimientos,
                         enCola = pendientes,
+                        solicitudes = solicitudes,
                     )
                 }
             }.onFailure { fallo ->
@@ -139,19 +144,35 @@ class CajaViewModel @Inject constructor(
         }
     }
 
-    fun pedirDeposito(importe: Double, motivo: String, alTerminar: () -> Unit) {
+    fun pedirDeposito(importe: Double, motivo: String, prioridad: String, alTerminar: () -> Unit) {
         val mia = _estado.value.caja ?: return
         _estado.update { it.copy(guardando = true) }
         viewModelScope.launch {
-            runCatching { caja.pedirDeposito(mia, importe, motivo, null) }
+            runCatching { caja.pedirDeposito(mia, importe, motivo, null, prioridad) }
                 .onSuccess {
                     _estado.update {
                         it.copy(
                             guardando = false,
-                            aviso = "Solicitud enviada. Administración la verá en la web.",
+                            aviso = "Solicitud registrada. Sigue su estado en «Mis solicitudes».",
                         )
                     }
                     alTerminar()
+                    cargar()
+                }
+                .onFailure { fallo ->
+                    _estado.update { it.copy(guardando = false, error = fallo.enCristiano()) }
+                }
+        }
+    }
+
+    fun corregirDeposito(pedido: PedidoDeDeposito, importe: Double, motivo: String, prioridad: String, alTerminar: () -> Unit) {
+        _estado.update { it.copy(guardando = true) }
+        viewModelScope.launch {
+            runCatching { caja.corregirDeposito(pedido, importe, motivo, prioridad) }
+                .onSuccess {
+                    _estado.update { it.copy(guardando = false, aviso = "Corrección registrada. Vuelve a administración.") }
+                    alTerminar()
+                    cargar()
                 }
                 .onFailure { fallo ->
                     _estado.update { it.copy(guardando = false, error = fallo.enCristiano()) }

@@ -21,7 +21,11 @@ import androidx.compose.ui.unit.dp
 import androidx.hilt.navigation.compose.hiltViewModel
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import pe.servicon.sigov.datos.Caja
+import pe.servicon.sigov.datos.ESTADOS_DE_DEPOSITO
 import pe.servicon.sigov.datos.Movimiento
+import pe.servicon.sigov.datos.PedidoDeDeposito
+import pe.servicon.sigov.datos.Peru
+import java.time.format.DateTimeFormatter
 import pe.servicon.sigov.ui.componentes.ArmazonDeApartado
 import pe.servicon.sigov.ui.theme.Marca
 import pe.servicon.sigov.ui.theme.Semaforo
@@ -44,6 +48,7 @@ fun PantallaCaja(
     val avisos = remember { SnackbarHostState() }
     var formularioAbierto by remember { mutableStateOf(false) }
     var solicitudAbierta by remember { mutableStateOf(false) }
+    var corrigiendo by remember { mutableStateOf<PedidoDeDeposito?>(null) }
 
     LaunchedEffect(estado.aviso, estado.error) {
         (estado.aviso ?: estado.error)?.let {
@@ -93,6 +98,22 @@ fun PantallaCaja(
                 verticalArrangement = Arrangement.spacedBy(12.dp),
             ) {
                 item { Saldo(estado, alPedirDeposito = { solicitudAbierta = true }) }
+
+                // OBS-41: lo pedido no desaparece con el aviso; queda aquí con su estado
+                if (estado.solicitudes.isNotEmpty()) {
+                    item {
+                        Text(
+                            "MIS SOLICITUDES DE DEPÓSITO",
+                            style = MaterialTheme.typography.labelMedium,
+                            fontWeight = FontWeight.SemiBold,
+                            color = MaterialTheme.colorScheme.onSurfaceVariant,
+                            modifier = Modifier.padding(top = 4.dp),
+                        )
+                    }
+                    items(estado.solicitudes, key = { "dep-" + it.id }) { pedido ->
+                        SolicitudFila(pedido, alCorregir = { corrigiendo = pedido })
+                    }
+                }
 
                 if (estado.todos.isEmpty()) {
                     item {
@@ -147,11 +168,120 @@ fun PantallaCaja(
             sugerido = estado.caja?.let { (it.saldoMinimo * 5).coerceAtLeast(500.0) } ?: 500.0,
             guardando = estado.guardando,
             alCerrar = { solicitudAbierta = false },
-            alEnviar = { importe, motivo ->
-                vm.pedirDeposito(importe, motivo) { solicitudAbierta = false }
+            alEnviar = { importe, motivo, prioridad ->
+                vm.pedirDeposito(importe, motivo, prioridad) { solicitudAbierta = false }
             },
         )
     }
+
+    corrigiendo?.let { pedido ->
+        SolicitudDeposito(
+            sugerido = pedido.amount,
+            guardando = estado.guardando,
+            alCerrar = { corrigiendo = null },
+            alEnviar = { importe, motivo, prioridad ->
+                vm.corregirDeposito(pedido, importe, motivo, prioridad) { corrigiendo = null }
+            },
+            motivoInicial = pedido.reason,
+            prioridadInicial = pedido.priority,
+            observacion = pedido.nota,
+            corrigiendo = true,
+        )
+    }
+}
+
+/** El color de cada estado: lo que espera respuesta en naranja, lo cerrado en verde o rojo. */
+@Composable
+private fun colorDeSolicitud(estado: String): Color = when (estado) {
+    "depositado" -> Marca.VerdeBandera
+    "aprobado", "en_evaluacion" -> Marca.Azul
+    "observado" -> Semaforo.PorVencer
+    "rechazado" -> Semaforo.Vencido
+    "en_cola", "corrigiendo", "solicitado" -> Marca.Naranja
+    else -> MaterialTheme.colorScheme.onSurfaceVariant
+}
+
+@Composable
+private fun SolicitudFila(pedido: PedidoDeDeposito, alCorregir: () -> Unit) {
+    val tono = colorDeSolicitud(pedido.status)
+    val fecha = runCatching {
+        java.time.OffsetDateTime.parse(pedido.creado.replace(" ", "T"))
+            .atZoneSameInstant(Peru.zona).format(DateTimeFormatter.ofPattern("dd/MM/yyyy HH:mm"))
+    }.getOrElse {
+        runCatching {
+            java.time.Instant.parse(pedido.creado).atZone(Peru.zona)
+                .format(DateTimeFormatter.ofPattern("dd/MM/yyyy HH:mm"))
+        }.getOrDefault(pedido.creado.take(10))
+    }
+
+    Card(
+        shape = RoundedCornerShape(14.dp),
+        colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface),
+        elevation = CardDefaults.cardElevation(defaultElevation = 0.dp),
+        border = CardDefaults.outlinedCardBorder(),
+        modifier = Modifier.fillMaxWidth(),
+    ) {
+        Column(Modifier.padding(16.dp)) {
+            Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.Top) {
+                Column(Modifier.weight(1f)) {
+                    Text(pedido.reason, style = MaterialTheme.typography.titleSmall, fontWeight = FontWeight.SemiBold)
+                    Text(
+                        listOfNotNull(fecha, pedido.paraCuando?.let { "para el $it" }).joinToString(" · "),
+                        style = MaterialTheme.typography.bodySmall,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant,
+                    )
+                }
+                Column(horizontalAlignment = Alignment.End) {
+                    Text(soles(pedido.amount), style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.SemiBold)
+                    pedido.montoAprobado?.takeIf { it != pedido.amount }?.let {
+                        Text(
+                            (if (pedido.status == "depositado") "depositado " else "aprobado ") + soles(it),
+                            style = MaterialTheme.typography.labelSmall,
+                            color = tono,
+                        )
+                    }
+                }
+            }
+            Spacer(Modifier.height(8.dp))
+            Row(horizontalArrangement = Arrangement.spacedBy(6.dp), verticalAlignment = Alignment.CenterVertically) {
+                Etiqueta(ESTADOS_DE_DEPOSITO[pedido.status] ?: pedido.status, tono)
+                Etiqueta(
+                    if (pedido.urgente) "Urgente" else "Normal",
+                    if (pedido.urgente) Semaforo.Urgente else MaterialTheme.colorScheme.onSurfaceVariant,
+                )
+            }
+            val detalle = listOfNotNull(
+                pedido.nota?.takeIf { pedido.status != "solicitado" && pedido.status != "corrigiendo" },
+                pedido.operacion?.let { "Operación $it" },
+            )
+            if (detalle.isNotEmpty()) {
+                Spacer(Modifier.height(6.dp))
+                Text(
+                    detalle.joinToString(" · "),
+                    style = MaterialTheme.typography.bodySmall,
+                    color = if (pedido.status == "observado" || pedido.status == "rechazado") tono
+                    else MaterialTheme.colorScheme.onSurfaceVariant,
+                )
+            }
+            if (pedido.corregible) {
+                Spacer(Modifier.height(8.dp))
+                OutlinedButton(onClick = alCorregir, shape = RoundedCornerShape(10.dp)) { Text("Corregir y reenviar") }
+            }
+        }
+    }
+}
+
+@Composable
+private fun Etiqueta(texto: String, tono: Color) {
+    Text(
+        texto,
+        style = MaterialTheme.typography.labelSmall,
+        fontWeight = FontWeight.SemiBold,
+        color = tono,
+        modifier = Modifier
+            .background(tono.copy(alpha = 0.10f), RoundedCornerShape(8.dp))
+            .padding(horizontal = 8.dp, vertical = 4.dp),
+    )
 }
 
 @Composable

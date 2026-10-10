@@ -232,28 +232,47 @@ fun FormularioGasto(
     }
 }
 
-/** Pedir plata, con motivo y monto, para que quede constancia. */
+/**
+ * Pedir plata, con motivo, monto y prioridad, para que quede constancia.
+ * Con [observacion] es la corrección de una solicitud observada.
+ */
+@OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun SolicitudDeposito(
     sugerido: Double,
     guardando: Boolean,
     alCerrar: () -> Unit,
-    alEnviar: (importe: Double, motivo: String) -> Unit,
+    alEnviar: (importe: Double, motivo: String, prioridad: String) -> Unit,
+    motivoInicial: String = "",
+    prioridadInicial: String = "normal",
+    observacion: String? = null,
+    corrigiendo: Boolean = false,
 ) {
-    var importe by remember { mutableStateOf(sugerido.toInt().toString()) }
-    var motivo by remember { mutableStateOf("") }
+    var importe by remember {
+        mutableStateOf(if (sugerido % 1.0 == 0.0) sugerido.toInt().toString() else sugerido.toString())
+    }
+    var motivo by remember { mutableStateOf(motivoInicial) }
+    var prioridad by remember { mutableStateOf(prioridadInicial) }
     var error by remember { mutableStateOf<String?>(null) }
 
     AlertDialog(
         onDismissRequest = alCerrar,
-        title = { Text("Pedir depósito") },
+        title = { Text(if (corrigiendo) "Corregir solicitud" else "Pedir depósito") },
         text = {
             Column(verticalArrangement = Arrangement.spacedBy(12.dp)) {
-                Text(
-                    "Administración lo verá en la web y responderá con el número de operación.",
-                    style = MaterialTheme.typography.bodySmall,
-                    color = MaterialTheme.colorScheme.onSurfaceVariant,
-                )
+                if (observacion != null) {
+                    Text(
+                        "Administración observó: «$observacion»",
+                        style = MaterialTheme.typography.bodySmall,
+                        color = Semaforo.PorVencer,
+                    )
+                } else {
+                    Text(
+                        "Administración la verá en la web. Sigue su estado en «Mis solicitudes».",
+                        style = MaterialTheme.typography.bodySmall,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant,
+                    )
+                }
                 OutlinedTextField(
                     value = importe,
                     onValueChange = { importe = it },
@@ -273,6 +292,23 @@ fun SolicitudDeposito(
                     shape = RoundedCornerShape(12.dp),
                     modifier = Modifier.fillMaxWidth(),
                 )
+                Text("Prioridad", style = MaterialTheme.typography.labelMedium)
+                Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                    FilterChip(
+                        selected = prioridad == "normal",
+                        onClick = { prioridad = "normal" },
+                        label = { Text("Normal") },
+                    )
+                    FilterChip(
+                        selected = prioridad == "urgente",
+                        onClick = { prioridad = "urgente" },
+                        label = { Text("Urgente") },
+                        colors = FilterChipDefaults.filterChipColors(
+                            selectedContainerColor = Semaforo.Urgente.copy(alpha = 0.15f),
+                            selectedLabelColor = Semaforo.Urgente,
+                        ),
+                    )
+                }
                 error?.let {
                     Text(it, style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.error)
                 }
@@ -288,9 +324,9 @@ fun SolicitudDeposito(
                         motivo.isBlank() -> "Di para qué es el depósito."
                         else -> null
                     }
-                    if (error == null) alEnviar(monto!!, motivo.trim())
+                    if (error == null) alEnviar(monto!!, motivo.trim(), prioridad)
                 },
-            ) { Text("Enviar solicitud") }
+            ) { Text(if (corrigiendo) "Enviar corrección" else "Enviar solicitud") }
         },
         dismissButton = { TextButton(onClick = alCerrar) { Text("Cancelar") } },
     )
