@@ -66,6 +66,20 @@ interface ColaDao {
     @Query("SELECT * FROM cola WHERE estado IN ('PENDIENTE','ERROR') ORDER BY creadoEn")
     fun enEspera(): Flow<List<EnvioPendiente>>
 
+    /**
+     * La bandeja completa (OBS-52): lo que espera, lo que se está enviando y
+     * lo que ya llegó desde [desde]; lo más nuevo arriba.
+     */
+    @Query(
+        """
+        SELECT * FROM cola
+        WHERE estado <> 'ENVIADO' OR enviadoEn >= :desde
+        ORDER BY creadoEn DESC
+        LIMIT 300
+        """
+    )
+    fun recientes(desde: Long): Flow<List<EnvioPendiente>>
+
     /** Cuándo subió algo por última vez. */
     @Query("SELECT MAX(enviadoEn) FROM cola WHERE estado = 'ENVIADO'")
     fun ultimoEnvio(): Flow<Long?>
@@ -102,6 +116,10 @@ interface ArchivoDao {
 
     @Query("SELECT COUNT(*) FROM archivos WHERE subido = 0")
     fun cuantosSinSubir(): Flow<Int>
+
+    /** De qué registros falta subir la foto o el archivo. */
+    @Query("SELECT clientId FROM archivos WHERE subido = 0")
+    fun sinSubir(): Flow<List<String>>
 }
 
 @Dao

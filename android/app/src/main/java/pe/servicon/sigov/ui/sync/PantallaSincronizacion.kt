@@ -18,6 +18,11 @@ import androidx.compose.material.icons.outlined.Sync
 import androidx.compose.material3.*
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.saveable.rememberSaveable
+import androidx.compose.runtime.setValue
+import androidx.compose.foundation.horizontalScroll
+import androidx.compose.foundation.rememberScrollState
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
@@ -49,7 +54,30 @@ data class EstadoSincronizacion(
     val conError: Int = 0,
     val fotosPendientes: Int = 0,
     val ultimoEnvio: Long? = null,
+    /** Todo lo de la bandeja: pendiente, enviándose y lo llegado en 48 h. */
+    val bandeja: List<EnvioPendiente> = emptyList(),
+    /** Registros a los que todavía les falta subir su foto o archivo. */
+    val conArchivo: Set<String> = emptySet(),
 )
+
+/** Los grupos de la bandeja, como los pidió Elvis (OBS-52). */
+enum class GrupoEnvio(val titulo: String) {
+    ACTIVIDADES("Actividades"),
+    REPORTES("Reportes"),
+    FOTOS("Fotografías"),
+    GASTOS("Gastos"),
+    OTROS("Otros"),
+}
+
+fun grupoDe(tabla: String): GrupoEnvio = when (tabla) {
+    "work_entries", "movimientos_cuadrilla", "supply_requests", "supply_request_items" -> GrupoEnvio.ACTIVIDADES
+    "work_orders", "rpc:actualizar_parte", "rpc:enviar_parte", "rpc:cargar_pagina_documento",
+    "rpc:quitar_pagina_documento", "safety_talks", "talk_attendance", "hygiene_checks",
+    "ats_iperc", "ats_signatures", "vehicle_checks", "checklist_responses", "safety_equipment_checks" -> GrupoEnvio.REPORTES
+    "evidences", "rpc:dar_de_baja_evidencia" -> GrupoEnvio.FOTOS
+    "cash_movements", "deposit_requests", "rpc:corregir_solicitud_deposito" -> GrupoEnvio.GASTOS
+    else -> GrupoEnvio.OTROS
+}
 
 /**
  * El estado de la cola, sin adornos.
@@ -70,12 +98,13 @@ class SincronizacionViewModel @Inject constructor(
     fun avisoVisto() { _aviso.value = null }
 
     val estado: StateFlow<EstadoSincronizacion> = combine(
-        cola.enEspera,
-        cola.conError,
-        cola.archivosPendientes,
-        cola.ultimoEnvio,
-    ) { espera, errores, fotos, ultimo ->
-        EstadoSincronizacion(espera, errores, fotos, ultimo)
+        combine(cola.enEspera, cola.conError, cola.archivosPendientes, cola.ultimoEnvio) { espera, errores, fotos, ultimo ->
+            EstadoSincronizacion(espera, errores, fotos, ultimo)
+        },
+        cola.bandeja,
+        cola.conArchivoPendiente,
+    ) { base, bandeja, conArchivo ->
+        base.copy(bandeja = bandeja, conArchivo = conArchivo)
     }.stateIn(viewModelScope, SharingStarted.WhileSubscribed(5_000), EstadoSincronizacion())
 
     /**
@@ -111,6 +140,7 @@ fun PantallaSincronizacion(
     val pendientes = estado.enEspera.size + estado.fotosPendientes
     val aviso by vm.aviso.collectAsStateWithLifecycle()
     val avisos = remember { SnackbarHostState() }
+    var grupo by rememberSaveable { mutableStateOf<GrupoEnvio?>(null) }
     LaunchedEffect(aviso) {
         aviso?.let { avisos.showSnackbar(it); vm.avisoVisto() }
     }
@@ -119,7 +149,7 @@ fun PantallaSincronizacion(
         titulo = "Sincronización",
         seccion = "Apartado 4.12",
         alVolver = alVolver,
-        ayuda = "Lo que registraste y todavía no sale de este teléfono.",
+        ayuda = "Lo que falta enviar, lo que se está enviando y lo que ya llegó, por tipo.",
         avisos = avisos,
         botonFlotante = {
             ExtendedFloatingActionButton(
@@ -138,7 +168,19 @@ fun PantallaSincronizacion(
         ) {
             item { Resumen(pendientes, estado) }
 
-            if (estado.enEspera.isEmpty()) {
+            item {
+                FiltroDeGrupos(
+                    elegido = grupo,
+                    cuantos = { g -> estado.bandeja.count { grupoDe(it.tabla) == g && it.estado != EstadoEnvio.ENVIADO } },
+                    alElegir = { grupo = it },
+                )
+            }
+
+            val delGrupo = estado.bandeja.filter { grupo == null || grupoDe(it.tabla) == grupo }
+            val porEnviar = delGrupo.filter { it.estado != EstadoEnvio.ENVIADO }
+            val enviados = delGrupo.filter { it.estado == EstadoEnvio.ENVIADO }
+
+            if (porEnviar.isEmpty()) {
                 item {
                     Column(
                         Modifier.fillMaxWidth().padding(top = 48.dp),
@@ -151,7 +193,10 @@ fun PantallaSincronizacion(
                             tint = Marca.VerdeBandera,
                         )
                         Spacer(Modifier.height(12.dp))
-                        Text("Todo está en la nube", style = MaterialTheme.typography.titleMedium)
+                        Text(
+                            if (grupo == null) "Todo está en la nube" else "Nada de ${grupo!!.titulo.lowercase()} por enviar",
+                            style = MaterialTheme.typography.titleMedium,
+                        )
                         Text(
                             "No queda nada por enviar desde este teléfono.",
                             style = MaterialTheme.typography.bodySmall,
@@ -162,12 +207,24 @@ fun PantallaSincronizacion(
             } else {
                 item {
                     Text(
-                        "Esperando para subir",
+                        "Por enviar · ${porEnviar.size}",
                         style = MaterialTheme.typography.titleSmall,
                         fontWeight = FontWeight.SemiBold,
                     )
                 }
-                items(estado.enEspera, key = { it.clientId }) { Envio(it) }
+                items(porEnviar, key = { it.clientId }) { Envio(it, it.clientId in estado.conArchivo) }
+            }
+
+            if (enviados.isNotEmpty()) {
+                item {
+                    Text(
+                        "Sincronizado en las últimas 48 horas · ${enviados.size}",
+                        style = MaterialTheme.typography.titleSmall,
+                        fontWeight = FontWeight.SemiBold,
+                        modifier = Modifier.padding(top = 8.dp),
+                    )
+                }
+                items(enviados, key = { "ok-" + it.clientId }) { Envio(it, false) }
             }
         }
     }
@@ -270,9 +327,38 @@ private fun Linea(texto: String, color: Color) {
 }
 
 @Composable
-private fun Envio(envio: EnvioPendiente) {
-    val fallo = envio.estado == EstadoEnvio.ERROR
-    val color = if (fallo) Marca.Naranja else Marca.Azul
+private fun FiltroDeGrupos(elegido: GrupoEnvio?, cuantos: (GrupoEnvio) -> Int, alElegir: (GrupoEnvio?) -> Unit) {
+    Row(
+        Modifier.fillMaxWidth().horizontalScroll(rememberScrollState()),
+        horizontalArrangement = Arrangement.spacedBy(8.dp),
+    ) {
+        FilterChip(selected = elegido == null, onClick = { alElegir(null) }, label = { Text("Todos") })
+        GrupoEnvio.entries.forEach { g ->
+            val n = cuantos(g)
+            FilterChip(
+                selected = elegido == g,
+                onClick = { alElegir(if (elegido == g) null else g) },
+                label = { Text(if (n > 0) "${g.titulo} · $n" else g.titulo) },
+            )
+        }
+    }
+}
+
+/** El estado de un registro, con su color: lo que el capataz mira primero. */
+private data class Etiqueta(val texto: String, val color: Color)
+
+@Composable
+private fun etiquetaDe(envio: EnvioPendiente): Etiqueta = when (envio.estado) {
+    EstadoEnvio.PENDIENTE -> Etiqueta("Pendiente", Marca.Azul)
+    EstadoEnvio.ENVIANDO -> Etiqueta("Enviando…", Marca.Naranja)
+    EstadoEnvio.ENVIADO -> Etiqueta("Sincronizado", Marca.VerdeBandera)
+    EstadoEnvio.ERROR -> if (envio.intentos >= MAX_INTENTOS) Etiqueta("Error · no se pudo enviar", MaterialTheme.colorScheme.error)
+        else Etiqueta("Error · reintentando", Marca.Naranja)
+}
+
+@Composable
+private fun Envio(envio: EnvioPendiente, faltaArchivo: Boolean) {
+    val etiqueta = etiquetaDe(envio)
 
     Card(
         shape = RoundedCornerShape(14.dp),
@@ -282,7 +368,7 @@ private fun Envio(envio: EnvioPendiente) {
         modifier = Modifier.fillMaxWidth(),
     ) {
         Row(Modifier.height(IntrinsicSize.Min)) {
-            Box(Modifier.width(4.dp).fillMaxHeight().background(color))
+            Box(Modifier.width(4.dp).fillMaxHeight().background(etiqueta.color))
 
             Column(Modifier.padding(16.dp)) {
                 Text(
@@ -291,41 +377,45 @@ private fun Envio(envio: EnvioPendiente) {
                     fontWeight = FontWeight.SemiBold,
                 )
                 Text(
-                    "${enCastellano(envio.tabla)} · registrado ${cuando(envio.creadoEn)}",
+                    "${grupoDe(envio.tabla).titulo} · ${enCastellano(envio.tabla)} · registrado ${cuando(envio.creadoEn)}" +
+                        (envio.enviadoEn?.takeIf { envio.estado == EstadoEnvio.ENVIADO }?.let { " · llegó ${cuando(it)}" } ?: ""),
                     style = MaterialTheme.typography.bodySmall,
                     color = MaterialTheme.colorScheme.onSurfaceVariant,
                 )
-
-                if (fallo) {
-                    val rendido = envio.intentos >= MAX_INTENTOS
-                    val tinte = if (rendido) MaterialTheme.colorScheme.error else Marca.Naranja
-                    Spacer(Modifier.height(8.dp))
-                    Text(
-                        when {
-                            rendido -> "No se pudo enviar"
-                            envio.intentos == 1 -> "Falló 1 intento · reintentando"
-                            else -> "Fallaron ${envio.intentos} intentos · reintentando"
-                        },
-                        style = MaterialTheme.typography.labelSmall,
-                        color = tinte,
-                        modifier = Modifier
-                            .background(tinte.copy(alpha = 0.12f), RoundedCornerShape(8.dp))
-                            .padding(horizontal = 8.dp, vertical = 4.dp),
-                    )
-                    // El motivo tal como lo devolvió el servidor: sin él, el
-                    // supervisor no tiene por dónde empezar a mirar.
-                    envio.ultimoError?.takeIf { rendido }?.let {
-                        Spacer(Modifier.height(6.dp))
-                        Text(
-                            it,
-                            style = MaterialTheme.typography.bodySmall,
-                            color = MaterialTheme.colorScheme.onSurfaceVariant,
-                        )
+                Spacer(Modifier.height(8.dp))
+                Row(horizontalArrangement = Arrangement.spacedBy(6.dp)) {
+                    Chip(etiqueta.texto, etiqueta.color)
+                    if (faltaArchivo) Chip("Foto por subir", Marca.Naranja)
+                    if (envio.estado == EstadoEnvio.ERROR && envio.intentos > 0 && envio.intentos < MAX_INTENTOS) {
+                        Chip(if (envio.intentos == 1) "1 intento" else "${envio.intentos} intentos", MaterialTheme.colorScheme.onSurfaceVariant)
                     }
+                }
+                // El motivo tal como lo devolvió el servidor: sin él, el
+                // supervisor no tiene por dónde empezar a mirar.
+                envio.ultimoError?.takeIf { envio.estado == EstadoEnvio.ERROR }?.let {
+                    Spacer(Modifier.height(6.dp))
+                    Text(
+                        it,
+                        style = MaterialTheme.typography.bodySmall,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant,
+                    )
                 }
             }
         }
     }
+}
+
+@Composable
+private fun Chip(texto: String, color: Color) {
+    Text(
+        texto,
+        style = MaterialTheme.typography.labelSmall,
+        fontWeight = FontWeight.SemiBold,
+        color = color,
+        modifier = Modifier
+            .background(color.copy(alpha = 0.12f), RoundedCornerShape(8.dp))
+            .padding(horizontal = 8.dp, vertical = 4.dp),
+    )
 }
 
 /** El nombre de la tabla dicho como lo diría alguien de obra. */
@@ -345,7 +435,14 @@ private fun enCastellano(tabla: String): String = when (tabla) {
     "checklist_responses" -> "Checklist"
     "ats_iperc" -> "ATS / IPERC"
     "ats_signatures" -> "Firma del ATS"
-    else -> tabla
+    "movimientos_cuadrilla" -> "Material usado"
+    "rpc:actualizar_parte" -> "Datos del parte"
+    "rpc:enviar_parte" -> "Envío del parte"
+    "rpc:cargar_pagina_documento" -> "Documento del día"
+    "rpc:quitar_pagina_documento" -> "Quitar página"
+    "rpc:dar_de_baja_evidencia" -> "Eliminar fotografía"
+    "rpc:corregir_solicitud_deposito" -> "Corrección de depósito"
+    else -> tabla.removePrefix("rpc:")
 }
 
 /** Hace cuánto, no la hora exacta: en campo nadie compara relojes. */

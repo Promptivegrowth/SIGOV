@@ -12,6 +12,7 @@ import io.github.jan.supabase.postgrest.rpc
 import io.github.jan.supabase.storage.storage
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.combine
+import kotlinx.coroutines.flow.map
 import kotlinx.serialization.json.Json
 import kotlinx.serialization.json.JsonObject
 import kotlinx.serialization.json.buildJsonObject
@@ -105,6 +106,13 @@ class ColaRepositorio @Inject constructor(
 
     /** Fotos y firmas todavía sin subir. */
     val archivosPendientes: Flow<Int> = archivos.cuantosSinSubir()
+
+    /** La bandeja: lo pendiente y lo sincronizado en las últimas 48 horas (OBS-52). */
+    val bandeja: Flow<List<EnvioPendiente>> =
+        cola.recientes(System.currentTimeMillis() - 48 * 3600_000L)
+
+    /** Los registros a los que todavía les falta subir su archivo. */
+    val conArchivoPendiente: Flow<Set<String>> = archivos.sinSubir().map { it.toSet() }
 
     /**
      * Empuja la cola ahora mismo.
