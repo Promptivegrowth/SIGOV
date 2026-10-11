@@ -697,6 +697,7 @@ export type Database = {
           deleted_at: string | null
           description: string
           id: string
+          justification: string | null
           kind: Database["public"]["Enums"]["cash_movement_kind"]
           occurred_on: string
           receipt_kind: Database["public"]["Enums"]["receipt_kind"]
@@ -725,6 +726,7 @@ export type Database = {
           deleted_at?: string | null
           description: string
           id?: string
+          justification?: string | null
           kind: Database["public"]["Enums"]["cash_movement_kind"]
           occurred_on?: string
           receipt_kind?: Database["public"]["Enums"]["receipt_kind"]
@@ -753,6 +755,7 @@ export type Database = {
           deleted_at?: string | null
           description?: string
           id?: string
+          justification?: string | null
           kind?: Database["public"]["Enums"]["cash_movement_kind"]
           occurred_on?: string
           receipt_kind?: Database["public"]["Enums"]["receipt_kind"]
@@ -5276,6 +5279,7 @@ export type Database = {
           crew_name: string | null
           description: string | null
           id: string | null
+          justification: string | null
           kind: Database["public"]["Enums"]["cash_movement_kind"] | null
           occurred_on: string | null
           receipt_kind: Database["public"]["Enums"]["receipt_kind"] | null

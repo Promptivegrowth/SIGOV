@@ -48,6 +48,11 @@ data class EstadoParte(
     val programadas: List<ItemProgramado> = emptyList(),
     val pcis: List<ItemPci> = emptyList(),
     val cuadrilla: String = "",
+    /** Integrantes activos más el jefe: lo que se propone como personal (OBS-33). */
+    val personalSugerido: Int? = null,
+    /** Las placas asignadas hoy a la cuadrilla. */
+    val vehiculosDelDia: List<String> = emptyList(),
+    val supervisor: String? = null,
     val fotosPorRegistro: Map<String, Int> = emptyMap(),
     /** Material usado en el día (Formato 8) y lo que la cuadrilla tiene. */
     val consumos: List<pe.servicon.sigov.datos.Consumo> = emptyList(),
@@ -79,6 +84,8 @@ class ParteViewModel @Inject constructor(
     private val formatos: FormatosPdf,
     private val consumoRepo: pe.servicon.sigov.datos.ConsumoRepositorio,
     private val materialRepo: pe.servicon.sigov.datos.MaterialRepositorio,
+    private val charlas: pe.servicon.sigov.datos.CharlaRepositorio,
+    private val ssoma: pe.servicon.sigov.datos.SsomaRepositorio,
 ) : ViewModel() {
 
     private val _estado = MutableStateFlow(EstadoParte())
@@ -123,6 +130,26 @@ class ParteViewModel @Inject constructor(
                         tramos = tramos,
                         tramoPorDefecto = tramos.firstOrNull { t -> t.id == cuadrilla.tramoId },
                     )
+                }
+
+                // OBS-33: lo que el sistema ya sabe no se vuelve a pedir:
+                // el supervisor de la cuadrilla, su personal y sus vehículos
+                runCatching {
+                    val lista = charlas.miembros(servicioId, cuadrilla.id)
+                    val yo = sesion.usuarioId()
+                    // El jefe cuenta una sola vez: suele estar ya en la lista
+                    val miembros = lista.size + if (lista.none { m -> m.perfilId == yo }) 1 else 0
+                    val placas = ssoma.vehiculos(servicioId)
+                        .filter { v -> v.cuadrillaId == cuadrilla.id }
+                        .map { v -> v.plate }
+                    val supervisor = runCatching { sesion.supervisor(servicioId, cuadrilla.id) }.getOrNull()
+                    _estado.update {
+                        it.copy(
+                            personalSugerido = miembros.takeIf { lista.isNotEmpty() },
+                            vehiculosDelDia = placas,
+                            supervisor = supervisor,
+                        )
+                    }
                 }
 
                 // Lo programado y los PCI llegan después: si no hay señal el
@@ -288,6 +315,8 @@ class ParteViewModel @Inject constructor(
                     contextoExtra = listOf(
                         "Clima" to (parte.clima ?: "—"),
                         "Personal" to (parte.personal?.toString() ?: "—"),
+                        "Vehículo" to e.vehiculosDelDia.joinToString(", ").ifBlank { "—" },
+                        "Supervisor" to (e.supervisor ?: "—"),
                         "Jornada" to listOfNotNull(parte.horaInicio, parte.horaFin)
                             .joinToString(" a ").ifBlank { "—" },
                         "Metrado total" to "%.2f".format(e.metradoTotal),

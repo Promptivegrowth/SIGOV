@@ -49,6 +49,7 @@ fun FormularioGasto(
         tipoComprobante: String,
         numeroComprobante: String?,
         foto: File?,
+        justificacion: String?,
     ) -> Unit,
 ) {
     val contexto = LocalContext.current
@@ -60,6 +61,7 @@ fun FormularioGasto(
     var ruc by remember { mutableStateOf("") }
     var tipo by remember { mutableStateOf(COMPROBANTES.first().first) }
     var numero by remember { mutableStateOf("") }
+    var justificacion by remember { mutableStateOf("") }
     var error by remember { mutableStateOf<String?>(null) }
 
     // El archivo donde la cámara va a escribir, y aparte el aviso de que ya
@@ -169,6 +171,20 @@ fun FormularioGasto(
                         COMPROBANTES.map { it.second },
                     ) { tipo = COMPROBANTES[it].first }
 
+                    // OBS-40: sin comprobante, el porqué va aparte y es obligatorio
+                    if (tipo == "sin_comprobante") {
+                        OutlinedTextField(
+                            value = justificacion,
+                            onValueChange = { justificacion = it },
+                            label = { Text("¿Por qué no hay comprobante?") },
+                            placeholder = { Text("Mercado sin boleta en la zona; se pagó en efectivo") },
+                            minLines = 2,
+                            shape = RoundedCornerShape(12.dp),
+                            modifier = Modifier.fillMaxWidth(),
+                            supportingText = { Text("Va a revisión de administración. La foto es opcional.") },
+                        )
+                    }
+
                     BotonDeFoto(
                         hayFoto = foto != null,
                         obligatoria = tipo != "sin_comprobante",
@@ -198,7 +214,7 @@ fun FormularioGasto(
                     Button(
                         onClick = {
                             val adjunta = foto
-                            error = validar(importe, detalle, tipo, adjunta, montoMinimoComprobante)
+                            error = validar(importe, detalle, tipo, adjunta, montoMinimoComprobante, justificacion)
                             if (error == null) {
                                 alGuardar(
                                     importe.replace(",", ".").toDouble(),
@@ -209,6 +225,7 @@ fun FormularioGasto(
                                     tipo,
                                     numero.ifBlank { null },
                                     adjunta,
+                                    justificacion.trim().takeIf { tipo == "sin_comprobante" && it.isNotBlank() },
                                 )
                             }
                         },
@@ -417,6 +434,7 @@ private fun validar(
     tipoComprobante: String,
     foto: File?,
     montoMinimoComprobante: Double,
+    justificacion: String,
 ): String? {
     val monto = importe.replace(",", ".").toDoubleOrNull()
     return when {
@@ -425,8 +443,8 @@ private fun validar(
         tipoComprobante == "sin_comprobante" && monto >= montoMinimoComprobante ->
             "Desde S/ %.2f el comprobante es obligatorio. Toma la foto de la boleta o factura."
                 .format(montoMinimoComprobante)
-        tipoComprobante == "sin_comprobante" && detalle.trim().length < 15 ->
-            "Sin comprobante hay que justificarlo: explica en el detalle qué se compró y por qué no hay boleta."
+        tipoComprobante == "sin_comprobante" && justificacion.trim().length < 10 ->
+            "Sin comprobante hay que justificarlo: di por qué no hay boleta o factura."
         tipoComprobante != "sin_comprobante" && foto == null ->
             "Falta la foto del comprobante. Si de verdad no hay, elige «Sin comprobante»."
         else -> null

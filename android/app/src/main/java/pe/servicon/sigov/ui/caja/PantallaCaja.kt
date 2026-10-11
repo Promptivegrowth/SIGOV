@@ -155,8 +155,8 @@ fun PantallaCaja(
             montoMinimoComprobante = estado.montoMinimoComprobante,
             guardando = estado.guardando,
             alCerrar = { formularioAbierto = false },
-            alGuardar = { importe, rubro, detalle, proveedor, ruc, tipo, numero, foto ->
-                vm.registrarGasto(importe, rubro, detalle, proveedor, ruc, tipo, numero, foto) {
+            alGuardar = { importe, rubro, detalle, proveedor, ruc, tipo, numero, foto, justificacion ->
+                vm.registrarGasto(importe, rubro, detalle, proveedor, ruc, tipo, numero, foto, justificacion) {
                     formularioAbierto = false
                 }
             },
@@ -404,7 +404,9 @@ private fun MovimientoFila(movimiento: Movimiento) {
             }
 
             val avisos = buildList {
-                if (movimiento.kind == "gasto" && movimiento.rutaFoto == null) {
+                if (movimiento.comprobante == "sin_comprobante") {
+                    add(("Sin comprobante" + (movimiento.justificacion?.let { " · $it" } ?: "")) to Marca.Naranja)
+                } else if (movimiento.kind == "gasto" && movimiento.rutaFoto == null) {
                     add("Sin comprobante adjunto" to Semaforo.Urgente)
                 }
                 when (movimiento.status) {

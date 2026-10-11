@@ -61,6 +61,8 @@ data class MiembroDeCuadrilla(
     val dni: String? = null,
     val position: String? = null,
     @SerialName("is_active") val activo: Boolean = true,
+    /** Si el integrante tiene usuario en SIGOV (el jefe suele estar en la lista). */
+    @SerialName("profile_id") val perfilId: String? = null,
 )
 
 /** La firma de un asistente, tal como se recoge en el celular. */

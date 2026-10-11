@@ -115,6 +115,7 @@ class CajaViewModel @Inject constructor(
         tipoComprobante: String,
         numeroComprobante: String?,
         foto: File?,
+        justificacion: String?,
         alTerminar: () -> Unit,
     ) {
         val mia = _estado.value.caja ?: return
@@ -131,6 +132,7 @@ class CajaViewModel @Inject constructor(
                     tipoComprobante = tipoComprobante,
                     numeroComprobante = numeroComprobante,
                     fotoComprobante = foto,
+                    justificacion = justificacion,
                 )
             }.onSuccess {
                 _estado.update {

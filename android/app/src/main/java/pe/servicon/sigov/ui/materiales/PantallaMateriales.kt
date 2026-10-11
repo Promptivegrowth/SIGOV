@@ -6,6 +6,7 @@ import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.rememberScrollState
+import androidx.compose.foundation.verticalScroll
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.outlined.ArrowBack
@@ -117,7 +118,7 @@ fun PantallaMateriales(
 
                 pestana == 0 -> Almacen(estado, vm)
 
-                else -> Pedidos(estado)
+                else -> Pedidos(estado, vm::detalle)
             }
         }
     }
@@ -312,7 +313,7 @@ private fun DialogoInsumoEscrito(
         text = {
             Column(verticalArrangement = Arrangement.spacedBy(12.dp)) {
                 Text(
-                    "El residente lo verá en la web y decide si lo incorpora al catálogo.",
+                    "Administración lo verá en la web y decide si lo incorpora al catálogo.",
                     style = MaterialTheme.typography.bodySmall,
                     color = TintaSuave,
                 )
@@ -412,7 +413,7 @@ private fun FilaInsumo(insumo: Insumo, cantidad: Double, alCambiar: (Double) -> 
             if (insumo.escaso) {
                 Spacer(Modifier.height(8.dp))
                 Text(
-                    "Por debajo del mínimo · avisa al residente",
+                    "Por debajo del mínimo · avisa a administración",
                     style = MaterialTheme.typography.bodySmall,
                     color = Semaforo.Urgente,
                     modifier = Modifier
@@ -443,7 +444,8 @@ private fun FilaInsumo(insumo: Insumo, cantidad: Double, alCambiar: (Double) -> 
 }
 
 @Composable
-private fun Pedidos(estado: EstadoMateriales) {
+private fun Pedidos(estado: EstadoMateriales, cargarDetalle: suspend (Pedido) -> pe.servicon.sigov.datos.DetallePedido) {
+    var abierto by remember { mutableStateOf<Pedido?>(null) }
     if (estado.todosLosPedidos.isEmpty()) {
         Column(
             Modifier.fillMaxSize().padding(32.dp),
@@ -471,15 +473,89 @@ private fun Pedidos(estado: EstadoMateriales) {
         contentPadding = PaddingValues(16.dp, 12.dp, 16.dp, 96.dp),
         verticalArrangement = Arrangement.spacedBy(10.dp),
     ) {
-        items(estado.todosLosPedidos, key = { it.id }) { FilaPedido(it) }
+        items(estado.todosLosPedidos, key = { it.id }) { FilaPedido(it, alTocar = { abierto = it }) }
+    }
+
+    abierto?.let { pedido ->
+        DetalleDePedido(pedido, cargar = cargarDetalle, alCerrar = { abierto = null })
+    }
+}
+
+/** Lo que trae el pedido y lo que pasó con él (OBS-46). */
+@OptIn(ExperimentalMaterial3Api::class)
+@Composable
+private fun DetalleDePedido(
+    pedido: Pedido,
+    cargar: suspend (Pedido) -> pe.servicon.sigov.datos.DetallePedido,
+    alCerrar: () -> Unit,
+) {
+    var detalle by remember(pedido.id) { mutableStateOf<pe.servicon.sigov.datos.DetallePedido?>(null) }
+    LaunchedEffect(pedido.id) { detalle = runCatching { cargar(pedido) }.getOrNull() ?: pe.servicon.sigov.datos.DetallePedido(emptyList(), emptyList()) }
+    ModalBottomSheet(onDismissRequest = alCerrar) {
+        Column(
+            Modifier.fillMaxWidth().padding(horizontal = 20.dp).padding(bottom = 32.dp).verticalScroll(rememberScrollState()),
+            verticalArrangement = Arrangement.spacedBy(10.dp),
+        ) {
+            Text(pedido.code ?: "Pedido sin número", style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.Bold)
+            Text(
+                listOfNotNull("para el ${pedido.paraCuando}", pedido.actividad, pedido.tramo).joinToString(" · "),
+                style = MaterialTheme.typography.bodySmall,
+                color = MaterialTheme.colorScheme.onSurfaceVariant,
+            )
+            pedido.reason?.takeIf { it.isNotBlank() }?.let { Text("«$it»", style = MaterialTheme.typography.bodyMedium) }
+            pedido.respuesta?.takeIf { it.isNotBlank() }?.let { Text("Respuesta: $it", color = Semaforo.PorVencer, style = MaterialTheme.typography.bodyMedium) }
+
+            Text("INSUMOS", style = MaterialTheme.typography.labelMedium, fontWeight = FontWeight.SemiBold, modifier = Modifier.padding(top = 6.dp))
+            val d = detalle
+            when {
+                d == null -> CircularProgressIndicator(Modifier.size(24.dp))
+                d.renglones.isEmpty() -> Text(
+                    "Sin señal para ver los insumos de este pedido.",
+                    style = MaterialTheme.typography.bodySmall,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                )
+                else -> d.renglones.forEach { r ->
+                    Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.Top) {
+                        Text(r.nombre, style = MaterialTheme.typography.bodyMedium, modifier = Modifier.weight(1f))
+                        Text(
+                            buildString {
+                                append(cifra(r.pedido)); r.unidad?.let { append(" $it") }
+                                r.aprobado?.let { append(" · aprob. ${cifra(it)}") }
+                                if (r.entregado > 0) append(" · entreg. ${cifra(r.entregado)}")
+                            },
+                            style = MaterialTheme.typography.bodySmall,
+                            color = MaterialTheme.colorScheme.onSurfaceVariant,
+                        )
+                    }
+                    HorizontalDivider()
+                }
+            }
+
+            if (!d?.historial.isNullOrEmpty()) {
+                Text("HISTORIAL", style = MaterialTheme.typography.labelMedium, fontWeight = FontWeight.SemiBold, modifier = Modifier.padding(top = 6.dp))
+                d!!.historial.forEach { h ->
+                    Column {
+                        Text(
+                            listOfNotNull(h.paso.replaceFirstChar { it.uppercase() }, h.quien).joinToString(" · "),
+                            style = MaterialTheme.typography.bodyMedium,
+                        )
+                        Text(
+                            listOfNotNull(h.cuando.take(16).replace('T', ' '), h.detalle).joinToString(" · "),
+                            style = MaterialTheme.typography.bodySmall,
+                            color = MaterialTheme.colorScheme.onSurfaceVariant,
+                        )
+                    }
+                }
+            }
+        }
     }
 }
 
 @Composable
-private fun FilaPedido(pedido: Pedido) {
+private fun FilaPedido(pedido: Pedido, alTocar: () -> Unit) {
     val (etiqueta, color) = when (pedido.status) {
         "en_cola" -> "Esperando señal" to Marca.Naranja
-        "solicitado" -> "Esperando al residente" to Marca.Naranja
+        "solicitado" -> "En revisión" to Marca.Naranja
         "aprobado" -> "Aprobado" to Semaforo.EnPlazo
         "parcial" -> "Entregado en parte" to Semaforo.PorVencer
         "entregado" -> "Entregado" to Marca.VerdeBandera
@@ -489,6 +565,7 @@ private fun FilaPedido(pedido: Pedido) {
     }
 
     Card(
+        onClick = alTocar,
         shape = RoundedCornerShape(14.dp),
         colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface),
         elevation = CardDefaults.cardElevation(defaultElevation = 0.dp),
@@ -563,7 +640,7 @@ private fun FormularioPedido(
             Column(verticalArrangement = Arrangement.spacedBy(12.dp)) {
                 Text(
                     "$renglones insumo" + (if (renglones == 1) "" else "s") +
-                        ". El residente lo aprueba desde la web.",
+                        ". Administración lo revisa y aprueba en la web.",
                     style = MaterialTheme.typography.bodySmall,
                     color = MaterialTheme.colorScheme.onSurfaceVariant,
                 )

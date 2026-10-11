@@ -44,6 +44,11 @@ const SOLICITUD_ESTADO = {
 /** Lo que administración todavía tiene que mover. */
 const SOLICITUD_ABIERTA = ['solicitado', 'en_evaluacion', 'aprobado']
 
+const TIPO_COMPROBANTE: Record<string, string> = {
+  boleta: 'Boleta', factura: 'Factura', recibo: 'Recibo', ticket: 'Ticket',
+  planilla: 'Planilla', sin_comprobante: 'Sin comprobante',
+}
+
 const soles = (n: number) =>
   'S/ ' + new Intl.NumberFormat('es-PE', { minimumFractionDigits: 2, maximumFractionDigits: 2 }).format(n ?? 0)
 
@@ -246,8 +251,10 @@ export function CajaClient() {
                       <div className="flex flex-wrap items-center gap-2">
                         <p className="font-medium">{m.description}</p>
                         <Badge variant={estado?.variant ?? 'outline'}>{estado?.label ?? m.status}</Badge>
-                        {m.kind === 'gasto' && !m.storage_path && (
-                          <Badge variant="destructive">Sin comprobante</Badge>
+                        {m.receipt_kind === 'sin_comprobante' ? (
+                          <Badge variant="warning">Sin comprobante</Badge>
+                        ) : m.kind === 'gasto' && !m.storage_path && (
+                          <Badge variant="destructive">Falta la foto</Badge>
                         )}
                       </div>
                       <p className="text-muted-foreground mt-0.5 text-[13px]">
@@ -260,6 +267,11 @@ export function CajaClient() {
                           m.created_by_name,
                         ].filter(Boolean).join(' · ')}
                       </p>
+                      {m.justification && m.receipt_kind === 'sin_comprobante' && (
+                        <p className="mt-1 text-[13px]">
+                          <span className="text-muted-foreground">Por qué no hay comprobante: </span>{m.justification}
+                        </p>
+                      )}
                       {m.review_note && (
                         <p className="text-destructive mt-1 text-[13px]">«{m.review_note}»</p>
                       )}
@@ -423,17 +435,26 @@ function RevisionDialog({
           <Dato titulo="Caja" valor={movimiento.box_code} />
           <Dato titulo="Proveedor" valor={movimiento.supplier ?? '—'} />
           <Dato titulo="Comprobante" valor={
-            [movimiento.receipt_kind, movimiento.receipt_number].filter(Boolean).join(' ') || '—'
+            [TIPO_COMPROBANTE[movimiento.receipt_kind] ?? movimiento.receipt_kind, movimiento.receipt_number].filter(Boolean).join(' ') || '—'
           } />
         </dl>
+
+        {movimiento.receipt_kind === 'sin_comprobante' && (
+          <div className="bg-warning/10 rounded-lg px-3 py-2 text-[13px]">
+            <p className="font-medium">Sin comprobante</p>
+            <p className="text-muted-foreground">{movimiento.justification ?? 'Sin justificación'}</p>
+          </div>
+        )}
 
         {movimiento.storage_path ? (
           <Button variant="outline" onClick={() => onVerComprobante(movimiento.storage_path)}>
             <Eye /> Ver el comprobante
           </Button>
         ) : (
-          <p className="text-destructive text-[13px]">
-            Este gasto llegó sin foto de comprobante.
+          <p className={movimiento.receipt_kind === 'sin_comprobante' ? 'text-muted-foreground text-[13px]' : 'text-destructive text-[13px]'}>
+            {movimiento.receipt_kind === 'sin_comprobante'
+              ? 'Sin foto: en un gasto sin comprobante es opcional.'
+              : 'Este gasto llegó sin foto de comprobante.'}
           </p>
         )}
 

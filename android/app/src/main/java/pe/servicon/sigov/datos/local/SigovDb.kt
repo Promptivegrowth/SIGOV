@@ -33,6 +33,10 @@ interface ColaDao {
     @Query("DELETE FROM cola WHERE clientId = :id")
     suspend fun borrar(id: String)
 
+    /** Los hijos en la cola, en el orden en que se anotaron. */
+    @Query("SELECT * FROM cola WHERE dependeDe = :padre ORDER BY creadoEn")
+    suspend fun hijos(padre: String): List<EnvioPendiente>
+
     /** Los hijos de un registro en la cola: los renglones de un pedido, por ejemplo. */
     @Query("SELECT COUNT(*) FROM cola WHERE tabla = :tabla AND dependeDe = :padre")
     suspend fun cuantosHijos(tabla: String, padre: String): Int

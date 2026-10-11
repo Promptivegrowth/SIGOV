@@ -37,7 +37,7 @@ val ParteLocal.editable: Boolean get() = estado == "borrador" || estado == "obse
  * horario y personal. Se ven de un vistazo y se corrigen con un toque.
  */
 @Composable
-fun DatosDelDia(parte: ParteLocal, alEditar: () -> Unit) {
+fun DatosDelDia(parte: ParteLocal, alEditar: () -> Unit, vehiculos: List<String> = emptyList(), supervisor: String? = null) {
     Card(
         onClick = alEditar,
         enabled = parte.editable,
@@ -61,6 +61,14 @@ fun DatosDelDia(parte: ParteLocal, alEditar: () -> Unit) {
                     style = MaterialTheme.typography.bodySmall,
                     color = if (falta && parte.editable) Marca.Naranja else MaterialTheme.colorScheme.onSurfaceVariant,
                 )
+                // Lo que el sistema ya sabe y va igual al reporte (OBS-33)
+                val sabido = listOfNotNull(
+                    vehiculos.takeIf { it.isNotEmpty() }?.let { "Vehículo ${it.joinToString(", ")}" },
+                    supervisor?.let { "Supervisor $it" },
+                ).joinToString(" · ")
+                if (sabido.isNotBlank()) {
+                    Text(sabido, style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
+                }
             }
             if (parte.editable) Text("Editar", color = Marca.Azul, style = MaterialTheme.typography.labelLarge)
         }
@@ -72,12 +80,13 @@ fun DialogoDatosDelDia(
     parte: ParteLocal,
     alCerrar: () -> Unit,
     alGuardar: (clima: String?, inicio: String?, fin: String?, personal: Int?, notas: String?) -> Unit,
+    personalSugerido: Int? = null,
 ) {
     val climas = listOf("Soleado", "Nublado", "Lluvia", "Viento fuerte", "Neblina")
     var clima by remember { mutableStateOf(parte.clima) }
     var inicio by remember { mutableStateOf(parte.horaInicio ?: "07:00") }
     var fin by remember { mutableStateOf(parte.horaFin ?: "16:00") }
-    var personal by remember { mutableStateOf(parte.personal?.toString() ?: "") }
+    var personal by remember { mutableStateOf((parte.personal ?: personalSugerido)?.toString() ?: "") }
     var notas by remember { mutableStateOf(parte.notas ?: "") }
     val hora = Regex("^([01]\\d|2[0-3]):[0-5]\\d$")
     val valido = (inicio.isBlank() || hora.matches(inicio)) && (fin.isBlank() || hora.matches(fin))

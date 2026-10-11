@@ -57,6 +57,19 @@ data class Pedido(
     @SerialName("qty_delivered") val entregado: Double = 0.0,
 )
 
+/** El detalle de un pedido, para verlo al tocarlo (OBS-46). */
+data class DetallePedido(val renglones: List<RenglonDetalle>, val historial: List<PasoDePedido>)
+
+data class RenglonDetalle(
+    val nombre: String,
+    val unidad: String?,
+    val pedido: Double,
+    val aprobado: Double? = null,
+    val entregado: Double = 0.0,
+)
+
+data class PasoDePedido(val cuando: String, val paso: String, val quien: String?, val detalle: String?)
+
 /** Un renglón del pedido: qué insumo y cuánto. */
 /**
  * Un renglón del pedido.
@@ -65,7 +78,7 @@ data class Pedido(
  * oficina al empezar el contrato y en la vía siempre aparece algo que nadie
  * previó —un perno, una manguera, una lata de algo—. Cuando eso pasa, el
  * pedido no puede quedarse sin hacer: se escribe el nombre y la unidad, y
- * el residente decide desde la web si lo incorpora al maestro.
+ * administración (SERVICON) decide desde la web si lo incorpora al maestro.
  */
 data class RenglonPedido(
     val cantidad: Double,
@@ -84,7 +97,7 @@ data class RenglonPedido(
  * Materiales e insumos.
  *
  * El capataz pide lo que necesita para la semana y ve qué queda en almacén
- * antes de pedir; el residente aprueba desde la web. Pedir sin saber el stock
+ * antes de pedir; administración (SERVICON) lo revisa en la web. Pedir sin saber el stock
  * es lo que hace que una cuadrilla se quede parada esperando emulsión que
  * nunca hubo.
  */
@@ -229,6 +242,59 @@ class MaterialRepositorio @Inject constructor(
             )
         }
         clientId
+    }
+
+    /**
+     * El detalle de un pedido (OBS-46): qué insumos y cuánto, y lo que pasó
+     * con él. Si todavía no salió del teléfono, sus renglones salen de la cola.
+     */
+    suspend fun detalle(pedido: Pedido): DetallePedido = withContext(Dispatchers.IO) {
+        if (pedido.status == "en_cola") {
+            val renglones = colaDao.hijos(pedido.id)
+                .filter { it.tabla == "supply_request_items" }
+                .map { envio ->
+                    val partes = envio.etiqueta.split(" · ")
+                    RenglonDetalle(
+                        nombre = partes.dropLast(1).joinToString(" · ").ifBlank { envio.etiqueta },
+                        unidad = null,
+                        pedido = partes.lastOrNull()?.toDoubleOrNull() ?: 0.0,
+                    )
+                }
+            return@withContext DetallePedido(renglones, emptyList())
+        }
+        val renglones = runCatching {
+            supabase.postgrest.from("v_renglones_de_pedido")
+                .select { filter { eq("request_id", pedido.id) } }
+                .decodeList<JsonObject>()
+                .map { f ->
+                    fun texto(k: String) = f[k]?.toString()?.trim('"')?.takeIf { it != "null" }
+                    RenglonDetalle(
+                        nombre = texto("nombre") ?: "Insumo",
+                        unidad = texto("unidad"),
+                        pedido = texto("qty_requested")?.toDoubleOrNull() ?: 0.0,
+                        aprobado = texto("qty_approved")?.toDoubleOrNull(),
+                        entregado = texto("qty_delivered")?.toDoubleOrNull() ?: 0.0,
+                    )
+                }
+        }.getOrDefault(emptyList())
+        val historial = runCatching {
+            supabase.postgrest.from("v_historial_de_pedido")
+                .select {
+                    filter { eq("request_id", pedido.id) }
+                    order("ocurrio", Order.ASCENDING)
+                }
+                .decodeList<JsonObject>()
+                .map { f ->
+                    fun texto(k: String) = f[k]?.toString()?.trim('"')?.takeIf { it != "null" }
+                    PasoDePedido(
+                        cuando = texto("ocurrio").orEmpty(),
+                        paso = texto("paso").orEmpty(),
+                        quien = texto("quien"),
+                        detalle = listOfNotNull(texto("insumo"), texto("cantidad"), texto("detalle")).joinToString(" · ").ifBlank { null },
+                    )
+                }
+        }.getOrDefault(emptyList())
+        DetallePedido(renglones, historial)
     }
 
     private suspend fun espejar(tabla: String, servicioId: String, filas: List<JsonObject>) {

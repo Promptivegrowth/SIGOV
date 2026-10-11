@@ -112,7 +112,7 @@ class JornadaViewModel @Inject constructor(
                 val programado = campo.programacionDelDia(cuadrilla.servicioId, cuadrilla.id)
                 val pci = campo.pciAsignados(cuadrilla.servicioId, cuadrilla.id)
                 val miCaja = runCatching { caja.miCaja(cuadrilla.servicioId, cuadrilla.id) }.getOrNull()
-                val jefe = runCatching { sesion.supervisor(cuadrilla.servicioId) }.getOrNull()
+                val jefe = runCatching { sesion.supervisor(cuadrilla.servicioId, cuadrilla.id) }.getOrNull()
                 val documentos = runCatching { documentosRepo.delDia(cuadrilla.servicioId, cuadrilla.id) }
                     .getOrDefault(emptyList())
                 // Los avisos: la campana y, si hay nuevos, la notificación del teléfono

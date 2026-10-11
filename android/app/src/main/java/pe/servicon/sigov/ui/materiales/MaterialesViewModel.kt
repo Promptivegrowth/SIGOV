@@ -61,7 +61,7 @@ data class EstadoMateriales(
  * Materiales e insumos.
  *
  * Dos cosas: ver qué hay en almacén antes de salir, y pedir lo que falta
- * para la semana. La aprobación es del residente y ocurre en la web.
+ * para la semana. La revisión es de administración (SERVICON) y ocurre en la web.
  */
 @HiltViewModel
 class MaterialesViewModel @Inject constructor(
@@ -72,6 +72,9 @@ class MaterialesViewModel @Inject constructor(
 
     private val _estado = MutableStateFlow(EstadoMateriales())
     val estado: StateFlow<EstadoMateriales> = _estado.asStateFlow()
+
+    /** El detalle de un pedido al tocarlo (OBS-46). */
+    suspend fun detalle(pedido: pe.servicon.sigov.datos.Pedido) = material.detalle(pedido)
 
     init { cargar() }
 
@@ -168,7 +171,7 @@ class MaterialesViewModel @Inject constructor(
                         guardando = false,
                         canasta = emptyMap(),
                         escritos = emptyList(),
-                        aviso = "Pedido enviado. El residente lo verá en la web.",
+                        aviso = "Pedido enviado. Administración lo revisará en la web.",
                     )
                 }
                 alTerminar()

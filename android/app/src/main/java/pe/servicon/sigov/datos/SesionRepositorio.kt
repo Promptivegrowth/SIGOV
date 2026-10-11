@@ -215,18 +215,26 @@ class SesionRepositorio @Inject constructor(
     }
 
     /**
-     * El supervisor del servicio.
-     *
-     * La especificación habla de «supervisor asignado» por cuadrilla, pero el
-     * modelo todavía no guarda esa asignación: hoy se devuelve el supervisor
-     * del contrato. Cuando exista el campo por cuadrilla, esto cambia aquí y
-     * la pantalla no se entera.
+     * El supervisor de la cuadrilla (OBS-33): el que tiene asignado en
+     * `crews.supervisor_id`. Si la cuadrilla todavía no tiene uno, el
+     * supervisor del contrato.
      */
-    suspend fun supervisor(servicioId: String): String? = recordando("mi_supervisor") {
+    suspend fun supervisor(servicioId: String, cuadrillaId: String? = null): String? = recordando("mi_supervisor") {
+        val asignado = cuadrillaId?.let { id ->
+            runCatching {
+                supabase.postgrest.from("crews")
+                    .select(Columns.raw("supervisor_id")) { filter { eq("id", id) } }
+                    .decodeList<JsonObject>()
+                    .firstOrNull()?.get("supervisor_id")?.jsonPrimitive?.contentOrNull
+            }.getOrNull()
+        }
         supabase.postgrest
             .from("service_members")
             .select(Columns.raw("profiles(full_name)")) {
-                filter { eq("service_id", servicioId); eq("role", "supervisor") }
+                filter {
+                    eq("service_id", servicioId)
+                    if (asignado != null) eq("profile_id", asignado) else eq("role", "supervisor")
+                }
                 limit(1)
             }
             .decodeList<JsonObject>()

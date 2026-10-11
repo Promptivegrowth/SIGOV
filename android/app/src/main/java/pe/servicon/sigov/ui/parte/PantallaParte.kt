@@ -159,7 +159,9 @@ fun PantallaParte(
             ) {
                 item { Resumen(estado) }
                 estado.observacion?.let { nota -> item { ObservacionDelSupervisor(nota) } }
-                estado.parte?.let { p -> item { DatosDelDia(p, alEditar = { editandoDatos = true }) } }
+                estado.parte?.let { p ->
+                    item { DatosDelDia(p, alEditar = { editandoDatos = true }, vehiculos = estado.vehiculosDelDia, supervisor = estado.supervisor) }
+                }
 
                 if (estado.registros.isEmpty()) {
                     item {
@@ -212,6 +214,7 @@ fun PantallaParte(
         estado.parte?.let { p ->
             DialogoDatosDelDia(
                 parte = p,
+                personalSugerido = estado.personalSugerido,
                 alCerrar = { editandoDatos = false },
                 alGuardar = { clima, inicio, fin, personal, notas ->
                     vm.guardarDatosDelDia(clima, inicio, fin, personal, notas)

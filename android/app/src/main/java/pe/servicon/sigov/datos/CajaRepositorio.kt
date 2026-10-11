@@ -62,7 +62,11 @@ data class Movimiento(
     @SerialName("receipt_number") val numeroComprobante: String? = null,
     @SerialName("storage_path") val rutaFoto: String? = null,
     @SerialName("review_note") val observacion: String? = null,
-)
+    /** Por qué no hay comprobante (OBS-40). */
+    val justification: String? = null,
+) {
+    val justificacion: String? get() = justification
+}
 
 /**
  * Una solicitud de depósito y lo que respondió administración (OBS-41).
@@ -227,6 +231,7 @@ class CajaRepositorio @Inject constructor(
                             comprobante = texto("receipt_kind") ?: "boleta",
                             numeroComprobante = texto("receipt_number"),
                             rutaFoto = texto("storage_path"),
+                            justification = texto("justification"),
                         )
                     }.getOrNull()
                 }
@@ -250,6 +255,7 @@ class CajaRepositorio @Inject constructor(
         numeroComprobante: String?,
         fotoComprobante: File?,
         fecha: String = Peru.hoy().toString(),
+        justificacion: String? = null,
     ): String = withContext(Dispatchers.IO) {
         val clientId = UUID.randomUUID().toString()
 
@@ -277,6 +283,7 @@ class CajaRepositorio @Inject constructor(
                 put("receipt_kind", tipoComprobante)
                 numeroComprobante?.takeIf { it.isNotBlank() }?.let { put("receipt_number", it) }
                 ruta?.let { put("storage_path", it) }
+                justificacion?.let { put("justification", it) }
                 caja.cuadrillaId?.let { put("crew_id", it) }
                 supabase.usuarioActual()?.let { put("created_by", it) }
             },
