@@ -19,7 +19,10 @@ import kotlinx.serialization.json.buildJsonObject
 import kotlinx.serialization.json.jsonObject
 import kotlinx.serialization.json.jsonPrimitive
 import kotlinx.serialization.json.put
+import pe.servicon.sigov.datos.Configuracion
+import pe.servicon.sigov.datos.TABLA_ORIGINAL
 import pe.servicon.sigov.datos.enCristiano
+import pe.servicon.sigov.datos.redSinCosto
 import pe.servicon.sigov.datos.local.ArchivoDao
 import pe.servicon.sigov.datos.local.ArchivoPendiente
 import pe.servicon.sigov.datos.local.ColaDao
@@ -107,6 +110,9 @@ class ColaRepositorio @Inject constructor(
     /** Fotos y firmas todavía sin subir. */
     val archivosPendientes: Flow<Int> = archivos.cuantosSinSubir()
 
+    /** Originales de fotos que esperan subir (con Wi-Fi, por omisión). */
+    val originalesPorSubir: Flow<Int> = cola.cuantosOriginales()
+
     /** La bandeja: lo pendiente y lo sincronizado en las últimas 48 horas (OBS-52). */
     val bandeja: Flow<List<EnvioPendiente>> =
         cola.recientes(System.currentTimeMillis() - 48 * 3600_000L)
@@ -186,6 +192,7 @@ class TrabajadorSincronizacion @AssistedInject constructor(
     private val cola: ColaDao,
     private val archivos: ArchivoDao,
     private val supabase: SupabaseClient,
+    private val configuracion: Configuracion,
 ) : CoroutineWorker(contexto, parametros) {
 
     override suspend fun doWork(): Result {
@@ -195,10 +202,14 @@ class TrabajadorSincronizacion @AssistedInject constructor(
 
         val yaSubidos = cola.yaEnviados().toMutableSet()
         var fallaron = 0
+        // Los originales de las fotos pesan ~3 MB: por omisión esperan al
+        // Wi-Fi para no gastar los datos de la cuadrilla (OBS-23)
+        val subirOriginales = configuracion.originalesConDatos.value || redSinCosto(applicationContext)
 
         for (envio in porEnviar) {
             // Un hijo espera a que su padre exista en la nube
             if (envio.dependeDe != null && envio.dependeDe !in yaSubidos) continue
+            if (envio.tabla == TABLA_ORIGINAL && !subirOriginales) continue
 
             cola.actualizar(envio.copy(estado = EstadoEnvio.ENVIANDO))
 
@@ -239,6 +250,10 @@ class TrabajadorSincronizacion @AssistedInject constructor(
                         cuerpo.forEach { (k, v) -> if (k != "client_id") put(k, v) }
                     }
                     supabase.postgrest.rpc(envio.tabla.removePrefix("rpc:"), parametros)
+                    // El original ya está en la nube: el teléfono no lo necesita
+                    if (envio.tabla == TABLA_ORIGINAL) {
+                        archivos.porId(envio.clientId)?.let { runCatching { File(it.rutaLocal).delete() } }
+                    }
                     cola.actualizar(
                         envio.copy(
                             estado = EstadoEnvio.ENVIADO,

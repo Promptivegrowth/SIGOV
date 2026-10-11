@@ -145,6 +145,17 @@ async function pushOutbox(): Promise<{ pushed: number; failed: number; blobs: nu
           blobsUp++
         }
       }
+      // Y su original JPG para COVINCA, si lo tiene (OBS-23)
+      const original = await db.blobs.get(item.client_id + '-original')
+      if (original && !original.uploaded) {
+        const { error: upErr } = await sb.storage
+          .from(original.bucket)
+          .upload(original.path, original.blob, { contentType: 'image/jpeg', upsert: true })
+        if (!upErr) {
+          await db.blobs.update(original.client_id, { uploaded: true })
+          blobsUp++
+        }
+      }
     } catch (e: any) {
       const attempts = item.attempts + 1
       await db.outbox.update(item.client_id, {

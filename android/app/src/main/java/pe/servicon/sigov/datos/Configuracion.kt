@@ -53,6 +53,19 @@ class Configuracion @Inject constructor(
         _sello.value = limpio
     }
 
+    private val _originalesConDatos = MutableStateFlow(guardado.getBoolean(CLAVE_ORIGINALES, false))
+
+    /**
+     * Si los originales de las fotos (JPG 4080 × 3072, ~3 MB) pueden subir con
+     * datos móviles. Por omisión no: esperan al Wi-Fi del campamento u oficina.
+     */
+    val originalesConDatos: StateFlow<Boolean> = _originalesConDatos.asStateFlow()
+
+    fun permitirOriginalesConDatos(si: Boolean) {
+        guardado.edit().putBoolean(CLAVE_ORIGINALES, si).apply()
+        _originalesConDatos.value = si
+    }
+
     fun volverAlContrato() {
         guardado.edit().remove(CLAVE_SELLO).apply()
         _sello.value = null
@@ -88,5 +101,6 @@ class Configuracion @Inject constructor(
 
     private companion object {
         const val CLAVE_SELLO = "sello"
+        const val CLAVE_ORIGINALES = "originales_con_datos"
     }
 }

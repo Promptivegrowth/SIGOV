@@ -11,7 +11,7 @@ import { Card, CardHeader, CardTitle, CardDescription, CardContent } from '@/com
 import { Input, Field } from '@/components/ui/input'
 import { Checkbox, Progress } from '@/components/ui/primitives'
 import { Select, SelectTrigger, SelectValue, SelectContent, SelectItem } from '@/components/ui/select'
-import { armarEstructuraCovinca, type AvanceCovinca, type RamasCovinca } from '@/lib/estructura-covinca'
+import { armarEstructuraCovinca, estimarFotos, type AvanceCovinca, type RamasCovinca } from '@/lib/estructura-covinca'
 import { mensajeAmigable } from '@/lib/errores'
 
 const TODAS = '__todas__'
@@ -26,12 +26,21 @@ const RAMAS: { clave: keyof RamasCovinca; titulo: string; ruta: string }[] = [
   { clave: 'pci', titulo: 'PCI por plazo e ítem (solo ítems con fotos)', ruta: 'PCI/PCI_n/<plazo>/ITEM_n/ITEM_n(k).jpg' },
 ]
 
-/** Primer y último día de un mes AAAA-MM. */
-function rangoDelMes(mes: string) {
+/** Primer y último día de un mes AAAA-MM, o de una de sus quincenas. */
+function rangoDelMes(mes: string, parte: Periodo = 'mes') {
   const [a, m] = mes.split('-').map(Number)
   const ultimo = new Date(Date.UTC(a, m, 0)).getUTCDate()
-  return { desde: `${mes}-01`, hasta: `${mes}-${String(ultimo).padStart(2, '0')}` }
+  const [d1, d2] = parte === 'q1' ? [1, 15] : parte === 'q2' ? [16, ultimo] : [1, ultimo]
+  const dd = (d: number) => String(d).padStart(2, '0')
+  return { desde: `${mes}-${dd(d1)}`, hasta: `${mes}-${dd(d2)}` }
 }
+
+type Periodo = 'mes' | 'q1' | 'q2'
+
+/** Desde aquí el navegador puede quedarse sin memoria al armar el ZIP. */
+const LIMITE_RECOMENDADO = 1.5e9
+
+const gb = (b: number) => b >= 1e9 ? `${(b / 1e9).toFixed(1)} GB` : `${Math.max(1, Math.round(b / 1e6))} MB`
 
 /**
  * La entrega con la estructura documental que aprobó COVINCA (ZIP de Elvis):
@@ -42,6 +51,7 @@ export function EntregaCovinca() {
   const sb = React.useMemo(() => createClient(), [])
   const [mes, setMes] = React.useState(() => new Date(Date.now() - 5 * 3600e3).toISOString().slice(0, 7))
   const [cuadrilla, setCuadrilla] = React.useState(TODAS)
+  const [periodo, setPeriodo] = React.useState<Periodo>('mes')
   const [ramas, setRamas] = React.useState<RamasCovinca>({ programacion: true, materiales: true, rutinario: true, niveles: true, reportes: true, documentos: true, pci: true })
   const [avance, setAvance] = React.useState<AvanceCovinca | null>(null)
 
@@ -55,9 +65,21 @@ export function EntregaCovinca() {
     },
   })
 
+  // Cuánto pesarán las fotos (OBS-23: los originales JPG pesan ~3 MB)
+  const conFotos = ramas.rutinario || ramas.niveles || ramas.pci
+  const estimado = useQuery({
+    queryKey: ['covinca-estimado', service.id, mes, periodo, cuadrilla],
+    enabled: conFotos && /^\d{4}-\d{2}$/.test(mes),
+    queryFn: () => estimarFotos({
+      sb, servicioId: service.id, ...rangoDelMes(mes, periodo),
+      cuadrillaId: cuadrilla === TODAS ? null : cuadrilla,
+    }),
+  })
+  const muyGrande = conFotos && (estimado.data?.bytes ?? 0) > LIMITE_RECOMENDADO
+
   const armar = async () => {
     if (!Object.values(ramas).some(Boolean)) { toast.error('Elige al menos una carpeta'); return }
-    const { desde, hasta } = rangoDelMes(mes)
+    const { desde, hasta } = rangoDelMes(mes, periodo)
     setAvance({ paso: 'Preparando', hechos: 0, total: 1 })
     try {
       const zip = await armarEstructuraCovinca({
@@ -69,7 +91,7 @@ export function EntregaCovinca() {
       const url = URL.createObjectURL(zip)
       const a = document.createElement('a')
       a.href = url
-      a.download = `SERVICON_COVINCA_${mes}${cuadrilla === TODAS ? '' : '_' + (cuadrillas.data?.find((c: any) => c.id === cuadrilla)?.code ?? '')}.zip`
+      a.download = `SERVICON_COVINCA_${mes}${periodo === 'mes' ? '' : periodo === 'q1' ? '_01-15' : '_16-fin'}${cuadrilla === TODAS ? '' : '_' + (cuadrillas.data?.find((c: any) => c.id === cuadrilla)?.code ?? '')}.zip`
       document.body.appendChild(a)
       a.click()
       a.remove()
@@ -91,13 +113,24 @@ export function EntregaCovinca() {
         </CardTitle>
         <CardDescription className="text-[12px]">
           Las carpetas y nombres de archivo que aprobó COVINCA, armados solos desde lo
-          registrado. Las fotos salen en JPG; los ítems PCI solo aparecen si tienen fotos.
+          registrado. Las fotos salen en JPG de 4080 × 3072 (el original del celular cuando
+          lo hay); los ítems PCI solo aparecen si tienen fotos.
         </CardDescription>
       </CardHeader>
       <CardContent className="space-y-4">
-        <div className="grid gap-3 sm:grid-cols-2">
+        <div className="grid gap-3 sm:grid-cols-3">
           <Field label="Mes">
             <Input type="month" value={mes} onChange={(e) => setMes(e.target.value)} />
+          </Field>
+          <Field label="Período">
+            <Select value={periodo} onValueChange={(v) => setPeriodo(v as Periodo)}>
+              <SelectTrigger><SelectValue /></SelectTrigger>
+              <SelectContent>
+                <SelectItem value="mes">Mes completo</SelectItem>
+                <SelectItem value="q1">Del 1 al 15</SelectItem>
+                <SelectItem value="q2">Del 16 a fin de mes</SelectItem>
+              </SelectContent>
+            </Select>
           </Field>
           <Field label="Cuadrilla">
             <Select value={cuadrilla} onValueChange={setCuadrilla}>
@@ -130,6 +163,15 @@ export function EntregaCovinca() {
           ))}
         </div>
 
+        {conFotos && estimado.data && (
+          <p className={muyGrande ? 'text-destructive text-[12.5px]' : 'text-muted-foreground text-[12.5px]'}>
+            {estimado.data.fotos === 0
+              ? 'Sin fotos en ese período.'
+              : `≈ ${estimado.data.fotos.toLocaleString('es-PE')} fotos (${estimado.data.conOriginal.toLocaleString('es-PE')} con original) · ${gb(estimado.data.bytes)}.`}
+            {muyGrande && ' Es mucho para armarlo de una vez en el navegador: elige una cuadrilla o una quincena.'}
+          </p>
+        )}
+
         {avance && (
           <div className="space-y-1.5">
             <div className="text-muted-foreground flex justify-between text-[12px]">
@@ -142,7 +184,7 @@ export function EntregaCovinca() {
 
         <Button onClick={armar} loading={!!avance} className="w-full">
           <Download className="size-4" />
-          Descargar la entrega de {mes}
+          {muyGrande ? 'Armar de todas formas' : `Descargar la entrega de ${mes}`}
         </Button>
       </CardContent>
     </Card>

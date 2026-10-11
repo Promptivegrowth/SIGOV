@@ -71,6 +71,9 @@ class ConfiguracionViewModel @Inject constructor(
         configuracion.fijarSello(transformar(_estado.value.efectivo))
 
     fun volverAlContrato() = configuracion.volverAlContrato()
+
+    val originalesConDatos = configuracion.originalesConDatos
+    fun permitirOriginalesConDatos(si: Boolean) = configuracion.permitirOriginalesConDatos(si)
 }
 
 /**
@@ -85,6 +88,7 @@ fun PantallaConfiguracion(
 ) {
     val estado by vm.estado.collectAsStateWithLifecycle()
     val sello = estado.efectivo
+    val originalesConDatos by vm.originalesConDatos.collectAsStateWithLifecycle()
 
     ArmazonDeApartado(
         titulo = "Configuración",
@@ -146,6 +150,27 @@ fun PantallaConfiguracion(
                 style = MaterialTheme.typography.bodySmall,
                 color = MaterialTheme.colorScheme.onSurfaceVariant,
             )
+
+            // OBS-23: el original 4080 × 3072 de cada foto, para COVINCA
+            Spacer(Modifier.height(8.dp))
+            Text("FOTOS ORIGINALES", style = MaterialTheme.typography.titleSmall, fontWeight = FontWeight.Bold)
+            Text(
+                "Cada foto guarda además su original en JPG de 4080 × 3072, el que pide COVINCA. " +
+                    "Pesa unos 3 MB, así que por omisión sube solo con Wi-Fi; mientras tanto la foto " +
+                    "liviana ya está en SIGOV.",
+                style = MaterialTheme.typography.bodySmall,
+                color = MaterialTheme.colorScheme.onSurfaceVariant,
+            )
+            Card(
+                colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface),
+                border = CardDefaults.outlinedCardBorder(),
+            ) {
+                Opcion(
+                    "Subir originales con datos móviles",
+                    "Gasta datos del plan; úsalo si no tendrás Wi-Fi en días",
+                    originalesConDatos,
+                ) { vm.permitirOriginalesConDatos(it) }
+            }
 
             Spacer(Modifier.height(12.dp))
             Text(

@@ -49,8 +49,13 @@ interface ColaDao {
     )
     suspend fun porEnviar(ahora: Long, maxIntentos: Int = 8): List<EnvioPendiente>
 
-    @Query("SELECT COUNT(*) FROM cola WHERE estado IN ('PENDIENTE', 'ERROR')")
+    // Los originales de las fotos (OBS-23) no cuentan como pendientes: esperan
+    // al Wi-Fi y no son trabajo que se pierda; se informan aparte.
+    @Query("SELECT COUNT(*) FROM cola WHERE estado IN ('PENDIENTE', 'ERROR') AND tabla <> 'rpc:fijar_original_evidencia'")
     fun cuantosPendientes(): Flow<Int>
+
+    @Query("SELECT COUNT(*) FROM cola WHERE estado <> 'ENVIADO' AND tabla = 'rpc:fijar_original_evidencia'")
+    fun cuantosOriginales(): Flow<Int>
 
     @Query("SELECT clientId FROM cola WHERE estado = 'ENVIADO'")
     suspend fun yaEnviados(): List<String>
@@ -63,7 +68,7 @@ interface ColaDao {
     suspend fun limpiarViejos(antesDe: Long)
 
     /** Lo que sigue esperando, para poder enseñárselo al capataz. */
-    @Query("SELECT * FROM cola WHERE estado IN ('PENDIENTE','ERROR') ORDER BY creadoEn")
+    @Query("SELECT * FROM cola WHERE estado IN ('PENDIENTE','ERROR') AND tabla <> 'rpc:fijar_original_evidencia' ORDER BY creadoEn")
     fun enEspera(): Flow<List<EnvioPendiente>>
 
     /**
@@ -108,13 +113,16 @@ interface ArchivoDao {
     @Query("SELECT * FROM archivos WHERE clientId = :id AND subido = 0")
     suspend fun pendiente(id: String): ArchivoPendiente?
 
+    @Query("SELECT * FROM archivos WHERE clientId = :id")
+    suspend fun porId(id: String): ArchivoPendiente?
+
     @Query("UPDATE archivos SET subido = 1 WHERE clientId = :id")
     suspend fun marcarSubido(id: String)
 
     @Query("DELETE FROM archivos WHERE clientId = :id")
     suspend fun borrar(id: String)
 
-    @Query("SELECT COUNT(*) FROM archivos WHERE subido = 0")
+    @Query("SELECT COUNT(*) FROM archivos WHERE subido = 0 AND rutaDestino NOT LIKE '%/originales/%'")
     fun cuantosSinSubir(): Flow<Int>
 
     /** De qué registros falta subir la foto o el archivo. */

@@ -1,5 +1,6 @@
 'use client'
 
+import { encolarOriginal } from '@/lib/offline/original'
 import * as React from 'react'
 import { useQuery, useQueryClient } from '@tanstack/react-query'
 import {
@@ -370,6 +371,7 @@ export function PciItemSheet({
           const path = `${service.id}/pci/${item.pci_id}/${clientId}.webp`
 
           await enqueueBlob({ client_id: clientId, bucket: 'evidencias', path, blob: photo.blob })
+          const original = await encolarOriginal(photo, service.id, clientId)
           await enqueue({
             client_id: clientId,
             table: 'evidences',
@@ -390,6 +392,7 @@ export function PciItemSheet({
               progresiva_m: item.prog_start_m,
               taken_at: photo.takenAt.toISOString(),
               sha256: photo.sha256,
+              ...original,
               watermarked: true,
               device_id: await getDeviceId(),
               device_model: navigator.userAgent.slice(0, 90),

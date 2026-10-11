@@ -1,5 +1,6 @@
 'use client'
 
+import { encolarOriginal } from '@/lib/offline/original'
 import * as React from 'react'
 import Link from 'next/link'
 import { useQuery, useQueryClient } from '@tanstack/react-query'
@@ -336,6 +337,7 @@ export function ParteDetailClient({ orderId }: { orderId: string }) {
           const path = `${service.id}/${now.getFullYear()}/${String(now.getMonth() + 1).padStart(2, '0')}/${clientId}.webp`
 
           await enqueueBlob({ client_id: clientId, bucket: 'evidencias', path, blob: photo.blob })
+          const original = await encolarOriginal(photo, service.id, clientId)
           await enqueue({
             client_id: clientId,
             table: 'evidences',
@@ -357,6 +359,7 @@ export function ParteDetailClient({ orderId }: { orderId: string }) {
               progresiva_m: cameraFor.prog_start_m,
               taken_at: photo.takenAt.toISOString(),
               sha256: photo.sha256,
+              ...original,
               watermarked: true,
               device_id: await getDeviceId(),
               device_model: navigator.userAgent.slice(0, 90),

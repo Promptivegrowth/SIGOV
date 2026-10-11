@@ -1,5 +1,6 @@
 'use client'
 
+import { encolarOriginal } from '@/lib/offline/original'
 import * as React from 'react'
 import { useQuery, useQueryClient } from '@tanstack/react-query'
 import {
@@ -136,6 +137,7 @@ export function EvidenceGrid({
         : `${service.id}/pci/${pciItemId}/${clientId}.webp`
 
       await enqueueBlob({ client_id: clientId, bucket: 'evidencias', path, blob: sealed.blob })
+      const original = await encolarOriginal(sealed, service.id, clientId)
       await enqueue({
         client_id: clientId,
         table: 'evidences',
@@ -157,6 +159,7 @@ export function EvidenceGrid({
           progresiva_m: context?.progresivaM ?? null,
           taken_at: sealed.takenAt.toISOString(),
           sha256: sealed.sha256,
+          ...original,
           watermarked: true,
           device_id: deviceId,
           device_model: navigator.userAgent.slice(0, 90),

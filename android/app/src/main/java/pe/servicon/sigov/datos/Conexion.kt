@@ -88,4 +88,36 @@ class Conexion @Inject constructor(
 
     /** Lo mismo, preguntado de una vez. */
     fun ahora(): Boolean = hay.value
+
+    /**
+     * Al entrar a una red sin costo (Wi-Fi) se envía enseguida: es cuando
+     * suben los originales de las fotos que esperaban (OBS-23).
+     */
+    private val sinCosto: StateFlow<Boolean> = callbackFlow {
+        val oyente = object : ConnectivityManager.NetworkCallback() {
+            override fun onCapabilitiesChanged(red: Network, capacidades: NetworkCapabilities) {
+                trySend(capacidades.hasCapability(NetworkCapabilities.NET_CAPABILITY_NOT_METERED) &&
+                    capacidades.hasCapability(NetworkCapabilities.NET_CAPABILITY_VALIDATED))
+            }
+            override fun onLost(red: Network) { trySend(false) }
+        }
+        trySend(redSinCosto(contexto))
+        runCatching { gestor.registerDefaultNetworkCallback(oyente) }
+        awaitClose { runCatching { gestor.unregisterNetworkCallback(oyente) } }
+    }
+        .distinctUntilChanged()
+        .stateIn(ambito, SharingStarted.Eagerly, false)
+
+    init {
+        ambito.launch {
+            sinCosto.drop(1).filter { it }.collect { pedirSincronizacion(contexto) }
+        }
+    }
+}
+
+/** Si la red de ahora no cobra por megas (Wi-Fi o similar). */
+fun redSinCosto(contexto: Context): Boolean {
+    val gestor = contexto.getSystemService(Context.CONNECTIVITY_SERVICE) as ConnectivityManager
+    val c = gestor.getNetworkCapabilities(gestor.activeNetwork) ?: return false
+    return c.hasCapability(NetworkCapabilities.NET_CAPABILITY_NOT_METERED)
 }

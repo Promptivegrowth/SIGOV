@@ -213,10 +213,19 @@ jsPDF, ExcelJS, SheetJS y la cámara también se cargan bajo demanda.
 
 | Servicio | Costo | Cuándo se activa |
 |---|---|---|
-| Supabase Free → Pro | USD 25/mes | Al superar 500 MB de BD o 1 GB de Storage (~4 000 fotos) |
+| Supabase Pro | USD 25/mes | **Activo desde octubre de 2026** (incluye 8 GB de BD y 100 GB de Storage; luego ~USD 0,021 por GB-mes) |
 | Vercel Hobby → Pro | USD 25/mes | Al superar el ancho de banda o necesitar más cron jobs |
 | Mapas | **USD 0** | MapLibre + OpenStreetMap + Esri: sin API key ni licencia |
 
-Con fotos de ~250 KB, 1 GB de Storage cubre unas 4 000 evidencias. A ritmo de
-70 evidencias diarias eso es aproximadamente **2 meses** de operación real:
-conviene presupuestar el paso a Supabase Pro desde el inicio del contrato.
+Con el plan gratuito (1 GB) el Storage llegó a 918 MB en octubre de 2026 y se
+pasó a Pro. Desde entonces cada foto guarda dos archivos (OBS-23):
+
+- la foto liviana WebP de 1600 px (~250 KB), que es la que se ve y sube primero;
+- el **original JPG 4080 × 3072** (~2,5–3,5 MB en una cámara real), sellado y
+  con EXIF, que pide COVINCA. Sube solo con Wi-Fi salvo que el capataz lo
+  permita con datos en Configuración, y la entrega COVINCA lo copia tal cual.
+
+A 70 fotos diarias son unos 6–7 GB al mes: los 100 GB del plan alcanzan para
+más de un año, y después cada GB adicional cuesta unos USD 0,02 al mes. La
+pantalla de Entregables avisa cuando una entrega pasa de 1,5 GB para armarla
+por cuadrilla o por quincena.

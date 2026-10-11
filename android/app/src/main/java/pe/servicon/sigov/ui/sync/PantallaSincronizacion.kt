@@ -54,6 +54,8 @@ data class EstadoSincronizacion(
     val conError: Int = 0,
     val fotosPendientes: Int = 0,
     val ultimoEnvio: Long? = null,
+    /** Originales JPG de fotos que esperan subir (con Wi-Fi). */
+    val originales: Int = 0,
     /** Todo lo de la bandeja: pendiente, enviándose y lo llegado en 48 h. */
     val bandeja: List<EnvioPendiente> = emptyList(),
     /** Registros a los que todavía les falta subir su foto o archivo. */
@@ -74,7 +76,7 @@ fun grupoDe(tabla: String): GrupoEnvio = when (tabla) {
     "work_orders", "rpc:actualizar_parte", "rpc:enviar_parte", "rpc:cargar_pagina_documento",
     "rpc:quitar_pagina_documento", "safety_talks", "talk_attendance", "hygiene_checks",
     "ats_iperc", "ats_signatures", "vehicle_checks", "checklist_responses", "safety_equipment_checks" -> GrupoEnvio.REPORTES
-    "evidences", "rpc:dar_de_baja_evidencia" -> GrupoEnvio.FOTOS
+    "evidences", "rpc:dar_de_baja_evidencia", "rpc:fijar_original_evidencia" -> GrupoEnvio.FOTOS
     "cash_movements", "deposit_requests", "rpc:corregir_solicitud_deposito" -> GrupoEnvio.GASTOS
     else -> GrupoEnvio.OTROS
 }
@@ -103,8 +105,9 @@ class SincronizacionViewModel @Inject constructor(
         },
         cola.bandeja,
         cola.conArchivoPendiente,
-    ) { base, bandeja, conArchivo ->
-        base.copy(bandeja = bandeja, conArchivo = conArchivo)
+        cola.originalesPorSubir,
+    ) { base, bandeja, conArchivo, originales ->
+        base.copy(bandeja = bandeja, conArchivo = conArchivo, originales = originales)
     }.stateIn(viewModelScope, SharingStarted.WhileSubscribed(5_000), EstadoSincronizacion())
 
     /**
@@ -273,6 +276,16 @@ private fun Resumen(pendientes: Int, estado: EstadoSincronizacion) {
                 }
             }
 
+            if (estado.originales > 0) {
+                Spacer(Modifier.height(10.dp))
+                Text(
+                    if (estado.originales == 1) "1 original de foto espera Wi-Fi para subir"
+                    else "${estado.originales} originales de fotos esperan Wi-Fi para subir",
+                    style = MaterialTheme.typography.bodySmall,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                )
+            }
+
             if (estado.fotosPendientes > 0) {
                 Spacer(Modifier.height(10.dp))
                 Text(
@@ -385,7 +398,10 @@ private fun Envio(envio: EnvioPendiente, faltaArchivo: Boolean) {
                 Spacer(Modifier.height(8.dp))
                 Row(horizontalArrangement = Arrangement.spacedBy(6.dp)) {
                     Chip(etiqueta.texto, etiqueta.color)
-                    if (faltaArchivo) Chip("Foto por subir", Marca.Naranja)
+                    if (faltaArchivo && envio.tabla != "rpc:fijar_original_evidencia") Chip("Foto por subir", Marca.Naranja)
+                    if (envio.tabla == "rpc:fijar_original_evidencia" && envio.estado == EstadoEnvio.PENDIENTE) {
+                        Chip("Sube con Wi-Fi", MaterialTheme.colorScheme.onSurfaceVariant)
+                    }
                     if (envio.estado == EstadoEnvio.ERROR && envio.intentos > 0 && envio.intentos < MAX_INTENTOS) {
                         Chip(if (envio.intentos == 1) "1 intento" else "${envio.intentos} intentos", MaterialTheme.colorScheme.onSurfaceVariant)
                     }
@@ -442,6 +458,7 @@ private fun enCastellano(tabla: String): String = when (tabla) {
     "rpc:quitar_pagina_documento" -> "Quitar página"
     "rpc:dar_de_baja_evidencia" -> "Eliminar fotografía"
     "rpc:corregir_solicitud_deposito" -> "Corrección de depósito"
+    "rpc:fijar_original_evidencia" -> "Original JPG para COVINCA"
     else -> tabla.removePrefix("rpc:")
 }
 

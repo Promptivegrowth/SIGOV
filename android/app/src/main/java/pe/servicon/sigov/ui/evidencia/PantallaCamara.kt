@@ -280,8 +280,21 @@ internal fun VisorDeCamara(onListo: (ImageCapture) -> Unit) {
                 val proveedor = proveedorFuturo.get()
                 val vistaPrevia = Preview.Builder().build()
                     .also { it.setSurfaceProvider(vista.surfaceProvider) }
+                // La toma en la mayor resolución 4:3 del equipo: de ahí sale
+                // el original 4080 × 3072 que pide COVINCA (OBS-23)
                 val captura = ImageCapture.Builder()
                     .setCaptureMode(ImageCapture.CAPTURE_MODE_MINIMIZE_LATENCY)
+                    .setResolutionSelector(
+                        androidx.camera.core.resolutionselector.ResolutionSelector.Builder()
+                            .setAspectRatioStrategy(
+                                androidx.camera.core.resolutionselector.AspectRatioStrategy.RATIO_4_3_FALLBACK_AUTO_STRATEGY
+                            )
+                            .setResolutionStrategy(
+                                androidx.camera.core.resolutionselector.ResolutionStrategy.HIGHEST_AVAILABLE_STRATEGY
+                            )
+                            .build()
+                    )
+                    .setJpegQuality(95)
                     .build()
                 runCatching {
                     proveedor.unbindAll()

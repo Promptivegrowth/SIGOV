@@ -135,25 +135,59 @@ class EvidenciaRepositorio @Inject constructor(
         val tomadaEn = Instant.now()
         val delSello = momentoDelSello ?: tomadaEn
 
-        val mapa = leerEnderezada(original)
-            ?: error("No se pudo leer la fotografía. Vuelve a tomarla.")
-        val sellada = if (conMarcaDeAgua && sello.activo) {
-            imprimirSello(mapa, registro, punto, delSello, sello.conFechaYHora(), cuadrilla, pciCodigo)
-        } else {
-            mapa
-        }
-
         val clientId = UUID.randomUUID().toString()
         val destino = File(carpeta(), clientId + ".webp")
-        destino.outputStream().use { salida -> sellada.compress(formatoWebp(), 82, salida) }
-        if (sellada !== mapa) sellada.recycle()
-        mapa.recycle()
+        val sellar = conMarcaDeAgua && sello.activo
+
+        // OBS-23: primero el original JPG 4080 × 3072 que pide COVINCA, ya
+        // sellado; el WebP liviano sale de él, así el sello es el mismo en
+        // los dos. Si el equipo no da para una imagen tan grande (memoria),
+        // se sigue como antes: sin original, pero sin perder la foto.
+        val archivoOriginal = File(carpeta(), "$clientId-original.jpg")
+        val conOriginal = runCatching {
+            // Una toma chica no se amplía a 4080: sería inventar detalle
+            val medidaToma = medir(original)
+            if (maxOf(medidaToma.outWidth, medidaToma.outHeight) < LADO_MINIMO_ORIGINAL) error("toma chica")
+            val grande = leerEnderezada(original, LADO_ORIGINAL) ?: error("sin lectura")
+            val maestro = aCuatroTercios(grande)
+            if (maestro !== grande) grande.recycle()
+            val selladoGrande = if (sellar) {
+                imprimirSello(maestro, registro, punto, delSello, sello.conFechaYHora(), cuadrilla, pciCodigo)
+            } else maestro
+            archivoOriginal.outputStream().use { selladoGrande.compress(Bitmap.CompressFormat.JPEG, CALIDAD_ORIGINAL, it) }
+            val liviano = reducir(selladoGrande, 1600)
+            destino.outputStream().use { salida -> liviano.compress(formatoWebp(), 82, salida) }
+            if (liviano !== selladoGrande) liviano.recycle()
+            if (selladoGrande !== maestro) selladoGrande.recycle()
+            maestro.recycle()
+            true
+        }.getOrElse { fallo ->
+            if (fallo is OutOfMemoryError) System.gc()
+            archivoOriginal.delete()
+            false
+        }
+
+        if (!conOriginal) {
+            val mapa = leerEnderezada(original)
+                ?: error("No se pudo leer la fotografía. Vuelve a tomarla.")
+            val sellada = if (sellar) {
+                imprimirSello(mapa, registro, punto, delSello, sello.conFechaYHora(), cuadrilla, pciCodigo)
+            } else {
+                mapa
+            }
+            destino.outputStream().use { salida -> sellada.compress(formatoWebp(), 82, salida) }
+            if (sellada !== mapa) sellada.recycle()
+            mapa.recycle()
+        }
         original.delete()
 
         // Lo que no se imprime viaja dentro del archivo: coordenadas, fecha
         // real y de qué trabajo es (OBS-18). Antes de la huella, para que la
         // huella cubra también estos datos.
         escribirMetadatos(destino, registro, punto, tomadaEn, delSello, fase, cuadrilla, pciCodigo)
+        if (conOriginal) {
+            escribirMetadatos(archivoOriginal, registro, punto, tomadaEn, delSello, fase, cuadrilla, pciCodigo)
+        }
 
         val huella = MessageDigest.getInstance("SHA-256")
             .digest(destino.readBytes())
@@ -231,7 +265,46 @@ class EvidenciaRepositorio @Inject constructor(
             tipoMime = "image/webp",
         )
 
+        if (conOriginal) encolarOriginal(clientId, registro.servicioId, tomadaEn, archivoOriginal)
+
         evidencia
+    }
+
+    /**
+     * El original viaja aparte y después de la foto: primero sube el archivo
+     * y luego se registra en la nube. Por omisión espera a tener Wi-Fi (son
+     * unos 3 MB por foto); en Configuración se puede permitir con datos.
+     */
+    private suspend fun encolarOriginal(clientId: String, servicioId: String, tomadaEn: Instant, archivo: File) {
+        val enLima = tomadaEn.atZone(Peru.zona)
+        val ruta = servicioId + "/originales/" + enLima.year + "/" +
+            "%02d".format(enLima.monthValue) + "/" + clientId + ".jpg"
+        val medidas = medir(archivo)
+        val huella = MessageDigest.getInstance("SHA-256")
+            .digest(archivo.readBytes())
+            .joinToString("") { "%02x".format(it) }
+        val idOriginal = "$clientId-original"
+        cola.encolar(
+            tabla = TABLA_ORIGINAL,
+            clientId = idOriginal,
+            dependeDe = clientId,
+            etiqueta = "Original de la foto · ${medidas.outWidth}×${medidas.outHeight}",
+            cuerpo = buildJsonObject {
+                put("p_client_id", clientId)
+                put("p_path", ruta)
+                put("p_width", medidas.outWidth)
+                put("p_height", medidas.outHeight)
+                put("p_bytes", archivo.length())
+                put("p_sha256", huella)
+            },
+        )
+        cola.adjuntar(
+            clientId = idOriginal,
+            bucket = "evidencias",
+            rutaDestino = ruta,
+            archivoLocal = archivo,
+            tipoMime = "image/jpeg",
+        )
     }
 
     /**
@@ -255,6 +328,10 @@ class EvidenciaRepositorio @Inject constructor(
                 cuerpo = buildJsonObject { put("p_client_id", foto.clientId) },
             )
         }
+        // Su original, si todavía no salió, ya no tiene a qué foto pegarse
+        val idOriginal = foto.clientId + "-original"
+        cola.envio(idOriginal)?.takeIf { it.estado != EstadoEnvio.ENVIADO }?.let { cola.descartar(idOriginal) }
+        runCatching { File(carpeta(), idOriginal + ".jpg").delete() }
         partes.borrarEvidencia(foto.clientId)
         runCatching { File(foto.rutaLocal).delete() }
     }
@@ -408,7 +485,7 @@ class EvidenciaRepositorio @Inject constructor(
 
         // El tamaño del texto va con la foto, no con el equipo
         val lado = minOf(ancho, alto).toFloat()
-        val grande = (lado * 0.050f).coerceIn(22f, 96f)
+        val grande = (lado * 0.050f).coerceIn(22f, 240f)
         val chico = grande * 0.62f
         val margen = lado * 0.035f
 
@@ -570,6 +647,32 @@ class EvidenciaRepositorio @Inject constructor(
         return girada
     }
 
+    /**
+     * Lleva la toma a 4080 × 3072 (o 3072 × 4080 si es vertical), lo que pide
+     * COVINCA: se recorta al centro si no es 4:3 y se escala en un solo paso.
+     */
+    private fun aCuatroTercios(foto: Bitmap): Bitmap {
+        val horizontal = foto.width >= foto.height
+        val (anchoMeta, altoMeta) = if (horizontal) 4080 to 3072 else 3072 to 4080
+        val proporcion = anchoMeta.toFloat() / altoMeta
+        var w = foto.width
+        var h = (w / proporcion).toInt()
+        if (h > foto.height) { h = foto.height; w = (h * proporcion).toInt() }
+        val x = (foto.width - w) / 2
+        val y = (foto.height - h) / 2
+        if (w == anchoMeta && h == altoMeta && x == 0 && y == 0) return foto
+        val escala = Matrix().apply { setScale(anchoMeta.toFloat() / w, altoMeta.toFloat() / h) }
+        return Bitmap.createBitmap(foto, x, y, w, h, escala, true)
+    }
+
+    /** La misma imagen con [lado] px en su lado mayor (para el WebP liviano). */
+    private fun reducir(foto: Bitmap, lado: Int): Bitmap {
+        val mayor = maxOf(foto.width, foto.height)
+        if (mayor <= lado) return foto
+        val f = lado.toFloat() / mayor
+        return Bitmap.createScaledBitmap(foto, (foto.width * f).toInt(), (foto.height * f).toInt(), true)
+    }
+
     private fun carpeta(): File = File(contexto.filesDir, "evidencias").apply { mkdirs() }
 
     @Suppress("DEPRECATION")
@@ -582,3 +685,15 @@ class EvidenciaRepositorio @Inject constructor(
         BitmapFactory.decodeFile(archivo.absolutePath, this)
     }
 }
+
+/** La acción de la cola que registra el original de una foto en la nube. */
+const val TABLA_ORIGINAL = "rpc:fijar_original_evidencia"
+
+/** El original se lee hasta este lado mayor antes de llevarlo a 4080 × 3072. */
+private const val LADO_ORIGINAL = 4080
+
+/** JPG de entrega: calidad alta sin llegar a pesar como un RAW. */
+private const val CALIDAD_ORIGINAL = 88
+
+/** Desde este lado mayor la toma sostiene un original 4080 × 3072. */
+private const val LADO_MINIMO_ORIGINAL = 2400

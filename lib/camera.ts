@@ -125,11 +125,18 @@ export interface SealedPhoto {
   height: number
   takenAt: Date
   gps: GpsFix
+  /**
+   * El original JPG 4080 × 3072 que pide COVINCA (OBS-23), sellado igual.
+   * Solo cuando la toma es lo bastante grande como para sostenerlo.
+   */
+  master?: { blob: Blob; width: number; height: number; sha256: string }
 }
 
 const MAX_EDGE = 1600
 const MIN_EDGE = 640      // por debajo de esto la marca de agua no es legible
 const THUMB_EDGE = 360
+/** Desde este lado mayor la toma sostiene un original 4080 × 3072 sin inventar detalle. */
+const MASTER_MIN_EDGE = 2400
 
 /**
  * Redimensiona, quema la marca de agua y calcula el hash de integridad.
@@ -151,6 +158,30 @@ export async function sealPhoto(source: Blob | HTMLVideoElement, data: Watermark
       : 1
   const w = Math.max(1, Math.round(bitmap.width * scale))
   const h = Math.max(1, Math.round(bitmap.height * scale))
+
+  // El original, antes de soltar la imagen: 4080 × 3072 (o vertical),
+  // recortando al centro lo que no sea 4:3. Una foto chica no se amplía.
+  let master: SealedPhoto['master']
+  if (Math.max(bitmap.width, bitmap.height) >= MASTER_MIN_EDGE) {
+    try {
+      const horizontal = bitmap.width >= bitmap.height
+      const [mw, mh] = horizontal ? [4080, 3072] : [3072, 4080]
+      let sw = bitmap.width
+      let sh = Math.round(sw / (mw / mh))
+      if (sh > bitmap.height) { sh = bitmap.height; sw = Math.round(sh * (mw / mh)) }
+      const mCanvas = document.createElement('canvas')
+      mCanvas.width = mw
+      mCanvas.height = mh
+      const mCtx = mCanvas.getContext('2d')!
+      mCtx.imageSmoothingQuality = 'high'
+      mCtx.drawImage(bitmap, (bitmap.width - sw) / 2, (bitmap.height - sh) / 2, sw, sh, 0, 0, mw, mh)
+      drawWatermark(mCtx, mw, mh, data)
+      const mBlob = await toBlobSafe(mCanvas, 'image/jpeg', 0.88)
+      if (mBlob.type === 'image/jpeg') master = { blob: mBlob, width: mw, height: mh, sha256: await sha256(mBlob) }
+    } catch {
+      master = undefined   // sin memoria para el original: queda la foto liviana
+    }
+  }
 
   const canvas = document.createElement('canvas')
   canvas.width = w
@@ -179,6 +210,7 @@ export async function sealPhoto(source: Blob | HTMLVideoElement, data: Watermark
     height: h,
     takenAt: data.takenAt,
     gps: data.gps,
+    master,
   }
 }
 

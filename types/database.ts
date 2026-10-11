@@ -1835,6 +1835,12 @@ export type Database = {
           id: string
           lat: number
           lng: number
+          master_bytes: number | null
+          master_height: number | null
+          master_path: string | null
+          master_sha256: string | null
+          master_uploaded_at: string | null
+          master_width: number | null
           mime_type: string
           pci_item_id: string | null
           phase: Database["public"]["Enums"]["evidence_phase"]
@@ -1869,6 +1875,12 @@ export type Database = {
           id?: string
           lat: number
           lng: number
+          master_bytes?: number | null
+          master_height?: number | null
+          master_path?: string | null
+          master_sha256?: string | null
+          master_uploaded_at?: string | null
+          master_width?: number | null
           mime_type?: string
           pci_item_id?: string | null
           phase?: Database["public"]["Enums"]["evidence_phase"]
@@ -1903,6 +1915,12 @@ export type Database = {
           id?: string
           lat?: number
           lng?: number
+          master_bytes?: number | null
+          master_height?: number | null
+          master_path?: string | null
+          master_sha256?: string | null
+          master_uploaded_at?: string | null
+          master_width?: number | null
           mime_type?: string
           pci_item_id?: string | null
           phase?: Database["public"]["Enums"]["evidence_phase"]
@@ -5356,6 +5374,10 @@ export type Database = {
           id: string | null
           lat: number | null
           lng: number | null
+          master_bytes: number | null
+          master_height: number | null
+          master_path: string | null
+          master_width: number | null
           mime_type: string | null
           origen: string | null
           pci_code: string | null
@@ -6787,6 +6809,10 @@ export type Database = {
         Args: { p_crew_id?: string; p_fecha?: string; p_id: string }
         Returns: Json
       }
+      equipo_a_mi_alcance: {
+        Args: { p_crew_id: string; p_service_id: string }
+        Returns: boolean
+      }
       estoy_activo: { Args: never; Returns: boolean }
       evaluate_pci_deadlines: { Args: never; Returns: Json }
       evidence_gallery: {
@@ -6823,6 +6849,17 @@ export type Database = {
           p_to?: string
         }
         Returns: Json
+      }
+      fijar_original_evidencia: {
+        Args: {
+          p_bytes: number
+          p_client_id: string
+          p_height: number
+          p_path: string
+          p_sha256: string
+          p_width: number
+        }
+        Returns: undefined
       }
       fmt_progresiva: { Args: { m: number }; Returns: string }
       hoy_peru: { Args: never; Returns: string }

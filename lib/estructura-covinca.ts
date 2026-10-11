@@ -35,6 +35,8 @@ export type AvanceCovinca = { paso: string; hechos: number; total: number }
 
 type Foto = {
   storage_path: string
+  /** El original JPG 4080 × 3072 (OBS-23), si el celular ya lo subió. */
+  master_path: string | null
   phase: string | null
   work_date: string | null
   fecha_sello: string | null
@@ -62,18 +64,37 @@ function cuadrillaDe(f: { crew_numero: number | null; crew_sede: string | null; 
   return { numero, sede }
 }
 
-/** WebP → JPG, en el navegador. Si no se puede, se entrega el original. */
-async function aJpg(blob: Blob): Promise<Blob> {
-  if (blob.type === 'image/jpeg') return blob
+/**
+ * WebP → JPG, en el navegador. Si no se puede, se entrega el archivo tal cual.
+ *
+ * Con `covinca`, la foto sale en 4080 × 3072 (o 3072 × 4080 si es vertical),
+ * la medida que exige COVINCA (OBS-23): se recorta al centro lo que no sea
+ * 4:3. Es el camino de las fotos que no tienen original guardado.
+ */
+async function aJpg(blob: Blob, covinca = false): Promise<Blob> {
+  if (blob.type === 'image/jpeg' && !covinca) return blob
   try {
     const bmp = await createImageBitmap(blob)
+    const horizontal = bmp.width >= bmp.height
+    const [ancho, alto] = !covinca ? [bmp.width, bmp.height] : horizontal ? [4080, 3072] : [3072, 4080]
+    // Lo que se toma de la imagen: todo, o el centro 4:3
+    let sw = bmp.width
+    let sh = bmp.height
+    if (covinca) {
+      const r = ancho / alto
+      sh = Math.round(sw / r)
+      if (sh > bmp.height) { sh = bmp.height; sw = Math.round(sh * r) }
+    }
+    const sx = Math.round((bmp.width - sw) / 2)
+    const sy = Math.round((bmp.height - sh) / 2)
     const lienzo = document.createElement('canvas')
-    lienzo.width = bmp.width
-    lienzo.height = bmp.height
+    lienzo.width = ancho
+    lienzo.height = alto
     const ctx = lienzo.getContext('2d')!
     ctx.fillStyle = '#FFFFFF'
-    ctx.fillRect(0, 0, bmp.width, bmp.height)
-    ctx.drawImage(bmp, 0, 0)
+    ctx.fillRect(0, 0, ancho, alto)
+    ctx.imageSmoothingQuality = 'high'
+    ctx.drawImage(bmp, sx, sy, sw, sh, 0, 0, ancho, alto)
     bmp.close?.()
     return await new Promise<Blob>((res) => lienzo.toBlob((b) => res(b ?? blob), 'image/jpeg', 0.92))
   } catch {
@@ -114,6 +135,33 @@ async function enParalelo<T>(items: T[], cuantos: number, hacer: (item: T, i: nu
   }))
 }
 
+/**
+ * Cuánto va a pesar la entrega en fotos, antes de armarla. Con los
+ * originales JPG (~3 MB cada uno) un mes de todas las cuadrillas puede pasar
+ * de varios GB, y el navegador arma el ZIP en memoria: hay que poder verlo
+ * venir y partirlo por cuadrilla o por quincena.
+ */
+export async function estimarFotos(opciones: {
+  sb: SupabaseClient<any>
+  servicioId: string
+  desde: string
+  hasta: string
+  cuadrillaId: string | null
+}): Promise<{ fotos: number; conOriginal: number; bytes: number }> {
+  const { sb, servicioId, desde, hasta, cuadrillaId } = opciones
+  const filas = await todas<{ master_bytes: number | null }>((a, b) => {
+    let c = sb.from('v_evidences').select('master_bytes')
+      .eq('service_id', servicioId).in('origen', ['parte', 'pci'])
+      .gte('work_date', desde).lte('work_date', hasta)
+      .order('id').range(a, b)
+    if (cuadrillaId) c = c.eq('crew_id', cuadrillaId)
+    return c
+  })
+  // Sin original, el JPG 4080 × 3072 que se genera ronda 1,8 MB
+  const bytes = filas.reduce((t, f) => t + Number(f.master_bytes ?? 1_800_000), 0)
+  return { fotos: filas.length, conOriginal: filas.filter((f) => f.master_bytes != null).length, bytes }
+}
+
 export async function armarEstructuraCovinca(opciones: {
   sb: SupabaseClient<any>
   servicioId: string
@@ -145,7 +193,7 @@ export async function armarEstructuraCovinca(opciones: {
     avisar('Buscando fotos', 0, 1)
     const fotos = await todas<Foto>((a, b) => {
       let c = sb.from('v_evidences')
-        .select('storage_path, phase, work_date, fecha_sello, origen, crew_id, crew_code, crew_name, crew_numero, crew_sede, activity_code, activity_name, activity_carpeta_ns, sector_folder, progresiva_m, side, pci_code, pci_item_number, pci_term_days')
+        .select('storage_path, master_path, phase, work_date, fecha_sello, origen, crew_id, crew_code, crew_name, crew_numero, crew_sede, activity_code, activity_name, activity_carpeta_ns, sector_folder, progresiva_m, side, pci_code, pci_item_number, pci_term_days')
         .eq('service_id', servicioId)
         .in('origen', ['parte', 'pci'])
         .gte('work_date', desde)
@@ -157,6 +205,7 @@ export async function armarEstructuraCovinca(opciones: {
       return c
     })
     const firmadas = await firmar(sb, 'evidencias', fotos.map((f) => f.storage_path))
+    const originales = await firmar(sb, 'evidencias', fotos.flatMap((f) => (f.master_path ? [f.master_path] : [])))
 
     let hechas = 0
     await enParalelo(fotos, 6, async (f) => {
@@ -164,8 +213,19 @@ export async function armarEstructuraCovinca(opciones: {
       const fecha = (f.fecha_sello ?? f.work_date ?? '').slice(0, 10) || (f.work_date ?? '')
       try {
         if (!url) throw new Error('sin enlace')
-        const jpg = await aJpg(await (await fetch(url)).blob())
-        const detalle = [f.activity_code, f.activity_name, f.crew_name, f.phase].filter(Boolean).join(' · ')
+        // El original del celular va tal cual: ya es JPG 4080 × 3072, con su
+        // sello y su EXIF. Si la foto no lo tiene (anterior a su uso, o no
+        // subió todavía), se genera desde la foto liviana y se dice.
+        const urlOriginal = f.master_path ? originales.get(f.master_path) : undefined
+        let jpg: Blob | null = null
+        if (urlOriginal) {
+          const r = await fetch(urlOriginal)
+          if (r.ok) jpg = await r.blob()
+        }
+        const ampliada = !jpg
+        if (!jpg) jpg = await aJpg(await (await fetch(url)).blob(), true)
+        const detalle = [f.activity_code, f.activity_name, f.crew_name, f.phase,
+          ampliada && 'ampliada desde la foto liviana: no tiene original'].filter(Boolean).join(' · ')
 
         // Lo de un ítem PCI va solo a la rama PCI, aunque se haya tomado
         // desde el parte (Elvis: «lo único que varía es dónde se guardan las
