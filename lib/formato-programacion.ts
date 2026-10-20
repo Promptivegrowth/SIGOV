@@ -2,7 +2,7 @@
  * El formato «PROGRAMACION SEMANAL» de COVINCA (hoja PS-ST04-SERVICON).
  *
  * Reproduce el Excel que hoy se llena a mano (C07, semana 05–11/10/2026):
- * cabecera con residente, supervisor, inspector y fecha; tabla con N°,
+ * cabecera con residente, supervisor, visor COVINCA y fecha; tabla con N°,
  * CODIGO, ST, PCI, origen, n.º y descripción de partida, unidad,
  * observación; por cada día de lunes a sábado Lado · Metrado · De · A; y el
  * total. Debajo, las partidas subcontratadas y las observaciones.
@@ -11,7 +11,7 @@
  * mano lo que ya registró.
  */
 import type { SupabaseClient } from '@supabase/supabase-js'
-import { semanaDe } from './covinca'
+import { semanaDe, semanaDelContrato } from './covinca'
 import { LADOS } from './lados'
 
 const AZUL = 'FF17375E'
@@ -83,7 +83,8 @@ export async function programacionSemanalXlsx(opciones: {
   const ws = wb.addWorksheet('PS-ST' + String(stCuadrilla ?? '').padStart(2, '0') + '-SERVICON', {
     views: [{ showGridLines: false, zoomScale: 70 }],
     pageSetup: {
-      orientation: 'landscape', fitToPage: true, fitToWidth: 1, fitToHeight: 0,
+      // A4 apaisado (Elvis, P40)
+      paperSize: 9, orientation: 'landscape', fitToPage: true, fitToWidth: 1, fitToHeight: 0,
       margins: { left: 0.39, right: 0, top: 0.59, bottom: 0, header: 0.59, footer: 0 },
     },
   })
@@ -120,7 +121,7 @@ export async function programacionSemanalXlsx(opciones: {
   rotulo('E1:AM4', 'PROGRAMACION SEMANAL', { size: 20, color: 'FFFFFFFF', fill: AZUL })
   rotulo('E5:I5', 'RESIDENTE', { font: 'Aptos Narrow' })
   rotulo('J5:T5', 'SUPERVISOR', { font: 'Aptos Narrow' })
-  rotulo('U5:AI5', 'INSPECTOR', { font: 'Aptos Narrow' })
+  rotulo('U5:AI5', 'VISOR COVINCA', { font: 'Aptos Narrow' })
   rotulo('AJ5:AM5', 'FECHA', { font: 'Aptos Narrow' })
   rotulo('E6:I6', plan.residente ?? '', { font: 'Aptos Narrow' })
   rotulo('J6:T6', plan.supervisor ?? items[0]?.supervisor_name ?? '', { font: 'Aptos Narrow' })
@@ -164,7 +165,10 @@ export async function programacionSemanalXlsx(opciones: {
   rotulo('I11:I15', 'Observacion', cab)
   ws.mergeCells('J11:J15'); ws.getCell('J11').fill = relleno(AZUL)
   const semana = rotulo('K11:AH11', '', cab)
-  semana.value = plan.semana_contrato ?? plan.week ?? null
+  // La semana del contrato: la 01 empezó el 01/10/2026 (Elvis, P41)
+  // (antes del inicio del contrato no hay semana: queda en blanco)
+  const delContrato = semanaDelContrato(lunes)
+  semana.value = plan.semana_contrato ?? (delContrato >= 1 ? delContrato : null)
   semana.numFmt = '"SEMANA" 00'
   const letra = (n: number) => ws.getColumn(n).letter
   const fechas = Array.from({ length: 6 }, (_, i) => {
@@ -274,7 +278,21 @@ export async function programacionSemanalXlsx(opciones: {
   ws.getCell(`A${fila}`).border = { top: { style: 'thin' }, left: { style: 'thin' }, bottom: { style: 'thin' }, right: { style: 'thin' } }
   ws.mergeCells(`C${fila}:AN${fila + 4}`)
   ws.getCell(`C${fila}`).border = { top: { style: 'thin' }, bottom: { style: 'thin' }, right: { style: 'thin' } }
-  ws.pageSetup.printArea = `A1:AN${fila + 4}`
+
+  // ── Firmas: supervisor, residente y visor COVINCA (Elvis, P40) ─────
+  const yFirma = fila + 7
+  const firmas: { desde: string; hasta: string; cargo: string; nombre: string | null | undefined }[] = [
+    { desde: 'B', hasta: 'H', cargo: 'SUPERVISOR', nombre: plan.supervisor ?? items[0]?.supervisor_name },
+    { desde: 'N', hasta: 'X', cargo: 'RESIDENTE', nombre: plan.residente },
+    { desde: 'AD', hasta: 'AL', cargo: 'VISOR COVINCA', nombre: plan.inspector },
+  ]
+  for (const { desde, hasta, cargo, nombre } of firmas) {
+    ws.mergeCells(`${desde}${yFirma}:${hasta}${yFirma + 2}`)
+    ws.getCell(`${desde}${yFirma}`).border = { bottom: { style: 'thin' } }
+    rotulo(`${desde}${yFirma + 3}:${hasta}${yFirma + 3}`, cargo, { font: 'Aptos Narrow' })
+    rotulo(`${desde}${yFirma + 4}:${hasta}${yFirma + 4}`, nombre ?? '', { font: 'Aptos Narrow' })
+  }
+  ws.pageSetup.printArea = `A1:AN${yFirma + 4}`
 
   const n = crew.numero ?? Number(String(crew.code ?? '').match(/\d+/)?.[0] ?? 0)
   const nombre = `${lunes}_al_${domingo}_C${String(n).padStart(2, '0')}_PROGRAMACION-ACTIVIDADES.xlsx`

@@ -223,6 +223,8 @@ class MainActivity : ComponentActivity() {
                         PantallaAst(
                             alVolver = { nav.popBackStack() },
                             alFotografiar = { nav.navigate("documento/ats") },
+                            alFotografiarConductor = { v -> nav.navigate("documento/ats_conductor?vehiculo=$v") },
+                            alFotografiarPetar = { nav.navigate("documento/petar") },
                         )
                     }
                     composable("avance") {

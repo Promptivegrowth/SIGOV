@@ -24,6 +24,7 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@
 import { FormDialog, ConfirmDialog, type FormField } from '@/components/forms/form-dialog'
 import { PLAN_ITEM_STATUS } from '@/lib/constants'
 import { cn, fmtDate, fmtNumber, startOfWeek, toISODate, addDays, isoWeek, truncate, parseProgresiva, fmtProgresiva } from '@/lib/utils'
+import { semanaDelContrato } from '@/lib/covinca'
 import { toast } from 'sonner'
 import { mensajeAmigable } from '@/lib/errores'
 
@@ -47,6 +48,9 @@ export function ProgramacionClient() {
   const monday = React.useMemo(() => addDays(startOfWeek(), offset * 7), [offset])
   const sunday = React.useMemo(() => addDays(monday, 6), [monday])
   const weekNo = isoWeek(monday)
+  // Lo que se muestra es la semana del contrato (la 01 empezó el 01/10/2026; P41)
+  const semanaContrato = semanaDelContrato(toISODate(monday))
+  const semanaVisible = String(semanaContrato >= 1 ? semanaContrato : weekNo).padStart(2, '0')
 
   const plan = useQuery({
     queryKey: ['weekly-plan', service.id, toISODate(monday)],
@@ -358,7 +362,7 @@ export function ProgramacionClient() {
               <ChevronLeft className="size-4" />
             </Button>
             <div className="px-2 text-center">
-              <div className="text-[13px] font-semibold leading-tight">Semana {weekNo}</div>
+              <div className="text-[13px] font-semibold leading-tight">Semana {semanaVisible}</div>
               <div className="text-muted-foreground text-[10.5px] leading-tight">
                 {fmtDate(monday)} – {fmtDate(sunday)}
               </div>
@@ -532,7 +536,7 @@ export function ProgramacionClient() {
         open={itemForm.open}
         onOpenChange={(v) => setItemForm({ open: v, row: v ? itemForm.row : undefined })}
         title={itemForm.row ? 'Editar actividad programada' : 'Programar actividad'}
-        description={'Semana ' + weekNo + ' - del ' + fmtDate(monday) + ' al ' + fmtDate(sunday) + '. La cuadrilla la vera en su celular al publicar.'}
+        description={'Semana ' + semanaVisible + ' - del ' + fmtDate(monday) + ' al ' + fmtDate(sunday) + '. La cuadrilla la vera en su celular al publicar.'}
         fields={itemFields}
         initial={itemForm.row ? {
           ...itemForm.row,

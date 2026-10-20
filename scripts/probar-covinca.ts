@@ -8,7 +8,7 @@
 import assert from 'node:assert/strict'
 import {
   RAIZ, carpetaCuadrilla, codigoCuadrilla, progresiva, kmDeFoto, lado, fase,
-  carpetaPlazo, carpetaPci, semanaDe, rutas, nombreLibre, aCovinca, letraDeRepetida,
+  carpetaPlazo, carpetaPci, semanaDe, rutas, nombreLibre, aCovinca, letraDeRepetida, semanaDelContrato,
 } from '../lib/covinca'
 
 let ok = 0
@@ -81,6 +81,11 @@ caso('documentos (CHARLA_SEGURIDAD, CHECKLIST_VEHICULOS de P28, REPORTE_DIARIO d
   assert.equal(cv.archivo, '2026-10-01_C01_CHECKLIST_VEHICULO-01.pdf')
   const rd = rutas.documento({ fecha: '2026-10-01', cuadrilla: 1, sede: 'CAMANA', tipo: 'reporte_diario', extension: '.pdf' })
   assert.equal(rd.archivo, '2026_10_01_C01_REPORTE_DIARIO.pdf')
+  const ac = rutas.documento({ fecha: '2026-10-01', cuadrilla: 1, sede: 'CAMANA', tipo: 'ats_conductor', detalle: 'VEHICULO-01', extension: '.jpg' })
+  assert.equal(ac.carpeta, base + '/CHARLAS_ATS')
+  assert.equal(ac.archivo, '2026-10-01_C01_ATS-CONDUCTOR_VEHICULO-01.jpg')
+  const pt = rutas.documento({ fecha: '2026-10-01', cuadrilla: 1, sede: 'CAMANA', tipo: 'petar', extension: '.jpg' })
+  assert.equal(pt.carpeta, base + '/PETAR_ACTIVIDADES')
   const ats = rutas.documento({ fecha: '2026-10-01', cuadrilla: 1, sede: 'CAMANA', tipo: 'ats', detalle: 'Limpieza cuneta', extension: '.pdf' })
   assert.equal(ats.archivo, '2026-10-01_C01_ATS_LIMPIEZA-CUNETA.pdf')
 })
@@ -99,6 +104,15 @@ caso('programación y materiales', () => {
   assert.equal(cruce[0].archivo, cruce[1].archivo)
   const m = rutas.materiales({ mes: '2026-10', cuadrillas: 7 })
   assert.equal(m.archivo, '2026-10_SEGUIMIENTO-DIARIO-DE-MATERIALES_7-CUADRILLAS.xlsx')
+})
+
+caso('semana del contrato (P41: la 01 empezó el 01/10/2026)', () => {
+  assert.equal(semanaDelContrato('2026-10-01'), 1)
+  assert.equal(semanaDelContrato('2026-10-04'), 1)
+  assert.equal(semanaDelContrato('2026-10-05'), 2)
+  assert.equal(semanaDelContrato('2026-10-11'), 2)
+  assert.equal(semanaDelContrato('2026-10-20'), 4)
+  assert.equal(semanaDelContrato('2026-11-02'), 6)
 })
 
 caso('nombres repetidos y limpieza', () => {

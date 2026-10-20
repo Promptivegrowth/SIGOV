@@ -175,7 +175,7 @@ export function SupervisorDashboard() {
           <Card>
             <CardHeader className="pb-1">
               <CardTitle className="text-[15px]">Avance de la programación</CardTitle>
-              <CardDescription className="text-[12px]">Semana {semana.numero} · {semana.etiqueta}</CardDescription>
+              <CardDescription className="text-[12px]">Semana {String(semana.numero).padStart(2, '0')} · {semana.etiqueta}</CardDescription>
             </CardHeader>
             <CardContent className="flex flex-col items-center gap-4 pb-6">
               {resumen.isLoading ? (

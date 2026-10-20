@@ -99,6 +99,20 @@ export function semanaDe(fechaIso: string): { lunes: string; domingo: string } {
   return { lunes: lunes.toISOString().slice(0, 10), domingo: domingo.toISOString().slice(0, 10) }
 }
 
+/** El contrato empezó a ejecutarse el jueves 01/10/2026: esa es la semana 01 (Elvis, P41). */
+export const INICIO_DEL_CONTRATO = '2026-10-01'
+
+/**
+ * La semana del contrato de una fecha: la 01 es la que contiene el inicio
+ * (lunes a domingo), y de ahí se cuenta. Del 05 al 11/10/2026 es la 02, como
+ * en la programación C07.
+ */
+export function semanaDelContrato(fechaIso: string, inicio = INICIO_DEL_CONTRATO): number {
+  const primera = new Date(semanaDe(inicio).lunes + 'T12:00:00Z').getTime()
+  const esta = new Date(semanaDe(fechaIso).lunes + 'T12:00:00Z').getTime()
+  return Math.round((esta - primera) / (7 * 86400000)) + 1
+}
+
 /**
  * Las rutas de la estructura. Cada función devuelve carpeta y nombre de
  * archivo; el empaquetador resuelve los choques de nombre con un correlativo.
@@ -145,7 +159,7 @@ export const rutas = {
   /** Reportes, charlas, ATS, checklist y PETAR por cuadrilla. */
   documento(p: {
     fecha: string; cuadrilla: number; sede: string
-    tipo: 'ats' | 'charla' | 'checklist_vehicular' | 'reporte_diario' | 'petar' | 'otro'
+    tipo: 'ats' | 'ats_conductor' | 'charla' | 'checklist_vehicular' | 'reporte_diario' | 'petar' | 'otro'
     detalle?: string | null; extension: string
   }) {
     const mes = p.fecha.slice(0, 7)
@@ -155,6 +169,9 @@ export const rutas = {
     switch (p.tipo) {
       case 'ats':
         return { carpeta: `${base}/CHARLAS_ATS`, archivo: [p.fecha, cc, 'ATS', detalle].filter(Boolean).join('_') + p.extension }
+      case 'ats_conductor':
+        // El del conductor, por foto como el de la cuadrilla (Elvis, P43)
+        return { carpeta: `${base}/CHARLAS_ATS`, archivo: `${p.fecha}_${cc}_ATS-CONDUCTOR_${detalle ?? 'VEHICULO-01'}${p.extension}` }
       case 'charla':
         return { carpeta: `${base}/CHARLA_SEGURIDAD`, archivo: `${p.fecha}_${cc}_CHARLA-5-MIN${p.extension}` }
       case 'checklist_vehicular':

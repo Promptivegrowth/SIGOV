@@ -12,6 +12,7 @@ import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription, Di
 import { Select, SelectTrigger, SelectValue, SelectContent, SelectItem } from '@/components/ui/select'
 import { programacionSemanalXlsx } from '@/lib/formato-programacion'
 import { f7Xlsx } from '@/lib/formato-f7'
+import { semanaDelContrato } from '@/lib/covinca'
 import { mensajeAmigable } from '@/lib/errores'
 
 /** El logo de la cabecera del formato, una sola vez por sesión. */
@@ -27,7 +28,7 @@ export async function logoServicon(): Promise<ArrayBuffer | null> {
 /**
  * Descarga la programación de la semana en el formato de COVINCA
  * (PROGRAMACION SEMANAL · PS-ST04), una cuadrilla por archivo. La cabecera
- * —residente, supervisor, inspector, n.º de semana del contrato y fecha— se
+ * —residente, supervisor, visor COVINCA, n.º de semana del contrato y fecha— se
  * guarda en la semana para no volver a escribirla.
  */
 export function FormatoCovinca({
@@ -80,7 +81,9 @@ export function FormatoCovinca({
       residente: plan?.residente ?? '',
       supervisor: plan?.supervisor ?? '',
       inspector: plan?.inspector ?? '',
-      semana_contrato: plan?.semana_contrato != null ? String(plan.semana_contrato) : '',
+      // Si no se fijó, la que corresponde desde el 01/10/2026 (P41)
+      semana_contrato: plan?.semana_contrato != null ? String(plan.semana_contrato)
+        : semanaDelContrato(lunes) >= 1 ? String(semanaDelContrato(lunes)) : '',
       emitido_on: plan?.emitido_on ?? new Date(Date.now() - 5 * 3600e3).toISOString().slice(0, 10),
     })
     if (!cuadrilla && cuadrillas[0]) setCuadrilla(cuadrillas[0].id)
@@ -150,7 +153,7 @@ export function FormatoCovinca({
           </div>
           {campo('residente', 'Residente')}
           {campo('supervisor', 'Supervisor')}
-          {campo('inspector', 'Inspector')}
+          {campo('inspector', 'Visor COVINCA')}
           {campo('semana_contrato', 'N.º de semana del contrato', 'number')}
           {campo('emitido_on', 'Fecha de emisión', 'date')}
         </div>

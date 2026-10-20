@@ -7567,10 +7567,12 @@ export type Database = {
         | "otro"
       documento_tipo:
         | "ats"
+        | "ats_conductor"
         | "charla"
         | "checklist_vehicular"
         | "higiene"
         | "inspeccion_equipos"
+        | "petar"
         | "otro"
       evidence_phase: "antes" | "durante" | "despues" | "general"
       hygiene_item:
@@ -7849,10 +7851,12 @@ export const Constants = {
       ],
       documento_tipo: [
         "ats",
+        "ats_conductor",
         "charla",
         "checklist_vehicular",
         "higiene",
         "inspeccion_equipos",
+        "petar",
         "otro",
       ],
       evidence_phase: ["antes", "durante", "despues", "general"],

@@ -20,10 +20,12 @@ import { mensajeAmigable } from '@/lib/errores'
 const TIPOS: Record<string, { nombre: string; sigla: string }> = {
   reporte_diario: { nombre: 'Reporte diario', sigla: 'RD' },
   ats: { nombre: 'ATS – Análisis de Trabajo Seguro', sigla: 'ATS' },
+  ats_conductor: { nombre: 'ATS del conductor', sigla: 'AC' },
   charla: { nombre: 'Charla de 5 minutos', sigla: 'CH' },
   checklist_vehicular: { nombre: 'Checklist vehicular', sigla: 'CV' },
   higiene: { nombre: 'Checklist de higiene', sigla: 'HI' },
   inspeccion_equipos: { nombre: 'Inspección de equipos', sigla: 'EQ' },
+  petar: { nombre: 'PETAR', sigla: 'PT' },
   otro: { nombre: 'Otro formato', sigla: 'OT' },
 }
 const ORDEN = Object.keys(TIPOS)

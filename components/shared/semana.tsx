@@ -4,6 +4,7 @@ import * as React from 'react'
 import { ChevronLeft, ChevronRight } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import { startOfWeek, toISODate, addDays, isoWeek, cn } from '@/lib/utils'
+import { semanaDelContrato } from '@/lib/covinca'
 
 /**
  * La semana como unidad de trabajo.
@@ -18,7 +19,10 @@ export interface Semana {
   from: string
   /** Domingo, en ISO */
   to: string
-  /** Número de semana ISO */
+  /**
+   * La semana del contrato: la 01 empezó el 01/10/2026 (Elvis, P41). Antes
+   * de esa fecha, el número de semana ISO.
+   */
   numero: number
   /** "08 – 14 set 2026" */
   etiqueta: string
@@ -41,7 +45,7 @@ export function semanaDe(fecha: Date | string = new Date()): Semana {
   return {
     from: toISODate(lunes),
     to: toISODate(domingo),
-    numero: isoWeek(lunes),
+    numero: semanaDelContrato(toISODate(lunes)) >= 1 ? semanaDelContrato(toISODate(lunes)) : isoWeek(lunes),
     etiqueta,
   }
 }
@@ -101,7 +105,7 @@ export function SelectorDeSemana({
       >
         <span className="block text-[12.5px] font-semibold leading-tight">{semana.etiqueta}</span>
         <span className="text-muted-foreground block text-[10.5px] leading-tight">
-          {actual ? 'Semana en curso' : `Semana ${semana.numero}`}
+          {actual ? `Semana en curso · ${String(semana.numero).padStart(2, '0')}` : `Semana ${String(semana.numero).padStart(2, '0')}`}
         </span>
       </button>
 

@@ -59,6 +59,8 @@ data class DocumentoDelDia(
         get() = when (tipo) {
             "reporte_diario" -> "Reporte diario"
             "ats" -> "ATS – Análisis de Trabajo Seguro"
+            "ats_conductor" -> "ATS del conductor" + (placa?.let { " · $it" } ?: "")
+            "petar" -> "PETAR"
             "charla" -> "Charla de 5 minutos"
             "checklist_vehicular" -> "Checklist vehicular" + (placa?.let { " · $it" } ?: "")
             "higiene" -> "Checklist de higiene"
@@ -292,7 +294,7 @@ class DocumentosRepositorio @Inject constructor(
 
     companion object {
         const val TABLA_COLA = "rpc:cargar_pagina_documento"
-        private val ORDEN = listOf("reporte_diario", "ats", "charla", "checklist_vehicular", "higiene", "inspeccion_equipos", "otro")
+        private val ORDEN = listOf("reporte_diario", "ats", "ats_conductor", "charla", "checklist_vehicular", "higiene", "inspeccion_equipos", "petar", "otro")
     }
 }
 

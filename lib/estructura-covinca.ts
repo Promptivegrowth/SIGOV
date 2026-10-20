@@ -323,10 +323,10 @@ export async function armarEstructuraCovinca(opciones: {
         .sort((a: any, b: any) => String(a.taken_at).localeCompare(String(b.taken_at)))
         .map((p: any) => {
           const cq = cuadrillaDe({ crew_numero: d.crews?.numero, crew_sede: d.crews?.sede, crew_code: d.crews?.code, crew_name: d.crews?.name })
-          const tipo = d.tipo === 'ats' || d.tipo === 'charla' || d.tipo === 'checklist_vehicular' ? d.tipo : 'otro'
+          const tipo = ['ats', 'ats_conductor', 'charla', 'checklist_vehicular', 'petar'].includes(d.tipo) ? d.tipo : 'otro'
           const r = rutas.documento({
             fecha: d.doc_date, cuadrilla: cq.numero, sede: cq.sede, tipo,
-            detalle: d.tipo === 'checklist_vehicular' ? correlativo.get(d.vehicle_id) ?? null : d.titulo,
+            detalle: ['checklist_vehicular', 'ats_conductor'].includes(d.tipo) ? correlativo.get(d.vehicle_id) ?? null : d.titulo,
             extension: '.jpg',
           })
           return { d, p, carpeta: r.carpeta, archivo: nombreLibre(usados, r.carpeta, r.archivo) }
