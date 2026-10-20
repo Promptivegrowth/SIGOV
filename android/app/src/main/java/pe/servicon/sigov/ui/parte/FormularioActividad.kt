@@ -23,6 +23,7 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.window.Dialog
 import androidx.compose.ui.window.DialogProperties
 import pe.servicon.sigov.datos.Actividad
+import pe.servicon.sigov.datos.DetalleFor001
 import pe.servicon.sigov.datos.ItemPci
 import pe.servicon.sigov.datos.ItemProgramado
 import pe.servicon.sigov.datos.OrigenDelTrabajo
@@ -102,6 +103,7 @@ fun FormularioActividad(
         cantidad: Double,
         observacion: String?,
         origen: OrigenDelTrabajo,
+        detalle: DetalleFor001,
     ) -> Unit,
 ) {
     // Lo ya culminado no se ofrece: volver a registrar contra una partida
@@ -123,6 +125,13 @@ fun FormularioActividad(
     var lado by remember { mutableStateOf("derecho") }
     var metrado by remember { mutableStateOf("") }
     var observacion by remember { mutableStateOf("") }
+    // FOR:001: horas, personas y medidas de lo ejecutado
+    var horaIni by remember { mutableStateOf("") }
+    var horaFin by remember { mutableStateOf("") }
+    var personas by remember { mutableStateOf("") }
+    var longitud by remember { mutableStateOf("") }
+    var ancho by remember { mutableStateOf("") }
+    var espesor by remember { mutableStateOf("") }
     var error by remember { mutableStateOf<String?>(null) }
     var buscando by remember { mutableStateOf(false) }
 
@@ -272,6 +281,23 @@ fun FormularioActividad(
                         modifier = Modifier.fillMaxWidth(),
                     )
 
+                    // Lo que pide el reporte diario FOR:001 de cada actividad
+                    Text(
+                        "Para el reporte diario: horario, personas y medidas (m)",
+                        style = MaterialTheme.typography.labelLarge,
+                        fontWeight = FontWeight.SemiBold,
+                    )
+                    Row(horizontalArrangement = Arrangement.spacedBy(12.dp)) {
+                        CampoCorto(horaIni, { horaIni = it }, "Inicio", "07:30", KeyboardType.Number, Modifier.weight(1f))
+                        CampoCorto(horaFin, { horaFin = it }, "Fin", "12:00", KeyboardType.Number, Modifier.weight(1f))
+                        CampoCorto(personas, { personas = it }, "Personas", "6", KeyboardType.Number, Modifier.weight(1f))
+                    }
+                    Row(horizontalArrangement = Arrangement.spacedBy(12.dp)) {
+                        CampoCorto(longitud, { longitud = it }, "Largo (m)", "100", KeyboardType.Decimal, Modifier.weight(1f))
+                        CampoCorto(ancho, { ancho = it }, "Ancho (m)", "1.5", KeyboardType.Decimal, Modifier.weight(1f))
+                        CampoCorto(espesor, { espesor = it }, "Espesor", "0.05", KeyboardType.Decimal, Modifier.weight(1f))
+                    }
+
                     OutlinedTextField(
                         value = observacion,
                         onValueChange = { observacion = it },
@@ -301,6 +327,7 @@ fun FormularioActividad(
                     Button(
                         onClick = {
                             error = validar(actividad, tramo, progIni, progFin, metrado, origen, observacion)
+                                ?: validarFor001(horaIni, horaFin, personas, longitud, ancho, espesor)
                             if (error == null) {
                                 alGuardar(
                                     actividad!!,
@@ -311,6 +338,14 @@ fun FormularioActividad(
                                     metrado.replace(",", ".").toDouble(),
                                     observacion.ifBlank { null },
                                     origen,
+                                    DetalleFor001(
+                                        horaInicio = DetalleFor001.hora(horaIni),
+                                        horaFin = DetalleFor001.hora(horaFin),
+                                        personas = personas.trim().toIntOrNull(),
+                                        longitud = DetalleFor001.numero(longitud),
+                                        ancho = DetalleFor001.numero(ancho),
+                                        espesor = DetalleFor001.numero(espesor),
+                                    ),
                                 )
                             }
                         },
@@ -538,6 +573,52 @@ private fun validar(
  * Lo que da mala espina pero no impide guardar. Solo para lo escrito a
  * mano: se avisa, no se impide.
  */
+/** Un campo angosto de una fila de tres. */
+@Composable
+private fun CampoCorto(
+    valor: String,
+    alCambiar: (String) -> Unit,
+    etiqueta: String,
+    ejemplo: String,
+    teclado: KeyboardType,
+    modifier: Modifier,
+) {
+    OutlinedTextField(
+        value = valor,
+        onValueChange = alCambiar,
+        label = { Text(etiqueta, maxLines = 1) },
+        placeholder = { Text(ejemplo) },
+        singleLine = true,
+        keyboardOptions = KeyboardOptions(keyboardType = teclado),
+        shape = RoundedCornerShape(12.dp),
+        modifier = modifier,
+    )
+}
+
+/** Las horas y medidas del FOR:001 son opcionales, pero si se escriben deben leerse. */
+internal fun validarFor001(
+    horaIni: String,
+    horaFin: String,
+    personas: String,
+    longitud: String,
+    ancho: String,
+    espesor: String,
+): String? {
+    val ini = DetalleFor001.hora(horaIni)
+    val fin = DetalleFor001.hora(horaFin)
+    return when {
+        horaIni.isNotBlank() && ini == null -> "La hora de inicio no se entiende. Escríbela como 07:30."
+        horaFin.isNotBlank() && fin == null -> "La hora de fin no se entiende. Escríbela como 12:00."
+        ini != null && fin != null && !fin.isAfter(ini) -> "La hora de fin debe ser posterior a la de inicio."
+        personas.isNotBlank() && personas.trim().toIntOrNull()?.takeIf { it in 1..99 } == null ->
+            "La cantidad de personas debe ser un número entre 1 y 99."
+        longitud.isNotBlank() && DetalleFor001.numero(longitud) == null -> "La longitud debe ser un número."
+        ancho.isNotBlank() && DetalleFor001.numero(ancho) == null -> "El ancho debe ser un número."
+        espesor.isNotBlank() && DetalleFor001.numero(espesor) == null -> "El espesor debe ser un número."
+        else -> null
+    }
+}
+
 private fun revisar(tramo: Tramo?, progIni: String): String? {
     val ini = Progresiva.aMetros(progIni) ?: return null
     if (tramo == null) return null

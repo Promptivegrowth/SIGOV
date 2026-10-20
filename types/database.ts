@@ -2439,6 +2439,79 @@ export type Database = {
         }
         Relationships: []
       }
+      parte_recursos: {
+        Row: {
+          cantidad: number | null
+          client_id: string | null
+          codigo: string | null
+          created_at: string
+          created_by: string | null
+          deleted_at: string | null
+          descripcion: string
+          id: string
+          observacion: string | null
+          service_id: string
+          tipo: string
+          unidad: string | null
+          updated_at: string
+          work_order_id: string
+        }
+        Insert: {
+          cantidad?: number | null
+          client_id?: string | null
+          codigo?: string | null
+          created_at?: string
+          created_by?: string | null
+          deleted_at?: string | null
+          descripcion: string
+          id?: string
+          observacion?: string | null
+          service_id: string
+          tipo: string
+          unidad?: string | null
+          updated_at?: string
+          work_order_id: string
+        }
+        Update: {
+          cantidad?: number | null
+          client_id?: string | null
+          codigo?: string | null
+          created_at?: string
+          created_by?: string | null
+          deleted_at?: string | null
+          descripcion?: string
+          id?: string
+          observacion?: string | null
+          service_id?: string
+          tipo?: string
+          unidad?: string | null
+          updated_at?: string
+          work_order_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "parte_recursos_created_by_fkey"
+            columns: ["created_by"]
+            isOneToOne: false
+            referencedRelation: "profiles"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "parte_recursos_service_id_fkey"
+            columns: ["service_id"]
+            isOneToOne: false
+            referencedRelation: "services"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "parte_recursos_work_order_id_fkey"
+            columns: ["work_order_id"]
+            isOneToOne: false
+            referencedRelation: "work_orders"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       pci_item_eventos: {
         Row: {
           a: Database["public"]["Enums"]["pci_item_status"]
@@ -4848,18 +4921,24 @@ export type Database = {
         Row: {
           accuracy_m: number | null
           activity_id: string
+          ancho_m: number | null
           client_id: string
           created_at: string
           created_by: string | null
           deleted_at: string | null
+          espesor_m: number | null
           finished_at: string | null
           geom: unknown
+          hora_fin: string | null
+          hora_inicio: string | null
           id: string
           lat: number | null
           lng: number | null
+          longitud_m: number | null
           observation: string | null
           origen: string | null
           pci_item_id: string | null
+          personas: number | null
           plan_item_id: string | null
           prog_end_m: number | null
           prog_start_m: number
@@ -4875,18 +4954,24 @@ export type Database = {
         Insert: {
           accuracy_m?: number | null
           activity_id: string
+          ancho_m?: number | null
           client_id?: string
           created_at?: string
           created_by?: string | null
           deleted_at?: string | null
+          espesor_m?: number | null
           finished_at?: string | null
           geom?: unknown
+          hora_fin?: string | null
+          hora_inicio?: string | null
           id?: string
           lat?: number | null
           lng?: number | null
+          longitud_m?: number | null
           observation?: string | null
           origen?: string | null
           pci_item_id?: string | null
+          personas?: number | null
           plan_item_id?: string | null
           prog_end_m?: number | null
           prog_start_m: number
@@ -4902,18 +4987,24 @@ export type Database = {
         Update: {
           accuracy_m?: number | null
           activity_id?: string
+          ancho_m?: number | null
           client_id?: string
           created_at?: string
           created_by?: string | null
           deleted_at?: string | null
+          espesor_m?: number | null
           finished_at?: string | null
           geom?: unknown
+          hora_fin?: string | null
+          hora_inicio?: string | null
           id?: string
           lat?: number | null
           lng?: number | null
+          longitud_m?: number | null
           observation?: string | null
           origen?: string | null
           pci_item_id?: string | null
+          personas?: number | null
           plan_item_id?: string | null
           prog_end_m?: number | null
           prog_start_m?: number
@@ -6530,22 +6621,28 @@ export type Database = {
           activity_id: string | null
           activity_name: string | null
           activity_numero: number | null
+          ancho_m: number | null
           created_at: string | null
           created_by_name: string | null
           crew_color: string | null
           crew_id: string | null
           crew_name: string | null
+          espesor_m: number | null
           evidence_count: number | null
           finished_at: string | null
+          hora_fin: string | null
+          hora_inicio: string | null
           id: string | null
           lat: number | null
           lng: number | null
+          longitud_m: number | null
           observation: string | null
           order_status: Database["public"]["Enums"]["work_order_status"] | null
           origen: string | null
           pci_code: string | null
           pci_item_id: string | null
           pci_item_number: number | null
+          personas: number | null
           plan_item_id: string | null
           prog_end_m: number | null
           prog_end_txt: string | null
@@ -6554,6 +6651,7 @@ export type Database = {
           quantity: number | null
           section_id: string | null
           section_name: string | null
+          sector_code: string | null
           service_id: string | null
           side: Database["public"]["Enums"]["road_side"] | null
           started_at: string | null

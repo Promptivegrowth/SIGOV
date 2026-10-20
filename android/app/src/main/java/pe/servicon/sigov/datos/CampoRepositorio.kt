@@ -591,6 +591,7 @@ class CampoRepositorio @Inject constructor(
         unidad: String?,
         observacion: String?,
         origen: OrigenDelTrabajo = OrigenDelTrabajo.Emergencia,
+        detalle: DetalleFor001 = DetalleFor001(),
     ): RegistroLocal = withContext(Dispatchers.IO) {
         val clientId = UUID.randomUUID().toString()
         // Dónde se registró el trabajo. Si el GPS no engancha se manda sin
@@ -650,6 +651,13 @@ class CampoRepositorio @Inject constructor(
                     put("accuracy_m", it.precision)
                 }
                 observacion?.takeIf { it.isNotBlank() }?.let { put("observation", it) }
+                // FOR:001
+                detalle.horaInicio?.let { put("hora_inicio", it.toString()) }
+                detalle.horaFin?.let { put("hora_fin", it.toString()) }
+                detalle.personas?.let { put("personas", it) }
+                detalle.longitud?.let { put("longitud_m", it) }
+                detalle.ancho?.let { put("ancho_m", it) }
+                detalle.espesor?.let { put("espesor_m", it) }
                 supabase.usuarioActual()?.let { put("created_by", it) }
             },
         )

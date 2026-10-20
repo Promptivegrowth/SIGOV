@@ -8,7 +8,7 @@ import { motion, AnimatePresence } from 'motion/react'
 import {
   ArrowLeft, Plus, Camera, Send, CircleCheck, CircleX, MapPin,
   Trash2, Clock, CloudUpload, TriangleAlert, ChevronDown, Ruler, Pencil,
-  FileText, Eye,
+  FileText, Eye, FileDown,
 } from 'lucide-react'
 import { createClient } from '@/lib/supabase/client'
 import { useSession } from '@/lib/hooks/use-session'
@@ -43,6 +43,28 @@ export function ParteDetailClient({ orderId }: { orderId: string }) {
   const [cameraFor, setCameraFor] = React.useState<any>(null)
   const [reviewOpen, setReviewOpen] = React.useState(false)
   const [informeOpen, setInformeOpen] = React.useState(false)
+  const [bajandoFor001, setBajandoFor001] = React.useState(false)
+
+  /** El FOR:001 de Elvis, en PDF: `2026_10_01_C01_REPORTE_DIARIO.pdf` (P15). */
+  const descargarFor001 = async () => {
+    setBajandoFor001(true)
+    try {
+      const { datosFor001, for001Pdf } = await import('@/lib/formato-for001')
+      const { rutas } = await import('@/lib/covinca')
+      const datos = await datosFor001(sb, orderId)
+      const logo = await fetch('/marca/logo-servicon.png').then((r) => r.arrayBuffer()).catch(() => null)
+      const doc = await for001Pdf(datos, logo)
+      const nombre = rutas.documento({
+        fecha: datos.parte.work_date, cuadrilla: datos.cuadrilla?.numero ?? 0, sede: datos.cuadrilla?.sede ?? '',
+        tipo: 'reporte_diario', extension: '.pdf',
+      }).archivo
+      doc.save(nombre)
+    } catch (e) {
+      toast.error('No se pudo armar el FOR:001', { description: mensajeAmigable(e) })
+    } finally {
+      setBajandoFor001(false)
+    }
+  }
   const [editEntry, setEditEntry] = React.useState<any>(null)
   const [confirm, setConfirm] = React.useState<any>(null)
 
@@ -139,6 +161,10 @@ export function ParteDetailClient({ orderId }: { orderId: string }) {
             <Button variant="outline" onClick={() => setInformeOpen(true)}>
               <FileText className="size-4" />
               Ver informe
+            </Button>
+            <Button variant="outline" loading={bajandoFor001} onClick={descargarFor001}>
+              <FileDown className="size-4" />
+              FOR:001
             </Button>
             {editable && isOwner && (
               <Button variant="accent" onClick={submit} disabled={!entries.data?.length}>
@@ -435,6 +461,11 @@ function EntryDialog({
   const [side, setSide] = React.useState('derecho')
   const [qty, setQty] = React.useState('')
   const [obs, setObs] = React.useState('')
+  // FOR:001: horas, personas y medidas de lo ejecutado
+  const VACIO = { hora_inicio: '', hora_fin: '', personas: '', longitud_m: '', ancho_m: '', espesor_m: '' }
+  const [for001, setFor001] = React.useState(VACIO)
+  const cambiarFor001 = (k: keyof typeof VACIO) => (e: React.ChangeEvent<HTMLInputElement>) =>
+    setFor001((f) => ({ ...f, [k]: e.target.value }))
   const [saving, setSaving] = React.useState(false)
   const [gpsBusy, setGpsBusy] = React.useState(false)
 
@@ -449,9 +480,16 @@ function EntryDialog({
       setSide(editing.side ?? 'derecho')
       setQty(String(editing.quantity ?? ''))
       setObs(editing.observation ?? '')
+      setFor001({
+        hora_inicio: editing.hora_inicio?.slice(0, 5) ?? '', hora_fin: editing.hora_fin?.slice(0, 5) ?? '',
+        personas: editing.personas != null ? String(editing.personas) : '',
+        longitud_m: editing.longitud_m != null ? String(editing.longitud_m) : '',
+        ancho_m: editing.ancho_m != null ? String(editing.ancho_m) : '',
+        espesor_m: editing.espesor_m != null ? String(editing.espesor_m) : '',
+      })
     } else {
       setActivityId(''); setSectionId(''); setProgIni('')
-      setProgFin(''); setSide('derecho'); setQty(''); setObs('')
+      setProgFin(''); setSide('derecho'); setQty(''); setObs(''); setFor001(VACIO)
     }
   }, [open, editing])
 
@@ -486,6 +524,21 @@ function EntryDialog({
     if (!activityId || !sectionId || !progIni || !qty) {
       return toast.error('Completa actividad, tramo, progresiva y metrado')
     }
+    if (for001.hora_inicio && for001.hora_fin && for001.hora_fin <= for001.hora_inicio) {
+      return toast.error('La hora de fin debe ser posterior a la de inicio')
+    }
+    const numero = (v: string) => (v.trim() === '' ? null : Number(v.replace(',', '.')))
+    const detalle = {
+      hora_inicio: for001.hora_inicio || null,
+      hora_fin: for001.hora_fin || null,
+      personas: numero(for001.personas),
+      longitud_m: numero(for001.longitud_m),
+      ancho_m: numero(for001.ancho_m),
+      espesor_m: numero(for001.espesor_m),
+    }
+    if (Object.values(detalle).some((v) => typeof v === 'number' && (!Number.isFinite(v) || v < 0))) {
+      return toast.error('Personas, longitud, ancho y espesor deben ser números positivos')
+    }
     setSaving(true)
 
     // Edicion: va directo al servidor, no pasa por la cola offline
@@ -499,6 +552,7 @@ function EntryDialog({
         quantity: Number(qty),
         unit_id: activity?.unit_id ?? null,
         observation: obs || null,
+        ...detalle,
       }).eq('id', editing.id)
       setSaving(false)
       if (error) { toast.error(mensajeAmigable(error)); return }
@@ -523,6 +577,7 @@ function EntryDialog({
       quantity: Number(qty),
       unit_id: activity?.unit_id ?? null,
       observation: obs || null,
+      ...detalle,
       started_at: new Date().toISOString(),
       created_by: profile.id,
     }
@@ -632,6 +687,28 @@ function EntryDialog({
                 placeholder="0.0"
                 className="h-11 text-right font-semibold tabular-nums"
               />
+            </Field>
+          </div>
+
+          {/* Lo que el FOR:001 pide de cada actividad */}
+          <div className="grid grid-cols-3 gap-3">
+            <Field label="Hora inicio">
+              <Input type="time" value={for001.hora_inicio} onChange={cambiarFor001('hora_inicio')} className="h-11" />
+            </Field>
+            <Field label="Hora fin">
+              <Input type="time" value={for001.hora_fin} onChange={cambiarFor001('hora_fin')} className="h-11" />
+            </Field>
+            <Field label="Personas">
+              <Input type="number" min={1} max={99} inputMode="numeric" value={for001.personas} onChange={cambiarFor001('personas')} className="h-11 text-right tabular-nums" />
+            </Field>
+            <Field label="Longitud (m)">
+              <Input type="number" min={0} step="any" inputMode="decimal" value={for001.longitud_m} onChange={cambiarFor001('longitud_m')} className="h-11 text-right tabular-nums" />
+            </Field>
+            <Field label="Ancho (m)">
+              <Input type="number" min={0} step="any" inputMode="decimal" value={for001.ancho_m} onChange={cambiarFor001('ancho_m')} className="h-11 text-right tabular-nums" />
+            </Field>
+            <Field label="Espesor (m)">
+              <Input type="number" min={0} step="any" inputMode="decimal" value={for001.espesor_m} onChange={cambiarFor001('espesor_m')} className="h-11 text-right tabular-nums" />
             </Field>
           </div>
 

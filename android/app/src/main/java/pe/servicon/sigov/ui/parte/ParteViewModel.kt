@@ -56,6 +56,8 @@ data class EstadoParte(
     val fotosPorRegistro: Map<String, Int> = emptyMap(),
     /** Material usado en el día (Formato 8) y lo que la cuadrilla tiene. */
     val consumos: List<pe.servicon.sigov.datos.Consumo> = emptyList(),
+    /** Equipos y otros recursos del día (FOR:001, secciones IV y V). */
+    val recursos: List<pe.servicon.sigov.datos.RecursoDelDia> = emptyList(),
     val stockCuadrilla: List<pe.servicon.sigov.datos.StockDeCuadrilla> = emptyList(),
     val insumos: List<pe.servicon.sigov.datos.Insumo> = emptyList(),
     /** Lo que observó el supervisor al devolver el parte. */
@@ -83,6 +85,7 @@ class ParteViewModel @Inject constructor(
     private val partes: ParteDao,
     private val formatos: FormatosPdf,
     private val consumoRepo: pe.servicon.sigov.datos.ConsumoRepositorio,
+    private val recursoRepo: pe.servicon.sigov.datos.RecursoRepositorio,
     private val materialRepo: pe.servicon.sigov.datos.MaterialRepositorio,
     private val charlas: pe.servicon.sigov.datos.CharlaRepositorio,
     private val ssoma: pe.servicon.sigov.datos.SsomaRepositorio,
@@ -175,6 +178,7 @@ class ParteViewModel @Inject constructor(
                 }
                 vigilarRegistros(parte.clientId)
                 cargarMateriales()
+                cargarRecursos()
                 refrescarEstado()
             }.onFailure { fallo ->
                 _estado.update { it.copy(cargando = false, error = fallo.enCristiano()) }
@@ -212,6 +216,7 @@ class ParteViewModel @Inject constructor(
         cantidad: Double,
         observacion: String?,
         origen: OrigenDelTrabajo,
+        detalle: pe.servicon.sigov.datos.DetalleFor001,
         alTerminar: () -> Unit,
     ) {
         val parte = _estado.value.parte ?: return
@@ -230,6 +235,7 @@ class ParteViewModel @Inject constructor(
                     unidad = null,
                     observacion = observacion,
                     origen = origen,
+                    detalle = detalle,
                 )
             }.onSuccess {
                 _estado.update {
@@ -501,6 +507,35 @@ class ParteViewModel @Inject constructor(
                 _estado.update { it.copy(aviso = "Material anotado. Se enviará al haber señal.") }
                 cargarMateriales()
             }.onFailure { f -> _estado.update { it.copy(error = f.enCristiano()) } }
+        }
+    }
+
+    /** Los equipos y otros recursos anotados en el parte. */
+    fun cargarRecursos() {
+        val parte = _estado.value.parte ?: return
+        viewModelScope.launch {
+            runCatching { recursoRepo.delParte(parte) }
+                .onSuccess { r -> _estado.update { it.copy(recursos = r) } }
+        }
+    }
+
+    fun registrarRecurso(tipo: String, codigo: String?, descripcion: String, unidad: String?, cantidad: Double?, observacion: String?) {
+        val parte = _estado.value.parte ?: return
+        viewModelScope.launch {
+            runCatching { recursoRepo.registrar(parte, tipo, codigo, descripcion, unidad, cantidad, observacion) }
+                .onSuccess {
+                    _estado.update { it.copy(aviso = if (tipo == "equipo") "Equipo anotado." else "Recurso anotado.") }
+                    cargarRecursos()
+                }
+                .onFailure { f -> _estado.update { it.copy(error = f.enCristiano()) } }
+        }
+    }
+
+    fun descartarRecurso(r: pe.servicon.sigov.datos.RecursoDelDia) {
+        viewModelScope.launch {
+            runCatching { recursoRepo.descartar(r.clientId) }
+                .onSuccess { _estado.update { it.copy(aviso = "Quitado.") }; cargarRecursos() }
+                .onFailure { f -> _estado.update { it.copy(error = f.enCristiano()) } }
         }
     }
 

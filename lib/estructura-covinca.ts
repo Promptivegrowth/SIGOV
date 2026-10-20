@@ -14,13 +14,12 @@
  * Las fotos salen en JPG (se guardan en WebP para no gastar datos).
  */
 import type { SupabaseClient } from '@supabase/supabase-js'
-import { reportePdf, type ReportMeta } from './reports'
 import { construirIndice, type FilaIndice } from './paquete'
 import { rutas, nombreLibre, aCovinca, semanaDe } from './covinca'
 import { programacionSemanalXlsx } from './formato-programacion'
 import { f8Xlsx } from './formato-f8'
 import { fmtDate } from './utils'
-import { codigoDeLado } from './lados'
+import { datosFor001, for001Pdf } from './formato-for001'
 
 export type RamasCovinca = {
   programacion: boolean
@@ -362,38 +361,13 @@ export async function armarEstructuraCovinca(opciones: {
       .order('work_date')
     if (cuadrillaId) c = c.eq('crew_id', cuadrillaId)
     const { data: partes } = await c
-    const meta: ReportMeta = {
-      titulo: '', servicio: opciones.servicioNombre, cliente: opciones.cliente ?? null,
-      contrato: opciones.contrato ?? null, periodo: '', generadoPor: opciones.generadoPor,
-    }
+    // El FOR:001 de Elvis, uno por día y cuadrilla (P15)
+    const logo = await fetch('/marca/logo-servicon.png').then((r) => r.arrayBuffer()).catch(() => null)
     for (const [i, parte] of (partes ?? []).entries()) {
-      const { data: registros } = await sb.from('v_work_entries').select('*').eq('work_order_id', (parte as any).id)
-      const filas = (registros ?? []).map((r: any) => ({
-        codigo: r.activity_code ?? '—',
-        actividad: r.activity_name ?? '—',
-        origen: ({ programacion: 'Programado', pci: 'PCI', emergencia: 'Emergencia', no_programado: 'No programado' } as any)[r.origen] ?? r.origen ?? '—',
-        tramo: r.section_name ?? '—',
-        progresiva: [r.prog_start_txt, r.prog_end_txt].filter(Boolean).join(' → ') || '—',
-        lado: r.side ? codigoDeLado(r.side) : '—',
-        cantidad: r.quantity ?? 0,
-        unidad: r.unit_symbol ?? '',
-      }))
+      const datos = await datosFor001(sb, (parte as any).id)
+      const doc = await for001Pdf(datos, logo)
+      const filas = datos.registros
       const cq = cuadrillaDe({ crew_numero: (parte as any).crews?.numero, crew_sede: (parte as any).crews?.sede, crew_code: (parte as any).crews?.code, crew_name: (parte as any).crews?.name })
-      const doc = await reportePdf(
-        { ...meta, titulo: `Reporte diario · ${(parte as any).crews?.name ?? ''} · ${fmtDate((parte as any).work_date)}`, periodo: fmtDate((parte as any).work_date) },
-        [
-          { header: 'Código', key: 'codigo', width: 26 },
-          { header: 'Actividad', key: 'actividad', width: 50 },
-          { header: 'Origen', key: 'origen', width: 24 },
-          { header: 'Tramo', key: 'tramo', width: 36 },
-          { header: 'Progresiva', key: 'progresiva', width: 32 },
-          { header: 'Lado', key: 'lado', width: 16 },
-          { header: 'Metrado', key: 'cantidad', align: 'right', width: 20 },
-          { header: 'Und.', key: 'unidad', width: 14 },
-        ],
-        filas,
-        { cover: false, landscape: true },
-      )
       const r = rutas.documento({ fecha: (parte as any).work_date, cuadrilla: cq.numero, sede: cq.sede, tipo: 'reporte_diario', extension: '.pdf' })
       poner(r.carpeta, r.archivo, doc.output('arraybuffer'), {
         tipo: 'Reporte diario', fecha: (parte as any).work_date,

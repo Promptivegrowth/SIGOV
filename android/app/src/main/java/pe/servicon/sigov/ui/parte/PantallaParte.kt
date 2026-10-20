@@ -50,6 +50,7 @@ fun PantallaParte(
     val avisos = remember { SnackbarHostState() }
     var formularioAbierto by remember { mutableStateOf(false) }
     var anotandoMaterial by remember { mutableStateOf(false) }
+    var anotandoRecurso by remember { mutableStateOf(false) }
     var editandoDatos by remember { mutableStateOf(false) }
     var confirmandoEnvio by remember { mutableStateOf(false) }
     var menuAbierto by remember { mutableStateOf(false) }
@@ -200,6 +201,14 @@ fun PantallaParte(
                         alQuitar = vm::descartarConsumo,
                     )
                 }
+                item {
+                    RecursosDelDia(
+                        recursos = estado.recursos,
+                        editable = estado.parte?.editable == true,
+                        alAgregar = { anotandoRecurso = true },
+                        alQuitar = vm::descartarRecurso,
+                    )
+                }
                 if (estado.parte?.editable == true && estado.registros.isNotEmpty()) {
                     item {
                         BotonEnviar(reenviar = estado.parte?.estado == "observado", alTocar = { confirmandoEnvio = true })
@@ -208,6 +217,16 @@ fun PantallaParte(
             }
         }
       }
+    }
+
+    if (anotandoRecurso) {
+        DialogoRecurso(
+            alCerrar = { anotandoRecurso = false },
+            alGuardar = { tipo, codigo, descripcion, unidad, cantidad, observacion ->
+                vm.registrarRecurso(tipo, codigo, descripcion, unidad, cantidad, observacion)
+                anotandoRecurso = false
+            },
+        )
     }
 
     if (editandoDatos) {
@@ -257,8 +276,8 @@ fun PantallaParte(
             inicial = estado.partidaInicial?.let { OrigenDelTrabajo.Programado(it) },
             guardando = estado.guardando,
             alCerrar = { formularioAbierto = false; vm.partidaInicialAtendida() },
-            alGuardar = { actividad, tramo, ini, fin, lado, cantidad, obs, origen ->
-                vm.registrar(actividad, tramo, ini, fin, lado, cantidad, obs, origen) {
+            alGuardar = { actividad, tramo, ini, fin, lado, cantidad, obs, origen, detalle ->
+                vm.registrar(actividad, tramo, ini, fin, lado, cantidad, obs, origen, detalle) {
                     formularioAbierto = false
                 }
             },
