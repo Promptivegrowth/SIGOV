@@ -8,6 +8,7 @@ import kotlinx.coroutines.withContext
 import kotlinx.serialization.json.Json
 import kotlinx.serialization.json.JsonObject
 import kotlinx.serialization.json.buildJsonObject
+import kotlinx.serialization.json.contentOrNull
 import kotlinx.serialization.json.jsonPrimitive
 import kotlinx.serialization.json.put
 import pe.servicon.sigov.datos.local.ColaDao
@@ -58,7 +59,7 @@ class RecursoRepositorio @Inject constructor(
                         order("created_at", Order.ASCENDING)
                     }
                     .decodeList<JsonObject>()
-                    .map { deFila(it["client_id"]?.jsonPrimitive?.content ?: it["id"]?.jsonPrimitive?.content ?: "", it, enviado = true) }
+                    .map { deFila(it["client_id"]?.jsonPrimitive?.contentOrNull ?: it["id"]?.jsonPrimitive?.contentOrNull ?: "", it, enviado = true) }
             }.getOrDefault(emptyList())
         } ?: emptyList()
         // Lo que ya subió deja de figurar como pendiente

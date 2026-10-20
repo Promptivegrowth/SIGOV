@@ -426,13 +426,15 @@ private fun Miniatura(foto: EvidenciaEnGaleria, alTocar: () -> Unit, conEtapa: B
         }
         // Una foto que todavía no subió no sustenta nada todavía
         if (foto.rutaLocal != null && foto.url == null && foto.sha256 == null) {
-            Box(
-                Modifier
+            Text(
+                "Por enviar",
+                style = MaterialTheme.typography.labelSmall,
+                color = Color.White,
+                modifier = Modifier
                     .align(Alignment.TopEnd)
-                    .padding(4.dp)
-                    .size(8.dp)
-                    .clip(RoundedCornerShape(4.dp))
-                    .background(Marca.Naranja),
+                    .padding(3.dp)
+                    .background(Marca.Naranja, RoundedCornerShape(5.dp))
+                    .padding(horizontal = 4.dp, vertical = 1.dp),
             )
         }
     }

@@ -56,6 +56,7 @@ class JornadaViewModel @Inject constructor(
     private val caja: CajaRepositorio,
     private val documentosRepo: DocumentosRepositorio,
     private val avisosRepo: pe.servicon.sigov.datos.AvisosRepositorio,
+    private val materialRepo: pe.servicon.sigov.datos.MaterialRepositorio,
 ) : ViewModel() {
 
     private val _estado = MutableStateFlow(EstadoJornada())
@@ -82,9 +83,10 @@ class JornadaViewModel @Inject constructor(
             var antes: Int? = null
             colaEnvio.pendientes.collectLatest { cuantos ->
                 _estado.update { it.copy(pendientes = cuantos) }
-                // Cuando la cola termina de enviar algo, el estado de los
-                // documentos cambió en la nube: se vuelve a consultar
-                if (antes != null && cuantos < antes!!) refrescarDocumentos()
+                // Cuando la cola cambia —una foto que se acaba de guardar o
+                // algo que terminó de subir— el estado de los documentos
+                // cambió: se vuelve a consultar (SEG-V2-OBS-02)
+                if (antes != null && cuantos != antes) refrescarDocumentos()
                 antes = cuantos
             }
         }
@@ -118,6 +120,9 @@ class JornadaViewModel @Inject constructor(
                     return@runCatching
                 }
                 runCatching { campo.bajarCatalogos(cuadrilla.servicioId) }
+                // Los materiales y sus rendimientos, para registrar sin señal
+                runCatching { materialRepo.insumos(cuadrilla.servicioId) }
+                runCatching { materialRepo.rendimientos(cuadrilla.servicioId) }
 
                 val programado = campo.programacionDelDia(cuadrilla.servicioId, cuadrilla.id)
                 val pci = campo.pciAsignados(cuadrilla.servicioId, cuadrilla.id)

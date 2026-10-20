@@ -113,6 +113,8 @@ export const NAV: NavItem[] = [
     roles: ['admin','supervisor','residente','ing_seguridad','visor'], module: 'mapa' },
   { href: '/inventario',   label: 'Inventario',    labelPorRol: { admin: 'Inventario / Vehículos' },
     icon: Boxes, roles: ['admin','supervisor','residente','visor','ing_seguridad'], module: 'inventario' },
+  { href: '/observaciones', label: 'Observaciones', icon: TriangleAlert,
+    roles: ['admin','supervisor','residente','visor'], module: 'inventario' },
   { href: '/ssoma',        label: 'SSOMA',         icon: ShieldCheck,
     roles: ['admin','supervisor','residente','ing_seguridad','visor'], module: 'ssoma', field: true },
   { href: '/vencimientos', label: 'Vencimientos',  icon: CalendarClock,
@@ -193,7 +195,7 @@ export const PLAN_ITEM_STATUS = {
   en_curso:     { label: 'En ejecución', className: 'bg-info/15 text-info' },
   por_validar:  { label: 'Por validar',  className: 'bg-warning/20 text-warning' },
   ejecutado:    { label: 'Culminada',    className: 'bg-success/15 text-success' },
-  suspendido:   { label: 'Observada',    className: 'bg-destructive/15 text-destructive' },
+  suspendido:   { label: 'No ejecutada', className: 'bg-destructive/15 text-destructive' },
   reprogramado: { label: 'Reprogramada', className: 'bg-warning/20 text-warning' },
   cancelado:    { label: 'Anulada',      className: 'bg-muted text-muted-foreground line-through' },
 } as const

@@ -53,18 +53,26 @@ class Configuracion @Inject constructor(
         _sello.value = limpio
     }
 
-    private val _originalesConDatos = MutableStateFlow(guardado.getBoolean(CLAVE_ORIGINALES, false))
+    private val _modoOriginales = MutableStateFlow(
+        guardado.getString(CLAVE_MODO_ORIGINALES, null)?.let { c -> ModoOriginales.entries.firstOrNull { it.name == c } }
+            ?: if (guardado.getBoolean(CLAVE_ORIGINALES, false)) ModoOriginales.WIFI_Y_DATOS else ModoOriginales.SOLO_WIFI
+    )
 
     /**
-     * Si los originales de las fotos (JPG 4080 × 3060, ~3 MB) pueden subir con
-     * datos móviles. Por omisión no: esperan al Wi-Fi del campamento u oficina.
+     * Cuándo suben los originales de las fotos (JPG 4080 × 3060, unos 3 MB
+     * cada uno): solo con Wi-Fi (por omisión), también con datos móviles, o
+     * nunca solos (REC-01 del consolidado).
      */
-    val originalesConDatos: StateFlow<Boolean> = _originalesConDatos.asStateFlow()
+    val modoOriginales: StateFlow<ModoOriginales> = _modoOriginales.asStateFlow()
 
-    fun permitirOriginalesConDatos(si: Boolean) {
-        guardado.edit().putBoolean(CLAVE_ORIGINALES, si).apply()
-        _originalesConDatos.value = si
+    fun fijarModoOriginales(modo: ModoOriginales) {
+        guardado.edit().putString(CLAVE_MODO_ORIGINALES, modo.name).apply()
+        _modoOriginales.value = modo
     }
+
+    /** «Subir originales ahora», pulsado en Sincronización: vale para el próximo envío. */
+    @Volatile
+    var subirOriginalesUnaVez: Boolean = false
 
     fun volverAlContrato() {
         guardado.edit().remove(CLAVE_SELLO).apply()
@@ -102,5 +110,13 @@ class Configuracion @Inject constructor(
     private companion object {
         const val CLAVE_SELLO = "sello"
         const val CLAVE_ORIGINALES = "originales_con_datos"
+        const val CLAVE_MODO_ORIGINALES = "modo_originales"
     }
+}
+
+/** Cuándo suben los originales de las fotos. */
+enum class ModoOriginales(val etiqueta: String, val detalle: String) {
+    SOLO_WIFI("Solo con Wi-Fi", "Recomendado: no gasta datos del plan"),
+    WIFI_Y_DATOS("Wi-Fi y datos móviles", "Gasta datos: unos 3 MB por foto"),
+    MANUAL("No subir automáticamente", "Suben al pulsar «Subir originales ahora» en Sincronización"),
 }

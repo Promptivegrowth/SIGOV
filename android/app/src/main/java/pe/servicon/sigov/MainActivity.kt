@@ -147,6 +147,7 @@ class MainActivity : ComponentActivity() {
                             alAbrirMateriales = { nav.navigate("materiales") },
                             alAbrirEquipos = { nav.navigate("equipos") },
                             alAbrirInventario = { nav.navigate("inventario") },
+                            alAbrirObservaciones = { nav.navigate("observaciones") },
                             alAbrirVehiculos = { nav.navigate("vehiculos") },
                             alAbrirCharlas = { nav.navigate("charlas") },
                             alAbrirHigiene = { nav.navigate("higiene") },
@@ -165,14 +166,24 @@ class MainActivity : ComponentActivity() {
                             },
                         )
                     }
-                    composable("programacion") {
+                    composable(
+                        "programacion?fecha={fecha}",
+                        arguments = listOf(navArgument("fecha") { type = NavType.StringType; nullable = true; defaultValue = null }),
+                    ) {
                         PantallaProgramacion(
                             alVolver = { nav.popBackStack() },
                             alRegistrarAvance = { nav.navigate("parte?partida=" + it.id) },
                             alTomarFoto = { registroId, fase -> nav.navigate("evidencia/$registroId?fase=${fase.valor}") },
                         )
                     }
-                    composable("pci") {
+                    composable(
+                        "pci?estado={estado}&plazo={plazo}&pci={pci}",
+                        arguments = listOf(
+                            navArgument("estado") { type = NavType.StringType; nullable = true; defaultValue = null },
+                            navArgument("plazo") { type = NavType.StringType; nullable = true; defaultValue = null },
+                            navArgument("pci") { type = NavType.StringType; nullable = true; defaultValue = null },
+                        ),
+                    ) {
                         PantallaPci(
                             alVolver = { nav.popBackStack() },
                             alTomarFoto = { registroId, fase -> nav.navigate("evidencia/$registroId?fase=${fase.valor}") },
@@ -194,7 +205,11 @@ class MainActivity : ComponentActivity() {
                         PantallaInventario(
                             alVolver = { nav.popBackStack() },
                             alVerPciEnMapa = { nav.navigate("pci-en-mapa") },
+                            alVerObservaciones = { nav.navigate("observaciones") },
                         )
+                    }
+                    composable("observaciones") {
+                        pe.servicon.sigov.ui.inventario.PantallaObservaciones(alVolver = { nav.popBackStack() })
                     }
                     composable("pci-en-mapa") {
                         pe.servicon.sigov.ui.inventario.PantallaPciEnMapa(
@@ -209,8 +224,23 @@ class MainActivity : ComponentActivity() {
                     composable("materiales") {
                         PantallaMateriales(alVolver = { nav.popBackStack() })
                     }
-                    composable("evidencias") {
+                    composable(
+                        "evidencias?desde={desde}&hasta={hasta}",
+                        arguments = listOf(
+                            navArgument("desde") { type = NavType.StringType; nullable = true; defaultValue = null },
+                            navArgument("hasta") { type = NavType.StringType; nullable = true; defaultValue = null },
+                        ),
+                    ) {
                         PantallaGaleria(alVolver = { nav.popBackStack() })
+                    }
+                    composable(
+                        "semana?lunes={lunes}",
+                        arguments = listOf(navArgument("lunes") { type = NavType.StringType; nullable = true; defaultValue = null }),
+                    ) {
+                        pe.servicon.sigov.ui.programacion.PantallaSemana(
+                            alVolver = { nav.popBackStack() },
+                            alAbrirDia = { dia -> nav.navigate("programacion?fecha=$dia") },
+                        )
                     }
                     composable("trabajos") {
                         PantallaProgramacion(
@@ -243,9 +273,11 @@ class MainActivity : ComponentActivity() {
                         PantallaAvance(
                             alVolver = { nav.popBackStack() },
                             alAbrirParte = { nav.navigate("parte") },
-                            alAbrirEvidencias = { nav.navigate("evidencias") },
-                            alAbrirPci = { nav.navigate("pci") },
-                            alAbrirProgramacion = { nav.navigate("programacion") },
+                            alAbrirEvidencias = { desde, hasta -> nav.navigate("evidencias?desde=$desde&hasta=$hasta") },
+                            alAbrirPci = { estado, plazo, pci ->
+                                nav.navigate("pci?" + listOfNotNull(estado?.let { "estado=$it" }, plazo?.let { "plazo=$it" }, pci?.let { "pci=$it" }).joinToString("&"))
+                            },
+                            alAbrirProgramacion = { lunes -> nav.navigate("semana?lunes=$lunes") },
                             alAbrirCaja = { nav.navigate("caja") },
                             alAbrirMateriales = { nav.navigate("materiales") },
                             alAbrirSincronizacion = { nav.navigate("sincronizacion") },

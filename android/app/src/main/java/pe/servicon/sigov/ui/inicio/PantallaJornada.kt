@@ -51,6 +51,7 @@ fun PantallaJornada(
     alAbrirMateriales: () -> Unit = {},
     alAbrirEquipos: () -> Unit = {},
     alAbrirInventario: () -> Unit = {},
+    alAbrirObservaciones: () -> Unit = {},
     alAbrirVehiculos: () -> Unit = {},
     alAbrirCharlas: () -> Unit = {},
     alAbrirHigiene: () -> Unit = {},
@@ -163,8 +164,10 @@ fun PantallaJornada(
                     alTocar = alAbrirCaja,
                 )
                 FichaDato(
-                    Icons.Outlined.CloudUpload, "Pendientes",
-                    estado.pendientes.toString(),
+                    // Lo que espera señal, y dicho así (SEG-V2-OBS-01): lo que
+                    // falta hacer está en «Documentos del día» y en PCI
+                    Icons.Outlined.CloudUpload, "Por sincronizar",
+                    if (estado.pendientes == 0) "Todo enviado" else estado.pendientes.toString(),
                     if (estado.pendientes == 0) Marca.VerdeBandera else Marca.Naranja,
                     Modifier.weight(1f),
                     alTocar = alAbrirSincronizacion,
@@ -219,6 +222,7 @@ fun PantallaJornada(
                 Apartado(Icons.Outlined.EditNote, "Reporte Diario", "Registrar lo ejecutado", azul, 0, alAbrirParte),
                 Apartado(Icons.Outlined.PhotoCamera, "Fotos / Evidencias", "Fotos con GPS y sello", verde, 0, alAbrirEvidencias),
                 Apartado(Icons.Outlined.Map, "Inventario vial", "Qué hay en tu tramo", azul, 0, alAbrirInventario),
+                Apartado(Icons.Outlined.ReportProblem, "Observaciones", "Lo que no está en el inventario", verde, 0, alAbrirObservaciones),
                 Apartado(Icons.Outlined.AccountBalanceWallet, "Mi Caja", "Saldo y movimientos", azul, 0, alAbrirCaja),
                 // El jefe de cuadrilla ejecuta lo programado; los materiales los
                 // pide el supervisor de campo según la programación (regla 1.2).
@@ -231,7 +235,7 @@ fun PantallaJornada(
                 Apartado(Icons.Outlined.Assignment, "ATS", "Análisis de Trabajo Seguro", verde, 0, alAbrirAst),
                 Apartado(Icons.Outlined.BarChart, "Mi Avance", "Cumplimiento del día", verde, 0, alAbrirAvance),
                 Apartado(Icons.Outlined.Sync, "Sincronización", "Registros pendientes", azul, estado.pendientes, alAbrirSincronizacion),
-                Apartado(Icons.Outlined.Settings, "Configuración", "Sello de las fotos", verde, 0, alAbrirConfiguracion),
+                Apartado(Icons.Outlined.Settings, "Configuración", "Sello y envío de fotos", verde, 0, alAbrirConfiguracion),
             ).filterNotNull()
 
             apartados.chunked(2).forEach { pareja ->

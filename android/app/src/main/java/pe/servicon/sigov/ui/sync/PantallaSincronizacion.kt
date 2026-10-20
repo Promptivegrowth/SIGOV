@@ -92,6 +92,7 @@ fun grupoDe(tabla: String): GrupoEnvio = when (tabla) {
 class SincronizacionViewModel @Inject constructor(
     private val cola: ColaRepositorio,
     private val conexion: Conexion,
+    private val configuracion: pe.servicon.sigov.datos.Configuracion,
 ) : ViewModel() {
 
     /** Lo que se le dice al capataz al pulsar «Sincronizar ahora». */
@@ -115,6 +116,16 @@ class SincronizacionViewModel @Inject constructor(
      * Ahora dice qué pasa: sin red, que todo queda guardado y saldrá solo;
      * con red, que está enviando.
      */
+    val modoOriginales = configuracion.modoOriginales
+
+    /** Sube los originales en este envío, aunque sea con datos móviles (REC-01). */
+    fun subirOriginalesAhora() {
+        configuracion.subirOriginalesUnaVez = true
+        viewModelScope.launch { cola.sincronizarAhora() }
+        _aviso.value = if (!conexion.ahora()) "Sin conexión: los originales subirán al recuperar señal."
+            else "Subiendo los originales…"
+    }
+
     fun sincronizarAhora() {
         viewModelScope.launch { cola.sincronizarAhora() }
         _aviso.value = if (!conexion.ahora())
@@ -140,6 +151,7 @@ fun PantallaSincronizacion(
     alVolver: () -> Unit,
 ) {
     val estado by vm.estado.collectAsStateWithLifecycle()
+    val modoOriginales by vm.modoOriginales.collectAsStateWithLifecycle()
     val pendientes = estado.enEspera.size + estado.fotosPendientes
     val aviso by vm.aviso.collectAsStateWithLifecycle()
     val avisos = remember { SnackbarHostState() }
@@ -169,7 +181,7 @@ fun PantallaSincronizacion(
             contentPadding = PaddingValues(16.dp, 16.dp, 16.dp, 96.dp),
             verticalArrangement = Arrangement.spacedBy(12.dp),
         ) {
-            item { Resumen(pendientes, estado) }
+            item { Resumen(pendientes, estado, modoOriginales, vm::subirOriginalesAhora) }
 
             item {
                 FiltroDeGrupos(
@@ -234,7 +246,12 @@ fun PantallaSincronizacion(
 }
 
 @Composable
-private fun Resumen(pendientes: Int, estado: EstadoSincronizacion) {
+private fun Resumen(
+    pendientes: Int,
+    estado: EstadoSincronizacion,
+    modo: pe.servicon.sigov.datos.ModoOriginales = pe.servicon.sigov.datos.ModoOriginales.SOLO_WIFI,
+    alSubirOriginales: () -> Unit = {},
+) {
     val todoArriba = pendientes == 0
     val color = when {
         estado.conError > 0 -> Marca.Naranja
@@ -278,12 +295,18 @@ private fun Resumen(pendientes: Int, estado: EstadoSincronizacion) {
 
             if (estado.originales > 0) {
                 Spacer(Modifier.height(10.dp))
+                // Cuánto pesa lo que falta y cuándo sube (REC-01)
                 Text(
-                    if (estado.originales == 1) "1 original de foto espera Wi-Fi para subir"
-                    else "${estado.originales} originales de fotos esperan Wi-Fi para subir",
+                    (if (estado.originales == 1) "1 original de foto por subir" else "${estado.originales} originales de fotos por subir") +
+                        " · unos ${estado.originales * 3} MB · " + when (modo) {
+                            pe.servicon.sigov.datos.ModoOriginales.SOLO_WIFI -> "esperan Wi-Fi"
+                            pe.servicon.sigov.datos.ModoOriginales.WIFI_Y_DATOS -> "suben también con datos móviles"
+                            pe.servicon.sigov.datos.ModoOriginales.MANUAL -> "no suben solos"
+                        },
                     style = MaterialTheme.typography.bodySmall,
                     color = MaterialTheme.colorScheme.onSurfaceVariant,
                 )
+                TextButton(onClick = alSubirOriginales) { Text("Subir originales ahora") }
             }
 
             if (estado.fotosPendientes > 0) {

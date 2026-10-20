@@ -112,6 +112,9 @@ fun FormularioActividad(
     cuadrilla: String = "",
     /** Sube cada vez que se guardó bien: el formulario vuelve al paso 2. */
     guardados: Int = 0,
+    /** El catálogo de materiales y los rendimientos, para el material de la actividad. */
+    insumos: List<pe.servicon.sigov.datos.Insumo> = emptyList(),
+    rendimientos: List<pe.servicon.sigov.datos.Rendimiento> = emptyList(),
     alCerrar: () -> Unit,
     alGuardar: (
         actividad: Actividad,
@@ -123,6 +126,7 @@ fun FormularioActividad(
         observacion: String?,
         origen: OrigenDelTrabajo,
         detalle: DetalleFor001,
+        materiales: List<MaterialDelRegistro>,
     ) -> Unit,
 ) {
     // Lo ya culminado no se ofrece: volver a registrar contra una partida
@@ -151,6 +155,10 @@ fun FormularioActividad(
     var verFor001 by remember { mutableStateOf(false) }
     var error by remember { mutableStateOf<String?>(null) }
     var buscando by remember { mutableStateOf(false) }
+    // El material de esta actividad: insumoId → cantidad escrita (SEG-V2-OBS-14)
+    val cantidades = remember { mutableStateMapOf<String, String>() }
+    val otros = remember { mutableStateListOf<String>() }
+    var eligiendoMaterial by remember { mutableStateOf(false) }
 
     // Al elegir de dónde sale el trabajo, el formulario se rellena solo
     fun adoptar(nuevo: OrigenDelTrabajo) {
@@ -158,6 +166,8 @@ fun FormularioActividad(
         error = null
         metrado = ""
         observacion = ""
+        cantidades.clear()
+        otros.clear()
         horaIni = ""; horaFin = ""; personas = ""; longitud = ""; ancho = ""; espesor = ""
         when (nuevo) {
             is OrigenDelTrabajo.Programado -> {
@@ -444,6 +454,15 @@ fun FormularioActividad(
                                 modifier = Modifier.fillMaxWidth(),
                             )
 
+                            MaterialesDeLaActividad(
+                                insumos = insumos,
+                                rendimientos = rendimientos.filter { it.actividadId == actividad?.id },
+                                metrado = metrado.replace(",", ".").toDoubleOrNull(),
+                                otros = otros,
+                                cantidades = cantidades,
+                                alAgregarOtro = { eligiendoMaterial = true },
+                            )
+
                             // Lo que pide el FOR:001 de cada actividad: opcional y plegado,
                             // para no retrasar el registro (boceto, nota 5)
                             if (itemPci == null) {
@@ -515,6 +534,11 @@ fun FormularioActividad(
                                             ancho = DetalleFor001.numero(ancho),
                                             espesor = DetalleFor001.numero(espesor),
                                         ),
+                                        cantidades.mapNotNull { (id, t) ->
+                                            val q = t.replace(",", ".").toDoubleOrNull()?.takeIf { it > 0 } ?: return@mapNotNull null
+                                            val ins = insumos.firstOrNull { it.id == id } ?: return@mapNotNull null
+                                            MaterialDelRegistro(id, ins.name, ins.unidad, q)
+                                        },
                                     )
                                 }
                             },
@@ -533,6 +557,14 @@ fun FormularioActividad(
                 }
             }
         }
+    }
+
+    if (eligiendoMaterial) {
+        BuscadorDeMaterial(
+            insumos = insumos,
+            alElegir = { i -> if (i.id !in otros) otros += i.id; eligiendoMaterial = false },
+            alCerrar = { eligiendoMaterial = false },
+        )
     }
 
     if (buscando) {
@@ -775,6 +807,90 @@ private fun CampoFijo(etiqueta: String, valor: String, modifier: Modifier = Modi
         ),
         modifier = modifier,
     )
+}
+
+/**
+ * El material de la actividad (SEG-V2-OBS-14): los insumos que la partida
+ * lleva según los rendimientos, con su unidad, para escribir solo la
+ * cantidad; y «Otros materiales» para lo excepcional.
+ */
+@Composable
+private fun MaterialesDeLaActividad(
+    insumos: List<pe.servicon.sigov.datos.Insumo>,
+    rendimientos: List<pe.servicon.sigov.datos.Rendimiento>,
+    metrado: Double?,
+    otros: List<String>,
+    cantidades: MutableMap<String, String>,
+    alAgregarOtro: () -> Unit,
+) {
+    val filas = (rendimientos.map { it.insumoId to it.cantidad } + otros.map { it to null })
+        .distinctBy { it.first }
+        .mapNotNull { (id, rend) -> insumos.firstOrNull { it.id == id }?.let { Triple(it, rend, id) } }
+    Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
+        Text("Materiales de esta actividad", style = MaterialTheme.typography.labelLarge, fontWeight = FontWeight.SemiBold)
+        if (filas.isEmpty()) {
+            Text("Esta partida no tiene materiales asociados. Si usaste alguno, agrégalo.",
+                style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
+        }
+        filas.forEach { (ins, rend, id) ->
+            val aprox = rend?.let { r -> metrado?.let { m -> r * m } }
+            Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(10.dp)) {
+                Column(Modifier.weight(1f)) {
+                    Text(ins.name, style = MaterialTheme.typography.bodyMedium, maxLines = 2)
+                    aprox?.let {
+                        Text("Según el rendimiento, aprox. ${cifra(it)} ${ins.unidad.orEmpty()}",
+                            style = MaterialTheme.typography.labelSmall, color = Marca.Azul)
+                    }
+                }
+                OutlinedTextField(
+                    value = cantidades[id] ?: "",
+                    onValueChange = { v -> cantidades[id] = v.filter { c -> c.isDigit() || c == '.' || c == ',' } },
+                    placeholder = { Text("0") },
+                    suffix = { ins.unidad?.let { Text(it) } },
+                    singleLine = true,
+                    keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Decimal),
+                    shape = RoundedCornerShape(10.dp),
+                    modifier = Modifier.width(120.dp),
+                )
+            }
+        }
+        TextButton(onClick = alAgregarOtro) { Text("+ Otros materiales") }
+    }
+}
+
+@Composable
+private fun BuscadorDeMaterial(
+    insumos: List<pe.servicon.sigov.datos.Insumo>,
+    alElegir: (pe.servicon.sigov.datos.Insumo) -> Unit,
+    alCerrar: () -> Unit,
+) {
+    var q by remember { mutableStateOf("") }
+    val visibles = remember(q, insumos) {
+        val t = sinTildes(q)
+        insumos.filter { t.isBlank() || sinTildes(it.name).contains(t) || sinTildes(it.code).contains(t) }.take(60)
+    }
+    Dialog(onDismissRequest = alCerrar, properties = DialogProperties(usePlatformDefaultWidth = false)) {
+        Surface(modifier = Modifier.fillMaxWidth(0.96f).fillMaxHeight(0.8f), shape = RoundedCornerShape(20.dp)) {
+            Column(Modifier.padding(16.dp)) {
+                OutlinedTextField(
+                    value = q, onValueChange = { q = it },
+                    label = { Text("Buscar material") },
+                    leadingIcon = { Icon(Icons.Outlined.Search, null) },
+                    singleLine = true, shape = RoundedCornerShape(12.dp), modifier = Modifier.fillMaxWidth(),
+                )
+                LazyColumn(Modifier.weight(1f).padding(top = 6.dp)) {
+                    items(visibles, key = { it.id }) { i ->
+                        Column(Modifier.fillMaxWidth().clickable { alElegir(i) }.padding(vertical = 10.dp, horizontal = 4.dp)) {
+                            Text(i.name, style = MaterialTheme.typography.bodyMedium)
+                            Text(i.unidad ?: "", style = MaterialTheme.typography.labelSmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
+                        }
+                        HorizontalDivider()
+                    }
+                }
+                TextButton(onClick = alCerrar, modifier = Modifier.align(Alignment.End)) { Text("Cerrar") }
+            }
+        }
+    }
 }
 
 /** El catálogo completo, buscable por nombre o código, sin tildes. */

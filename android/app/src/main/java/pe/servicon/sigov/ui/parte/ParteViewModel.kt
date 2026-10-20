@@ -32,6 +32,9 @@ import pe.servicon.sigov.datos.FormatosPdf
 import java.time.LocalDate
 import javax.inject.Inject
 
+/** Un material anotado dentro del registro de una actividad. */
+data class MaterialDelRegistro(val insumoId: String, val nombre: String, val unidad: String?, val cantidad: Double)
+
 data class EstadoParte(
     val cargando: Boolean = true,
     /** El día que se reporta: hoy por defecto, se puede cambiar (Elvis, 05-10). */
@@ -65,6 +68,8 @@ data class EstadoParte(
     /** Lo que observó el supervisor al devolver el parte. */
     val observacion: String? = null,
     val guardando: Boolean = false,
+    /** Los clientId que siguen en la cola; «envio:<parte>» si el envío espera señal. */
+    val porEnviar: Set<String> = emptySet(),
     /** Mientras se arma el PDF del parte */
     val imprimiendo: Boolean = false,
     val aviso: String? = null,
@@ -91,6 +96,7 @@ class ParteViewModel @Inject constructor(
     private val materialRepo: pe.servicon.sigov.datos.MaterialRepositorio,
     private val charlas: pe.servicon.sigov.datos.CharlaRepositorio,
     private val ssoma: pe.servicon.sigov.datos.SsomaRepositorio,
+    private val colaEnvio: pe.servicon.sigov.datos.sync.ColaRepositorio,
 ) : ViewModel() {
 
     private val _estado = MutableStateFlow(EstadoParte())
@@ -98,6 +104,19 @@ class ParteViewModel @Inject constructor(
 
     // Se puede abrir en un día anterior desde la Jornada, para subsanarlo
     init {
+        // Lo que todavía espera señal, en vivo: cada actividad y el envío del
+        // reporte lo dicen («Por enviar», SEG-V2-OBS-03)
+        viewModelScope.launch {
+            colaEnvio.enEspera.collect { cola ->
+                val ids = cola.map { it.clientId }.toMutableSet()
+                cola.filter { it.tabla == "rpc:enviar_parte" }.forEach { e ->
+                    runCatching { kotlinx.serialization.json.Json.parseToJsonElement(e.cuerpo) as kotlinx.serialization.json.JsonObject }
+                        .getOrNull()?.get("p_id")?.let { (it as? kotlinx.serialization.json.JsonPrimitive)?.content }
+                        ?.let { ids += "envio:$it" }
+                }
+                _estado.update { it.copy(porEnviar = ids) }
+            }
+        }
         abrir(
             ruta.get<String>("fecha")?.let { runCatching { LocalDate.parse(it) }.getOrNull() }
                 ?.takeIf { !it.isAfter(Peru.hoy()) } ?: Peru.hoy()
@@ -229,6 +248,7 @@ class ParteViewModel @Inject constructor(
         observacion: String?,
         origen: OrigenDelTrabajo,
         detalle: pe.servicon.sigov.datos.DetalleFor001,
+        materiales: List<MaterialDelRegistro> = emptyList(),
         alTerminar: () -> Unit,
     ) {
         val parte = _estado.value.parte ?: return
@@ -244,12 +264,10 @@ class ParteViewModel @Inject constructor(
                         .firstOrNull { r -> r.planItemId == origen.item.id && r.cantidad == 0.0 }
                     else -> null
                 }
-                if (existente != null) {
+                val registro = if (existente != null) {
                     campo.completarRegistro(existente, tramo, progresivaInicio, progresivaFin, lado, cantidad,
                         observacion ?: existente.observacion, detalle)
-                    return@runCatching
-                }
-                campo.registrarActividad(
+                } else campo.registrarActividad(
                     parte = parte,
                     actividad = actividad,
                     tramo = tramo,
@@ -262,7 +280,16 @@ class ParteViewModel @Inject constructor(
                     origen = origen,
                     detalle = detalle,
                 )
+                // El material de esa actividad, con ella (SEG-V2-OBS-14)
+                val cuadrilla = sesion.cuadrilla()
+                if (cuadrilla != null) materiales.filter { m -> m.cantidad > 0 }.forEach { m ->
+                    consumoRepo.registrar(
+                        cuadrilla.servicioId, cuadrilla.id, _estado.value.fecha, m.insumoId, m.nombre, m.unidad, m.cantidad,
+                        registro, parte.clientId,
+                    )
+                }
             }.onSuccess {
+                if (materiales.any { m -> m.cantidad > 0 }) cargarMateriales()
                 _estado.update {
                     it.copy(
                         guardando = false,
@@ -500,7 +527,13 @@ class ParteViewModel @Inject constructor(
             return
         }
         viewModelScope.launch {
-            runCatching { campo.enviarParte(parte) }
+            // El personal, si no se puso: los integrantes de la cuadrilla
+            val sugerido = _estado.value.personalSugerido
+            val completo = if (parte.personal == null && sugerido != null) {
+                runCatching { campo.guardarDatosDelDia(parte, null, parte.horaInicio, parte.horaFin, sugerido, parte.notas) }
+                    .getOrDefault(parte)
+            } else parte
+            runCatching { campo.enviarParte(completo) }
                 .onSuccess { nuevo -> _estado.update { it.copy(parte = nuevo, observacion = null, aviso = "Reporte enviado al supervisor.") } }
                 .onFailure { f -> _estado.update { it.copy(error = f.enCristiano()) } }
         }

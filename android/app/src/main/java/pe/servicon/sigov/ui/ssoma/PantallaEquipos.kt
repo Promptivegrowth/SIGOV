@@ -255,8 +255,9 @@ private fun DialogoInspeccion(
                     color = MaterialTheme.colorScheme.onSurfaceVariant,
                 )
 
-                Row(verticalAlignment = Alignment.CenterVertically) {
-                    Column(Modifier.weight(1f)) {
+                // El texto arriba y las fichas debajo, para que no se parta (SEG-V2-OBS-08)
+                Column {
+                    Column {
                         Text("¿Está conforme?", style = MaterialTheme.typography.bodyMedium)
                         Text(
                             if (conforme) "Sin novedad" else "Hay algo que corregir",

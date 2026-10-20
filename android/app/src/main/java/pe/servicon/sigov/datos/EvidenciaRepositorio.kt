@@ -141,6 +141,8 @@ class EvidenciaRepositorio @Inject constructor(
          * parte: va sola y la nube la engancha al elemento.
          */
         activo: Pair<String, String>? = null,
+        /** Foto de una observación de campo: espera a que la observación suba. */
+        observacion: String? = null,
     ): EvidenciaLocal = withContext(Dispatchers.IO) {
         val punto = ubicacion.actual()
         val tomadaEn = Instant.now()
@@ -211,7 +213,7 @@ class EvidenciaRepositorio @Inject constructor(
         val medidas = medir(destino)
         val evidencia = EvidenciaLocal(
             clientId = clientId,
-            registroClientId = if (activo != null) null else registro.clientId,
+            registroClientId = if (activo != null || observacion != null) null else registro.clientId,
             servicioId = registro.servicioId,
             fase = fase.valor,
             rutaLocal = destino.absolutePath,
@@ -234,7 +236,11 @@ class EvidenciaRepositorio @Inject constructor(
             tabla = "evidences",
             clientId = clientId,
             // La foto espera a que su registro exista en la nube
-            dependeDe = if (activo != null) null else registro.clientId,
+            dependeDe = when {
+                observacion != null -> observacion
+                activo != null -> null
+                else -> registro.clientId
+            },
             etiqueta = "Foto · " + registro.actividadNombre,
             cuerpo = buildJsonObject {
                 put("service_id", registro.servicioId)

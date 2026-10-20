@@ -1913,6 +1913,7 @@ export type Database = {
           master_uploaded_at: string | null
           master_width: number | null
           mime_type: string
+          observacion_id: string | null
           pci_item_id: string | null
           phase: Database["public"]["Enums"]["evidence_phase"]
           progresiva_m: number | null
@@ -1958,6 +1959,7 @@ export type Database = {
           master_uploaded_at?: string | null
           master_width?: number | null
           mime_type?: string
+          observacion_id?: string | null
           pci_item_id?: string | null
           phase?: Database["public"]["Enums"]["evidence_phase"]
           progresiva_m?: number | null
@@ -2003,6 +2005,7 @@ export type Database = {
           master_uploaded_at?: string | null
           master_width?: number | null
           mime_type?: string
+          observacion_id?: string | null
           pci_item_id?: string | null
           phase?: Database["public"]["Enums"]["evidence_phase"]
           progresiva_m?: number | null
@@ -2050,6 +2053,20 @@ export type Database = {
             columns: ["created_by"]
             isOneToOne: false
             referencedRelation: "profiles"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "evidences_observacion_id_fkey"
+            columns: ["observacion_id"]
+            isOneToOne: false
+            referencedRelation: "observaciones_campo"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "evidences_observacion_id_fkey"
+            columns: ["observacion_id"]
+            isOneToOne: false
+            referencedRelation: "v_observaciones_campo"
             referencedColumns: ["id"]
           },
           {
@@ -2454,6 +2471,118 @@ export type Database = {
           },
           {
             foreignKeyName: "notifications_service_id_fkey"
+            columns: ["service_id"]
+            isOneToOne: false
+            referencedRelation: "services"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      observaciones_campo: {
+        Row: {
+          atendida_at: string | null
+          atendida_por: string | null
+          client_id: string | null
+          created_at: string
+          created_by: string | null
+          crew_id: string | null
+          deleted_at: string | null
+          descripcion: string
+          estado: string
+          id: string
+          lat: number | null
+          lng: number | null
+          nota_atencion: string | null
+          observado_on: string
+          programada_on: string | null
+          progresiva_m: number | null
+          section_id: string | null
+          service_id: string
+          side: string | null
+          updated_at: string
+        }
+        Insert: {
+          atendida_at?: string | null
+          atendida_por?: string | null
+          client_id?: string | null
+          created_at?: string
+          created_by?: string | null
+          crew_id?: string | null
+          deleted_at?: string | null
+          descripcion: string
+          estado?: string
+          id?: string
+          lat?: number | null
+          lng?: number | null
+          nota_atencion?: string | null
+          observado_on?: string
+          programada_on?: string | null
+          progresiva_m?: number | null
+          section_id?: string | null
+          service_id: string
+          side?: string | null
+          updated_at?: string
+        }
+        Update: {
+          atendida_at?: string | null
+          atendida_por?: string | null
+          client_id?: string | null
+          created_at?: string
+          created_by?: string | null
+          crew_id?: string | null
+          deleted_at?: string | null
+          descripcion?: string
+          estado?: string
+          id?: string
+          lat?: number | null
+          lng?: number | null
+          nota_atencion?: string | null
+          observado_on?: string
+          programada_on?: string | null
+          progresiva_m?: number | null
+          section_id?: string | null
+          service_id?: string
+          side?: string | null
+          updated_at?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "observaciones_campo_atendida_por_fkey"
+            columns: ["atendida_por"]
+            isOneToOne: false
+            referencedRelation: "profiles"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "observaciones_campo_created_by_fkey"
+            columns: ["created_by"]
+            isOneToOne: false
+            referencedRelation: "profiles"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "observaciones_campo_crew_id_fkey"
+            columns: ["crew_id"]
+            isOneToOne: false
+            referencedRelation: "crews"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "observaciones_campo_crew_id_fkey"
+            columns: ["crew_id"]
+            isOneToOne: false
+            referencedRelation: "v_hygiene_today"
+            referencedColumns: ["crew_id"]
+          },
+          {
+            foreignKeyName: "observaciones_campo_section_id_fkey"
+            columns: ["section_id"]
+            isOneToOne: false
+            referencedRelation: "road_sections"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "observaciones_campo_service_id_fkey"
             columns: ["service_id"]
             isOneToOne: false
             referencedRelation: "services"
@@ -6109,6 +6238,71 @@ export type Database = {
           unit_symbol: string | null
         }
         Relationships: []
+      }
+      v_observaciones_campo: {
+        Row: {
+          atendida_at: string | null
+          client_id: string | null
+          created_at: string | null
+          created_by: string | null
+          created_by_name: string | null
+          crew_id: string | null
+          crew_name: string | null
+          descripcion: string | null
+          estado: string | null
+          fotos: string[] | null
+          id: string | null
+          lat: number | null
+          lng: number | null
+          nota_atencion: string | null
+          observado_on: string | null
+          programada_on: string | null
+          progresiva_m: number | null
+          progresiva_txt: string | null
+          section_code: string | null
+          section_id: string | null
+          section_name: string | null
+          section_numero: number | null
+          service_id: string | null
+          side: string | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "observaciones_campo_created_by_fkey"
+            columns: ["created_by"]
+            isOneToOne: false
+            referencedRelation: "profiles"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "observaciones_campo_crew_id_fkey"
+            columns: ["crew_id"]
+            isOneToOne: false
+            referencedRelation: "crews"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "observaciones_campo_crew_id_fkey"
+            columns: ["crew_id"]
+            isOneToOne: false
+            referencedRelation: "v_hygiene_today"
+            referencedColumns: ["crew_id"]
+          },
+          {
+            foreignKeyName: "observaciones_campo_section_id_fkey"
+            columns: ["section_id"]
+            isOneToOne: false
+            referencedRelation: "road_sections"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "observaciones_campo_service_id_fkey"
+            columns: ["service_id"]
+            isOneToOne: false
+            referencedRelation: "services"
+            referencedColumns: ["id"]
+          },
+        ]
       }
       v_pci_items: {
         Row: {

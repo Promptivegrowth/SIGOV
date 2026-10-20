@@ -1,6 +1,8 @@
 package pe.servicon.sigov.ui.avance
 
 import androidx.compose.foundation.background
+import androidx.compose.foundation.clickable
+import androidx.compose.runtime.remember
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.RoundedCornerShape
@@ -48,14 +50,21 @@ fun PantallaAvance(
     vm: AvanceViewModel = hiltViewModel(),
     alVolver: () -> Unit,
     alAbrirParte: () -> Unit = {},
-    alAbrirEvidencias: () -> Unit = {},
-    alAbrirPci: () -> Unit = {},
-    alAbrirProgramacion: () -> Unit = {},
+    /** Evidencias con la semana elegida ya puesta (SEG-V2-OBS-26). */
+    alAbrirEvidencias: (desde: String, hasta: String) -> Unit = { _, _ -> },
+    /** PCI ya filtrado: por estado, por plazo o un PCI (SEG-V2-OBS-23/24). */
+    alAbrirPci: (estado: String?, plazo: String?, pci: String?) -> Unit = { _, _, _ -> },
+    /** La semana elegida, día por día (SEG-V2-OBS-25). */
+    alAbrirProgramacion: (lunes: String) -> Unit = {},
     alAbrirCaja: () -> Unit = {},
     alAbrirMateriales: () -> Unit = {},
     alAbrirSincronizacion: () -> Unit = {},
 ) {
     val estado by vm.estado.collectAsStateWithLifecycle()
+    val (desdeSemana, hastaSemana) = remember(estado.semana) {
+        pe.servicon.sigov.datos.AvanceRepositorio.semanaDe(Peru.hoy().plusWeeks(estado.semana.toLong()))
+    }
+    val abrirEvidencias = { alAbrirEvidencias(desdeSemana.toString(), hastaSemana.toString()) }
 
     ArmazonDeApartado(
         titulo = "Mi Avance",
@@ -85,7 +94,10 @@ fun PantallaAvance(
                 verticalArrangement = Arrangement.spacedBy(14.dp),
             ) {
                 Cumplimiento(estado)
-                Contadores(estado, alAbrirParte, alAbrirEvidencias, alAbrirPci)
+                Contadores(estado, alAbrirParte, abrirEvidencias) {
+                    // El acceso rápido: lo vencido primero, si no lo que vence ya
+                    alAbrirPci(null, if (estado.pciPanel.any { it.vencidos > 0 }) "VENCIDO" else "UN_DIA", null)
+                }
 
                 // ─── OBS-49: el resumen de la semana ───────────────────
                 SelectorDeSemana(estado, vm::moverSemana)
@@ -97,9 +109,9 @@ fun PantallaAvance(
                     estado.resumen == null -> Aviso(estado.errorSemana ?: "No se pudo calcular el resumen.", Marca.Naranja)
                     else -> {
                         val r = estado.resumen!!
-                        BloqueProgramacion(r, alAbrirProgramacion)
-                        BloquePci(r, alAbrirPci)
-                        BloqueEvidencias(r, alAbrirEvidencias)
+                        BloqueProgramacion(r) { alAbrirProgramacion(desdeSemana.toString()) }
+                        BloquePci(estado.pciPanel, alAbrirPci)
+                        BloqueEvidencias(r, abrirEvidencias)
                         BloqueOtros(r, estado.porSincronizar, estado.conError, alAbrirCaja, alAbrirMateriales, alAbrirSincronizacion)
                     }
                 }
@@ -202,7 +214,7 @@ private fun Contadores(
     Row(horizontalArrangement = Arrangement.spacedBy(10.dp)) {
         Contador("Registros", estado.registros.toString(), Marca.Azul, Modifier.weight(1f), alAbrirParte)
         Contador("Registros con foto", estado.fotos.toString(), Marca.VerdeBandera, Modifier.weight(1f), alAbrirEvidencias)
-        Contador("Ítems PCI abiertos", estado.pciAbiertos.toString(), Marca.Naranja, Modifier.weight(1f), alAbrirPci)
+        Contador("PCI por atender ya", estado.pciUrgentes.toString(), if (estado.pciUrgentes > 0) Semaforo.Vencido else Marca.Naranja, Modifier.weight(1f), alAbrirPci)
     }
 }
 
@@ -461,7 +473,7 @@ private fun BloqueProgramacion(r: ResumenAvance, alTocar: () -> Unit) {
         Notas(
             s.porValidar.takeIf { it > 0 }?.let { "$it por validar" } to Marca.Azul,
             s.atrasadas.takeIf { it > 0 }?.let { plural(it, "atrasada", "atrasadas") } to Semaforo.Vencido,
-            s.suspendidas.takeIf { it > 0 }?.let { plural(it, "suspendida", "suspendidas") } to Semaforo.PorVencer,
+            s.suspendidas.takeIf { it > 0 }?.let { plural(it, "no ejecutada", "no ejecutadas") } to Semaforo.PorVencer,
         )
         if (r.dias.isNotEmpty()) DiasDeLaSemana(r.dias)
     }
@@ -507,46 +519,60 @@ private fun DiasDeLaSemana(dias: List<AvanceDia>) {
     }
 }
 
+/**
+ * El panel por PCI activo (SEG-V2-OBS-23/24): los mismos estados del módulo
+ * PCI —por atender, en ejecución, conformes y observados— y los vencidos
+ * como condición de plazo. Cada cifra abre la lista ya filtrada.
+ */
 @Composable
-private fun BloquePci(r: ResumenAvance, alTocar: () -> Unit) {
-    val p = r.pci
+private fun BloquePci(panel: List<PanelDePci>, alAbrir: (estado: String?, plazo: String?, pci: String?) -> Unit) {
+    val vencidos = panel.sumOf { it.vencidos }
     Bloque(
-        "PCI",
-        destacado = if (p.vencidos > 0) "${p.vencidos} vencidos" else null,
+        "PCI activos",
+        destacado = if (vencidos > 0) "$vencidos vencidos" else null,
         colorDestacado = Semaforo.Vencido,
-        alTocar = alTocar,
+        alTocar = { alAbrir(null, null, null) },
     ) {
-        if (p.items == 0) {
+        if (panel.isEmpty()) {
             Text(
-                "No tienes ítems PCI asignados.",
+                "No tienes PCI activos.",
                 style = MaterialTheme.typography.bodySmall,
                 color = MaterialTheme.colorScheme.onSurfaceVariant,
             )
             return@Bloque
         }
-        Cifras(
-            Triple("PCI asignados", p.documentos, Marca.Azul),
-            Triple("Ítems pendientes", p.pendientes, Marca.Naranja),
-            Triple("Ítems levantados", p.levantados, Marca.VerdeBandera),
-        )
-        Notas(
-            p.venceHoy.takeIf { it > 0 }?.let { "$it vence hoy" } to Semaforo.Urgente,
-            p.porVencer.takeIf { it > 0 }?.let { "$it por vencer" } to Semaforo.PorVencer,
-        )
-        val detalle = listOfNotNull(
-            p.proximoVencimiento?.let { f ->
-                runCatching { "Próximo vencimiento: ${LocalDate.parse(f).format(DIA_CORTO)}" }.getOrNull()
-            },
-            p.observados.takeIf { it > 0 }?.let { plural(it, "observado por COVINCA", "observados por COVINCA") },
-            p.conformes.takeIf { it > 0 }?.let { "$it conformes" },
-        )
-        if (detalle.isNotEmpty()) {
-            Text(
-                detalle.joinToString(" · "),
-                style = MaterialTheme.typography.bodySmall,
-                color = MaterialTheme.colorScheme.onSurfaceVariant,
-            )
+        panel.forEach { p ->
+            Text(p.codigo, style = MaterialTheme.typography.titleSmall, fontWeight = FontWeight.Bold, color = Marca.Azul,
+                modifier = Modifier.clickable { alAbrir(null, null, p.pciId) })
+            Row(horizontalArrangement = Arrangement.spacedBy(6.dp)) {
+                CifraPci("Por atender", p.porAtender, Color(0xFF616161), Modifier.weight(1f)) { alAbrir("POR_ATENDER", null, p.pciId) }
+                CifraPci("En ejecución", p.enEjecucion, Semaforo.PorVencer, Modifier.weight(1f)) { alAbrir("EN_EJECUCION", null, p.pciId) }
+                CifraPci("Conformes", p.conformes, Semaforo.Levantado, Modifier.weight(1f)) { alAbrir("CONFORMES", null, p.pciId) }
+                CifraPci("Observados", p.observados, Semaforo.Vencido, Modifier.weight(1f)) { alAbrir("OBSERVADOS", null, p.pciId) }
+            }
+            if (p.vencidos > 0) {
+                Text(
+                    "${p.vencidos} ${if (p.vencidos == 1) "ítem vencido" else "ítems vencidos"} sin terminar · ver",
+                    style = MaterialTheme.typography.bodySmall,
+                    color = Semaforo.Vencido,
+                    modifier = Modifier.clickable { alAbrir("PENDIENTES", "VENCIDO", p.pciId) }.padding(vertical = 2.dp),
+                )
+            }
         }
+    }
+}
+
+@Composable
+private fun CifraPci(etiqueta: String, n: Int, color: Color, modifier: Modifier, alTocar: () -> Unit) {
+    Column(
+        modifier
+            .background(color.copy(alpha = 0.10f), RoundedCornerShape(10.dp))
+            .clickable(onClick = alTocar)
+            .padding(vertical = 8.dp, horizontal = 2.dp),
+        horizontalAlignment = Alignment.CenterHorizontally,
+    ) {
+        Text("$n", style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.Bold, color = color)
+        Text(etiqueta, style = MaterialTheme.typography.labelSmall, maxLines = 1)
     }
 }
 

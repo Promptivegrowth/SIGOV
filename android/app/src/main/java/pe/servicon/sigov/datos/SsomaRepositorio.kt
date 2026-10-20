@@ -97,11 +97,26 @@ data class Vehiculo(
 
     val estadoLegible: String
         get() = when (status) {
-            "operativo" -> "Operativo"
+            "operativo" -> if (documentosVencidos.isNotEmpty()) "Operativo · documentos vencidos" else "Operativo"
             "taller" -> "En taller"
             "inoperativo" -> "Inoperativo"
             else -> status
         }
+
+    /**
+     * Lo documental, aparte de lo mecánico (SEG-V2-OBS-06): un vehículo con el
+     * SOAT, la revisión técnica o la póliza vencidos no está apto para
+     * circular aunque el motor ande bien.
+     */
+    val documentosVencidos: List<String>
+        get() {
+            val hoy = Peru.hoy()
+            return listOf("SOAT" to soat, "Revisión técnica" to revisionTecnica, "Póliza" to poliza)
+                .filter { (_, f) -> f != null && runCatching { java.time.LocalDate.parse(f!!.take(10)).isBefore(hoy) }.getOrDefault(false) }
+                .map { it.first }
+        }
+
+    val aptoParaCircular: Boolean get() = status == "operativo" && documentosVencidos.isEmpty()
 
     val tipo: String
         get() = when (kind) {
@@ -246,9 +261,35 @@ class SsomaRepositorio @Inject constructor(
      * Registra el vehículo de reemplazo (OBS-71). Necesita señal: la base
      * cierra la asignación del titular, lo manda al taller y abre la nueva.
      */
+    /**
+     * Los reemplazos de la cuadrilla, del más reciente al más viejo: qué
+     * unidad entró por cuál, desde cuándo, hasta cuándo y por qué.
+     */
+    suspend fun historialDeReemplazos(cuadrillaId: String, flota: List<Vehiculo>): List<ReemplazoDeVehiculo> =
+        withContext(Dispatchers.IO) {
+            runCatching {
+                val filas = supabase.postgrest.from("crew_vehicle_assignments")
+                    .select { filter { eq("crew_id", cuadrillaId) } }
+                    .decodeList<kotlinx.serialization.json.JsonObject>()
+                fun campo(o: kotlinx.serialization.json.JsonObject, k: String) =
+                    (o[k] as? kotlinx.serialization.json.JsonPrimitive)?.let { if (it is kotlinx.serialization.json.JsonNull) null else it.content }
+                val placa = flota.associate { it.id to it.plate }
+                val vehiculoDe = filas.associate { campo(it, "id") to campo(it, "vehicle_id") }
+                filas.filter { campo(it, "kind") == "reemplazo" }.map { o ->
+                    ReemplazoDeVehiculo(
+                        placa = placa[campo(o, "vehicle_id")] ?: "Vehículo",
+                        titular = campo(o, "replaces_id")?.let { vehiculoDe[it] }?.let { placa[it] },
+                        desde = campo(o, "start_on") ?: "",
+                        hasta = campo(o, "end_on"),
+                        motivo = campo(o, "reason"),
+                    )
+                }.sortedByDescending { it.desde }
+            }.getOrDefault(emptyList())
+        }
+
     suspend fun registrarReemplazo(
         cuadrillaId: String, titular: Vehiculo, placa: String, tipo: String, marca: String?, modelo: String?,
-        motivo: String, km: Int, observacion: String?,
+        motivo: String, km: Int, observacion: String?, desde: java.time.LocalDate = Peru.hoy(),
     ) = withContext(Dispatchers.IO) {
         supabase.postgrest.rpc("registrar_reemplazo", buildJsonObject {
             put("p_crew", cuadrillaId)
@@ -257,7 +298,7 @@ class SsomaRepositorio @Inject constructor(
             put("p_tipo", tipo)
             marca?.let { put("p_marca", it) }
             modelo?.let { put("p_modelo", it) }
-            put("p_fecha", Peru.hoy().toString())
+            put("p_fecha", desde.toString())
             put("p_motivo", motivo)
             put("p_km", km)
             observacion?.let { put("p_obs", it) }
@@ -342,4 +383,23 @@ class SsomaRepositorio @Inject constructor(
         catalogo.guardar(vigentes)
         if (vigentes.isNotEmpty()) catalogo.borrarLosQueYaNoEstan(tabla, vigentes.map { it.id })
     }
+}
+
+/** Un reemplazo de la cuadrilla, para su historial. */
+data class ReemplazoDeVehiculo(
+    val placa: String,
+    val titular: String?,
+    val desde: String,
+    val hasta: String?,
+    val motivo: String?,
+) {
+    val motivoLegible: String?
+        get() = when (motivo) {
+            "mantenimiento" -> "Mantenimiento"
+            "averia" -> "Avería"
+            "reparacion" -> "Reparación"
+            "cambio_temporal" -> "Cambio temporal"
+            "otro" -> "Otro motivo"
+            else -> motivo
+        }
 }

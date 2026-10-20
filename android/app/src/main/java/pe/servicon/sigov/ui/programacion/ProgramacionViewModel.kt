@@ -46,6 +46,7 @@ data class EstadoProgramacion(
  */
 @HiltViewModel
 class ProgramacionViewModel @Inject constructor(
+    private val ruta: androidx.lifecycle.SavedStateHandle,
     private val campo: CampoRepositorio,
     private val sesion: SesionRepositorio,
     private val partes: ParteDao,
@@ -55,7 +56,10 @@ class ProgramacionViewModel @Inject constructor(
     private val _estado = MutableStateFlow(EstadoProgramacion())
     val estado: StateFlow<EstadoProgramacion> = _estado.asStateFlow()
 
-    init { cargar(Peru.hoy()) }
+    // Desde la semana de Mi Avance se llega a un día concreto (SEG-V2-OBS-25)
+    init {
+        cargar(ruta.get<String>("fecha")?.let { runCatching { LocalDate.parse(it) }.getOrNull() } ?: Peru.hoy())
+    }
 
     fun moverDia(dias: Long) = cargar(_estado.value.fecha.plusDays(dias))
 

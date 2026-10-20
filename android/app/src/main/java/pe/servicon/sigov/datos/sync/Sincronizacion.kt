@@ -17,6 +17,7 @@ import kotlinx.serialization.json.Json
 import kotlinx.serialization.json.JsonObject
 import kotlinx.serialization.json.buildJsonObject
 import kotlinx.serialization.json.jsonObject
+import kotlinx.serialization.json.contentOrNull
 import kotlinx.serialization.json.jsonPrimitive
 import kotlinx.serialization.json.put
 import pe.servicon.sigov.datos.Configuracion
@@ -46,7 +47,7 @@ import kotlin.math.pow
 private val LLAVE_DEL_PADRE: Map<String, Map<String, String>> = mapOf(
     "work_entries" to mapOf("work_orders" to "work_order_id"),
     "parte_recursos" to mapOf("work_orders" to "work_order_id"),
-    "evidences" to mapOf("work_entries" to "work_entry_id"),
+    "evidences" to mapOf("work_entries" to "work_entry_id", "observaciones_campo" to "observacion_id"),
     "ats_signatures" to mapOf("ats_iperc" to "ats_id"),
     "checklist_responses" to mapOf("work_orders" to "work_order_id"),
     "supply_request_items" to mapOf("supply_requests" to "request_id"),
@@ -205,7 +206,12 @@ class TrabajadorSincronizacion @AssistedInject constructor(
         var fallaron = 0
         // Los originales de las fotos pesan ~3 MB: por omisión esperan al
         // Wi-Fi para no gastar los datos de la cuadrilla (OBS-23)
-        val subirOriginales = configuracion.originalesConDatos.value || redSinCosto(applicationContext)
+        val subirOriginales = when (configuracion.modoOriginales.value) {
+            pe.servicon.sigov.datos.ModoOriginales.WIFI_Y_DATOS -> true
+            pe.servicon.sigov.datos.ModoOriginales.SOLO_WIFI -> redSinCosto(applicationContext)
+            pe.servicon.sigov.datos.ModoOriginales.MANUAL -> false
+        } || configuracion.subirOriginalesUnaVez
+        configuracion.subirOriginalesUnaVez = false
 
         for (envio in porEnviar) {
             // Un hijo espera a que su padre exista en la nube
@@ -270,7 +276,7 @@ class TrabajadorSincronizacion @AssistedInject constructor(
                 // registro ya existe en la nube. Existir no es un error: el
                 // parte del día es uno solo, lo abra quien lo abra.
                 val existente = LLAVE_NATURAL[envio.tabla]?.let { llaves ->
-                    val valores = llaves.associateWith { cuerpo[it]?.jsonPrimitive?.content }
+                    val valores = llaves.associateWith { cuerpo[it]?.jsonPrimitive?.contentOrNull }
                     if (valores.values.any { it == null }) null
                     else supabase.postgrest.from(envio.tabla)
                         .select {

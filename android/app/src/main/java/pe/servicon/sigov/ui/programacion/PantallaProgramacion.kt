@@ -526,7 +526,7 @@ private fun EtiquetaDeEstado(status: String) {
         "en_curso" -> "En ejecución" to Marca.Verde
         "por_validar" -> "Por validar" to Marca.Naranja
         "ejecutado" -> "Culminada" to Marca.VerdeBandera
-        "suspendido" -> "Observada" to Marca.Naranja
+        "suspendido" -> "No ejecutada" to Marca.Naranja
         "reprogramado" -> "Reprogramada" to Marca.Naranja
         else -> "Anulada" to Color.Gray
     }

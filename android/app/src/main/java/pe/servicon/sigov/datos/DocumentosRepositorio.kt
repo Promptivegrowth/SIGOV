@@ -19,6 +19,7 @@ import kotlinx.serialization.Serializable
 import kotlinx.serialization.json.Json
 import kotlinx.serialization.json.JsonObject
 import kotlinx.serialization.json.buildJsonObject
+import kotlinx.serialization.json.contentOrNull
 import kotlinx.serialization.json.jsonPrimitive
 import kotlinx.serialization.json.put
 import pe.servicon.sigov.datos.local.CatalogoDao
@@ -76,8 +77,12 @@ data class DocumentoDelDia(
 
     val estadoLegible: String
         get() = when {
-            porEnviar > 0 && estado in setOf("pendiente", "cargado", "observado") ->
-                if (porEnviar == 1) "1 foto por enviar" else "$porEnviar fotos por enviar"
+            porEnviar > 0 && tipo == "reporte_diario" -> "Enviado · por enviar (sin señal)"
+            porEnviar > 0 && tipo == "higiene" -> "Guardado · por enviar"
+            // Ya está hecho: va a revisión SSOMA en cuanto haya señal (SEG-V2-OBS-02/03)
+            porEnviar > 0 && estado in setOf("pendiente", "cargado", "observado", "pendiente_revision") ->
+                "Pendiente de revisión SSOMA · " +
+                    (if (porEnviar == 1) "1 foto por enviar" else "$porEnviar fotos por enviar")
             else -> when (estado) {
                 "pendiente" -> "Pendiente"
                 "cargado" -> "Registrado en la app"
@@ -149,7 +154,23 @@ class DocumentosRepositorio @Inject constructor(
                 (o["p_vehicle_id"]?.jsonPrimitive?.content ?: "") + "|" + (o["p_titulo"]?.jsonPrimitive?.content ?: "")
             val porClave = locales.groupingBy(::clave).eachCount()
 
-            remotos.map { d -> d.copy(porEnviar = porClave[d.clave] ?: 0) }
+            // El reporte y la higiene: lo que se mandó sin señal también es
+            // «por enviar», no «pendiente» (SEG-V2-OBS-03)
+            suspend fun cuantosDe(tabla: String, dia: String, cuadrilla: String) = colaDao.sinConfirmarDe(tabla).count { envio ->
+                val o = runCatching { json.parseToJsonElement(envio.cuerpo) as JsonObject }.getOrNull()
+                o?.get(dia)?.jsonPrimitive?.contentOrNull == fecha.toString() &&
+                    (o[cuadrilla]?.jsonPrimitive?.contentOrNull ?: cuadrillaId) == cuadrillaId
+            }
+            val reporteEnCola = cuantosDe("rpc:enviar_parte", "p_fecha", "p_crew_id")
+            val higieneEnCola = cuantosDe("hygiene_checks", "checked_on", "crew_id")
+
+            remotos.map { d ->
+                d.copy(porEnviar = when (d.tipo) {
+                    "reporte_diario" -> reporteEnCola
+                    "higiene" -> higieneEnCola
+                    else -> porClave[d.clave] ?: 0
+                })
+            }
                 .sortedBy { ORDEN.indexOf(it.tipo).let { i -> if (i < 0) 99 else i } }
         }
 

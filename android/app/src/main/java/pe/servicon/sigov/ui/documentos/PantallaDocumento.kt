@@ -111,7 +111,11 @@ class DocumentoViewModel @Inject constructor(
         viewModelScope.launch {
             runCatching {
                 val cuadrilla = sesion.cuadrilla() ?: error("Tu usuario no dirige ninguna cuadrilla.")
-                documentos.cargarPagina(cuadrilla.servicioId, cuadrilla.id, fecha, tipo, toma, vehiculo, titulo)
+                // Que termine aunque el capataz salga de la pantalla en ese
+                // segundo: si no, la página podía perderse (SEG-V2-OBS-02)
+                kotlinx.coroutines.withContext(kotlinx.coroutines.NonCancellable) {
+                    documentos.cargarPagina(cuadrilla.servicioId, cuadrilla.id, fecha, tipo, toma, vehiculo, titulo)
+                }
             }.onSuccess {
                 _estado.update { it.copy(guardando = false, aviso = "Página guardada. Se enviará al haber señal.") }
                 cargar()

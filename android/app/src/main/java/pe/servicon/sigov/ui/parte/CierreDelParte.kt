@@ -22,7 +22,8 @@ import pe.servicon.sigov.ui.theme.Marca
 import pe.servicon.sigov.ui.theme.Semaforo
 
 /** El estado del parte dicho en palabras. */
-fun estadoDelParte(estado: String?): String = when (estado) {
+fun estadoDelParte(estado: String?, envioEnCola: Boolean = false): String = if (estado == "enviado" && envioEnCola)
+    "Por enviar · sin señal" else when (estado) {
     "borrador" -> "En borrador"
     "enviado" -> "Enviado · por validar"
     "validado" -> "Validado"
@@ -51,15 +52,15 @@ fun DatosDelDia(parte: ParteLocal, alEditar: () -> Unit, vehiculos: List<String>
             Spacer(Modifier.width(12.dp))
             Column(Modifier.weight(1f)) {
                 Text("Datos del día", style = MaterialTheme.typography.titleSmall, fontWeight = FontWeight.SemiBold)
-                // Sin clima: retrasa y confunde al encargado (Elvis, video del 13/10)
-                val falta = parte.horaInicio == null || parte.personal == null
+                // Ya no es un paso obligatorio (SEG-V2-OBS-13): el horario y el
+                // personal salen de las actividades registradas si no se tocan
                 Text(
                     listOfNotNull(
                         listOfNotNull(parte.horaInicio, parte.horaFin).joinToString(" a ").ifBlank { null },
                         parte.personal?.let { "$it personas" },
-                    ).joinToString(" · ").ifBlank { "Horario y personal" },
+                    ).joinToString(" · ").ifBlank { "Opcional · el horario y el personal se completan solos" },
                     style = MaterialTheme.typography.bodySmall,
-                    color = if (falta && parte.editable) Marca.Naranja else MaterialTheme.colorScheme.onSurfaceVariant,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant,
                 )
                 // Lo que el sistema ya sabe y va igual al reporte (OBS-33)
                 val sabido = listOfNotNull(
@@ -158,7 +159,7 @@ fun DialogoEnviar(registros: Int, sinFotos: Int, faltanDatos: Boolean, alCerrar:
             Column(verticalArrangement = Arrangement.spacedBy(6.dp)) {
                 Text("$registros actividad(es) registradas.")
                 if (sinFotos > 0) Text("$sinFotos actividad(es) sin foto.", color = Marca.Naranja)
-                if (faltanDatos) Text("Faltan los datos del día (horario o personal).", color = Marca.Naranja)
+
                 Text(
                     "Después de enviarlo ya no podrás agregar actividades, salvo que el supervisor lo observe.",
                     style = MaterialTheme.typography.bodySmall,

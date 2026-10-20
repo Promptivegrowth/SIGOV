@@ -106,15 +106,8 @@ fun PantallaVehiculos(
                     contentPadding = PaddingValues(16.dp, 4.dp, 16.dp, 24.dp),
                     verticalArrangement = Arrangement.spacedBy(10.dp),
                 ) {
-                    if (estado.puedeAgregar) {
-                        item {
-                            OutlinedButton(
-                                onClick = { nuevoTemporal = true },
-                                modifier = Modifier.fillMaxWidth().height(48.dp),
-                                shape = RoundedCornerShape(10.dp),
-                            ) { Text("Registrar vehículo temporal") }
-                        }
-                    }
+                    // Un solo camino para la unidad que entra: el reemplazo de
+                    // un titular, con su motivo y su fecha (SEG-V2-OBS-09)
                     items(estado.visibles, key = { it.id }) { vehiculo ->
                         // El checklist físico del vehículo, fotografiado (OBS-67)
                         pe.servicon.sigov.ui.documentos.AccesoAFoto(
@@ -130,6 +123,9 @@ fun PantallaVehiculos(
                             alReemplazar = { reemplazando = vehiculo },
                             alDevolver = { devolviendo = vehiculo },
                         )
+                    }
+                    if (estado.historial.isNotEmpty()) {
+                        item { HistorialDeReemplazos(estado.historial) }
                     }
                 }
             }
@@ -150,13 +146,14 @@ fun PantallaVehiculos(
     if (reemplazando != null || nuevoTemporal) {
         DialogoVehiculoNuevo(
             titular = reemplazando,
+            flota = estado.vehiculos,
             guardando = estado.guardando,
             error = estado.error,
             alCerrar = { reemplazando = null; nuevoTemporal = false; vm.avisoVisto() },
-            alGuardar = { placa, tipo, marca, modelo, motivo, km, obs ->
+            alGuardar = { placa, tipo, marca, modelo, motivo, km, obs, desde ->
                 val titular = reemplazando
                 val cerrar = { reemplazando = null; nuevoTemporal = false }
-                if (titular != null) vm.registrarReemplazo(titular, placa, tipo, marca, modelo, motivo, km, obs, cerrar)
+                if (titular != null) vm.registrarReemplazo(titular, placa, tipo, marca, modelo, motivo, km, obs, desde, cerrar)
                 else vm.altaTemporal(placa, tipo, marca, modelo, km, obs, cerrar)
             },
         )
@@ -252,6 +249,22 @@ private fun FilaVehiculo(
                     ).joinToString(" · ").ifBlank { "Kilometraje sin registrar" },
                     style = MaterialTheme.typography.bodySmall,
                 )
+                if (vehiculo.documentosVencidos.isNotEmpty()) {
+                    Spacer(Modifier.height(8.dp))
+                    Text(
+                        vehiculo.documentosVencidos.let { v ->
+                            if (v.size == 1) "No apto para circular: venció ${v[0]}. Renuévalo o avisa al supervisor."
+                            else "No apto para circular: vencieron ${v.dropLast(1).joinToString(", ")} y ${v.last()}. Renuévalos o avisa al supervisor."
+                        },
+                        style = MaterialTheme.typography.bodySmall,
+                        fontWeight = FontWeight.SemiBold,
+                        color = Semaforo.Vencido,
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .background(Semaforo.Vencido.copy(alpha = 0.10f), RoundedCornerShape(8.dp))
+                            .padding(10.dp),
+                    )
+                }
                 Spacer(Modifier.height(6.dp))
                 Papel("SOAT", vehiculo.soat)
                 Papel("Revisión técnica", vehiculo.revisionTecnica)
@@ -268,20 +281,21 @@ private fun FilaVehiculo(
                     )
                 }
 
-                Spacer(Modifier.height(12.dp))
-                OutlinedButton(
-                    onClick = alRevisar,
-                    modifier = Modifier.fillMaxWidth().height(46.dp),
-                    shape = RoundedCornerShape(10.dp),
-                ) {
-                    Text(if (revisado) "Volver a revisar" else "Revisión antes de salir")
-                }
-                Spacer(Modifier.height(6.dp))
-                TextButton(
-                    onClick = if (vehiculo.esReemplazo) alDevolver else alReemplazar,
-                    modifier = Modifier.fillMaxWidth(),
-                ) {
-                    Text(if (vehiculo.esReemplazo) "Volvió ${vehiculo.reemplazaA ?: "el titular"}" else "Registrar vehículo de reemplazo")
+                Spacer(Modifier.height(10.dp))
+                // El registro es la foto del checklist en papel; la revisión
+                // en la app queda como apoyo opcional (SEG-V2-OBS-07)
+                Row(horizontalArrangement = Arrangement.spacedBy(6.dp)) {
+                    TextButton(onClick = alRevisar, modifier = Modifier.weight(1f)) {
+                        Text(if (revisado) "Revisión en la app · ver" else "Revisión en la app (opcional)")
+                    }
+                    if (vehiculo.esReemplazo || !vehiculo.temporal) {
+                        TextButton(
+                            onClick = if (vehiculo.esReemplazo) alDevolver else alReemplazar,
+                            modifier = Modifier.weight(1f),
+                        ) {
+                            Text(if (vehiculo.esReemplazo) "Volvió ${vehiculo.reemplazaA ?: "el titular"}" else "Registrar reemplazo")
+                        }
+                    }
                 }
             }
         }
@@ -389,7 +403,10 @@ private fun Preoperacional(
 
                     PUNTOS_PREOPERACIONAL.forEach { (clave, etiqueta) ->
                         val conforme = puntos[clave] ?: true
-                        Row(
+                        // La etiqueta arriba y las dos fichas debajo: en una fila,
+                        // las fichas dejaban al texto 2 cm y se partía letra por
+                        // letra (SEG-V2-OBS-08)
+                        Column(
                             Modifier
                                 .fillMaxWidth()
                                 .background(
@@ -398,14 +415,12 @@ private fun Preoperacional(
                                     RoundedCornerShape(10.dp),
                                 )
                                 .padding(horizontal = 10.dp, vertical = 4.dp),
-                            verticalAlignment = Alignment.CenterVertically,
                         ) {
                             Text(
                                 etiqueta,
                                 style = MaterialTheme.typography.bodyMedium,
                                 color = if (conforme) MaterialTheme.colorScheme.onSurface
                                 else Semaforo.Urgente,
-                                modifier = Modifier.weight(1f),
                             )
                             ConformeONo(conforme = conforme, alCambiar = { puntos[clave] = it })
                         }
@@ -502,3 +517,34 @@ private fun colorDeDias(dias: Int?): Color = when {
     dias <= 30 -> Marca.Verde
     else -> Semaforo.EnPlazo
 }
+
+/** Los reemplazos de la cuadrilla: quién entró por quién, cuándo y por qué (SEG-V2-OBS-09). */
+@Composable
+private fun HistorialDeReemplazos(historial: List<pe.servicon.sigov.datos.ReemplazoDeVehiculo>) {
+    Column(Modifier.padding(top = 6.dp), verticalArrangement = Arrangement.spacedBy(6.dp)) {
+        Text("Historial de reemplazos", style = MaterialTheme.typography.titleSmall, fontWeight = FontWeight.SemiBold)
+        historial.forEach { h ->
+            Card(
+                shape = RoundedCornerShape(10.dp),
+                colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface),
+                border = CardDefaults.outlinedCardBorder(),
+                modifier = Modifier.fillMaxWidth(),
+            ) {
+                Column(Modifier.padding(12.dp)) {
+                    Text("${h.placa} por ${h.titular ?: "—"}", style = MaterialTheme.typography.bodyMedium, fontWeight = FontWeight.SemiBold)
+                    Text(
+                        listOfNotNull(
+                            h.motivoLegible,
+                            "desde ${dma(h.desde)}",
+                            h.hasta?.let { "hasta ${dma(it)}" } ?: "en curso",
+                        ).joinToString(" · "),
+                        style = MaterialTheme.typography.bodySmall,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant,
+                    )
+                }
+            }
+        }
+    }
+}
+
+private fun dma(iso: String): String = iso.take(10).split("-").let { if (it.size == 3) "${it[2]}/${it[1]}/${it[0]}" else iso }

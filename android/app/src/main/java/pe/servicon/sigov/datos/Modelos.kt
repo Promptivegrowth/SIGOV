@@ -32,6 +32,8 @@ data class Tramo(
     val name: String,
     @SerialName("prog_start_m") val progresivaInicio: Double,
     @SerialName("prog_end_m") val progresivaFin: Double,
+    /** Tramo 1 a 4, como lo nombra el contrato. */
+    val numero: Int? = null,
 )
 
 @Serializable

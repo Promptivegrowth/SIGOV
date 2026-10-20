@@ -1,6 +1,7 @@
 package pe.servicon.sigov.ui.configuracion
 
 import androidx.compose.foundation.background
+import androidx.compose.foundation.clickable
 import androidx.compose.foundation.selection.toggleable
 import androidx.compose.ui.semantics.Role
 import androidx.compose.foundation.layout.*
@@ -72,8 +73,8 @@ class ConfiguracionViewModel @Inject constructor(
 
     fun volverAlContrato() = configuracion.volverAlContrato()
 
-    val originalesConDatos = configuracion.originalesConDatos
-    fun permitirOriginalesConDatos(si: Boolean) = configuracion.permitirOriginalesConDatos(si)
+    val modoOriginales = configuracion.modoOriginales
+    fun fijarModoOriginales(m: pe.servicon.sigov.datos.ModoOriginales) = configuracion.fijarModoOriginales(m)
 }
 
 /**
@@ -88,7 +89,7 @@ fun PantallaConfiguracion(
 ) {
     val estado by vm.estado.collectAsStateWithLifecycle()
     val sello = estado.efectivo
-    val originalesConDatos by vm.originalesConDatos.collectAsStateWithLifecycle()
+    val modoOriginales by vm.modoOriginales.collectAsStateWithLifecycle()
 
     ArmazonDeApartado(
         titulo = "Configuración",
@@ -156,8 +157,8 @@ fun PantallaConfiguracion(
             Text("FOTOS ORIGINALES", style = MaterialTheme.typography.titleSmall, fontWeight = FontWeight.Bold)
             Text(
                 "Cada foto guarda además su original en JPG de 4080 × 3060, el que pide COVINCA. " +
-                    "Pesa unos 3 MB, así que por omisión sube solo con Wi-Fi; mientras tanto la foto " +
-                    "liviana ya está en SIGOV.",
+                    "Cada original pesa unos 3 MB: 20 fotos son unos 60 MB del plan de datos. " +
+                    "La foto liviana sube siempre; esto decide cuándo sube el original.",
                 style = MaterialTheme.typography.bodySmall,
                 color = MaterialTheme.colorScheme.onSurfaceVariant,
             )
@@ -165,11 +166,24 @@ fun PantallaConfiguracion(
                 colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface),
                 border = CardDefaults.outlinedCardBorder(),
             ) {
-                Opcion(
-                    "Subir originales con datos móviles",
-                    "Gasta datos del plan; úsalo si no tendrás Wi-Fi en días",
-                    originalesConDatos,
-                ) { vm.permitirOriginalesConDatos(it) }
+                Column(Modifier.padding(vertical = 4.dp)) {
+                    pe.servicon.sigov.datos.ModoOriginales.entries.forEach { m ->
+                        Row(
+                            Modifier
+                                .fillMaxWidth()
+                                .clickable { vm.fijarModoOriginales(m) }
+                                .padding(horizontal = 12.dp, vertical = 8.dp),
+                            verticalAlignment = Alignment.CenterVertically,
+                        ) {
+                            RadioButton(selected = modoOriginales == m, onClick = { vm.fijarModoOriginales(m) })
+                            Spacer(Modifier.width(6.dp))
+                            Column {
+                                Text(m.etiqueta, style = MaterialTheme.typography.bodyMedium, fontWeight = FontWeight.SemiBold)
+                                Text(m.detalle, style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
+                            }
+                        }
+                    }
+                }
             }
 
             Spacer(Modifier.height(12.dp))

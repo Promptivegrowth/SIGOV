@@ -127,6 +127,7 @@ data class EstadoGaleria(
  */
 @HiltViewModel
 class GaleriaViewModel @Inject constructor(
+    private val ruta: androidx.lifecycle.SavedStateHandle,
     private val evidencias: EvidenciaRepositorio,
     private val sesion: SesionRepositorio,
 ) : ViewModel() {
@@ -134,7 +135,14 @@ class GaleriaViewModel @Inject constructor(
     private val _estado = MutableStateFlow(EstadoGaleria())
     val estado: StateFlow<EstadoGaleria> = _estado.asStateFlow()
 
-    init { cargar() }
+    init {
+        val desde = ruta.get<String>("desde")?.let { runCatching { LocalDate.parse(it) }.getOrNull() }
+        val hasta = ruta.get<String>("hasta")?.let { runCatching { LocalDate.parse(it) }.getOrNull() }
+        if (desde != null && hasta != null) {
+            _estado.update { it.copy(desde = desde, hasta = minOf(hasta, Peru.hoy())) }
+        }
+        cargar()
+    }
 
     fun cambiarPeriodo(periodo: Periodo) {
         val hoy = Peru.hoy()

@@ -10,6 +10,7 @@ import kotlinx.serialization.Serializable
 import kotlinx.serialization.json.Json
 import kotlinx.serialization.json.JsonObject
 import kotlinx.serialization.json.buildJsonObject
+import kotlinx.serialization.json.contentOrNull
 import kotlinx.serialization.json.jsonPrimitive
 import kotlinx.serialization.json.put
 import pe.servicon.sigov.datos.local.CatalogoDao
@@ -86,12 +87,22 @@ class ConsumoRepositorio @Inject constructor(
                     clientId = envio.clientId,
                     insumoId = o["supply_id"]?.jsonPrimitive?.content ?: "",
                     nombre = o["_nombre"]?.jsonPrimitive?.content ?: "Material",
-                    unidad = o["_unidad"]?.jsonPrimitive?.content,
+                    unidad = o["_unidad"]?.jsonPrimitive?.contentOrNull,
                     cantidad = o["qty"]?.jsonPrimitive?.content?.toDoubleOrNull() ?: 0.0,
                     actividad = envio.dependeDe?.let { nombres[it] },
                     enviado = false,
                 )
             }
+            // El client_id de lo que ya llegó a la nube: lo que sube entre una
+            // lectura y otra no se muestra dos veces (SEG-V2-OBS-15)
+            val llaves = runCatching {
+                supabase.postgrest.from("movimientos_cuadrilla")
+                    .select(io.github.jan.supabase.postgrest.query.Columns.list("id", "client_id")) {
+                        filter { eq("crew_id", cuadrillaId); eq("occurred_on", fecha.toString()) }
+                    }
+                    .decodeList<JsonObject>()
+                    .associate { it["id"]?.jsonPrimitive?.contentOrNull to it["client_id"]?.jsonPrimitive?.contentOrNull }
+            }.getOrDefault(emptyMap())
             val remotos = runCatching {
                 supabase.postgrest.from("v_kardex_cuadrilla")
                     .select {
@@ -102,18 +113,21 @@ class ConsumoRepositorio @Inject constructor(
                     }
                     .decodeList<JsonObject>()
                     .map { o ->
+                        val id = o["id"]?.jsonPrimitive?.contentOrNull ?: ""
                         Consumo(
-                            clientId = o["id"]?.jsonPrimitive?.content ?: "",
-                            insumoId = o["supply_id"]?.jsonPrimitive?.content ?: "",
-                            nombre = o["supply_name"]?.jsonPrimitive?.content ?: "Material",
-                            unidad = o["unit_symbol"]?.jsonPrimitive?.content,
-                            cantidad = o["salida"]?.jsonPrimitive?.content?.toDoubleOrNull() ?: 0.0,
-                            actividad = o["notes"]?.jsonPrimitive?.content,
+                            clientId = llaves[id] ?: id,
+                            insumoId = o["supply_id"]?.jsonPrimitive?.contentOrNull ?: "",
+                            nombre = o["supply_name"]?.jsonPrimitive?.contentOrNull ?: "Material",
+                            // Un vacío de la nube es JsonNull: con «content» salía el texto «null»
+                            unidad = o["unit_symbol"]?.jsonPrimitive?.contentOrNull,
+                            cantidad = o["salida"]?.jsonPrimitive?.contentOrNull?.toDoubleOrNull() ?: 0.0,
+                            actividad = o["notes"]?.jsonPrimitive?.contentOrNull?.takeIf { it.isNotBlank() },
                             enviado = true,
                         )
                     }
             }.getOrDefault(emptyList())
-            locales + remotos
+            val subidos = remotos.map { it.clientId }.toSet()
+            locales.filter { it.clientId !in subidos } + remotos
         }
 
     /**

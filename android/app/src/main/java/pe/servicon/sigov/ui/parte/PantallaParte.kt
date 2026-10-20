@@ -193,6 +193,7 @@ fun PantallaParte(
                         Registro(
                             registro = registro,
                             fotos = estado.fotosPorRegistro[registro.clientId] ?: 0,
+                            porEnviar = registro.clientId in estado.porEnviar,
                             alTomarEvidencia = { alTomarEvidencia(registro.clientId) },
                         )
                     }
@@ -288,9 +289,11 @@ fun PantallaParte(
             registrados = estado.registros.flatMap { listOfNotNull(it.planItemId, it.pciItemId) }.toSet(),
             cuadrilla = estado.cuadrilla,
             guardados = guardados,
+            insumos = estado.insumos,
+            rendimientos = estado.rendimientos,
             alCerrar = { formularioAbierto = false; vm.partidaInicialAtendida() },
-            alGuardar = { actividad, tramo, ini, fin, lado, cantidad, obs, origen, detalle ->
-                vm.registrar(actividad, tramo, ini, fin, lado, cantidad, obs, origen, detalle) {
+            alGuardar = { actividad, tramo, ini, fin, lado, cantidad, obs, origen, detalle, materiales ->
+                vm.registrar(actividad, tramo, ini, fin, lado, cantidad, obs, origen, detalle, materiales) {
                     // Desde una partida se vuelve a ella; si no, a la lista del paso 2
                     if (desdePartida != null) { formularioAbierto = false; vm.partidaInicialAtendida() }
                     else guardados++
@@ -313,7 +316,7 @@ private fun Resumen(estado: EstadoParte) {
         ) {
             Dato("Registros", estado.registros.size.toString())
             Dato("Metrado", String.format(Locale("es", "PE"), "%.1f", estado.metradoTotal))
-            Dato("Estado", estadoDelParte(estado.parte?.estado))
+            Dato("Estado", estadoDelParte(estado.parte?.estado, ("envio:" + estado.parte?.clientId) in estado.porEnviar))
         }
     }
 }
@@ -334,6 +337,7 @@ private fun Dato(etiqueta: String, valor: String) {
 private fun Registro(
     registro: RegistroLocal,
     fotos: Int,
+    porEnviar: Boolean = false,
     alTomarEvidencia: () -> Unit,
 ) {
     Card(
@@ -380,14 +384,27 @@ private fun Registro(
                 "pci" -> "Levantamiento de PCI" to Marca.Naranja
                 else -> "No programado" to MaterialTheme.colorScheme.onSurfaceVariant
             }
-            Text(
-                rotulo,
-                style = MaterialTheme.typography.labelSmall,
-                color = tinte,
-                modifier = Modifier
-                    .background(tinte.copy(alpha = 0.12f), RoundedCornerShape(8.dp))
-                    .padding(horizontal = 8.dp, vertical = 4.dp),
-            )
+            Row(horizontalArrangement = Arrangement.spacedBy(6.dp)) {
+                Text(
+                    rotulo,
+                    style = MaterialTheme.typography.labelSmall,
+                    color = tinte,
+                    modifier = Modifier
+                        .background(tinte.copy(alpha = 0.12f), RoundedCornerShape(8.dp))
+                        .padding(horizontal = 8.dp, vertical = 4.dp),
+                )
+                // Guardado en el equipo, sube al haber señal (SEG-V2-OBS-03)
+                if (porEnviar) {
+                    Text(
+                        "Por enviar",
+                        style = MaterialTheme.typography.labelSmall,
+                        color = Marca.Naranja,
+                        modifier = Modifier
+                            .background(Marca.Naranja.copy(alpha = 0.12f), RoundedCornerShape(8.dp))
+                            .padding(horizontal = 8.dp, vertical = 4.dp),
+                    )
+                }
+            }
 
             registro.observacion?.takeIf { it.isNotBlank() }?.let {
                 Spacer(Modifier.height(8.dp))

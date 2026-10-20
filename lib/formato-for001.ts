@@ -53,8 +53,21 @@ export async function datosFor001(sb: SupabaseClient<any>, parteId: string): Pro
     ? await sb.from('profiles').select('id, full_name').in('id', ids)
     : { data: [] as any[] }
   const nombre = (id?: string | null) => (personas ?? []).find((p: any) => p.id === id)?.full_name ?? null
+  // «Datos del día» ya no se piden a mano (SEG-V2-OBS-13): si el capataz no
+  // los puso, salen de lo registrado (la primera y la última hora de las
+  // actividades y el mayor número de personas en una de ellas)
+  const regs = (registros.data ?? []) as any[]
+  const horasIni = regs.map((r) => r.hora_inicio).filter(Boolean).sort()
+  const horasFin = regs.map((r) => r.hora_fin).filter(Boolean).sort()
+  const personasMax = Math.max(0, ...regs.map((r) => Number(r.personas) || 0))
+  const parteCompleto = {
+    ...parte,
+    start_time: parte.start_time ?? horasIni[0] ?? null,
+    end_time: parte.end_time ?? horasFin[horasFin.length - 1] ?? null,
+    headcount: parte.headcount ?? (personasMax || null),
+  }
   return {
-    parte,
+    parte: parteCompleto,
     cuadrilla: crew.data,
     jefe: nombre(crew.data?.leader_id),
     supervisor: nombre(crew.data?.supervisor_id),
@@ -332,7 +345,6 @@ export async function for001Pdf(datos: Datos, logo?: ArrayBuffer | null) {
   seccion('OBSERVACIONES GENERALES', M, y, W - 2 * M)
   const observaciones = [
     parte.notes,
-    parte.weather && `Clima: ${parte.weather}`,
     parte.start_time && `Jornada: ${hora(parte.start_time)} a ${hora(parte.end_time)}`,
     parte.headcount && `Personal: ${parte.headcount}`,
     parte.review_notes && `Revisión: ${parte.review_notes}`,

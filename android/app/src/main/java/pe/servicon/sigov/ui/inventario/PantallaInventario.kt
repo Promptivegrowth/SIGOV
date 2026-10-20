@@ -102,6 +102,7 @@ fun PantallaInventario(
     vm: InventarioViewModel = hiltViewModel(),
     alVolver: () -> Unit,
     alVerPciEnMapa: () -> Unit = {},
+    alVerObservaciones: () -> Unit = {},
 ) {
     val estado by vm.estado.collectAsStateWithLifecycle()
     val avisos = remember { SnackbarHostState() }
@@ -117,6 +118,8 @@ fun PantallaInventario(
         alVolver = alVolver,
         avisos = avisos,
         acciones = {
+            // Lo que no está en el inventario, en su propio apartado (Elvis, 14/10)
+            TextButton(onClick = alVerObservaciones) { Text("Observaciones", fontSize = 12.5.sp) }
             IconButton(onClick = vm::refrescar) {
                 Icon(Icons.Outlined.Refresh, "Actualizar", tint = Marca.Azul)
             }

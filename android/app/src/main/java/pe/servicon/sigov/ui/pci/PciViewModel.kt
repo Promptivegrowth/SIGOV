@@ -163,6 +163,7 @@ data class EstadoPci(
  */
 @HiltViewModel
 class PciViewModel @Inject constructor(
+    private val ruta: androidx.lifecycle.SavedStateHandle,
     private val campo: CampoRepositorio,
     private val sesion: SesionRepositorio,
     private val partes: ParteDao,
@@ -175,7 +176,16 @@ class PciViewModel @Inject constructor(
     /** Ya llegó la primera carga: desde ahí, cada regreso a la pantalla recarga. */
     private var cargoUnaVez = false
 
-    init { cargar() }
+    init {
+        // Desde Mi Avance: la cifra tocada llega ya filtrada, también dentro
+        // del PCI abierto (que filtra con su propio estado)
+        ruta.get<String>("estado")?.let { e -> Estado.entries.firstOrNull { it.name == e } }
+            ?.let { e -> _estado.update { it.copy(estado = e, estadoDelPci = e) } }
+        ruta.get<String>("plazo")?.let { p -> Plazo.entries.firstOrNull { it.name == p } }
+            ?.let { p -> _estado.update { it.copy(plazo = p) } }
+        ruta.get<String>("pci")?.let { id -> _estado.update { it.copy(abierto = id) } }
+        cargar()
+    }
 
     /** Al volver de la cámara: las fotos recién tomadas cambian las cuentas y el estado. */
     fun alVolver() {

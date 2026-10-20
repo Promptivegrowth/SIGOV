@@ -25,6 +25,8 @@ data class EstadoVehiculos(
     val cuadrilla: String = "",
     val hoy: String = Peru.hoy().toString(),
     val guardando: Boolean = false,
+    /** Los reemplazos de la cuadrilla, con fecha de inicio y de retorno. */
+    val historial: List<pe.servicon.sigov.datos.ReemplazoDeVehiculo> = emptyList(),
     val aviso: String? = null,
     val error: String? = null,
 ) {
@@ -70,10 +72,12 @@ class VehiculosViewModel @Inject constructor(
                 val cuadrilla = sesion.cuadrilla()
                     ?: error("Tu usuario no dirige ninguna cuadrilla. Avisa al coordinador.")
                 val flota = ssoma.vehiculos(cuadrilla.servicioId)
+                val historial = ssoma.historialDeReemplazos(cuadrilla.id, flota)
                 _estado.update {
                     it.copy(
                         cargando = false,
                         vehiculos = flota,
+                        historial = historial,
                         miCuadrillaId = cuadrilla.id,
                         cuadrilla = cuadrilla.name,
                         hoy = Peru.hoy().toString(),
@@ -102,7 +106,12 @@ class VehiculosViewModel @Inject constructor(
                 _estado.update {
                     it.copy(
                         guardando = false,
-                        aviso = if (faltantes == 0) {
+                        aviso = if (vehiculo.documentosVencidos.isNotEmpty()) {
+                            "Revisión registrada, pero " + vehiculo.documentosVencidos.let { v ->
+                                if (v.size == 1) "venció ${v[0]}: " else "vencieron ${v.dropLast(1).joinToString(", ")} y ${v.last()}: "
+                            } +
+                                "el vehículo no está apto para circular. Avisa al supervisor."
+                        } else if (faltantes == 0) {
                             "Preoperacional registrado. Puedes salir."
                         } else {
                             "Registrado con $faltantes punto" +
@@ -138,9 +147,9 @@ class VehiculosViewModel @Inject constructor(
 
     fun registrarReemplazo(
         titular: Vehiculo, placa: String, tipo: String, marca: String?, modelo: String?,
-        motivo: String, km: Int, observacion: String?, alTerminar: () -> Unit,
-    ) = accion("Reemplazo registrado. Haz su revisión antes de salir.", { c ->
-        ssoma.registrarReemplazo(c, titular, placa, tipo, marca, modelo, motivo, km, observacion)
+        motivo: String, km: Int, observacion: String?, desde: java.time.LocalDate, alTerminar: () -> Unit,
+    ) = accion("Reemplazo registrado. Fotografía su checklist antes de salir.", { c ->
+        ssoma.registrarReemplazo(c, titular, placa, tipo, marca, modelo, motivo, km, observacion, desde)
     }, alTerminar)
 
     fun devolverTitular(reemplazo: Vehiculo, km: Int?, alTerminar: () -> Unit) =

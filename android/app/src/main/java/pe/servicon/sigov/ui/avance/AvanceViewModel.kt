@@ -38,6 +38,14 @@ data class EstadoAvance(
     val fotos: Int = 0,
     val sinFoto: Int = 0,
     val pciAbiertos: Int = 0,
+    /**
+     * Los PCI activos con los mismos estados que el módulo PCI (SEG-V2-OBS-24):
+     * por atender, en ejecución, conformes y observados; «vencido» es una
+     * condición de plazo que puede darse en cualquiera de los abiertos.
+     */
+    val pciPanel: List<PanelDePci> = emptyList(),
+    /** Lo que pide acción ya: vencido o vence hoy o mañana (SEG-V2-OBS-23). */
+    val pciUrgentes: Int = 0,
     val partidas: List<AvanceDePartida> = emptyList(),
     val error: String? = null,
     /** 0 = esta semana, -1 = la anterior… */
@@ -130,6 +138,25 @@ class AvanceViewModel @Inject constructor(
 
                 val programadas = campo.programacionDelDia(cuadrilla.servicioId, cuadrilla.id)
                 val pcis = campo.pciAsignados(cuadrilla.servicioId, cuadrilla.id)
+                val resumenes = campo.pciDeLaCuadrilla(cuadrilla.servicioId, cuadrilla.id).filter { r -> r.activo }
+                val items = campo.itemsPciDeLaCuadrilla(cuadrilla.servicioId, cuadrilla.id).filter { i -> i.activoParaCuadrilla }
+                val panel = resumenes.map { r ->
+                    val delPci = items.filter { i -> i.pciId == r.pciId }
+                    val abiertos = delPci.filter { i -> pe.servicon.sigov.ui.pci.estadoDe(i) != pe.servicon.sigov.ui.pci.Estado.CONFORMES }
+                    PanelDePci(
+                        pciId = r.pciId,
+                        codigo = pe.servicon.sigov.datos.codigoCortoDePci(r.code) ?: r.code,
+                        porAtender = delPci.count { i -> pe.servicon.sigov.ui.pci.estadoDe(i) == pe.servicon.sigov.ui.pci.Estado.POR_ATENDER },
+                        enEjecucion = delPci.count { i -> pe.servicon.sigov.ui.pci.estadoDe(i) == pe.servicon.sigov.ui.pci.Estado.EN_EJECUCION },
+                        conformes = delPci.count { i -> pe.servicon.sigov.ui.pci.estadoDe(i) == pe.servicon.sigov.ui.pci.Estado.CONFORMES },
+                        observados = delPci.count { i -> pe.servicon.sigov.ui.pci.estadoDe(i) == pe.servicon.sigov.ui.pci.Estado.OBSERVADOS },
+                        vencidos = abiertos.count { i -> (pe.servicon.sigov.ui.pci.diasQueLeQuedan(i) ?: 0) < 0 },
+                    )
+                }.filter { p -> p.porAtender + p.enEjecucion + p.conformes + p.observados > 0 }
+                val urgentes = items.count { i ->
+                    pe.servicon.sigov.ui.pci.estadoDe(i) != pe.servicon.sigov.ui.pci.Estado.CONFORMES &&
+                        (pe.servicon.sigov.ui.pci.diasQueLeQuedan(i) ?: 99) <= 1
+                }
 
                 // Lo registrado sale de la copia local, no de la nube: el
                 // capataz consulta su avance justo donde no hay señal.
@@ -150,6 +177,8 @@ class AvanceViewModel @Inject constructor(
                         fotos = conFoto,
                         sinFoto = registros.size - conFoto,
                         pciAbiertos = pcis.size,
+                        pciPanel = panel,
+                        pciUrgentes = urgentes,
                         partidas = programadas.map { p ->
                             AvanceDePartida(
                                 actividad = p.actividad ?: "Partida sin nombre",
@@ -169,3 +198,14 @@ class AvanceViewModel @Inject constructor(
         }
     }
 }
+
+/** Un PCI activo en el panel de Mi Avance. */
+data class PanelDePci(
+    val pciId: String,
+    val codigo: String,
+    val porAtender: Int,
+    val enEjecucion: Int,
+    val conformes: Int,
+    val observados: Int,
+    val vencidos: Int,
+)

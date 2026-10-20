@@ -491,7 +491,7 @@ export function ProgramacionClient() {
             { label: 'Actividades programadas', value: fmtNumber(stats.items), sub: `${stats.ejecutados} ejecutadas` },
             { label: 'Avance medio', value: `${stats.avanceMedio.toFixed(1)}%`, sub: 'promedio por partida' },
             { label: 'En ejecución', value: fmtNumber(stats.enCurso), sub: stats.enCurso ? 'empezadas y sin cerrar' : 'ninguna empezada' },
-            { label: 'Suspendidas por PCI', value: fmtNumber(stats.suspendidos), sub: stats.suspendidos ? 'reordenadas automáticamente' : 'ninguna', danger: stats.suspendidos > 0 },
+            { label: 'No ejecutadas', value: fmtNumber(stats.suspendidos), sub: stats.suspendidos ? 'por impedimento o por un PCI' : 'ninguna', danger: stats.suspendidos > 0 },
           ].map((s, i) => (
             <motion.div
               key={s.label}
