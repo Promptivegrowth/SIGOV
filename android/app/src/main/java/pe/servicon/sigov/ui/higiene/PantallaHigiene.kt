@@ -70,11 +70,17 @@ data class EstadoHigiene(
  */
 @HiltViewModel
 class HigieneViewModel @Inject constructor(
+    ruta: androidx.lifecycle.SavedStateHandle,
     private val higiene: HigieneRepositorio,
     private val charlas: CharlaRepositorio,
     private val sesion: SesionRepositorio,
     private val ubicacion: Ubicacion,
 ) : ViewModel() {
+
+    /** El día que se responde: hoy, o uno anterior que se subsana desde la Jornada. */
+    val dia: java.time.LocalDate = ruta.get<String>("fecha")
+        ?.let { runCatching { java.time.LocalDate.parse(it) }.getOrNull() }
+        ?.takeIf { !it.isAfter(Peru.hoy()) } ?: Peru.hoy()
 
     private val _estado = MutableStateFlow(EstadoHigiene())
     val estado: StateFlow<EstadoHigiene> = _estado.asStateFlow()
@@ -86,7 +92,7 @@ class HigieneViewModel @Inject constructor(
             runCatching {
                 val cuadrilla = sesion.cuadrilla()
                     ?: error("Tu usuario no dirige ninguna cuadrilla. Avisa al coordinador.")
-                val guardadas = higiene.respuestasDeHoy(cuadrilla.servicioId, cuadrilla.id)
+                val guardadas = higiene.respuestasDeHoy(cuadrilla.servicioId, cuadrilla.id, dia)
                 val miembros = runCatching { charlas.miembros(cuadrilla.servicioId, cuadrilla.id).size }.getOrDefault(0)
                 Triple(cuadrilla.name, guardadas, miembros)
             }.onSuccess { (nombre, guardadas, miembros) ->
@@ -127,9 +133,9 @@ class HigieneViewModel @Inject constructor(
                 val donde = runCatching { ubicacion.actual() }.getOrNull()
                 higiene.guardarChecklist(
                     cuadrilla.servicioId, cuadrilla.id, e.respuestas, e.notas,
-                    e.personas.toIntOrNull(), donde,
+                    e.personas.toIntOrNull(), donde, dia,
                 )
-                higiene.respuestasDeHoy(cuadrilla.servicioId, cuadrilla.id)
+                higiene.respuestasDeHoy(cuadrilla.servicioId, cuadrilla.id, dia)
             }.onSuccess { guardadas ->
                 _estado.update {
                     it.copy(
@@ -177,7 +183,7 @@ fun PantallaHigiene(vm: HigieneViewModel = hiltViewModel(), alVolver: () -> Unit
                 .padding(16.dp),
             verticalArrangement = Arrangement.spacedBy(12.dp),
         ) {
-            Resumen(estado)
+            Resumen(estado, vm.dia)
 
             PuntoDeHigiene.entries.forEach { punto ->
                 FilaPunto(
@@ -222,16 +228,16 @@ fun PantallaHigiene(vm: HigieneViewModel = hiltViewModel(), alVolver: () -> Unit
 }
 
 @Composable
-private fun Resumen(estado: EstadoHigiene) {
+private fun Resumen(estado: EstadoHigiene, dia: java.time.LocalDate) {
     val porEnviar = estado.guardadas.values.any { it.porEnviar }
     val (texto, color) = when {
-        !estado.yaGuardado -> "Todavía no se registra hoy" to Semaforo.Urgente
+        !estado.yaGuardado -> (if (dia == Peru.hoy()) "Todavía no se registra hoy" else "No se registró ese día") to Semaforo.Urgente
         porEnviar -> "Guardado en el celular · se envía al haber señal" to Marca.Naranja
         else -> "Registrado hoy · ${estado.guardadas.values.count { it.cumple }} de ${PuntoDeHigiene.entries.size} cumplidos" to Marca.VerdeBandera
     }
     Surface(color = color.copy(alpha = 0.10f), shape = RoundedCornerShape(14.dp), modifier = Modifier.fillMaxWidth()) {
         Column(Modifier.padding(16.dp)) {
-            Text(Peru.fechaLarga(), style = MaterialTheme.typography.labelMedium, color = MaterialTheme.colorScheme.onSurfaceVariant)
+            Text(Peru.fechaLarga(dia), style = MaterialTheme.typography.labelMedium, color = MaterialTheme.colorScheme.onSurfaceVariant)
             Text(texto, style = MaterialTheme.typography.titleSmall, fontWeight = FontWeight.SemiBold, color = color)
         }
     }

@@ -37,7 +37,24 @@ object Peru {
     fun fechaCorta(dia: LocalDate = hoy()): String =
         dia.format(DateTimeFormatter.ofPattern("dd/MM/yyyy", esPe))
 
-    /** `21/09/2026 21:58`, para sellar evidencias. */
+    /**
+     * `9 oct 2026 1:17:58 p. m.`: el sello de las fotos que COVINCA ya recibe
+     * (ejemplos de Elvis, Timestamp Camera). Se arma a mano para que no
+     * dependa de cómo abrevia cada versión de Android el mes o el «p. m.».
+     */
     fun sello(momento: LocalDateTime = ahora()): String =
-        momento.format(DateTimeFormatter.ofPattern("dd/MM/yyyy HH:mm", esPe))
+        selloFecha(momento.toLocalDate()) + " " + selloHora(momento)
+
+    /** `9 oct 2026` */
+    fun selloFecha(dia: LocalDate): String =
+        "${dia.dayOfMonth} ${MESES_CORTOS[dia.monthValue - 1]} ${dia.year}"
+
+    /** `1:17:58 p. m.` */
+    fun selloHora(momento: LocalDateTime): String {
+        val h = momento.hour % 12
+        return "%d:%02d:%02d %s".format(if (h == 0) 12 else h, momento.minute, momento.second,
+            if (momento.hour < 12) "a. m." else "p. m.")
+    }
+
+    private val MESES_CORTOS = listOf("ene", "feb", "mar", "abr", "may", "jun", "jul", "ago", "sep", "oct", "nov", "dic")
 }

@@ -157,9 +157,13 @@ class HigieneRepositorio @Inject constructor(
      * Lo guardado en el equipo y sin subir manda sobre la nube, porque es lo
      * último que contestó el capataz.
      */
-    suspend fun respuestasDeHoy(servicioId: String, cuadrillaId: String): Map<String, RespuestaHigiene> =
+    suspend fun respuestasDeHoy(
+        servicioId: String,
+        cuadrillaId: String,
+        dia: java.time.LocalDate = Peru.hoy(),
+    ): Map<String, RespuestaHigiene> =
         withContext(Dispatchers.IO) {
-            val hoy = Peru.hoy().toString()
+            val hoy = dia.toString()
             val nube = runCatching {
                 val filas = supabase.postgrest.from("hygiene_checks")
                     .select {
@@ -209,10 +213,11 @@ class HigieneRepositorio @Inject constructor(
         notas: Map<PuntoDeHigiene, String>,
         personas: Int?,
         ubicacion: Punto?,
+        dia: java.time.LocalDate = Peru.hoy(),
     ) = withContext(Dispatchers.IO) {
         respuestas.forEach { (punto, cumple) ->
             val clientId = UUID.nameUUIDFromBytes(
-                "$cuadrillaId|${Peru.hoy()}|${punto.valor}".toByteArray()
+                "$cuadrillaId|$dia|${punto.valor}".toByteArray()
             ).toString()
             cola.encolar(
                 tabla = "hygiene_checks",
@@ -221,7 +226,7 @@ class HigieneRepositorio @Inject constructor(
                 cuerpo = buildJsonObject {
                     put("service_id", servicioId)
                     put("crew_id", cuadrillaId)
-                    put("checked_on", Peru.hoy().toString())
+                    put("checked_on", dia.toString())
                     put("item", punto.valor)
                     put("done", cumple)
                     personas?.let { put("people_count", it) }

@@ -48,6 +48,7 @@ import pe.servicon.sigov.datos.FechaEditada
 import pe.servicon.sigov.datos.Peru
 import androidx.compose.material.icons.outlined.EditCalendar
 import androidx.compose.material.icons.outlined.Restore
+import androidx.compose.material.icons.outlined.ScreenRotation
 import androidx.compose.ui.text.style.TextAlign
 import kotlinx.coroutines.delay
 import java.time.Instant
@@ -141,6 +142,12 @@ fun PantallaCamara(
                 if (hayCamara) {
                     var disparo by remember { mutableStateOf<ImageCapture?>(null) }
                     VisorDeCamara(onListo = { disparo = it })
+                    // Solo fotos horizontales (Elvis, P9; COVINCA observa las
+                    // verticales). La pantalla está fija en vertical, así que el
+                    // giro del celular se lee del sensor y se le pasa a la cámara.
+                    val giro by rememberGiroDelEquipo()
+                    LaunchedEffect(giro, disparo) { disparo?.targetRotation = giro }
+                    val horizontal = giro == android.view.Surface.ROTATION_90 || giro == android.view.Surface.ROTATION_270
 
                     SelloEnVivo(
                         buscando = estado.buscandoGps,
@@ -160,8 +167,10 @@ fun PantallaCamara(
                         )
                     }
 
+                    if (!horizontal) AvisoDeGirar(Modifier.align(Alignment.Center))
+
                     Disparador(
-                        habilitado = disparo != null && !estado.guardando,
+                        habilitado = disparo != null && !estado.guardando && horizontal,
                         guardando = estado.guardando,
                         modifier = Modifier.align(Alignment.BottomCenter).padding(bottom = 24.dp),
                         alDisparar = {
@@ -215,11 +224,14 @@ fun PantallaCamara(
                 alAlternarMarca = vm::alternarMarca,
             )
 
-            FechaDelSello(
-                editada = estado.fechaEditada,
-                alEditar = vm::editarFecha,
-                alUsarHoraReal = vm::usarHoraReal,
-            )
+            // Corregir la fecha del sello solo en fotos de PCI (Elvis, P24)
+            if (estado.registro?.pciItemId != null) {
+                FechaDelSello(
+                    editada = estado.fechaEditada,
+                    alEditar = vm::editarFecha,
+                    alUsarHoraReal = vm::usarHoraReal,
+                )
+            }
 
             // La foto que se tocó en la tira, para verla, ampliarla o quitarla
             var abierta by remember { mutableStateOf<EvidenciaLocal?>(null) }
@@ -281,7 +293,7 @@ internal fun VisorDeCamara(onListo: (ImageCapture) -> Unit) {
                 val vistaPrevia = Preview.Builder().build()
                     .also { it.setSurfaceProvider(vista.surfaceProvider) }
                 // La toma en la mayor resolución 4:3 del equipo: de ahí sale
-                // el original 4080 × 3072 que pide COVINCA (OBS-23)
+                // el original 4080 × 3060 que pide COVINCA (OBS-23)
                 val captura = ImageCapture.Builder()
                     .setCaptureMode(ImageCapture.CAPTURE_MODE_MINIMIZE_LATENCY)
                     .setResolutionSelector(
@@ -357,6 +369,49 @@ private fun SelloEnVivo(buscando: Boolean, coordenadas: String?, modifier: Modif
                 }
             }
         }
+    }
+}
+
+/**
+ * Cómo está girado el celular, en los valores que entiende la cámara. La
+ * actividad está fija en vertical, así que se lee del sensor de orientación.
+ */
+@Composable
+internal fun rememberGiroDelEquipo(): State<Int> {
+    val contexto = LocalContext.current
+    val giro = remember { mutableIntStateOf(android.view.Surface.ROTATION_0) }
+    DisposableEffect(Unit) {
+        val oyente = object : android.view.OrientationEventListener(contexto) {
+            override fun onOrientationChanged(grados: Int) {
+                if (grados == ORIENTATION_UNKNOWN) return
+                giro.intValue = when (grados) {
+                    in 60 until 120 -> android.view.Surface.ROTATION_270
+                    in 150 until 210 -> android.view.Surface.ROTATION_180
+                    in 240 until 300 -> android.view.Surface.ROTATION_90
+                    in 0 until 30, in 330..360 -> android.view.Surface.ROTATION_0
+                    else -> giro.intValue   // en la diagonal, se queda como estaba
+                }
+            }
+        }
+        if (oyente.canDetectOrientation()) oyente.enable() else giro.intValue = android.view.Surface.ROTATION_90
+        onDispose { oyente.disable() }
+    }
+    return giro
+}
+
+/** Mientras el celular esté vertical, no se dispara: se pide girarlo. */
+@Composable
+private fun AvisoDeGirar(modifier: Modifier = Modifier) {
+    Column(
+        modifier
+            .background(Color.Black.copy(alpha = 0.65f), RoundedCornerShape(14.dp))
+            .padding(horizontal = 20.dp, vertical = 14.dp),
+        horizontalAlignment = Alignment.CenterHorizontally,
+    ) {
+        Icon(Icons.Outlined.ScreenRotation, contentDescription = null, tint = Color.White, modifier = Modifier.size(36.dp))
+        Spacer(Modifier.height(6.dp))
+        Text("Gira el celular", style = MaterialTheme.typography.titleMedium, color = Color.White, fontWeight = FontWeight.Bold)
+        Text("Las fotos van en horizontal", style = MaterialTheme.typography.bodySmall, color = Color.White.copy(alpha = 0.85f))
     }
 }
 
@@ -577,13 +632,13 @@ private fun FechaDelSello(
         val hoy = Peru.hoy()
         val estadoFecha = rememberDatePickerState(
             initialSelectedDateMillis = momento.toLocalDate().atStartOfDay().toInstant(ZoneOffset.UTC).toEpochMilli(),
-            // Ni el futuro ni más de 30 días atrás: es para cerrar el día de ayer
+            // Hacia atrás sin límite (Elvis, P24: «a N días»); nunca a futuro
             selectableDates = object : SelectableDates {
                 override fun isSelectableDate(utcTimeMillis: Long): Boolean {
                     val dia = Instant.ofEpochMilli(utcTimeMillis).atZone(ZoneOffset.UTC).toLocalDate()
-                    return !dia.isAfter(hoy) && !dia.isBefore(hoy.minusDays(30))
+                    return !dia.isAfter(hoy)
                 }
-                override fun isSelectableYear(year: Int) = year in hoy.minusDays(30).year..hoy.year
+                override fun isSelectableYear(year: Int) = year <= hoy.year
             },
         )
         DatePickerDialog(

@@ -113,7 +113,7 @@ export function EntregaCovinca() {
         </CardTitle>
         <CardDescription className="text-[12px]">
           Las carpetas y nombres de archivo que aprobó COVINCA, armados solos desde lo
-          registrado. Las fotos salen en JPG de 4080 × 3072 (el original del celular cuando
+          registrado. Las fotos salen en JPG de 4080 × 3060 (el original del celular cuando
           lo hay); los ítems PCI solo aparecen si tienen fotos.
         </CardDescription>
       </CardHeader>

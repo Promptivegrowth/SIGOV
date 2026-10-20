@@ -36,6 +36,11 @@ data class EstadoJornada(
     val rol: String = "jefe_cuadrilla",
     /** Los formatos que la cuadrilla debe tener hoy (OBS-53, §16). */
     val documentos: List<DocumentoDelDia> = emptyList(),
+    /**
+     * El día cuyos documentos se ven (Elvis, video del 12/10): hoy, o uno
+     * anterior para subsanar lo que faltó. Nunca uno futuro.
+     */
+    val diaDocumentos: java.time.LocalDate = Peru.hoy(),
     /** Avisos sin leer: la campana de arriba. */
     val avisos: Int = 0,
     val error: String? = null,
@@ -74,8 +79,13 @@ class JornadaViewModel @Inject constructor(
     /** Cuántos registros esperan señal, en vivo. */
     private fun vigilarPendientes() {
         viewModelScope.launch {
+            var antes: Int? = null
             colaEnvio.pendientes.collectLatest { cuantos ->
                 _estado.update { it.copy(pendientes = cuantos) }
+                // Cuando la cola termina de enviar algo, el estado de los
+                // documentos cambió en la nube: se vuelve a consultar
+                if (antes != null && cuantos < antes!!) refrescarDocumentos()
+                antes = cuantos
             }
         }
     }
@@ -140,6 +150,33 @@ class JornadaViewModel @Inject constructor(
 
     /** Al volver a la jornada los números pueden haber cambiado. */
     fun refrescar() = cargar()
+
+    /**
+     * Al volver de otra pantalla se actualizan los documentos del día que se
+     * está viendo (Elvis, video del 12/10: la charla ya tenía sus dos fotos
+     * y en la Jornada seguía «Pendiente»). Es liviano: no vuelve a bajar los
+     * catálogos ni la programación.
+     */
+    fun refrescarDocumentos() {
+        viewModelScope.launch {
+            val cuadrilla = runCatching { sesion.cuadrilla() }.getOrNull() ?: return@launch
+            val dia = _estado.value.diaDocumentos
+            val documentos = runCatching { documentosRepo.delDia(cuadrilla.servicioId, cuadrilla.id, dia) }
+                .getOrNull() ?: return@launch
+            val miCaja = runCatching { caja.miCaja(cuadrilla.servicioId, cuadrilla.id) }.getOrNull()
+            _estado.update {
+                if (it.diaDocumentos != dia) it
+                else it.copy(documentos = documentos, saldo = miCaja?.caja?.let { c -> soles(c.balance) } ?: it.saldo)
+            }
+        }
+    }
+
+    /** Ver los documentos de otro día: hoy o uno anterior, nunca a futuro. */
+    fun verDia(dia: java.time.LocalDate) {
+        val elegido = if (dia.isAfter(Peru.hoy())) Peru.hoy() else dia
+        _estado.update { it.copy(diaDocumentos = elegido, fechaCorta = Peru.fechaCorta(elegido)) }
+        refrescarDocumentos()
+    }
 
     fun salir(alSalir: () -> Unit) {
         viewModelScope.launch {

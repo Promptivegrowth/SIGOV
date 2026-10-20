@@ -91,7 +91,13 @@ class ParteViewModel @Inject constructor(
     private val _estado = MutableStateFlow(EstadoParte())
     val estado: StateFlow<EstadoParte> = _estado.asStateFlow()
 
-    init { abrir(Peru.hoy()) }
+    // Se puede abrir en un día anterior desde la Jornada, para subsanarlo
+    init {
+        abrir(
+            ruta.get<String>("fecha")?.let { runCatching { LocalDate.parse(it) }.getOrNull() }
+                ?.takeIf { !it.isAfter(Peru.hoy()) } ?: Peru.hoy()
+        )
+    }
 
     /** Reportar otro día: el de ayer que quedó pendiente, por ejemplo. No el de mañana. */
     fun cambiarFecha(dias: Long) {

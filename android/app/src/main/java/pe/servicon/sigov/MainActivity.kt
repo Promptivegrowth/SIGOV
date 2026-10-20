@@ -150,6 +150,8 @@ class MainActivity : ComponentActivity() {
                             alAbrirVehiculos = { nav.navigate("vehiculos") },
                             alAbrirCharlas = { nav.navigate("charlas") },
                             alAbrirHigiene = { nav.navigate("higiene") },
+                            alAbrirParteDelDia = { dia -> nav.navigate("parte?fecha=$dia") },
+                            alAbrirHigieneDelDia = { dia -> nav.navigate("higiene?fecha=$dia") },
                             alAbrirAst = { nav.navigate("ast") },
                             alAbrirAvance = { nav.navigate("avance") },
                             alAbrirSincronizacion = { nav.navigate("sincronizacion") },
@@ -246,7 +248,10 @@ class MainActivity : ComponentActivity() {
                     ) {
                         pe.servicon.sigov.ui.documentos.PantallaDocumento(alVolver = { nav.popBackStack() })
                     }
-                    composable("higiene") {
+                    composable(
+                        "higiene?fecha={fecha}",
+                        arguments = listOf(androidx.navigation.navArgument("fecha") { nullable = true; defaultValue = null }),
+                    ) {
                         pe.servicon.sigov.ui.higiene.PantallaHigiene(alVolver = { nav.popBackStack() })
                     }
                     composable("avisos") {
@@ -262,10 +267,11 @@ class MainActivity : ComponentActivity() {
                         PantallaSincronizacion(alVolver = { nav.popBackStack() })
                     }
                     composable(
-                        "parte?partida={partida}",
-                        arguments = listOf(androidx.navigation.navArgument("partida") {
-                            nullable = true; defaultValue = null
-                        }),
+                        "parte?partida={partida}&fecha={fecha}",
+                        arguments = listOf(
+                            androidx.navigation.navArgument("partida") { nullable = true; defaultValue = null },
+                            androidx.navigation.navArgument("fecha") { nullable = true; defaultValue = null },
+                        ),
                     ) {
                         PantallaParte(
                             alVolver = { nav.popBackStack() },

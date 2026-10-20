@@ -18,6 +18,7 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import pe.servicon.sigov.ui.theme.Borde
 import pe.servicon.sigov.ui.theme.Marca
+import pe.servicon.sigov.ui.theme.Tinta
 import pe.servicon.sigov.ui.theme.TintaSuave
 
 /**
@@ -39,7 +40,13 @@ fun FichaDato(
         onClick = { alTocar?.invoke() },
         enabled = alTocar != null,
         shape = RoundedCornerShape(12.dp),
-        colors = CardDefaults.cardColors(containerColor = Color.White),
+        // Un recuadro que no se toca se pintaba con el color «deshabilitado»
+        // (gris oscuro con el teléfono en modo oscuro): ahora es igual a los demás
+        colors = CardDefaults.cardColors(
+            containerColor = Color.White,
+            disabledContainerColor = Color.White,
+            disabledContentColor = Tinta,
+        ),
         elevation = CardDefaults.cardElevation(defaultElevation = 0.dp),
         border = BorderStroke(1.dp, Borde),
         modifier = modifier,

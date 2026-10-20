@@ -81,7 +81,11 @@ private val EsquemaOscuro = darkColorScheme(
 
 @Composable
 fun SigovTheme(
-    oscuro: Boolean = isSystemInDarkTheme(),
+    // Siempre el tema claro de la marca (video de Elvis, 12/10): con el
+    // celular en modo oscuro la Jornada mezclaba fondos claros fijos con
+    // tarjetas oscuras y la fecha, la cuadrilla o el estado de un documento
+    // no se leían. En obra, a pleno sol, el tema claro se lee mejor.
+    oscuro: Boolean = false,
     content: @Composable () -> Unit,
 ) {
     val esquema = if (oscuro) EsquemaOscuro else EsquemaClaro

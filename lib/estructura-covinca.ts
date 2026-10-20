@@ -35,7 +35,7 @@ export type AvanceCovinca = { paso: string; hechos: number; total: number }
 
 type Foto = {
   storage_path: string
-  /** El original JPG 4080 × 3072 (OBS-23), si el celular ya lo subió. */
+  /** El original JPG 4080 × 3060 (OBS-23), si el celular ya lo subió. */
   master_path: string | null
   phase: string | null
   work_date: string | null
@@ -67,7 +67,7 @@ function cuadrillaDe(f: { crew_numero: number | null; crew_sede: string | null; 
 /**
  * WebP → JPG, en el navegador. Si no se puede, se entrega el archivo tal cual.
  *
- * Con `covinca`, la foto sale en 4080 × 3072 (o 3072 × 4080 si es vertical),
+ * Con `covinca`, la foto sale en 4080 × 3060 (o 3060 × 4080 si es vertical),
  * la medida que exige COVINCA (OBS-23): se recorta al centro lo que no sea
  * 4:3. Es el camino de las fotos que no tienen original guardado.
  */
@@ -76,7 +76,7 @@ async function aJpg(blob: Blob, covinca = false): Promise<Blob> {
   try {
     const bmp = await createImageBitmap(blob)
     const horizontal = bmp.width >= bmp.height
-    const [ancho, alto] = !covinca ? [bmp.width, bmp.height] : horizontal ? [4080, 3072] : [3072, 4080]
+    const [ancho, alto] = !covinca ? [bmp.width, bmp.height] : horizontal ? [4080, 3060] : [3060, 4080]
     // Lo que se toma de la imagen: todo, o el centro 4:3
     let sw = bmp.width
     let sh = bmp.height
@@ -157,7 +157,7 @@ export async function estimarFotos(opciones: {
     if (cuadrillaId) c = c.eq('crew_id', cuadrillaId)
     return c
   })
-  // Sin original, el JPG 4080 × 3072 que se genera ronda 1,8 MB
+  // Sin original, el JPG 4080 × 3060 que se genera ronda 1,8 MB
   const bytes = filas.reduce((t, f) => t + Number(f.master_bytes ?? 1_800_000), 0)
   return { fotos: filas.length, conOriginal: filas.filter((f) => f.master_bytes != null).length, bytes }
 }
@@ -213,7 +213,7 @@ export async function armarEstructuraCovinca(opciones: {
       const fecha = (f.fecha_sello ?? f.work_date ?? '').slice(0, 10) || (f.work_date ?? '')
       try {
         if (!url) throw new Error('sin enlace')
-        // El original del celular va tal cual: ya es JPG 4080 × 3072, con su
+        // El original del celular va tal cual: ya es JPG 4080 × 3060, con su
         // sello y su EXIF. Si la foto no lo tiene (anterior a su uso, o no
         // subió todavía), se genera desde la foto liviana y se dice.
         const urlOriginal = f.master_path ? originales.get(f.master_path) : undefined

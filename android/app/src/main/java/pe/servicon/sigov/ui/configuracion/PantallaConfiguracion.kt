@@ -151,11 +151,11 @@ fun PantallaConfiguracion(
                 color = MaterialTheme.colorScheme.onSurfaceVariant,
             )
 
-            // OBS-23: el original 4080 × 3072 de cada foto, para COVINCA
+            // OBS-23: el original 4080 × 3060 de cada foto, para COVINCA
             Spacer(Modifier.height(8.dp))
             Text("FOTOS ORIGINALES", style = MaterialTheme.typography.titleSmall, fontWeight = FontWeight.Bold)
             Text(
-                "Cada foto guarda además su original en JPG de 4080 × 3072, el que pide COVINCA. " +
+                "Cada foto guarda además su original en JPG de 4080 × 3060, el que pide COVINCA. " +
                     "Pesa unos 3 MB, así que por omisión sube solo con Wi-Fi; mientras tanto la foto " +
                     "liviana ya está en SIGOV.",
                 style = MaterialTheme.typography.bodySmall,

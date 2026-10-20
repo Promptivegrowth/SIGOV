@@ -318,11 +318,7 @@ fun PantallaDocumento(
     }
 
     ampliada?.let { p ->
-        Dialog(onDismissRequest = { ampliada = null }, properties = DialogProperties(usePlatformDefaultWidth = false)) {
-            Box(Modifier.fillMaxSize().background(Color.Black).clickable { ampliada = null }) {
-                AsyncImage(model = p.modelo, contentDescription = "Página", contentScale = ContentScale.Fit, modifier = Modifier.fillMaxSize())
-            }
-        }
+        pe.servicon.sigov.ui.componentes.VisorConZoom(modelo = p.modelo, descripcion = "Página", alCerrar = { ampliada = null })
     }
 
     quitando?.let { p ->

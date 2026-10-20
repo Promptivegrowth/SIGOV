@@ -652,14 +652,7 @@ private fun FichaDelElemento(
     }
 
     ampliada?.let { url ->
-        Dialog(onDismissRequest = { ampliada = null },
-            properties = DialogProperties(usePlatformDefaultWidth = false)) {
-            Box(Modifier.fillMaxSize().background(Color.Black.copy(alpha = 0.92f))
-                .clickable { ampliada = null }, Alignment.Center) {
-                AsyncImage(model = url, contentDescription = null,
-                    contentScale = ContentScale.Fit, modifier = Modifier.fillMaxWidth())
-            }
-        }
+        pe.servicon.sigov.ui.componentes.VisorConZoom(modelo = url, descripcion = null, alCerrar = { ampliada = null })
     }
 }
 

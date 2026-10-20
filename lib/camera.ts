@@ -126,7 +126,8 @@ export interface SealedPhoto {
   takenAt: Date
   gps: GpsFix
   /**
-   * El original JPG 4080 × 3072 que pide COVINCA (OBS-23), sellado igual.
+   * El original JPG 4080 × 3060 para COVINCA (OBS-23; la medida de las fotos
+   * que COVINCA ya acepta), sellado igual. Solo de fotos horizontales.
    * Solo cuando la toma es lo bastante grande como para sostenerlo.
    */
   master?: { blob: Blob; width: number; height: number; sha256: string }
@@ -135,7 +136,7 @@ export interface SealedPhoto {
 const MAX_EDGE = 1600
 const MIN_EDGE = 640      // por debajo de esto la marca de agua no es legible
 const THUMB_EDGE = 360
-/** Desde este lado mayor la toma sostiene un original 4080 × 3072 sin inventar detalle. */
+/** Desde este lado mayor la toma sostiene un original 4080 × 3060 sin inventar detalle. */
 const MASTER_MIN_EDGE = 2400
 
 /**
@@ -159,13 +160,13 @@ export async function sealPhoto(source: Blob | HTMLVideoElement, data: Watermark
   const w = Math.max(1, Math.round(bitmap.width * scale))
   const h = Math.max(1, Math.round(bitmap.height * scale))
 
-  // El original, antes de soltar la imagen: 4080 × 3072 (o vertical),
-  // recortando al centro lo que no sea 4:3. Una foto chica no se amplía.
+  // El original, antes de soltar la imagen: 4080 × 3060, recortando al
+  // centro lo que no sea 4:3. Una foto chica no se amplía, y COVINCA solo
+  // recibe fotos horizontales (Elvis, P9): una vertical no lleva original.
   let master: SealedPhoto['master']
-  if (Math.max(bitmap.width, bitmap.height) >= MASTER_MIN_EDGE) {
+  if (bitmap.width >= MASTER_MIN_EDGE && bitmap.width > bitmap.height) {
     try {
-      const horizontal = bitmap.width >= bitmap.height
-      const [mw, mh] = horizontal ? [4080, 3072] : [3072, 4080]
+      const [mw, mh] = [4080, 3060]
       let sw = bitmap.width
       let sh = Math.round(sw / (mw / mh))
       if (sh > bitmap.height) { sh = bitmap.height; sw = Math.round(sh * (mw / mh)) }
@@ -256,12 +257,7 @@ function drawWatermark(
   const margen = Math.round(lado * 0.035)
 
   const momento = d.stampedAt ?? d.takenAt
-  const fecha = momento.toLocaleDateString('es-PE', {
-    day: '2-digit', month: '2-digit', year: 'numeric', timeZone: 'America/Lima',
-  })
-  const hora = momento.toLocaleTimeString('es-PE', {
-    hour: '2-digit', minute: '2-digit', hour12: false, timeZone: 'America/Lima',
-  })
+  const { fecha, hora } = textoDelSello(momento)
 
   const lugar = [
     s.tramo ? d.tramo : null,
@@ -293,6 +289,27 @@ function drawWatermark(
   }
   escribir(`${fecha} ${hora}`, grande, true)
   ;[...extras].reverse().forEach((t) => escribir(t, chico, false))
+}
+
+/**
+ * «9 oct 2026» y «1:17:58 p. m.»: el sello de las fotos que COVINCA ya recibe
+ * (ejemplos de Elvis, Timestamp Camera). Se arma a mano, en hora de Lima,
+ * para no depender de cómo cada navegador abrevia el mes o el «p. m.».
+ */
+export function textoDelSello(momento: Date): { fecha: string; hora: string } {
+  const partes = Object.fromEntries(
+    new Intl.DateTimeFormat('en-US', {
+      timeZone: 'America/Lima', year: 'numeric', month: 'numeric', day: 'numeric',
+      hour: 'numeric', minute: '2-digit', second: '2-digit', hourCycle: 'h23',
+    }).formatToParts(momento).map((p) => [p.type, p.value])
+  )
+  const MESES = ['ene', 'feb', 'mar', 'abr', 'may', 'jun', 'jul', 'ago', 'sep', 'oct', 'nov', 'dic']
+  const h24 = Number(partes.hour) % 24
+  const h12 = h24 % 12 === 0 ? 12 : h24 % 12
+  return {
+    fecha: `${Number(partes.day)} ${MESES[Number(partes.month) - 1]} ${partes.year}`,
+    hora: `${h12}:${partes.minute}:${partes.second} ${h24 < 12 ? 'a. m.' : 'p. m.'}`,
+  }
 }
 
 // ─── Cámara ───────────────────────────────────────────────────────────────

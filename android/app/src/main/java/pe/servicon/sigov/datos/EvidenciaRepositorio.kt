@@ -139,7 +139,7 @@ class EvidenciaRepositorio @Inject constructor(
         val destino = File(carpeta(), clientId + ".webp")
         val sellar = conMarcaDeAgua && sello.activo
 
-        // OBS-23: primero el original JPG 4080 × 3072 que pide COVINCA, ya
+        // OBS-23: primero el original JPG 4080 × 3060 que pide COVINCA, ya
         // sellado; el WebP liviano sale de él, así el sello es el mismo en
         // los dos. Si el equipo no da para una imagen tan grande (memoria),
         // se sigue como antes: sin original, pero sin perder la foto.
@@ -514,7 +514,7 @@ class EvidenciaRepositorio @Inject constructor(
         )
         val fechaHora = when {
             sello.fecha && sello.hora -> Peru.sello(cuando)
-            sello.fecha -> cuando.toLocalDate().format(DateTimeFormatter.ofPattern("dd/MM/yyyy"))
+            sello.fecha -> Peru.selloFecha(cuando.toLocalDate())
             sello.hora -> "%02d:%02d".format(cuando.hour, cuando.minute)
             else -> null
         }
@@ -648,12 +648,13 @@ class EvidenciaRepositorio @Inject constructor(
     }
 
     /**
-     * Lleva la toma a 4080 × 3072 (o 3072 × 4080 si es vertical), lo que pide
-     * COVINCA: se recorta al centro si no es 4:3 y se escala en un solo paso.
+     * Lleva la toma a 4080 × 3060 (4:3, la medida de las fotos que COVINCA ya
+     * acepta; ejemplos de Elvis del 13/10). Se recorta al centro si no es 4:3
+     * y se escala en un solo paso. Las fotos son siempre horizontales.
      */
     private fun aCuatroTercios(foto: Bitmap): Bitmap {
         val horizontal = foto.width >= foto.height
-        val (anchoMeta, altoMeta) = if (horizontal) 4080 to 3072 else 3072 to 4080
+        val (anchoMeta, altoMeta) = if (horizontal) 4080 to 3060 else 3060 to 4080
         val proporcion = anchoMeta.toFloat() / altoMeta
         var w = foto.width
         var h = (w / proporcion).toInt()
@@ -689,11 +690,11 @@ class EvidenciaRepositorio @Inject constructor(
 /** La acción de la cola que registra el original de una foto en la nube. */
 const val TABLA_ORIGINAL = "rpc:fijar_original_evidencia"
 
-/** El original se lee hasta este lado mayor antes de llevarlo a 4080 × 3072. */
+/** El original se lee hasta este lado mayor antes de llevarlo a 4080 × 3060. */
 private const val LADO_ORIGINAL = 4080
 
 /** JPG de entrega: calidad alta sin llegar a pesar como un RAW. */
 private const val CALIDAD_ORIGINAL = 88
 
-/** Desde este lado mayor la toma sostiene un original 4080 × 3072. */
+/** Desde este lado mayor la toma sostiene un original 4080 × 3060. */
 private const val LADO_MINIMO_ORIGINAL = 2400

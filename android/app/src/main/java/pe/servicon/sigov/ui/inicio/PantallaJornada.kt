@@ -60,6 +60,9 @@ fun PantallaJornada(
     alAbrirConfiguracion: () -> Unit = {},
     alAbrirDocumento: (pe.servicon.sigov.datos.DocumentoDelDia) -> Unit = {},
     alAbrirAvisos: () -> Unit = {},
+    /** El reporte y la higiene de un día anterior, para subsanarlos. */
+    alAbrirParteDelDia: (String) -> Unit = { alAbrirParte() },
+    alAbrirHigieneDelDia: (String) -> Unit = { alAbrirHigiene() },
 ) {
     // Android 13+: permiso para mostrar los avisos como notificación del teléfono
     val pedirPermiso = androidx.activity.compose.rememberLauncherForActivityResult(
@@ -70,6 +73,22 @@ fun PantallaJornada(
     }
 
     val estado by vm.estado.collectAsStateWithLifecycle()
+    var eligiendoDia by androidx.compose.runtime.remember { androidx.compose.runtime.mutableStateOf(false) }
+
+    // Al volver de una pantalla (la charla recién fotografiada, por ejemplo)
+    // los documentos se actualizan solos
+    val ciclo = androidx.lifecycle.compose.LocalLifecycleOwner.current
+    androidx.compose.runtime.DisposableEffect(ciclo) {
+        var primera = true
+        val observador = androidx.lifecycle.LifecycleEventObserver { _, evento ->
+            if (evento == androidx.lifecycle.Lifecycle.Event.ON_RESUME) {
+                if (!primera) vm.refrescarDocumentos()
+                primera = false
+            }
+        }
+        ciclo.lifecycle.addObserver(observador)
+        onDispose { ciclo.lifecycle.removeObserver(observador) }
+    }
 
     // El color de fondo se declara aquí: sin él se transparenta el fondo de
     // la ventana, que es el de la pantalla de arranque.
@@ -109,9 +128,14 @@ fun PantallaJornada(
         ) {
             // ── La fila de contexto del documento ───────────────────────
             Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                // Tocar la fecha permite ir a un día anterior y subsanar lo que faltó
                 FichaDato(
-                    Icons.Outlined.CalendarMonth, "Fecha", estado.fechaCorta,
-                    Marca.Azul, Modifier.weight(1f),
+                    Icons.Outlined.CalendarMonth,
+                    if (estado.diaDocumentos == pe.servicon.sigov.datos.Peru.hoy()) "Fecha" else "Viendo el día",
+                    estado.fechaCorta,
+                    if (estado.diaDocumentos == pe.servicon.sigov.datos.Peru.hoy()) Marca.Azul else Marca.Naranja,
+                    Modifier.weight(1f),
+                    alTocar = { eligiendoDia = true },
                 )
                 FichaDato(
                     Icons.Outlined.Groups, "Cuadrilla",
@@ -150,13 +174,31 @@ fun PantallaJornada(
             }
 
             // ── Los documentos del día: lo que falta, en rojo ───────────
+            if (estado.diaDocumentos != pe.servicon.sigov.datos.Peru.hoy()) {
+                Surface(
+                    color = Marca.Naranja.copy(alpha = 0.12f),
+                    shape = RoundedCornerShape(12.dp),
+                    modifier = Modifier.fillMaxWidth(),
+                ) {
+                    Row(Modifier.padding(horizontal = 14.dp, vertical = 8.dp), verticalAlignment = Alignment.CenterVertically) {
+                        Text(
+                            "Documentos del " + pe.servicon.sigov.datos.Peru.fechaLarga(estado.diaDocumentos).lowercase() +
+                                ". Toca uno en rojo para subsanarlo.",
+                            style = MaterialTheme.typography.bodySmall,
+                            color = Marca.Naranja,
+                            modifier = Modifier.weight(1f),
+                        )
+                        TextButton(onClick = { vm.verDia(pe.servicon.sigov.datos.Peru.hoy()) }) { Text("Volver a hoy") }
+                    }
+                }
+            }
             if (estado.documentos.isNotEmpty()) {
                 DocumentosDelDia(
                     documentos = estado.documentos,
                     alTocar = { d ->
                         when (d.tipo) {
-                            "reporte_diario" -> alAbrirParte()
-                            "higiene" -> alAbrirHigiene()
+                            "reporte_diario" -> alAbrirParteDelDia(d.fecha)
+                            "higiene" -> alAbrirHigieneDelDia(d.fecha)
                             else -> alAbrirDocumento(d)
                         }
                     },
@@ -231,6 +273,7 @@ fun PantallaJornada(
         }
     }
     }
+    if (eligiendoDia) ElegirDia(estado.diaDocumentos, alElegir = vm::verDia, alCerrar = { eligiendoDia = false })
 }
 
 private data class Apartado(
@@ -267,6 +310,33 @@ private fun BandaDeCampana() {
             )
         }
     }
+}
+
+/** El día de los documentos: hoy o cualquiera anterior, nunca a futuro. */
+@OptIn(ExperimentalMaterial3Api::class)
+@Composable
+private fun ElegirDia(actual: java.time.LocalDate, alElegir: (java.time.LocalDate) -> Unit, alCerrar: () -> Unit) {
+    val hoy = pe.servicon.sigov.datos.Peru.hoy()
+    val estadoFecha = rememberDatePickerState(
+        initialSelectedDateMillis = actual.atStartOfDay().toInstant(java.time.ZoneOffset.UTC).toEpochMilli(),
+        selectableDates = object : SelectableDates {
+            override fun isSelectableDate(utcTimeMillis: Long): Boolean =
+                !java.time.Instant.ofEpochMilli(utcTimeMillis).atZone(java.time.ZoneOffset.UTC).toLocalDate().isAfter(hoy)
+            override fun isSelectableYear(year: Int) = year <= hoy.year
+        },
+    )
+    DatePickerDialog(
+        onDismissRequest = alCerrar,
+        confirmButton = {
+            TextButton(onClick = {
+                estadoFecha.selectedDateMillis?.let {
+                    alElegir(java.time.Instant.ofEpochMilli(it).atZone(java.time.ZoneOffset.UTC).toLocalDate())
+                }
+                alCerrar()
+            }) { Text("Ver ese día") }
+        },
+        dismissButton = { TextButton(onClick = alCerrar) { Text("Cancelar") } },
+    ) { DatePicker(state = estadoFecha, title = { Text("¿Qué día quieres revisar?", modifier = Modifier.padding(start = 24.dp, top = 16.dp)) }) }
 }
 
 /**

@@ -56,7 +56,7 @@ class Configuracion @Inject constructor(
     private val _originalesConDatos = MutableStateFlow(guardado.getBoolean(CLAVE_ORIGINALES, false))
 
     /**
-     * Si los originales de las fotos (JPG 4080 × 3072, ~3 MB) pueden subir con
+     * Si los originales de las fotos (JPG 4080 × 3060, ~3 MB) pueden subir con
      * datos móviles. Por omisión no: esperan al Wi-Fi del campamento u oficina.
      */
     val originalesConDatos: StateFlow<Boolean> = _originalesConDatos.asStateFlow()

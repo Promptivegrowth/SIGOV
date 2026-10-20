@@ -2,7 +2,7 @@ import { enqueueBlob } from '@/lib/offline/db'
 import type { SealedPhoto } from '@/lib/camera'
 
 /**
- * Deja en cola el original JPG 4080 × 3072 de una foto (OBS-23) y devuelve
+ * Deja en cola el original JPG 4080 × 3060 de una foto (OBS-23) y devuelve
  * los campos que lo registran en la evidencia. Sube detrás de la foto, con
  * su mismo identificador más «-original».
  */
