@@ -1200,6 +1200,7 @@ export type Database = {
           section_id: string | null
           sede: string | null
           service_id: string
+          subtramo: number | null
           supervisor_id: string | null
           updated_at: string
           vehicle: string | null
@@ -1219,6 +1220,7 @@ export type Database = {
           section_id?: string | null
           sede?: string | null
           service_id: string
+          subtramo?: number | null
           supervisor_id?: string | null
           updated_at?: string
           vehicle?: string | null
@@ -1238,6 +1240,7 @@ export type Database = {
           section_id?: string | null
           sede?: string | null
           service_id?: string
+          subtramo?: number | null
           supervisor_id?: string | null
           updated_at?: string
           vehicle?: string | null
@@ -1301,6 +1304,7 @@ export type Database = {
           service_id: string
           status: Database["public"]["Enums"]["deposit_request_status"]
           updated_at: string
+          voucher_path: string | null
         }
         Insert: {
           amount: number
@@ -1322,6 +1326,7 @@ export type Database = {
           service_id: string
           status?: Database["public"]["Enums"]["deposit_request_status"]
           updated_at?: string
+          voucher_path?: string | null
         }
         Update: {
           amount?: number
@@ -1343,6 +1348,7 @@ export type Database = {
           service_id?: string
           status?: Database["public"]["Enums"]["deposit_request_status"]
           updated_at?: string
+          voucher_path?: string | null
         }
         Relationships: [
           {
@@ -1848,6 +1854,10 @@ export type Database = {
           pci_item_id: string | null
           phase: Database["public"]["Enums"]["evidence_phase"]
           progresiva_m: number | null
+          revisada_at: string | null
+          revisada_por: string | null
+          revision: string | null
+          revision_nota: string | null
           section_id: string | null
           service_id: string
           sha256: string
@@ -1888,6 +1898,10 @@ export type Database = {
           pci_item_id?: string | null
           phase?: Database["public"]["Enums"]["evidence_phase"]
           progresiva_m?: number | null
+          revisada_at?: string | null
+          revisada_por?: string | null
+          revision?: string | null
+          revision_nota?: string | null
           section_id?: string | null
           service_id: string
           sha256: string
@@ -1928,6 +1942,10 @@ export type Database = {
           pci_item_id?: string | null
           phase?: Database["public"]["Enums"]["evidence_phase"]
           progresiva_m?: number | null
+          revisada_at?: string | null
+          revisada_por?: string | null
+          revision?: string | null
+          revision_nota?: string | null
           section_id?: string | null
           service_id?: string
           sha256?: string
@@ -1982,6 +2000,13 @@ export type Database = {
             columns: ["pci_item_id"]
             isOneToOne: false
             referencedRelation: "v_pci_items"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "evidences_revisada_por_fkey"
+            columns: ["revisada_por"]
+            isOneToOne: false
+            referencedRelation: "profiles"
             referencedColumns: ["id"]
           },
           {
@@ -5391,6 +5416,9 @@ export type Database = {
           pci_term_days: number | null
           phase: Database["public"]["Enums"]["evidence_phase"] | null
           progresiva_m: number | null
+          revisada_at: string | null
+          revision: string | null
+          revision_nota: string | null
           section_code: string | null
           section_id: string | null
           section_name: string | null
@@ -6670,10 +6698,11 @@ export type Database = {
       }
       atender_solicitud_deposito: {
         Args: {
+          p_comprobante: string
           p_id: string
           p_monto: number
           p_nota?: string
-          p_operacion: string
+          p_operacion?: string
         }
         Returns: Json
       }
@@ -7079,6 +7108,10 @@ export type Database = {
         Args: { p_conforme: boolean; p_documento_id: string; p_nota?: string }
         Returns: Json
       }
+      revisar_foto: {
+        Args: { p_conforme: boolean; p_evidencia: string; p_nota?: string }
+        Returns: Json
+      }
       revisar_parte: {
         Args: { p_id: string; p_nota?: string; p_validar: boolean }
         Returns: Json
@@ -7315,6 +7348,7 @@ export type Database = {
       user_role:
         | "admin"
         | "supervisor"
+        | "residente"
         | "jefe_cuadrilla"
         | "ing_seguridad"
         | "visor"
@@ -7603,6 +7637,7 @@ export const Constants = {
       user_role: [
         "admin",
         "supervisor",
+        "residente",
         "jefe_cuadrilla",
         "ing_seguridad",
         "visor",

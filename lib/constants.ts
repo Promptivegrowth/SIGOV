@@ -6,7 +6,7 @@ import {
   ClipboardList, Camera, BarChart3, RefreshCw,
 } from 'lucide-react'
 
-export type Role = 'admin' | 'supervisor' | 'jefe_cuadrilla' | 'ing_seguridad' | 'visor'
+export type Role = 'admin' | 'supervisor' | 'residente' | 'jefe_cuadrilla' | 'ing_seguridad' | 'visor'
 
 export const ROLES: Record<Role, {
   label: string
@@ -19,16 +19,24 @@ export const ROLES: Record<Role, {
   admin: {
     label: 'Administrador',
     short: 'Admin',
-    alias: 'Coordinador de contrato',
+    alias: 'Administración del contrato',
     description: 'Control total del sistema, servicios, usuarios y configuración',
     color: 'oklch(0.47 0.19 264)',
   },
   supervisor: {
     label: 'Supervisor',
     short: 'Supervisor',
-    alias: 'Inspector',
-    description: 'Valida partes, programa, gestiona PCIs y emite reportes',
+    alias: 'Supervisor de campo',
+    description: 'Valida partes, programa, gestiona PCIs y emite reportes de sus cuadrillas',
     color: 'oklch(0.62 0.14 235)',
+  },
+  // Elvis, P17: el coordinador, jefe inmediato de los supervisores
+  residente: {
+    label: 'Residente',
+    short: 'Residente',
+    alias: 'Ing. residente · coordinador',
+    description: 'Coordina a los supervisores: lo mismo que ellos, en todas las cuadrillas',
+    color: 'oklch(0.5 0.16 290)',
   },
   jefe_cuadrilla: {
     label: 'Jefe de cuadrilla',
@@ -47,8 +55,8 @@ export const ROLES: Record<Role, {
   visor: {
     label: 'Visor',
     short: 'Visor',
-    alias: 'Cliente / COVINCA · solo lectura',
-    description: 'Solo lectura: dashboard, mapa y reportes. Sin ninguna escritura',
+    alias: 'Visor COVINCA',
+    description: 'Consulta y da conformidad u observa ítems PCI y fotos. No ve la caja',
     color: 'oklch(0.55 0.02 258)',
   },
 }
@@ -75,55 +83,55 @@ export interface NavItem {
  */
 export const NAV: NavItem[] = [
   { href: '/dashboard',    label: 'Dashboard',     labelPorRol: { jefe_cuadrilla: 'Inicio' },
-    icon: LayoutDashboard, roles: ['admin','supervisor','ing_seguridad','visor','jefe_cuadrilla'] },
+    icon: LayoutDashboard, roles: ['admin','supervisor','residente','ing_seguridad','visor','jefe_cuadrilla'] },
   { href: '/jornada',      label: 'Mi Jornada',    icon: ClipboardList,
     roles: ['jefe_cuadrilla'], module: 'campo' },
   { href: '/programacion', label: 'Programación',  icon: CalendarRange,
-    roles: ['admin','supervisor','jefe_cuadrilla','visor'], module: 'programacion', field: true },
+    roles: ['admin','supervisor','residente','jefe_cuadrilla','visor'], module: 'programacion', field: true },
   { href: '/pci',          label: 'PCIs',          icon: TriangleAlert,
-    roles: ['admin','supervisor','jefe_cuadrilla','visor'], module: 'pci', field: true, badge: 'pci' },
+    roles: ['admin','supervisor','residente','jefe_cuadrilla','visor'], module: 'pci', field: true, badge: 'pci' },
   { href: '/campo',        label: 'Campo',
     labelPorRol: { jefe_cuadrilla: 'Reporte Diario', visor: 'Ejecución / Campo', admin: 'Reportes Diarios' },
-    icon: HardHat, roles: ['admin','supervisor','jefe_cuadrilla','visor'], module: 'campo', field: true, badge: 'sync' },
+    icon: HardHat, roles: ['admin','supervisor','residente','jefe_cuadrilla','visor'], module: 'campo', field: true, badge: 'sync' },
   { href: '/caja',         label: 'Caja chica',    labelPorRol: { jefe_cuadrilla: 'Registro de Gastos / Mi Caja' },
-    icon: Wallet, roles: ['admin','supervisor','jefe_cuadrilla'], module: 'caja' },
+    icon: Wallet, roles: ['admin','supervisor','residente','jefe_cuadrilla'], module: 'caja' },
   // Regla 1.2: pedir materiales no es tarea del Jefe de Cuadrilla, así que
   // el apartado no figura en su menú (la base tampoco le deja crear pedidos).
   { href: '/materiales',   label: 'Materiales',
     labelPorRol: { admin: 'Materiales / Insumos', visor: 'Materiales / Insumos' },
-    icon: Package, roles: ['admin','supervisor','visor'], module: 'materiales' },
+    icon: Package, roles: ['admin','supervisor','residente','visor'], module: 'materiales' },
   { href: '/evidencias',   label: 'Fotos / Evidencias',
     labelPorRol: { visor: 'Fotografías', ing_seguridad: 'Evidencias SSOMA' },
-    icon: Camera, roles: ['admin','supervisor','ing_seguridad','jefe_cuadrilla','visor'], module: 'campo' },
+    icon: Camera, roles: ['admin','supervisor','residente','ing_seguridad','jefe_cuadrilla','visor'], module: 'campo' },
   { href: '/avance',       label: 'Mi Avance',     icon: BarChart3,
     roles: ['jefe_cuadrilla'], module: 'campo' },
   { href: '/sincronizacion', label: 'Sincronización', icon: RefreshCw,
     roles: ['jefe_cuadrilla'], badge: 'sync' },
   { href: '/alertas',      label: 'Alertas',       icon: Bell,
-    roles: ['admin','supervisor','ing_seguridad'], badge: 'alertas' },
+    roles: ['admin','supervisor','residente','ing_seguridad'], badge: 'alertas' },
   { href: '/mapa',         label: 'Mapa',          icon: Map,
-    roles: ['admin','supervisor','ing_seguridad','visor'], module: 'mapa' },
+    roles: ['admin','supervisor','residente','ing_seguridad','visor'], module: 'mapa' },
   { href: '/inventario',   label: 'Inventario',    labelPorRol: { admin: 'Inventario / Vehículos' },
-    icon: Boxes, roles: ['admin','supervisor','visor','ing_seguridad'], module: 'inventario' },
+    icon: Boxes, roles: ['admin','supervisor','residente','visor','ing_seguridad'], module: 'inventario' },
   { href: '/ssoma',        label: 'SSOMA',         icon: ShieldCheck,
-    roles: ['admin','supervisor','ing_seguridad','visor'], module: 'ssoma', field: true },
+    roles: ['admin','supervisor','residente','ing_seguridad','visor'], module: 'ssoma', field: true },
   { href: '/vencimientos', label: 'Vencimientos',  icon: CalendarClock,
-    roles: ['admin','supervisor','ing_seguridad'], module: 'ssoma' },
+    roles: ['admin','supervisor','residente','ing_seguridad'], module: 'ssoma' },
   { href: '/auditoria',    label: 'Auditoría',     icon: History,
     roles: ['admin'] },
   { href: '/reportes',     label: 'Reportes',      icon: FileBarChart,
-    roles: ['admin','supervisor','ing_seguridad','visor'], module: 'reportes' },
+    roles: ['admin','supervisor','residente','ing_seguridad','visor'], module: 'reportes' },
   { href: '/formatos',     label: 'Formatos',      icon: FileSignature,
-    roles: ['admin','supervisor','ing_seguridad'], module: 'reportes' },
+    roles: ['admin','supervisor','residente','ing_seguridad'], module: 'reportes' },
   // 12.1: el paquete lo arman el Administrador y el Visor COVINCA
   { href: '/paquetes',     label: 'Entregables',   icon: PackageCheck,
-    roles: ['admin','supervisor','visor'], module: 'reportes' },
+    roles: ['admin','supervisor','residente','visor'], module: 'reportes' },
   { href: '/archivo',      label: 'Archivo',       labelPorRol: { admin: 'Documentos', visor: 'Documentos', ing_seguridad: 'Documentos' },
-    icon: FolderOpen, roles: ['admin','supervisor','ing_seguridad','visor'] },
+    icon: FolderOpen, roles: ['admin','supervisor','residente','ing_seguridad','visor'] },
   { href: '/importar',     label: 'Importación',   icon: Upload,
-    roles: ['admin','supervisor'] },
+    roles: ['admin','supervisor','residente'] },
   { href: '/configuracion',label: 'Configuración', icon: Settings,
-    roles: ['admin','supervisor'] },
+    roles: ['admin','supervisor','residente'] },
 ]
 
 /** El rótulo que le toca a este rol. */

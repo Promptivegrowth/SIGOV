@@ -48,11 +48,6 @@ data class Sello(
 }
 
 @Serializable
-data class AjustesDeCaja(
-    @SerialName("monto_minimo_comprobante") val montoMinimoComprobante: Double = 20.0,
-)
-
-@Serializable
 data class AjustesDeAlertas(
     @SerialName("dias_aviso_vencimiento") val diasAvisoVencimiento: Int = 30,
     @SerialName("dias_aviso_pci") val diasAvisoPci: Int = 7,
@@ -67,6 +62,5 @@ data class AjustesDeAlertas(
 @Serializable
 data class AjustesDelServicio(
     val sello: Sello = Sello(),
-    val caja: AjustesDeCaja = AjustesDeCaja(),
     val alertas: AjustesDeAlertas = AjustesDeAlertas(),
 )

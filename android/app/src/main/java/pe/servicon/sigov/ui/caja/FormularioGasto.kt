@@ -37,7 +37,6 @@ import java.io.File
  */
 @Composable
 fun FormularioGasto(
-    montoMinimoComprobante: Double,
     guardando: Boolean,
     alCerrar: () -> Unit,
     alGuardar: (
@@ -214,7 +213,7 @@ fun FormularioGasto(
                     Button(
                         onClick = {
                             val adjunta = foto
-                            error = validar(importe, detalle, tipo, adjunta, montoMinimoComprobante, justificacion)
+                            error = validar(importe, detalle, tipo, adjunta, justificacion)
                             if (error == null) {
                                 alGuardar(
                                     importe.replace(",", ".").toDouble(),
@@ -423,26 +422,22 @@ private fun uriDe(contexto: android.content.Context, archivo: File): Uri =
     FileProvider.getUriForFile(contexto, "${contexto.packageName}.fileprovider", archivo)
 
 /**
- * La política de caja (OBS-39/40): desde el monto que fija administración el
- * comprobante es obligatorio; por debajo se admite «Sin comprobante», pero
- * con la explicación de por qué no lo hay, y va a revisión como cualquier
- * gasto. Antes se podía registrar cualquier importe sin comprobante.
+ * La política de caja: no hay monto mínimo (Elvis, P48: «de lo que se
+ * tenga, si hay comprobante, que se pueda adjuntar»). Con comprobante, su
+ * foto; sin él, la explicación de por qué no lo hay (OBS-39/40). Los dos
+ * van a revisión como cualquier gasto.
  */
 private fun validar(
     importe: String,
     detalle: String,
     tipoComprobante: String,
     foto: File?,
-    montoMinimoComprobante: Double,
     justificacion: String,
 ): String? {
     val monto = importe.replace(",", ".").toDoubleOrNull()
     return when {
         monto == null || monto <= 0 -> "Escribe el importe del gasto."
         detalle.isBlank() -> "Di en qué se gastó."
-        tipoComprobante == "sin_comprobante" && monto >= montoMinimoComprobante ->
-            "Desde S/ %.2f el comprobante es obligatorio. Toma la foto de la boleta o factura."
-                .format(montoMinimoComprobante)
         tipoComprobante == "sin_comprobante" && justificacion.trim().length < 10 ->
             "Sin comprobante hay que justificarlo: di por qué no hay boleta o factura."
         tipoComprobante != "sin_comprobante" && foto == null ->

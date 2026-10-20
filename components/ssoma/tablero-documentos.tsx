@@ -61,7 +61,7 @@ export function TableroDocumentos({ crewFilter }: { crewFilter: string }) {
   const [lunes, setLunes] = React.useState(() => startOfWeek(new Date()))
   const [celda, setCelda] = React.useState<{ crew: string; fecha: string } | null>(null)
   const dias = React.useMemo(() => Array.from({ length: 7 }, (_, i) => toISODate(addDays(lunes, i))), [lunes])
-  const puedeRevisar = ['admin', 'supervisor', 'ing_seguridad'].includes(role)
+  const puedeRevisar = ['admin', 'supervisor', 'residente', 'ing_seguridad'].includes(role)
 
   const tablero = useQuery({
     queryKey: ['ssoma-tablero', service.id, dias[0], crewFilter],

@@ -127,8 +127,8 @@ export function SessionProvider({
       crew,
       role,
       can: {
-        write: ['admin', 'supervisor', 'jefe_cuadrilla', 'ing_seguridad'].includes(role),
-        manage: ['admin', 'supervisor'].includes(role),
+        write: ['admin', 'supervisor', 'residente', 'jefe_cuadrilla', 'ing_seguridad'].includes(role),
+        manage: ['admin', 'supervisor', 'residente'].includes(role),
         admin: role === 'admin',
         field: role === 'jefe_cuadrilla',
       },

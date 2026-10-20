@@ -48,7 +48,7 @@ export async function POST(req: NextRequest) {
       .from('service_members')
       .select('profile_id')
       .eq('service_id', body.service_id)
-      .in('role', body.roles ?? ['admin', 'supervisor', 'jefe_cuadrilla', 'ing_seguridad'])
+      .in('role', body.roles ?? ['admin', 'supervisor', 'residente', 'jefe_cuadrilla', 'ing_seguridad'])
     profileIds = (data ?? []).map((m: any) => m.profile_id)
   }
 

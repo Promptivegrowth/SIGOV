@@ -56,6 +56,9 @@ type Foto = {
   pci_code: string | null
   pci_item_number: number | null
   pci_term_days: number | null
+  /** Conformidad u observación de COVINCA: una foto observada no se entrega. */
+  revision: string | null
+  revision_nota: string | null
 }
 
 /** La cuadrilla tal como la nombra COVINCA; si aún no tiene número o sede, se deduce y se avisa en el índice. */
@@ -153,6 +156,7 @@ export async function estimarFotos(opciones: {
   const filas = await todas<{ master_bytes: number | null }>((a, b) => {
     let c = sb.from('v_evidences').select('master_bytes')
       .eq('service_id', servicioId).in('origen', ['parte', 'pci'])
+      .or('revision.is.null,revision.neq.observada')
       .gte('work_date', desde).lte('work_date', hasta)
       .order('id').range(a, b)
     if (cuadrillaId) c = c.eq('crew_id', cuadrillaId)
@@ -194,7 +198,7 @@ export async function armarEstructuraCovinca(opciones: {
     avisar('Buscando fotos', 0, 1)
     const fotos = await todas<Foto>((a, b) => {
       let c = sb.from('v_evidences')
-        .select('storage_path, master_path, phase, work_date, fecha_sello, origen, crew_id, crew_code, crew_name, crew_numero, crew_sede, activity_code, activity_name, activity_carpeta_ns, sector_folder, progresiva_m, side, pci_code, pci_item_number, pci_term_days')
+        .select('storage_path, master_path, phase, work_date, fecha_sello, origen, crew_id, crew_code, crew_name, crew_numero, crew_sede, activity_code, activity_name, activity_carpeta_ns, sector_folder, progresiva_m, side, pci_code, pci_item_number, pci_term_days, revision, revision_nota')
         .eq('service_id', servicioId)
         .in('origen', ['parte', 'pci'])
         .gte('work_date', desde)
@@ -218,6 +222,15 @@ export async function armarEstructuraCovinca(opciones: {
     const destinos = fotos.map((f): Destino[] => {
       const fecha = fechaDe(f)
       const detalle = [f.activity_code, f.activity_name, f.crew_name, f.phase].filter(Boolean).join(' · ')
+      // La que COVINCA observó no va: queda anotada en el índice para retomarla
+      if (f.revision === 'observada') {
+        indice.push({
+          carpeta: '(observada: no se entrega)', archivo: f.storage_path, tipo: 'Foto observada', fecha,
+          detalle: [f.pci_code && `${f.pci_code} · ítem ${f.pci_item_number}`, detalle, f.revision_nota && `«${f.revision_nota}»`].filter(Boolean).join(' · '),
+          bytes: 0,
+        })
+        return []
+      }
       const reservar = (r: { carpeta: string; archivo: string }, tipo: string, extra = detalle): Destino =>
         ({ carpeta: r.carpeta, archivo: nombreLibre(usados, r.carpeta, r.archivo), tipo, detalle: extra })
       const lista: Destino[] = []

@@ -128,7 +128,7 @@ export function CommandPalette({
       key: 'personas',
       heading: 'Personas',
       icon: Users,
-      show: ['admin', 'supervisor'].includes(role),
+      show: ['admin', 'supervisor', 'residente'].includes(role),
       rows: data?.personas ?? [],
       render: (r: any) => ({
         href: '/configuracion',

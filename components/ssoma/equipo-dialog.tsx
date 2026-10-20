@@ -38,7 +38,7 @@ const SIN_CUADRILLA = '__ninguna__'
 /** Quién administra los equipos (OBS-63): lo mismo que exige la base. */
 export function usePuedeAdministrarEquipos() {
   const { role } = useSession()
-  return ['admin', 'supervisor', 'ing_seguridad'].includes(role)
+  return ['admin', 'supervisor', 'residente', 'ing_seguridad'].includes(role)
 }
 
 /**

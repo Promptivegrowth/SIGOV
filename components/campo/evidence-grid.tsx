@@ -6,6 +6,7 @@ import { useQuery, useQueryClient } from '@tanstack/react-query'
 import {
   Camera, Plus, MapPin, ShieldCheck, Clock, Fingerprint, Images,
   Link2, Unlink, Upload, Maximize2, ChevronLeft, ChevronRight, Eye,
+  CheckCircle2, AlertTriangle,
 } from 'lucide-react'
 import { createClient } from '@/lib/supabase/client'
 import { useSession } from '@/lib/hooks/use-session'
@@ -13,6 +14,7 @@ import { Dialog, DialogContent } from '@/components/ui/dialog'
 import { Badge } from '@/components/ui/badge'
 import { Button } from '@/components/ui/button'
 import { Skeleton } from '@/components/ui/skeleton'
+import { Textarea } from '@/components/ui/input'
 import { Tip } from '@/components/ui/primitives'
 import { ImageViewer } from '@/components/shared/image-viewer'
 import { EvidencePicker } from './evidence-picker'
@@ -68,7 +70,13 @@ export function EvidenceGrid({
   const [uploader, setUploader] = React.useState(false)
   const qc = useQueryClient()
   const sb = React.useMemo(() => createClient(), [])
-  const { service, profile } = useSession()
+  const { service, profile, can, role } = useSession()
+  // Conformidad u observación de las fotos: el visor COVINCA y quien
+  // administra (Elvis, P17)
+  const puedeRevisar = can.manage || role === 'visor'
+  const [observando, setObservando] = React.useState(false)
+  const [nota, setNota] = React.useState('')
+  const [revisando, setRevisando] = React.useState(false)
 
   const key = entryId ?? pciItemId ?? ''
 
@@ -90,14 +98,14 @@ export function EvidenceGrid({
 
       const own = await sb
         .from('evidences')
-        .select('id, phase, storage_path, taken_at, lat, lng, accuracy_m, progresiva_m, sha256, size_bytes, caption, device_model')
+        .select('id, phase, storage_path, taken_at, lat, lng, accuracy_m, progresiva_m, sha256, size_bytes, caption, device_model, revision, revision_nota')
         .eq(col, val!)
         .is('deleted_at', null)
         .order('taken_at')
 
       const linked = await sb
         .from('evidence_links')
-        .select('id, evidences(id, phase, storage_path, taken_at, lat, lng, accuracy_m, progresiva_m, sha256, size_bytes, caption, device_model)')
+        .select('id, evidences(id, phase, storage_path, taken_at, lat, lng, accuracy_m, progresiva_m, sha256, size_bytes, caption, device_model, revision, revision_nota)')
         .eq(col, val!)
 
       const rows = [
@@ -117,6 +125,23 @@ export function EvidenceGrid({
   })
 
   const refresh = () => qc.invalidateQueries({ queryKey: ['evidences', key] })
+
+  const revisar = async (id: string, conforme: boolean) => {
+    if (!conforme && !nota.trim()) { toast.error('Escribe qué hay que corregir en la foto'); return }
+    setRevisando(true)
+    const { error } = await sb.rpc('revisar_foto', { p_evidencia: id, p_conforme: conforme, p_nota: nota.trim() || undefined })
+    setRevisando(false)
+    if (error) { toast.error(mensajeAmigable(error)); return }
+    toast.success(conforme ? 'Foto conforme' : 'Foto observada', {
+      description: conforme ? undefined : 'La cuadrilla recibe el aviso para tomarla de nuevo. No irá en la entrega a COVINCA.',
+    })
+    setObservando(false)
+    setNota('')
+    refresh()
+  }
+
+  // Al pasar a otra foto se cierra la observación a medio escribir
+  React.useEffect(() => { setObservando(false); setNota('') }, [zoomIdx])
 
   const unlink = async (linkId: string) => {
     const { error } = await sb.from('evidence_links').delete().eq('id', linkId)
@@ -213,6 +238,18 @@ export function EvidenceGrid({
                 {e.linked && (
                   <span className="bg-accent text-accent-foreground absolute top-1 left-1 flex size-4 items-center justify-center rounded">
                     <Link2 className="size-2.5" />
+                  </span>
+                )}
+                {e.revision && (
+                  <span
+                    title={e.revision === 'observada' ? `Observada: ${e.revision_nota ?? ''}` : 'Conforme'}
+                    className={cn(
+                      'absolute top-1 flex size-4 items-center justify-center rounded text-white',
+                      e.linked ? 'left-6' : 'left-1',
+                      e.revision === 'observada' ? 'bg-destructive' : 'bg-success',
+                    )}
+                  >
+                    {e.revision === 'observada' ? <AlertTriangle className="size-2.5" /> : <CheckCircle2 className="size-2.5" />}
                   </span>
                 )}
                 {/* Sin esto nadie adivina que la miniatura se abre */}
@@ -368,6 +405,59 @@ export function EvidenceGrid({
                   )}
                 </div>
                 {zoom.caption && <p className="mt-2 text-[13px]">{zoom.caption}</p>}
+
+                {/* Revisión: conformidad u observación de COVINCA */}
+                {(zoom.revision || puedeRevisar) && (
+                  <div
+                    className={cn(
+                      'mt-3 rounded-lg border px-3 py-2.5',
+                      zoom.revision === 'observada' ? 'border-destructive/40 bg-destructive/5'
+                        : zoom.revision === 'conforme' ? 'border-success/40 bg-success/5' : 'border-border',
+                    )}
+                  >
+                    <div className="flex flex-wrap items-center gap-2">
+                      {zoom.revision === 'observada' && (
+                        <Badge variant="destructive" className="gap-1"><AlertTriangle className="size-2.5" /> Observada</Badge>
+                      )}
+                      {zoom.revision === 'conforme' && (
+                        <Badge variant="success" className="gap-1"><CheckCircle2 className="size-2.5" /> Conforme</Badge>
+                      )}
+                      {!zoom.revision && <span className="text-muted-foreground text-[12px]">Sin revisar</span>}
+                      {puedeRevisar && !zoom.linked && (
+                        <div className="ml-auto flex gap-2">
+                          {zoom.revision !== 'conforme' && (
+                            <Button size="sm" variant="outline" disabled={revisando} onClick={() => revisar(zoom.id, true)}>
+                              <CheckCircle2 className="size-3.5" /> Conforme
+                            </Button>
+                          )}
+                          {!observando && (
+                            <Button size="sm" variant="outline" disabled={revisando} onClick={() => setObservando(true)}>
+                              <AlertTriangle className="size-3.5" /> Observar
+                            </Button>
+                          )}
+                        </div>
+                      )}
+                    </div>
+                    {zoom.revision_nota && <p className="mt-1.5 text-[12.5px]">«{zoom.revision_nota}»</p>}
+                    {observando && (
+                      <div className="mt-2 space-y-2">
+                        <Textarea
+                          value={nota}
+                          onChange={(e) => setNota(e.target.value)}
+                          rows={2}
+                          placeholder="Qué hay que corregir: foto vertical, no se ve el después…"
+                          autoFocus
+                        />
+                        <div className="flex justify-end gap-2">
+                          <Button size="sm" variant="ghost" onClick={() => { setObservando(false); setNota('') }}>Cancelar</Button>
+                          <Button size="sm" variant="destructive" disabled={revisando} onClick={() => revisar(zoom.id, false)}>
+                            Observar la foto
+                          </Button>
+                        </div>
+                      </div>
+                    )}
+                  </div>
+                )}
                 <dl className="mt-3 grid grid-cols-2 gap-x-6 gap-y-2 text-[11.5px]">
                   {[
                     { icon: MapPin, k: 'Coordenadas', v: `${zoom.lat?.toFixed(6)}, ${zoom.lng?.toFixed(6)}` },

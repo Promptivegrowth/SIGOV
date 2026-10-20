@@ -128,10 +128,11 @@ export function CajaClient() {
     qc.invalidateQueries({ queryKey: ['caja-solicitudes'] })
   }
 
-  /** Ver la boleta: la ruta se firma al vuelo, el bucket no es público. */
+  /** Ver la boleta: la ruta se firma al vuelo, el bucket no es público. Un PDF se abre aparte. */
   const verComprobante = async (ruta: string) => {
     const { data, error } = await sb.storage.from('documentos').createSignedUrl(ruta, 3600)
     if (error || !data) { toast.error('No se pudo abrir el comprobante'); return }
+    if (/\.pdf$/i.test(ruta)) { window.open(data.signedUrl, '_blank', 'noopener'); return }
     setComprobante(data.signedUrl)
   }
 
@@ -339,7 +340,14 @@ export function CajaClient() {
 
                     <p className="text-lg font-bold tabular-nums">{soles(Number(s.amount))}</p>
 
-                    {can.manage && !['depositado', 'rechazado'].includes(s.status) && (
+                    {s.voucher_path && (
+                      <Button size="sm" variant="outline" onClick={() => verComprobante(s.voucher_path)}>
+                        <ReceiptText /> Comprobante
+                      </Button>
+                    )}
+
+                    {/* Solo el administrador las atiende (Elvis, P47) */}
+                    {can.admin && !['depositado', 'rechazado'].includes(s.status) && (
                       <Button size="sm" onClick={() => setResolviendo(s)}>
                         <Banknote /> Responder
                       </Button>
@@ -486,13 +494,15 @@ function RevisionDialog({
 /**
  * Responder una solicitud de depósito.
  *
- * Administración la mueve por sus estados —en evaluación, aprobada,
+ * El administrador la mueve por sus estados —en evaluación, aprobada,
  * observada, rechazada— hasta atenderla. Atender no es solo cambiar un
  * estado: el dinero entra a la caja como movimiento en la misma operación,
- * o el saldo del capataz no sube.
+ * o el saldo del capataz no sube. Se atiende con el comprobante del
+ * depósito (Elvis, P47); el número de operación es opcional.
  */
 function DepositoDialog({
   solicitud,
+  serviceId,
   onClose,
   onHecho,
 }: {
@@ -506,12 +516,14 @@ function DepositoDialog({
   const [monto, setMonto] = React.useState('')
   const [operacion, setOperacion] = React.useState('')
   const [nota, setNota] = React.useState('')
+  const [voucher, setVoucher] = React.useState<File | null>(null)
   const [enviando, setEnviando] = React.useState(false)
 
   React.useEffect(() => {
     setMonto(solicitud ? String(solicitud.approved_amount ?? solicitud.amount) : '')
     setOperacion('')
     setNota('')
+    setVoucher(null)
   }, [solicitud?.id])
 
   if (!solicitud) return null
@@ -524,16 +536,31 @@ function DepositoDialog({
   const depositar = async () => {
     const n = importe()
     if (n == null) { toast.error('Escribe el monto depositado'); return }
-    if (!operacion.trim()) { toast.error('Falta el número de operación del abono'); return }
+    if (!voucher) { toast.error('Adjunta el comprobante del depósito'); return }
+    if (voucher.size > 10 * 1024 * 1024) { toast.error('El comprobante pesa más de 10 MB'); return }
     setEnviando(true)
+    const extension = (voucher.name.match(/\.(jpe?g|png|webp|pdf)$/i)?.[1] ?? 'jpg').toLowerCase()
+    const ruta = `${serviceId}/caja/depositos/${solicitud.id}-${Date.now()}.${extension}`
+    const subida = await sb.storage.from('documentos').upload(ruta, voucher, { contentType: voucher.type || undefined })
+    if (subida.error) {
+      setEnviando(false)
+      toast.error('No se pudo subir el comprobante', { description: mensajeAmigable(subida.error) })
+      return
+    }
     const { error } = await sb.rpc('atender_solicitud_deposito', {
       p_id: solicitud.id,
       p_monto: n,
-      p_operacion: operacion.trim(),
+      p_comprobante: ruta,
+      p_operacion: operacion.trim() || undefined,
       p_nota: nota.trim() || undefined,
     })
     setEnviando(false)
-    if (error) { toast.error(mensajeAmigable(error)); return }
+    if (error) {
+      // Que no quede un comprobante suelto de un depósito que no se registró
+      void sb.storage.from('documentos').remove([ruta])
+      toast.error(mensajeAmigable(error))
+      return
+    }
     toast.success('Depósito registrado. El capataz verá el saldo actualizado.')
     onHecho()
   }
@@ -580,7 +607,15 @@ function DepositoDialog({
           <Input value={monto} onChange={(e) => setMonto(e.target.value)} inputMode="decimal" />
         </Field>
 
-        <Field label="Número de operación" hint="Solo para registrar el depósito">
+        <Field label="Comprobante del depósito" hint="Foto o PDF del voucher: obligatorio para registrar el depósito">
+          <Input
+            type="file"
+            accept="image/jpeg,image/png,image/webp,application/pdf"
+            onChange={(e) => setVoucher(e.target.files?.[0] ?? null)}
+          />
+        </Field>
+
+        <Field label="Número de operación" hint="Opcional">
           <Input
             value={operacion}
             onChange={(e) => setOperacion(e.target.value)}

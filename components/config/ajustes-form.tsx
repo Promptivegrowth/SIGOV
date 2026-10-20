@@ -2,7 +2,7 @@
 
 import * as React from 'react'
 import { useQuery, useQueryClient } from '@tanstack/react-query'
-import { Camera, Wallet, BellRing, Save } from 'lucide-react'
+import { Camera, BellRing, Save } from 'lucide-react'
 import { toast } from 'sonner'
 import { createClient } from '@/lib/supabase/client'
 import { useSession } from '@/lib/hooks/use-session'
@@ -145,35 +145,8 @@ export function AjustesDelServicio() {
       </Card>
 
       {/* ═══ Umbrales de operación ══════════════════════════════════════ */}
+      {/* Sin monto mínimo para el comprobante: si lo hay, se adjunta (Elvis, P48) */}
       <div className="grid grid-cols-1 gap-4 lg:grid-cols-2">
-        <Card>
-          <CardHeader className="pb-3">
-            <CardTitle className="flex items-center gap-2 text-[15px]">
-              <Wallet className="size-4" />
-              Caja chica
-            </CardTitle>
-            <CardDescription className="text-[12px]">
-              Desde qué monto el gasto exige comprobante.
-            </CardDescription>
-          </CardHeader>
-          <CardContent>
-            <label className="block">
-              <span className="text-muted-foreground mb-1.5 block text-[11.5px] font-medium uppercase tracking-wide">
-                Monto mínimo con comprobante (S/)
-              </span>
-              <Input
-                type="number"
-                min={0}
-                step={1}
-                value={actual?.caja?.monto_minimo_comprobante ?? 20}
-                onChange={(e) => cambiar('caja', 'monto_minimo_comprobante', Number(e.target.value))}
-                disabled={!can.manage}
-                className="max-w-[180px]"
-              />
-            </label>
-          </CardContent>
-        </Card>
-
         <Card>
           <CardHeader className="pb-3">
             <CardTitle className="flex items-center gap-2 text-[15px]">

@@ -272,8 +272,9 @@ private fun Dato(icono: ImageVector, etiqueta: String, valor: String) {
 private fun rolLegible(rol: String): String = when (rol) {
     "jefe_cuadrilla" -> "Jefe de cuadrilla"
     "supervisor" -> "Supervisor de campo"
+    "residente" -> "Ingeniero residente"
     "ing_seguridad" -> "Ingeniero de seguridad"
     "admin" -> "Administrador"
-    "visor" -> "Visor"
+    "visor" -> "Visor COVINCA"
     else -> rol.ifBlank { "—" }
 }
