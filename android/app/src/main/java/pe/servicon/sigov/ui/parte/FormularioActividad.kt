@@ -201,12 +201,23 @@ fun FormularioActividad(
                         .padding(20.dp),
                     verticalArrangement = Arrangement.spacedBy(14.dp),
                 ) {
-                    SelectorDeOrigen(
-                        origen = origen,
-                        pendientes = pendientes,
-                        pcis = pcis,
-                        alElegir = { adoptar(it) },
-                    )
+                    // Si se llegó desde una partida, ya se sabe de dónde sale el
+                    // trabajo: elegir otra vez confundiría (Elvis, video del 13/10)
+                    if (inicial == null) {
+                        SelectorDeOrigen(
+                            origen = origen,
+                            pendientes = pendientes,
+                            pcis = pcis,
+                            alElegir = { adoptar(it) },
+                        )
+                    } else if (inicial is OrigenDelTrabajo.Programado) {
+                        val dia = runCatching { java.time.LocalDate.parse(inicial.item.fecha) }.getOrNull()
+                        Text(
+                            "Avance de la partida programada" + (dia?.let { " del " + pe.servicon.sigov.datos.Peru.fechaCorta(it) } ?: ""),
+                            style = MaterialTheme.typography.bodyMedium,
+                            color = MaterialTheme.colorScheme.onSurfaceVariant,
+                        )
+                    }
 
                     if (manual) {
                         // Buscador del catálogo completo: 191 partidas no caben en un desplegable
@@ -245,9 +256,9 @@ fun FormularioActividad(
                             value = progIni,
                             onValueChange = { progIni = it },
                             label = { Text("Progresiva inicio") },
-                            placeholder = { Text("1334+600") },
+                            placeholder = { Text("1334.600") },
                             singleLine = true,
-                            keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Text),
+                            keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Decimal),
                             shape = RoundedCornerShape(12.dp),
                             modifier = Modifier.weight(1f),
                         )
@@ -255,12 +266,20 @@ fun FormularioActividad(
                             value = progFin,
                             onValueChange = { progFin = it },
                             label = { Text("Fin") },
-                            placeholder = { Text("1335+000") },
+                            placeholder = { Text("1335.000") },
                             singleLine = true,
+                            keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Decimal),
                             shape = RoundedCornerShape(12.dp),
                             modifier = Modifier.weight(1f),
                         )
                     }
+                    // «1334.600» vale lo mismo que «1334+600»: el teclado
+                    // numérico no tiene «+» (Elvis, video del 13/10)
+                    Text(
+                        "Se escribe 1334.600 o 1334+600 (km y metros).",
+                        style = MaterialTheme.typography.bodySmall,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant,
+                    )
 
                     Selector(
                         etiqueta = "Lado de la vía",
@@ -728,8 +747,8 @@ private fun rotulo(item: ItemProgramado): String = listOfNotNull(
 ).joinToString(" · ").ifBlank { "Partida sin nombre" }
 
 private fun rotulo(item: ItemPci): String = listOfNotNull(
-    item.pciCodigo?.let { codigo -> item.numero?.let { "$codigo · ítem $it" } ?: codigo },
-    item.description?.take(40),
+    item.pciCorto?.let { codigo -> item.numero?.let { "$codigo · ítem $it" } ?: codigo },
+    item.tituloCorto,
 ).joinToString(" · ").ifBlank { "Requerimiento" }
 
 private fun cifra(valor: Double): String =

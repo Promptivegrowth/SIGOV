@@ -211,6 +211,8 @@ class CampoRepositorio @Inject constructor(
                             isIn("status", listOf("pendiente", "en_atencion", "observado"))
                             // La vista llama a esta columna assigned_crew_id
                             cuadrillaId?.let { eq("assigned_crew_id", it) }
+                            // Los PCI que el supervisor pausó no se le muestran
+                            if (cuadrillaId != null) eq("activo_para_cuadrilla", true)
                         }
                         order("due_date", Order.ASCENDING)
                         order("item_number", Order.ASCENDING)
@@ -230,6 +232,20 @@ class CampoRepositorio @Inject constructor(
     }
 
     /**
+     * Una partida programada por su id, de cualquier día: al registrar el
+     * avance de una partida atrasada, el formulario la trae ya elegida.
+     */
+    suspend fun itemProgramado(id: String): ItemProgramado? = withContext(Dispatchers.IO) {
+        runCatching {
+            supabase.postgrest.from("v_plan_items")
+                .select { filter { eq("id", id) } }
+                .decodeList<JsonObject>()
+                .firstOrNull()
+                ?.let { json.decodeFromString<ItemProgramado>(it.toString()) }
+        }.getOrNull()
+    }
+
+    /**
      * Los PCI de la cuadrilla, uno por fila, con sus cuentas (OBS-05).
      *
      * Antes la pantalla mostraba cientos de ítems uno debajo de otro; ahora
@@ -244,6 +260,7 @@ class CampoRepositorio @Inject constructor(
                         filter {
                             eq("service_id", servicioId)
                             cuadrillaId?.let { eq("crew_id", it) }
+                            if (cuadrillaId != null) eq("activo", true)
                         }
                         order("code", Order.DESCENDING)
                     }
@@ -269,6 +286,7 @@ class CampoRepositorio @Inject constructor(
                             filter {
                                 eq("service_id", servicioId)
                                 cuadrillaId?.let { eq("assigned_crew_id", it) }
+                                if (cuadrillaId != null) eq("activo_para_cuadrilla", true)
                             }
                             order("due_date", Order.ASCENDING)
                             order("item_number", Order.ASCENDING)

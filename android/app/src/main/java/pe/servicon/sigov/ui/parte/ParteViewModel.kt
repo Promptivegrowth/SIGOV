@@ -111,6 +111,12 @@ class ParteViewModel @Inject constructor(
 
     fun volverAHoy() = abrir(Peru.hoy())
 
+    /** Ir a un día anterior desde el calendario. No a mañana. */
+    fun irADia(fecha: LocalDate) {
+        if (fecha.isAfter(Peru.hoy())) return
+        abrir(fecha)
+    }
+
     fun partidaInicialAtendida() = _estado.update { it.copy(partidaInicial = null) }
 
     private var vigilancia: kotlinx.coroutines.Job? = null
@@ -168,11 +174,15 @@ class ParteViewModel @Inject constructor(
                     val pcis = campo.pciAsignados(servicioId, cuadrilla.id)
                     // Si se llegó desde una partida, se ofrece ya elegida (una sola vez)
                     val pedida = ruta.get<String>("partida")?.also { ruta["partida"] = null }
+                    // Puede ser de otro día (una partida atrasada): se busca aparte
+                    val partida = pedida?.let { id ->
+                        programadas.firstOrNull { p -> p.id == id } ?: campo.itemProgramado(id)
+                    }
                     _estado.update {
                         it.copy(
                             programadas = programadas,
                             pcis = pcis,
-                            partidaInicial = pedida?.let { id -> programadas.firstOrNull { p -> p.id == id } },
+                            partidaInicial = partida,
                         )
                     }
                 }
@@ -245,7 +255,7 @@ class ParteViewModel @Inject constructor(
                             is OrigenDelTrabajo.Programado ->
                                 "Registrado y descontado de la partida programada."
                             is OrigenDelTrabajo.Pci ->
-                                "Registrado como sustento del ${origen.item.pciCodigo ?: "PCI"}."
+                                "Registrado como sustento del ${origen.item.pciCorto ?: "PCI"}."
                             else -> "Actividad registrada. Se enviará al haber señal."
                         },
                     )
@@ -435,7 +445,7 @@ class ParteViewModel @Inject constructor(
     /** De dónde nace la actividad, como se lee en el formato. */
     private fun origenDe(r: RegistroLocal): String = when (r.origen) {
         "programacion" -> "Programación"
-        "pci" -> listOfNotNull("PCI", r.pciCodigo).joinToString(" ")
+        "pci" -> r.pciCodigo?.let { pe.servicon.sigov.datos.codigoCortoDePci(it) } ?: "PCI"
         "no_programado" -> "No programado"
         else -> "Emergencia"
     }

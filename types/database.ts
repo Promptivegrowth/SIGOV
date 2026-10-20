@@ -2570,6 +2570,73 @@ export type Database = {
           },
         ]
       }
+      pci_cuadrilla_pausada: {
+        Row: {
+          created_at: string
+          created_by: string | null
+          crew_id: string
+          pci_id: string
+          service_id: string
+        }
+        Insert: {
+          created_at?: string
+          created_by?: string | null
+          crew_id: string
+          pci_id: string
+          service_id: string
+        }
+        Update: {
+          created_at?: string
+          created_by?: string | null
+          crew_id?: string
+          pci_id?: string
+          service_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "pci_cuadrilla_pausada_created_by_fkey"
+            columns: ["created_by"]
+            isOneToOne: false
+            referencedRelation: "profiles"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "pci_cuadrilla_pausada_crew_id_fkey"
+            columns: ["crew_id"]
+            isOneToOne: false
+            referencedRelation: "crews"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "pci_cuadrilla_pausada_crew_id_fkey"
+            columns: ["crew_id"]
+            isOneToOne: false
+            referencedRelation: "v_hygiene_today"
+            referencedColumns: ["crew_id"]
+          },
+          {
+            foreignKeyName: "pci_cuadrilla_pausada_pci_id_fkey"
+            columns: ["pci_id"]
+            isOneToOne: false
+            referencedRelation: "pcis"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "pci_cuadrilla_pausada_pci_id_fkey"
+            columns: ["pci_id"]
+            isOneToOne: false
+            referencedRelation: "v_pci_resumen"
+            referencedColumns: ["pci_id"]
+          },
+          {
+            foreignKeyName: "pci_cuadrilla_pausada_service_id_fkey"
+            columns: ["service_id"]
+            isOneToOne: false
+            referencedRelation: "services"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       pci_item_eventos: {
         Row: {
           a: Database["public"]["Enums"]["pci_item_status"]
@@ -2645,6 +2712,7 @@ export type Database = {
           deleted_at: string | null
           description: string
           due_date: string
+          foto_referencia_path: string | null
           id: string
           item_number: number
           notes: string | null
@@ -2678,6 +2746,7 @@ export type Database = {
           deleted_at?: string | null
           description: string
           due_date: string
+          foto_referencia_path?: string | null
           id?: string
           item_number: number
           notes?: string | null
@@ -2711,6 +2780,7 @@ export type Database = {
           deleted_at?: string | null
           description?: string
           due_date?: string
+          foto_referencia_path?: string | null
           id?: string
           item_number?: number
           notes?: string | null
@@ -2940,6 +3010,7 @@ export type Database = {
           executed_qty: number
           finished_at: string | null
           finished_by: string | null
+          foto_referencia_path: string | null
           id: string
           impedimento: string | null
           impedimento_at: string | null
@@ -2979,6 +3050,7 @@ export type Database = {
           executed_qty?: number
           finished_at?: string | null
           finished_by?: string | null
+          foto_referencia_path?: string | null
           id?: string
           impedimento?: string | null
           impedimento_at?: string | null
@@ -3018,6 +3090,7 @@ export type Database = {
           executed_qty?: number
           finished_at?: string | null
           finished_by?: string | null
+          foto_referencia_path?: string | null
           id?: string
           impedimento?: string | null
           impedimento_at?: string | null
@@ -6023,6 +6096,7 @@ export type Database = {
           activity_code: string | null
           activity_id: string | null
           activity_name: string | null
+          activo_para_cuadrilla: boolean | null
           assigned_crew_id: string | null
           assigned_to: string | null
           assignee_name: string | null
@@ -6033,6 +6107,7 @@ export type Database = {
           description: string | null
           due_date: string | null
           evidence_count: number | null
+          foto_referencia_path: string | null
           fotos_antes: number | null
           fotos_despues: number | null
           fotos_durante: number | null
@@ -6126,6 +6201,7 @@ export type Database = {
       }
       v_pci_resumen: {
         Row: {
+          activo: boolean | null
           code: string | null
           conformes: number | null
           crew_id: string | null
@@ -6208,6 +6284,7 @@ export type Database = {
           executed_qty: number | null
           finished_at: string | null
           finished_by_name: string | null
+          foto_referencia_path: string | null
           id: string | null
           impedimento: string | null
           impedimento_at: string | null
@@ -7192,6 +7269,10 @@ export type Database = {
           p_to?: string
         }
         Returns: Json
+      }
+      fijar_foto_referencial: {
+        Args: { p_id: string; p_path: string; p_tabla: string }
+        Returns: undefined
       }
       fijar_original_evidencia: {
         Args: {

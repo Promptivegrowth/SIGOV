@@ -170,9 +170,9 @@ export const PCI_ABIERTO: readonly string[] = ['abierto', 'en_atencion', 'vencid
  * revisarse. «rechazado» queda solo por compatibilidad: ya no se usa.
  */
 export const PCI_ITEM_STATUS = {
-  pendiente:   { label: 'Pendiente',              className: 'bg-muted text-muted-foreground' },
+  pendiente:   { label: 'Por atender',            className: 'bg-muted text-muted-foreground' },
   en_atencion: { label: 'En ejecución',           className: 'bg-info/15 text-info' },
-  levantado:   { label: 'Por validar COVINCA',    className: 'bg-warning/20 text-warning' },
+  levantado:   { label: 'Conforme · por validar', className: 'bg-warning/20 text-warning' },
   observado:   { label: 'Observado',              className: 'bg-destructive/15 text-destructive' },
   subsanado:   { label: 'Subsanado · por validar', className: 'bg-warning/20 text-warning' },
   validado:    { label: 'Conforme',               className: 'bg-success/20 text-success' },

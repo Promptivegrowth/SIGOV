@@ -1,6 +1,7 @@
 package pe.servicon.sigov.ui.programacion
 
 import androidx.compose.foundation.background
+import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
@@ -10,7 +11,9 @@ import androidx.compose.material.icons.outlined.WarningAmber
 import androidx.compose.material.icons.automirrored.outlined.ArrowBack
 import androidx.compose.material.icons.outlined.ChevronLeft
 import androidx.compose.material.icons.outlined.ChevronRight
+import androidx.compose.material.icons.outlined.CalendarMonth
 import androidx.compose.material.icons.outlined.CheckCircle
+import androidx.compose.material.icons.outlined.Image
 import androidx.compose.material.icons.outlined.EditNote
 import androidx.compose.material.icons.outlined.EventAvailable
 import androidx.compose.material.icons.outlined.PlayArrow
@@ -76,6 +79,10 @@ fun PantallaProgramacion(
         )
     }
 
+    estado.referencia?.let { url ->
+        pe.servicon.sigov.ui.componentes.VisorConZoom(modelo = url, descripcion = "Foto referencial", alCerrar = vm::cerrarReferencia)
+    }
+
     impedimento?.let { partida ->
         DialogoDeImpedimento(
             partida = partida,
@@ -103,6 +110,8 @@ fun PantallaProgramacion(
                 alRetroceder = { vm.moverDia(-1) },
                 alAvanzar = { vm.moverDia(1) },
                 alVolverAHoy = vm::volverAHoy,
+                fecha = estado.fecha,
+                alElegir = vm::irA,
             )
 
             when {
@@ -155,6 +164,7 @@ fun PantallaProgramacion(
                             alFinalizar = { vm.finalizar(item) },
                             alReportar = { impedimento = item },
                             alRegistrarAvance = { alRegistrarAvance(item) },
+                            alVerReferencia = { vm.verReferencia(item) },
                         )
                     }
                 }
@@ -163,6 +173,11 @@ fun PantallaProgramacion(
     }
 }
 
+/**
+ * El día que se mira. Tocar la fecha abre un calendario para ir a cualquier
+ * día, mes o año sin retroceder día por día (Elvis, video del 13/10).
+ */
+@OptIn(ExperimentalMaterial3Api::class)
 @Composable
 internal fun SelectorDeDia(
     etiqueta: String,
@@ -170,7 +185,33 @@ internal fun SelectorDeDia(
     alRetroceder: () -> Unit,
     alAvanzar: () -> Unit,
     alVolverAHoy: () -> Unit,
+    fecha: java.time.LocalDate? = null,
+    permitirFuturo: Boolean = true,
+    alElegir: ((java.time.LocalDate) -> Unit)? = null,
 ) {
+    var calendario by remember { mutableStateOf(false) }
+    if (calendario && fecha != null && alElegir != null) {
+        val hoy = Peru.hoy()
+        val estadoFecha = rememberDatePickerState(
+            initialSelectedDateMillis = fecha.atStartOfDay().toInstant(java.time.ZoneOffset.UTC).toEpochMilli(),
+            selectableDates = object : SelectableDates {
+                override fun isSelectableDate(utcTimeMillis: Long): Boolean =
+                    permitirFuturo || !java.time.Instant.ofEpochMilli(utcTimeMillis).atZone(java.time.ZoneOffset.UTC).toLocalDate().isAfter(hoy)
+            },
+        )
+        DatePickerDialog(
+            onDismissRequest = { calendario = false },
+            confirmButton = {
+                TextButton(onClick = {
+                    estadoFecha.selectedDateMillis?.let {
+                        alElegir(java.time.Instant.ofEpochMilli(it).atZone(java.time.ZoneOffset.UTC).toLocalDate())
+                    }
+                    calendario = false
+                }) { Text("Ir a ese día") }
+            },
+            dismissButton = { TextButton(onClick = { calendario = false }) { Text("Cancelar") } },
+        ) { DatePicker(state = estadoFecha) }
+    }
     Surface(color = Marca.Azul.copy(alpha = 0.06f)) {
         Row(
             Modifier.fillMaxWidth().padding(horizontal = 8.dp, vertical = 6.dp),
@@ -180,11 +221,23 @@ internal fun SelectorDeDia(
                 Icon(Icons.Outlined.ChevronLeft, contentDescription = "Día anterior")
             }
             Column(Modifier.weight(1f), horizontalAlignment = Alignment.CenterHorizontally) {
-                Text(
-                    etiqueta,
-                    style = MaterialTheme.typography.titleSmall,
-                    fontWeight = FontWeight.SemiBold,
-                )
+                Row(
+                    verticalAlignment = Alignment.CenterVertically,
+                    modifier = Modifier
+                        .then(if (alElegir != null) Modifier.clickable { calendario = true } else Modifier)
+                        .padding(horizontal = 8.dp, vertical = 4.dp),
+                ) {
+                    Text(
+                        etiqueta,
+                        style = MaterialTheme.typography.titleSmall,
+                        fontWeight = FontWeight.SemiBold,
+                    )
+                    if (alElegir != null) {
+                        Spacer(Modifier.width(6.dp))
+                        Icon(Icons.Outlined.CalendarMonth, contentDescription = "Elegir otro día",
+                            modifier = Modifier.size(18.dp), tint = Marca.Azul)
+                    }
+                }
                 if (!esHoy) {
                     TextButton(onClick = alVolverAHoy, contentPadding = PaddingValues(0.dp)) {
                         Text("Volver a hoy", style = MaterialTheme.typography.labelSmall)
@@ -236,6 +289,7 @@ private fun Partida(
     alFinalizar: () -> Unit = {},
     alReportar: () -> Unit = {},
     alRegistrarAvance: () -> Unit = {},
+    alVerReferencia: () -> Unit = {},
 ) {
     val avance = ((item.avance ?: 0.0) / 100.0).coerceIn(0.0, 1.0).toFloat()
 
@@ -270,9 +324,12 @@ private fun Partida(
                     // Todo lo que manda el supervisor, para no volver a escribirlo (OBS-02)
                     Text(
                         listOfNotNull(
-                            Progresiva.rango(item.progresivaInicio, item.progresivaFin),
-                            item.lado?.let { "lado " + (pe.servicon.sigov.datos.Lados.codigo(it) ?: it) },
-                        ).joinToString(" · ").ifBlank { "Sin progresiva indicada" },
+                            Progresiva.rango(item.progresivaInicio, item.progresivaFin) ?: "Sin progresiva indicada",
+                            // El lado siempre a la vista (Elvis: «no indica si es lado izquierdo o derecho»)
+                            item.lado?.takeIf { it.isNotBlank() }
+                                ?.let { "lado " + (pe.servicon.sigov.datos.Lados.codigo(it) ?: it) }
+                                ?: "lado sin indicar",
+                        ).joinToString(" · "),
                         style = MaterialTheme.typography.bodySmall,
                         fontWeight = FontWeight.Medium,
                     )
@@ -313,6 +370,12 @@ private fun Partida(
                 Spacer(Modifier.height(8.dp))
                 Text("Indicación: $it", style = MaterialTheme.typography.bodySmall,
                     color = MaterialTheme.colorScheme.onSurfaceVariant)
+            }
+
+            // Dónde queda exactamente: la foto que cargó el supervisor al programar
+            if (item.fotoReferencia != null) {
+                Spacer(Modifier.height(10.dp))
+                Boton("Foto referencial", Icons.Outlined.Image, Marca.Azul, ocupada, Modifier.fillMaxWidth(), alVerReferencia)
             }
 
             item.impedimento?.takeIf { it.isNotBlank() }?.let {
@@ -360,7 +423,7 @@ private fun Partida(
                             Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
                                 Boton("Finalizar", Icons.Outlined.CheckCircle, Marca.VerdeBandera,
                                     ocupada, Modifier.weight(1f), alFinalizar)
-                                Boton("No se pudo", Icons.Outlined.ReportProblem, Marca.Naranja,
+                                Boton("No ejecutado", Icons.Outlined.ReportProblem, Marca.Naranja,
                                     ocupada, Modifier.weight(1f), alReportar)
                             }
                         }
@@ -372,7 +435,7 @@ private fun Partida(
                                 ocupada, Modifier.weight(1f), alIniciar,
                             )
                             if (!item.estaObservada) {
-                                Boton("No se pudo", Icons.Outlined.ReportProblem, Marca.Naranja,
+                                Boton("No ejecutado", Icons.Outlined.ReportProblem, Marca.Naranja,
                                     ocupada, Modifier.weight(1f), alReportar)
                             }
                         }
@@ -442,7 +505,7 @@ private fun DialogoDeImpedimento(
 
     AlertDialog(
         onDismissRequest = alCerrar,
-        title = { Text("¿Por qué no se pudo?") },
+        title = { Text("¿Por qué no se ejecutó?") },
         text = {
             Column {
                 Text(

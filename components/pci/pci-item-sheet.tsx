@@ -25,6 +25,7 @@ import type { SealedPhoto } from '@/lib/camera'
 import { toast } from 'sonner'
 import { mensajeAmigable } from '@/lib/errores'
 import { usePlazosPci, etiquetaPlazo } from '@/lib/hooks/use-plazos-pci'
+import { FotoReferencial } from '@/components/shared/foto-referencial'
 
 type Funcion = 'pci_iniciar_atencion' | 'pci_levantar' | 'pci_validar'
 
@@ -196,6 +197,14 @@ export function PciItemSheet({
               ))}
             </dl>
 
+            {/* Dónde queda: la cargan el supervisor o el visor COVINCA */}
+            <FotoReferencial
+              tabla="pci_items"
+              id={item.id}
+              ruta={item.foto_referencia_path}
+              puedeEditar={can.manage || role === 'visor'}
+            />
+
             {['observado', 'subsanado'].includes(item.status) && item.observacion && (
               <div className="bg-destructive/8 border-destructive/25 flex items-start gap-2.5 rounded-lg border px-3 py-2.5">
                 <TriangleAlert className="text-destructive mt-0.5 size-4 shrink-0" />
@@ -217,7 +226,7 @@ export function PciItemSheet({
               </h3>
               <p className="text-muted-foreground mt-0.5 text-[11.5px]">
                 Antes {item.fotos_antes ?? 0} · durante {item.fotos_durante ?? 0} · después {item.fotos_despues ?? 0}
-                {item.requires_evidence && ' — para levantar hacen falta la del antes y la del después.'}
+                {item.requires_evidence && ' — con las tres el ítem pasa solo a conforme y a revisión de COVINCA.'}
               </p>
               <EvidenceGrid
                 pciItemId={item.id}

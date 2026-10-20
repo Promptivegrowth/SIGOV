@@ -79,12 +79,10 @@ fun PantallaJornada(
     // los documentos se actualizan solos
     val ciclo = androidx.lifecycle.compose.LocalLifecycleOwner.current
     androidx.compose.runtime.DisposableEffect(ciclo) {
-        var primera = true
+        // Sin «la primera vez no»: al volver, esta pantalla se compone de
+        // nuevo y esa marca se reiniciaba, así que nunca refrescaba
         val observador = androidx.lifecycle.LifecycleEventObserver { _, evento ->
-            if (evento == androidx.lifecycle.Lifecycle.Event.ON_RESUME) {
-                if (!primera) vm.refrescarDocumentos()
-                primera = false
-            }
+            if (evento == androidx.lifecycle.Lifecycle.Event.ON_RESUME) vm.refrescarDocumentos()
         }
         ciclo.lifecycle.addObserver(observador)
         onDispose { ciclo.lifecycle.removeObserver(observador) }

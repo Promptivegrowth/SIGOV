@@ -20,16 +20,23 @@ object Progresiva {
         return "$km+${String.format(Locale.US, "%03d", resto)}"
     }
 
-    /** `18+400` → `18400.0`. Devuelve null si no se entiende. */
+    /**
+     * `18+400` → `18400.0`. También `18.400` o `18,400` (km y tres cifras de
+     * metros, como se escribe con el teclado numérico, que no tiene «+») y
+     * `18400` (metros). Devuelve null si no se entiende.
+     */
     fun aMetros(texto: String): Double? {
-        val limpio = texto.trim()
+        val limpio = texto.trim().replace(" ", "")
         if (limpio.isBlank()) return null
         val partes = limpio.split("+")
         return runCatching {
-            if (partes.size == 2) {
-                partes[0].trim().toDouble() * 1000 + partes[1].trim().replace(",", ".").toDouble()
-            } else {
-                limpio.replace(",", ".").toDouble()
+            when {
+                partes.size == 2 -> partes[0].toDouble() * 1000 + partes[1].replace(",", ".").toDouble()
+                Regex("^\\d+[.,]\\d{3}$").matches(limpio) -> {
+                    val (km, m) = limpio.split('.', ',')
+                    km.toDouble() * 1000 + m.toDouble()
+                }
+                else -> limpio.replace(",", ".").toDouble()
             }
         }.getOrNull()
     }

@@ -21,6 +21,8 @@ data class EstadoProgramacion(
     val cargando: Boolean = true,
     val fecha: LocalDate = Peru.hoy(),
     val items: List<ItemProgramado> = emptyList(),
+    /** El enlace de la foto referencial abierta. */
+    val referencia: String? = null,
     val cuadrilla: String = "",
     val trabajando: String? = null,   // el id de la partida que se está cambiando
     val aviso: String? = null,
@@ -45,6 +47,7 @@ class ProgramacionViewModel @Inject constructor(
     private val campo: CampoRepositorio,
     private val sesion: SesionRepositorio,
     private val partes: ParteDao,
+    private val documentos: pe.servicon.sigov.datos.DocumentosRepositorio,
 ) : ViewModel() {
 
     private val _estado = MutableStateFlow(EstadoProgramacion())
@@ -55,6 +58,23 @@ class ProgramacionViewModel @Inject constructor(
     fun moverDia(dias: Long) = cargar(_estado.value.fecha.plusDays(dias))
 
     fun volverAHoy() = cargar(Peru.hoy())
+
+    /** Ir a un día cualquiera desde el calendario. */
+    fun irA(fecha: LocalDate) = cargar(fecha)
+
+    /** La foto referencial de la partida, con un enlace temporal. */
+    fun verReferencia(item: ItemProgramado) {
+        val ruta = item.fotoReferencia ?: return
+        viewModelScope.launch {
+            val url = documentos.enlace(ruta)
+            _estado.update {
+                if (url == null) it.copy(error = "No se pudo abrir la foto referencial. Revisa la señal.")
+                else it.copy(referencia = url)
+            }
+        }
+    }
+
+    fun cerrarReferencia() = _estado.update { it.copy(referencia = null) }
 
     fun iniciar(item: ItemProgramado) = accion(item, "Partida iniciada. Suerte allá afuera.") {
         campo.iniciarPartida(item.id)

@@ -40,12 +40,10 @@ fun PantallaAst(
     // Al volver de tomar una foto, el estado de cada ATS se actualiza
     val ciclo = LocalLifecycleOwner.current
     DisposableEffect(ciclo) {
-        var primera = true
+        // Sin «la primera vez no»: al volver, esta pantalla se compone de
+        // nuevo y esa marca se reiniciaba, así que nunca recargaba
         val observador = LifecycleEventObserver { _, evento ->
-            if (evento == Lifecycle.Event.ON_RESUME) {
-                if (!primera) vm.cargar()
-                primera = false
-            }
+            if (evento == Lifecycle.Event.ON_RESUME) vm.cargar()
         }
         ciclo.lifecycle.addObserver(observador)
         onDispose { ciclo.lifecycle.removeObserver(observador) }

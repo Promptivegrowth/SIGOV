@@ -74,6 +74,8 @@ data class ItemProgramado(
     @SerialName("pci_item_number") val pciItemNumero: Int? = null,
     @SerialName("pci_item_pci_code") val pciItemCodigo: String? = null,
     @SerialName("supervisor_name") val supervisor: String? = null,
+    /** La foto de la ubicación que cargó el supervisor al programar. */
+    @SerialName("foto_referencia_path") val fotoReferencia: String? = null,
     @SerialName("sector_code") val sector: String? = null,
     @SerialName("prog_start_txt") val progresivaInicioTexto: String? = null,
     @SerialName("prog_end_txt") val progresivaFinTexto: String? = null,
@@ -88,6 +90,14 @@ data class ItemProgramado(
     val esperaValidacion: Boolean get() = status == "por_validar"
     val estaObservada: Boolean get() = status == "suspendido"
     val estaCerrada: Boolean get() = status in setOf("ejecutado", "cancelado", "reprogramado")
+}
+
+/**
+ * «PCI-2026-044» → «PCI 44»: en la app el año se sobreentiende (Elvis, video
+ * del 13/10). El código completo sigue en la base, la foto y la entrega.
+ */
+fun codigoCortoDePci(codigo: String?): String? = codigo?.trim()?.let { c ->
+    Regex("""^PCI-\d{4}-0*(\d+)$""", RegexOption.IGNORE_CASE).find(c)?.let { "PCI " + it.groupValues[1] } ?: c
 }
 
 /** Un ítem de PCI asignado a la cuadrilla, con su plazo. */
@@ -124,6 +134,10 @@ data class ItemPci(
     @SerialName("activity_code") val actividadCodigo: String? = null,
     @SerialName("started_at") val atendidoDesde: String? = null,
     val notes: String? = null,
+    /** La foto de la ubicación que cargó el supervisor o el visor COVINCA. */
+    @SerialName("foto_referencia_path") val fotoReferencia: String? = null,
+    /** El supervisor puede pausar un PCI para la cuadrilla. */
+    @SerialName("activo_para_cuadrilla") val activoParaCuadrilla: Boolean = true,
 ) {
     val estaPendiente: Boolean get() = status == "pendiente"
     val estaEnAtencion: Boolean get() = status == "en_atencion"
@@ -134,6 +148,22 @@ data class ItemPci(
     val esConforme: Boolean get() = status == "validado"
     /** Lo que sigue en manos de la cuadrilla. */
     val estaAbierto: Boolean get() = status in setOf("pendiente", "en_atencion", "observado")
+
+    val pciCorto: String? get() = codigoCortoDePci(pciCodigo)
+
+    /**
+     * «Reposición de señal R-30 (Señal vertical 194+722). Retroreflectividad…»
+     * → «Reposición de señal R-30»: en la tarjeta, lo que hay que hacer; la
+     * descripción completa, al abrir el ítem.
+     */
+    val tituloCorto: String
+        get() {
+            val texto = description?.trim().orEmpty()
+            if (texto.isBlank()) return actividad ?: "Ítem sin descripción"
+            val corte = texto.split(Regex("""\s*\(|[.;]\s|\s+[—–-]\s+""")).first().trim().trimEnd('.', ',', ';', ':')
+            val titulo = corte.ifBlank { texto }
+            return if (titulo.length > 70) titulo.take(67).trimEnd() + "…" else titulo
+        }
 
     /** Las tres fotos que pide COVINCA para un ítem: antes, durante y después. */
     val fotosCompletas: Boolean get() = fotosAntes > 0 && fotosDurante > 0 && fotosDespues > 0
@@ -198,6 +228,8 @@ data class ResumenPci(
     val vencidos: Int = 0,
     val urgentes: Int = 0,
     @SerialName("proximo_vencimiento") val proximoVencimiento: String? = null,
+    /** El supervisor puede pausar un PCI para la cuadrilla. */
+    val activo: Boolean = true,
 ) {
     /** Lo que todavía depende de la cuadrilla. */
     val abiertos: Int get() = pendientes + enAtencion + observados

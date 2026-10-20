@@ -9,6 +9,7 @@ import {
   CalendarRange, ChevronLeft, ChevronRight, Plus, Upload, Send,
   Zap, CircleCheck, Users, LayoutGrid, List, TriangleAlert,
   Pencil, Trash2, Search, X, CalendarDays, CopyPlus, Undo2, FileSpreadsheet,
+  Image as ImageIcon,
 } from 'lucide-react'
 import { createClient } from '@/lib/supabase/client'
 import { useSession } from '@/lib/hooks/use-session'
@@ -27,6 +28,8 @@ import { cn, fmtDate, fmtNumber, startOfWeek, toISODate, addDays, isoWeek, trunc
 import { semanaDelContrato } from '@/lib/covinca'
 import { toast } from 'sonner'
 import { mensajeAmigable } from '@/lib/errores'
+import { LADOS, codigoDeLado } from '@/lib/lados'
+import { FotoReferencial } from '@/components/shared/foto-referencial'
 
 const DIAS = ['Lunes', 'Martes', 'Miércoles', 'Jueves', 'Viernes', 'Sábado', 'Domingo']
 
@@ -135,9 +138,20 @@ export function ProgramacionClient() {
   const itemFields: FormField[] = [
     {
       name: 'activity_id', label: 'Actividad', type: 'select', required: true, span: 2,
-      options: (catalogs.data?.activities ?? []).map((a: any) => ({
-        value: a.id, label: `${a.code} · ${a.name}`, color: a.color,
-      })),
+      options: [
+        // La actividad de la partida aunque ya no esté activa en el catálogo:
+        // si no, el selector sale vacío al editarla
+        ...(itemForm.row?.activity_id && !(catalogs.data?.activities ?? []).some((a: any) => a.id === itemForm.row.activity_id)
+          ? [{
+              value: itemForm.row.activity_id,
+              label: `${itemForm.row.activity_code ?? ''} · ${itemForm.row.activity_name ?? 'Actividad'} (inactiva)`,
+              color: itemForm.row.activity_color,
+            }]
+          : []),
+        ...(catalogs.data?.activities ?? []).map((a: any) => ({
+          value: a.id, label: `${a.code} · ${a.name}`, color: a.color,
+        })),
+      ],
     },
     {
       name: 'section_id', label: 'Tramo', type: 'select', required: true, span: 2,
@@ -145,6 +159,11 @@ export function ProgramacionClient() {
     },
     { name: 'prog_start', label: 'Progresiva inicio', type: 'progresiva', required: true, placeholder: '12+450' },
     { name: 'prog_end', label: 'Progresiva fin', type: 'progresiva', required: true, placeholder: '15+200' },
+    // El capataz necesita saber de qué lado trabaja (Elvis, video del 13/10)
+    {
+      name: 'lado', label: 'Lado', type: 'select', span: 2,
+      options: LADOS.map((l) => ({ value: l.codigo, label: l.etiqueta })),
+    },
     {
       name: 'crew_id', label: 'Cuadrilla', type: 'select',
       options: (crews.data ?? []).map((c: any) => ({ value: c.id, label: c.name, color: c.color })),
@@ -197,6 +216,7 @@ export function ProgramacionClient() {
         unit_id: act?.unit_id ?? null,
         status: v.status || 'programado',
         notes: v.notes || null,
+        lado: v.lado || null,
       }
       const { error } = itemForm.row
         ? await sb.from('plan_items').update(payload).eq('id', itemForm.row.id)
@@ -545,6 +565,14 @@ export function ProgramacionClient() {
         } : { scheduled_on: toISODate(monday) }}
         submitLabel={itemForm.row ? 'Guardar cambios' : 'Programar'}
         onSubmit={saveItem}
+        footerNote={itemForm.row ? (
+          <FotoReferencial
+            tabla="plan_items"
+            id={itemForm.row.id}
+            ruta={itemForm.row.foto_referencia_path}
+            puedeEditar={can.manage}
+          />
+        ) : 'Al guardar la partida podrás cargar su foto referencial (Editar).'}
       />
 
       <ConfirmDialog
@@ -673,7 +701,7 @@ function PlanChip({ item, canEdit, onEdit }: { item: any; canEdit?: boolean; onE
         <span className="block max-w-56">
           <span className="block font-semibold">{item.activity_name}</span>
           <span className="block">{item.section_name}</span>
-          <span className="block">{item.prog_start_txt} → {item.prog_end_txt}</span>
+          <span className="block">{item.prog_start_txt} → {item.prog_end_txt} · {item.lado ? 'lado ' + codigoDeLado(item.lado) : 'lado sin indicar'}</span>
           <span className="block">
             Meta {fmtNumber(item.target_qty, 1)} {item.unit_symbol} · Avance {fmtNumber(item.executed_qty, 1)}
           </span>
@@ -771,6 +799,12 @@ function ListView({
                   <td className="px-3 py-2.5">
                     <span className="block">{r.section_name}</span>
                     <Progresiva from={r.prog_start_m} to={r.prog_end_m} className="text-[11px] text-muted-foreground" />
+                    <span className="text-muted-foreground flex items-center gap-1 text-[10.5px]">
+                      {r.lado ? 'Lado ' + codigoDeLado(r.lado) : 'Lado sin indicar'}
+                      {r.foto_referencia_path && (
+                        <Tip label="Tiene foto referencial"><ImageIcon className="size-3" /></Tip>
+                      )}
+                    </span>
                   </td>
                   <td className="px-3 py-2.5 whitespace-nowrap">
                     {r.crew_name ? (

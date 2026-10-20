@@ -128,14 +128,19 @@ class JornadaViewModel @Inject constructor(
                 // Los avisos: la campana y, si hay nuevos, la notificación del teléfono
                 runCatching { avisosRepo.notificarNuevos() }
 
+                // El tramo fijo de la cuadrilla, por su subtramo (Elvis, 13/10)
+                val suTramo = cuadrilla.tramoId?.let { id ->
+                    runCatching { campo.tramos(cuadrilla.servicioId) }.getOrDefault(emptyList())
+                        .firstOrNull { t -> t.id == id }?.name
+                }
                 _estado.update {
                     it.copy(
                         programadas = programado.size,
                         pci = pci.size,
                         // El sector sale de lo que hoy toca; si no hay nada
-                        // programado, del primer PCI asignado.
+                        // programado, el tramo de la cuadrilla.
                         sector = (programado.firstOrNull()?.tramo
-                            ?: pci.firstOrNull()?.tramo).orEmpty(),
+                            ?: suTramo ?: pci.firstOrNull()?.tramo).orEmpty(),
                         supervisor = jefe.orEmpty(),
                         documentos = documentos,
                         saldo = miCaja?.caja?.let { c -> soles(c.balance) } ?: "—",

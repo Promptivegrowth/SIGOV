@@ -136,6 +136,9 @@ fun PantallaParte(
             alRetroceder = { vm.cambiarFecha(-1) },
             alAvanzar = { vm.cambiarFecha(1) },
             alVolverAHoy = vm::volverAHoy,
+            fecha = estado.fecha,
+            permitirFuturo = false,
+            alElegir = vm::irADia,
         )
         when {
             estado.cargando -> Box(

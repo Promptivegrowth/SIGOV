@@ -24,6 +24,7 @@ import { EmptyState, SemaforoBadge, Progresiva, ProgressBar } from '@/components
 import { SuspensionDialog } from '@/components/pci/suspension-dialog'
 import { PciItemSheet } from '@/components/pci/pci-item-sheet'
 import { VencimientosPorPlazo } from '@/components/pci/vencimientos-por-plazo'
+import { CuadrillasDelPci } from '@/components/pci/cuadrillas-del-pci'
 import { descargarPdf, descargarExcel, type ReportMeta } from '@/lib/reports'
 import { PCI_PRIORITY, PCI_ITEM_STATUS, SEMAFORO, type Semaforo } from '@/lib/constants'
 import { cn, fmtDate, fmtNumber, truncate, toISODate } from '@/lib/utils'
@@ -327,6 +328,8 @@ export function PciDetailClient({ pciId }: { pciId: string }) {
             }}
           />
         )}
+
+        {p?.published_at && <CuadrillasDelPci pciId={pciId} items={items.data ?? []} />}
 
         {/* Filtros por semáforo — el color con su etiqueta y su cifra */}
         <div className="flex flex-wrap gap-2">
