@@ -25,6 +25,7 @@ import { cn, fmtDate, fmtNumber, fmtRelative, toISODate, parseFecha } from '@/li
 import { toast } from 'sonner'
 import Link from 'next/link'
 import { usePlazosPci, etiquetaPlazo } from '@/lib/hooks/use-plazos-pci'
+import { SINONIMOS_DE_LADO } from '@/lib/lados'
 
 /** «Detectar el PCI desde la columna del Excel» en vez de elegir uno. */
 const PCI_DESDE_EXCEL = '__excel__'
@@ -78,11 +79,7 @@ export function ImportarClient() {
         condition: new Map(
           ['bueno', 'regular', 'malo', 'critico', 'no_evaluado'].map((c) => [normKey(c), c])
         ),
-        side: new Map([
-          ...['derecho', 'izquierdo', 'ambos', 'eje'].map((c) => [normKey(c), c] as const),
-          ...([['ld', 'derecho'], ['d', 'derecho'], ['li', 'izquierdo'], ['i', 'izquierdo'],
-              ['ldli', 'ambos'], ['lild', 'ambos'], ['ambos', 'ambos'], ['ldejeli', 'ambos'], ['e', 'eje']] as const),
-        ]),
+        side: new Map<string, string>(SINONIMOS_DE_LADO),
       }
     },
     staleTime: 5 * 60_000,

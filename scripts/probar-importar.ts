@@ -6,6 +6,7 @@
  */
 import assert from 'node:assert/strict'
 import { autoMap, coerce, IMPORT_KINDS, normKey } from '../lib/import-schemas'
+import { SINONIMOS_DE_LADO } from '../lib/lados'
 
 let ok = 0
 const caso = (nombre: string, fn: () => void) => {
@@ -58,10 +59,7 @@ caso('Encabezados abreviados', () => {
 caso('El lado como lo escribe la programación', () => {
   const lado = campos.find((f) => f.key === 'side')!
   // El mismo mapa que arma el importador
-  const side = new Map<string, string>([
-    ...['derecho', 'izquierdo', 'ambos', 'eje'].map((c) => [normKey(c), c] as [string, string]),
-    ['ld', 'derecho'], ['li', 'izquierdo'], ['ldli', 'ambos'], ['lild', 'ambos'], ['ldejeli', 'ambos'],
-  ])
+  const side = new Map<string, string>(SINONIMOS_DE_LADO)
   const valor = (v: string) => coerce(v, lado, { side }).value
   assert.equal(valor('LD'), 'derecho')
   assert.equal(valor('LI'), 'izquierdo')
@@ -69,6 +67,11 @@ caso('El lado como lo escribe la programación', () => {
   assert.equal(valor('LD-LI'), 'ambos')
   assert.equal(valor('LD/EJE/LI'), 'ambos')
   assert.equal(valor('Eje'), 'eje')
+  // Calzada (Elvis, P8; el PCI 55 escribe «C.I.»)
+  assert.equal(valor('CD'), 'calzada_derecha')
+  assert.equal(valor('C.I.'), 'calzada_izquierda')
+  assert.equal(valor('Calzada derecha'), 'calzada_derecha')
+  assert.equal(valor('Izq'), 'izquierdo')
 })
 
 caso('Progresivas y plazo', () => {

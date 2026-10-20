@@ -17,6 +17,7 @@ import { Switch } from '@/components/ui/primitives'
 import { DateRangeTabs, rangeFromPreset, type DatePresetKey } from '@/components/shared/misc'
 import { SEMAFORO, ASSET_CONDITION } from '@/lib/constants'
 import { cn, fmtNumber, fmtDate } from '@/lib/utils'
+import { etiquetaDeLado } from '@/lib/lados'
 
 interface LayerDef {
   key: 'tramos' | 'inventario' | 'evidencias' | 'pci' | 'registros'
@@ -478,7 +479,7 @@ function popupHtml(layerId: string, p: any): string {
     case 'l-assets':
       return head(p.name ?? p.code, `${p.type_name} · ${p.code}`) +
         body(row('Tramo', p.section) + row('Progresiva', p.progresiva) +
-             row('Lado', p.side) + row('Estado', p.condition) +
+             row('Lado', etiquetaDeLado(p.side)) + row('Estado', p.condition) +
              row('Última inspección', p.last_inspected ? fmtDate(p.last_inspected) : '—'))
     case 'l-reg':
       return head(p.actividad, `${p.cuadrilla ?? ''} · ${p.fecha ? fmtDate(p.fecha) : ''}`) +

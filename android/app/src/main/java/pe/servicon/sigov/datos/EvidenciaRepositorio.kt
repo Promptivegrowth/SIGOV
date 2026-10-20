@@ -589,7 +589,7 @@ class EvidenciaRepositorio @Inject constructor(
                     registro.actividadNombre,
                     registro.tramoNombre,
                     Progresiva.rango(registro.progresivaInicio, registro.progresivaFin),
-                    registro.lado.takeIf { it.isNotBlank() }?.let { "lado $it" },
+                    Lados.codigo(registro.lado)?.let { "lado $it" },
                     pciCodigo,
                     cuadrilla,
                     fase.etiqueta,

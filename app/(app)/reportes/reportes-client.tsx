@@ -19,6 +19,7 @@ import { cn, fmtDate, fmtNumber, fmtProgresiva, truncate, toISODate } from '@/li
 import { SEMAFORO } from '@/lib/constants'
 import { toast } from 'sonner'
 import { mensajeAmigable } from '@/lib/errores'
+import { codigoDeLado } from '@/lib/lados'
 
 type ReportKey = 'diario' | 'metrados' | 'pci' | 'ssoma' | 'inventario' | 'caja' | 'materiales'
 
@@ -328,7 +329,7 @@ export function ReportesClient() {
         const rows = data.map((a: any) => ({
           codigo: a.code, tipo: a.type_name, nombre: a.name ?? '—',
           tramo: a.section_name ?? '—', progresiva: a.progresiva_txt ?? '—',
-          lado: a.side, estado: a.condition,
+          lado: codigoDeLado(a.side), estado: a.condition,
           inspeccion: a.last_inspected_on ? fmtDate(a.last_inspected_on) : '—',
         }))
         format === 'pdf'

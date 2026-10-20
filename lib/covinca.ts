@@ -1,9 +1,10 @@
 /**
  * La nomenclatura de la estructura documental COVINCA.
  *
- * Sale del ZIP «SERVICON_COVINCA_Estructura_Revision» que mandó Elvis y de
- * la reunión del 05-10-2026. Reglas: MAYÚSCULAS, sin tildes ni Ñ, «_» entre
- * campos y «-» dentro de un campo, fechas ISO, progresivas «km+mmm».
+ * Sale del ZIP «SERVICON_COVINCA_Estructura_Revision» que mandó Elvis, de
+ * la reunión del 05-10-2026 y de sus respuestas al cuestionario (13-10-2026).
+ * Reglas: MAYÚSCULAS, sin tildes ni Ñ, «_» entre campos y «-» dentro de un
+ * campo, fechas ISO, progresivas «km+mmm» sin ceros a la izquierda.
  *
  * Funciones puras: el empaquetador las usa y `scripts/probar-covinca.ts` las
  * comprueba contra los nombres del ZIP.
@@ -38,20 +39,25 @@ export function progresiva(metros: number): string {
   return `${Math.floor(m / 1000)}+${String(m % 1000).padStart(3, '0')}`
 }
 
-/** `KM-0852+335`: en los nombres de foto el km va en cuatro cifras («KM-XXXX+XXX»). */
+/** `KM-852+335`: el km sin ceros a la izquierda (Elvis, P7: «sin ceros intermedios»). */
 export function kmDeFoto(metros: number | null | undefined): string {
   if (metros == null || !Number.isFinite(Number(metros))) return 'KM-SIN-PROGRESIVA'
-  const m = Math.max(0, Math.round(Number(metros)))
-  return `KM-${String(Math.floor(m / 1000)).padStart(4, '0')}+${String(m % 1000).padStart(3, '0')}`
+  return 'KM-' + progresiva(Number(metros))
 }
 
-/** El lado como lo escribe la programación: LD, LI, LD-LI, EJE. Sin «/», que no vale en un archivo. */
+/**
+ * El lado como lo escribe la programación: LD, LI, LD-LI, EJE, y CD / CI
+ * para la calzada derecha e izquierda (Elvis, P8). Sin «/», que no vale en
+ * un archivo.
+ */
 export function lado(side: string | null | undefined): string {
   switch ((side ?? '').toLowerCase()) {
     case 'derecho': return 'LD'
     case 'izquierdo': return 'LI'
     case 'ambos': return 'LD-LI'
     case 'eje': return 'EJE'
+    case 'calzada_derecha': return 'CD'
+    case 'calzada_izquierda': return 'CI'
     default: return side ? aCovinca(side, '-') : 'SL'
   }
 }
@@ -98,23 +104,25 @@ export function semanaDe(fechaIso: string): { lunes: string; domingo: string } {
  * archivo; el empaquetador resuelve los choques de nombre con un correlativo.
  */
 export const rutas = {
-  /** Foto del día por cuadrilla (todas las actividades juntas, no PCI). */
-  fotoRutinaria(p: {
-    fecha: string; cuadrilla: number; sede: string; progresivaM: number | null
-    lado: string | null; codigo: string | null; fase: string | null
-  }) {
+  /**
+   * Foto del día por cuadrilla (todas las actividades juntas, no PCI). Se
+   * nombra por el código de la partida y un correlativo dentro de la carpeta
+   * del día: `COV_SV_029_foto1.jpg` (Elvis, P6). El empaquetador lleva la
+   * cuenta (`numero`).
+   */
+  fotoRutinaria(p: { fecha: string; cuadrilla: number; sede: string; codigo: string | null; numero: number }) {
     const mes = p.fecha.slice(0, 7)
     const dia = p.fecha.slice(8, 10)
     return {
       carpeta: `${RAIZ}/MANTENIMIENTO_RUTINARIO/${mes}/${carpetaCuadrilla(p.cuadrilla, p.sede)}/${dia}`,
-      archivo: [
-        p.fecha, codigoCuadrilla(p.cuadrilla), kmDeFoto(p.progresivaM), lado(p.lado),
-        p.codigo ? aCovinca(p.codigo, '-') : 'SIN-CODIGO', fase(p.fase),
-      ].join('_') + '.jpg',
+      archivo: `${p.codigo ? aCovinca(p.codigo) : 'SIN_CODIGO'}_foto${p.numero}.jpg`,
     }
   },
 
-  /** La misma foto, separada por sector y tipo de actividad (niveles de servicio). */
+  /**
+   * La misma foto, separada por sector y tipo de actividad (niveles de
+   * servicio). También las fotos de un ítem PCI (Elvis, P20).
+   */
   fotoNivelDeServicio(p: {
     fecha: string; sector: string; carpetaNs: string; progresivaM: number | null
     lado: string | null; fase: string | null
@@ -150,10 +158,11 @@ export const rutas = {
       case 'charla':
         return { carpeta: `${base}/CHARLA_SEGURIDAD`, archivo: `${p.fecha}_${cc}_CHARLA-5-MIN${p.extension}` }
       case 'checklist_vehicular':
-        // La carpeta se llama así en la estructura aprobada (con la errata)
-        return { carpeta: `${base}/CHECKIST_VEHICULOS`, archivo: `${p.fecha}_${cc}_CHECKLIST_${detalle ?? 'VEHICULO-01'}${p.extension}` }
+        // La estructura aprobada decía CHECKIST: Elvis pidió corregirla (P28)
+        return { carpeta: `${base}/CHECKLIST_VEHICULOS`, archivo: `${p.fecha}_${cc}_CHECKLIST_${detalle ?? 'VEHICULO-01'}${p.extension}` }
       case 'reporte_diario':
-        return { carpeta: `${base}/REPORTE_DIARIO`, archivo: `${p.fecha}_${cc}_REPORTE-DIARIO${p.extension}` }
+        // `2026_10_01_C01_REPORTE_DIARIO` (Elvis, P15)
+        return { carpeta: `${base}/REPORTE_DIARIO`, archivo: `${p.fecha.replaceAll('-', '_')}_${cc}_REPORTE_DIARIO${p.extension}` }
       case 'petar':
         return { carpeta: `${base}/PETAR_ACTIVIDADES`, archivo: [p.fecha, cc, 'PETAR', detalle].filter(Boolean).join('_') + p.extension }
       default:
@@ -161,13 +170,17 @@ export const rutas = {
     }
   },
 
-  /** Programación semanal por cuadrilla. */
+  /**
+   * Programación semanal por cuadrilla. La semana que cruza dos meses va en
+   * los dos (Elvis, P27): devuelve una ruta por mes.
+   */
   programacion(p: { lunes: string; domingo: string; cuadrilla: number; sede: string; tipo: 'ACTIVIDADES' | 'RECURSOS' }) {
-    const mes = p.lunes.slice(0, 7)
-    return {
+    const meses = [...new Set([p.lunes.slice(0, 7), p.domingo.slice(0, 7)])]
+    return meses.map((mes) => ({
+      mes,
       carpeta: `${RAIZ}/MANTENIMIENTO_RUTINARIO/${mes}/PROGRAMACION_SEMANAL_DE_ACTIVIDADES_Y_RECURSOS/${carpetaCuadrilla(p.cuadrilla, p.sede)}`,
       archivo: `${p.lunes}_al_${p.domingo}_${codigoCuadrilla(p.cuadrilla)}_PROGRAMACION-${p.tipo}.xlsx`,
-    }
+    }))
   },
 
   /** El seguimiento diario de materiales del mes, uno para todas las cuadrillas. */
@@ -179,18 +192,31 @@ export const rutas = {
   },
 }
 
+/** `A`, `B`… `Z`, `AA`, `AB`…: la letra del correlativo de repetidas. */
+export function letraDeRepetida(k: number): string {
+  let n = k + 1
+  let letras = ''
+  while (n > 0) {
+    n -= 1
+    letras = String.fromCharCode(65 + (n % 26)) + letras
+    n = Math.floor(n / 26)
+  }
+  return letras
+}
+
 /**
- * Un nombre libre dentro de una carpeta: si ya existe, se le agrega «_2»,
- * «_3»… antes de la extensión (el ZIP no admite dos archivos iguales y
- * COVINCA no definió correlativo; el primero queda con el nombre exacto).
+ * Un nombre libre dentro de una carpeta. La primera foto queda con el nombre
+ * exacto; si ya existe, la segunda lleva «_A», la tercera «_B»… antes de la
+ * extensión: ITEM_5(2).jpg, ITEM_5(2)_A.jpg, ITEM_5(2)_B.jpg (Elvis, P19 y
+ * P21).
  */
 export function nombreLibre(usados: Set<string>, carpeta: string, archivo: string): string {
   let nombre = archivo
-  let k = 2
+  let k = 0
   const punto = archivo.lastIndexOf('.')
   const base = punto > 0 ? archivo.slice(0, punto) : archivo
   const ext = punto > 0 ? archivo.slice(punto) : ''
-  while (usados.has(carpeta + '/' + nombre)) nombre = `${base}_${k++}${ext}`
+  while (usados.has(carpeta + '/' + nombre)) nombre = `${base}_${letraDeRepetida(k++)}${ext}`
   usados.add(carpeta + '/' + nombre)
   return nombre
 }

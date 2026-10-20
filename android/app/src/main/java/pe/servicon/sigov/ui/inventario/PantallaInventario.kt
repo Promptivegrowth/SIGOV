@@ -506,7 +506,7 @@ private fun FichaDelElemento(
                     ?: (elemento.progresiva ?: "—"),
                 Modifier.weight(1f),
             )
-            DatoFicha("Lado", elemento.side ?: "—", Modifier.weight(1f))
+            DatoFicha("Lado", pe.servicon.sigov.datos.Lados.etiqueta(elemento.side) ?: "—", Modifier.weight(1f))
         }
         DatoFicha("Tramo", elemento.tramo ?: "—", Modifier.fillMaxWidth())
         Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {

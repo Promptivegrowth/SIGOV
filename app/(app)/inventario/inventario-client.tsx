@@ -27,6 +27,7 @@ import { MapaDeInventario } from '@/components/inventario/mapa-de-inventario'
 import { ASSET_CONDITION } from '@/lib/constants'
 import { cn, fmtDate, fmtNumber, parseFecha } from '@/lib/utils'
 import { mensajeAmigable } from '@/lib/errores'
+import { codigoDeLado, etiquetaDeLado } from '@/lib/lados'
 
 export function InventarioClient() {
   const { service, can } = useSession()
@@ -308,7 +309,7 @@ export function InventarioClient() {
                       <span className="w-24">
                         <Progresiva from={r.progresiva_m} />
                       </span>
-                      <span className="text-muted-foreground hidden w-20 capitalize lg:block">{r.side}</span>
+                      <span className="text-muted-foreground hidden w-20 lg:block">{codigoDeLado(r.side)}</span>
                       <span className="w-24">
                         <Badge className={cond.className}>{cond.label}</Badge>
                       </span>
@@ -346,7 +347,7 @@ export function InventarioClient() {
                 {[
                   ['Tramo', detail.section_name],
                   ['Progresiva', detail.progresiva_txt],
-                  ['Lado', detail.side],
+                  ['Lado', etiquetaDeLado(detail.side)],
                   ['Estado', ASSET_CONDITION[detail.condition as keyof typeof ASSET_CONDITION].label],
                   ['Año de instalación', detail.install_year],
                   ['Última inspección', detail.last_inspected_on ? fmtDate(detail.last_inspected_on) : '—'],

@@ -325,7 +325,7 @@ private fun Registro(
                         listOfNotNull(
                             registro.tramoNombre,
                             Progresiva.rango(registro.progresivaInicio, registro.progresivaFin),
-                            "lado ${registro.lado}",
+                            pe.servicon.sigov.datos.Lados.etiqueta(registro.lado),
                         ).joinToString(" · "),
                         style = MaterialTheme.typography.bodySmall,
                         color = MaterialTheme.colorScheme.onSurfaceVariant,

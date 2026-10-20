@@ -35,22 +35,27 @@ import java.text.Normalizer
  * Los lados de la vía: el valor que guarda la base y cómo se escribe en el
  * formato oficial.
  */
-private val LADOS = listOf(
-    "derecho" to "LD · derecho",
-    "izquierdo" to "LI · izquierdo",
-    "ambos" to "LD/LI · ambos lados",
-    "eje" to "EJE · eje",
-)
+private val LADOS = pe.servicon.sigov.datos.Lados.todos.map { it.valor to it.etiqueta }
 
-/** El lado escrito por el supervisor (LI, LD, LD/LI, LD/EJE/LI…), en el valor de la base. */
+/**
+ * El lado escrito por el supervisor (LI, LD, LD/LI, LD/EJE/LI, CD, CI…), en
+ * el valor de la base. CD y CI son la calzada (Elvis, P8), no LD y LI.
+ */
 internal fun ladoDesdeProgramacion(texto: String?): String? {
-    val t = texto?.uppercase()?.replace(" ", "") ?: return null
-    val d = "LD" in t || "CD" in t
-    val i = "LI" in t || "CI" in t
+    val crudo = texto?.trim()?.lowercase() ?: return null
+    pe.servicon.sigov.datos.Lados.todos.firstOrNull { it.valor == crudo }?.let { return it.valor }
+    val t = crudo.uppercase().replace(" ", "").replace(".", "")
+    val d = "LD" in t
+    val i = "LI" in t
+    val cd = "CD" in t || "CALZADADER" in t
+    val ci = "CI" in t || "CALZADAIZQ" in t
     return when {
         d && i -> "ambos"
         d -> "derecho"
         i -> "izquierdo"
+        cd && ci -> "ambos"
+        cd -> "calzada_derecha"
+        ci -> "calzada_izquierda"
         "EJE" in t -> "eje"
         else -> null
     }

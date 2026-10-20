@@ -691,7 +691,7 @@ private fun ubicacion(item: ItemPci): String =
     listOfNotNull(
         item.tramo,
         Progresiva.rango(item.progresiva, item.progresivaFin),
-        item.side?.let { "lado $it" },
+        pe.servicon.sigov.datos.Lados.etiqueta(item.side),
     ).joinToString(" · ").ifBlank { "Sin ubicación indicada" }
 
 /** El plazo dicho como lo diría un capataz, no como una fecha. */

@@ -1,6 +1,7 @@
 'use client'
 
 import { fmtDate, fmtNumber, fmtProgresiva } from '@/lib/utils'
+import { codigoDeLado } from './lados'
 
 // ═══════════════════════════════════════════════════════════════════════════
 // SIGOV · Los formatos oficiales de SERVICON
@@ -376,7 +377,7 @@ export function datosDeParte(parte: any, registros: any[], cab: Omit<Cabecera, '
       r.section_name ?? '—',
       [fmtProgresiva(r.prog_start_m), r.prog_end_m ? fmtProgresiva(r.prog_end_m) : null]
         .filter(Boolean).join(' – '),
-      r.side ?? '—',
+      r.side ? codigoDeLado(r.side) : '—',
       fmtNumber(r.quantity, 1),
       r.unit_symbol ?? '—',
       r.plan_item_id ? 'Programación' : r.pci_item_id ? 'PCI' : 'No programado',

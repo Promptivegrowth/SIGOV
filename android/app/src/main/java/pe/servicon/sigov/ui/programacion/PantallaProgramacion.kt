@@ -271,7 +271,7 @@ private fun Partida(
                     Text(
                         listOfNotNull(
                             Progresiva.rango(item.progresivaInicio, item.progresivaFin),
-                            item.lado?.let { "lado $it" },
+                            item.lado?.let { "lado " + (pe.servicon.sigov.datos.Lados.codigo(it) ?: it) },
                         ).joinToString(" · ").ifBlank { "Sin progresiva indicada" },
                         style = MaterialTheme.typography.bodySmall,
                         fontWeight = FontWeight.Medium,

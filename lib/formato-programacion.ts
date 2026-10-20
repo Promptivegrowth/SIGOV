@@ -12,6 +12,7 @@
  */
 import type { SupabaseClient } from '@supabase/supabase-js'
 import { semanaDe } from './covinca'
+import { LADOS } from './lados'
 
 const AZUL = 'FF17375E'
 const AZUL_CLARO = 'FFDCE6F2'
@@ -23,7 +24,7 @@ const DIAS = ['Lunes', 'Martes', 'Miércoles', 'Jueves', 'Viernes', 'Sábado']
 /** Primera columna de cada día (K, O, S, W, AA, AE) */
 const COL_DIA = [11, 15, 19, 23, 27, 31]
 
-const LADO: Record<string, string> = { derecho: 'LD', izquierdo: 'LI', ambos: 'LD/LI', eje: 'EJE' }
+const LADO: Record<string, string> = Object.fromEntries(LADOS.map((l) => [l.valor, l.codigo]))
 
 export type CabeceraProgramacion = {
   residente?: string | null

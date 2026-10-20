@@ -18,6 +18,7 @@ import { Select, SelectTrigger, SelectValue, SelectContent, SelectItem } from '@
 import { SkeletonList } from '@/components/ui/skeleton'
 import { cn, fmtDate, fmtDateTime, fmtNumber, fmtProgresiva } from '@/lib/utils'
 import { ASSET_CONDITION } from '@/lib/constants'
+import { etiquetaDeLado } from '@/lib/lados'
 
 /**
  * El inventario sobre la carretera.
@@ -470,7 +471,7 @@ export function MapaDeInventario() {
                         : elegido.progresiva ?? '—'
                     }
                   />
-                  <Dato etiqueta="Lado" valor={elegido.side ?? '—'} />
+                  <Dato etiqueta="Lado" valor={etiquetaDeLado(elegido.side)} />
                   <Dato etiqueta="Tramo" valor={elegido.section ?? '—'} ancho />
                   <Dato
                     etiqueta="Conservación"

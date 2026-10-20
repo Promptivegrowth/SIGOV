@@ -33,6 +33,7 @@ import { syncNow } from '@/lib/offline/sync'
 import { getGpsFix, haptic, type SealedPhoto } from '@/lib/camera'
 import { toast } from 'sonner'
 import { mensajeAmigable } from '@/lib/errores'
+import { LADOS, etiquetaDeLado } from '@/lib/lados'
 
 export function ParteDetailClient({ orderId }: { orderId: string }) {
   const { service, profile, can, role } = useSession()
@@ -243,7 +244,7 @@ export function ParteDetailClient({ orderId }: { orderId: string }) {
                             {e.section_name}
                           </span>
                           <Progresiva from={e.prog_start_m} to={e.prog_end_m} />
-                          <span className="capitalize">lado {e.side}</span>
+                          <span>{etiquetaDeLado(e.side)}</span>
                         </p>
                         {e.observation && (
                           <p className="text-muted-foreground mt-1.5 text-[12px] italic">&laquo;{e.observation}&raquo;</p>
@@ -616,8 +617,8 @@ function EntryDialog({
               <Select value={side} onValueChange={setSide}>
                 <SelectTrigger className="h-11"><SelectValue /></SelectTrigger>
                 <SelectContent>
-                  {['derecho', 'izquierdo', 'ambos', 'eje'].map((s) => (
-                    <SelectItem key={s} value={s} className="capitalize">{s}</SelectItem>
+                  {LADOS.map((l) => (
+                    <SelectItem key={l.valor} value={l.valor}>{l.etiqueta}</SelectItem>
                   ))}
                 </SelectContent>
               </Select>

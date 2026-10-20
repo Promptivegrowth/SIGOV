@@ -18,6 +18,7 @@ import { cn, parseProgresiva, fmtProgresiva, toISODate } from '@/lib/utils'
 import { getGpsFix } from '@/lib/camera'
 import { toast } from 'sonner'
 import { mensajeAmigable } from '@/lib/errores'
+import { LADOS } from '@/lib/lados'
 
 /**
  * Alta y edición de un elemento del inventario vial.
@@ -300,8 +301,8 @@ export function AssetForm({
             <Select value={side} onValueChange={setSide}>
               <SelectTrigger className="h-10"><SelectValue /></SelectTrigger>
               <SelectContent>
-                {['derecho', 'izquierdo', 'ambos', 'eje'].map((s) => (
-                  <SelectItem key={s} value={s} className="capitalize">{s}</SelectItem>
+                {LADOS.map((l) => (
+                  <SelectItem key={l.valor} value={l.valor}>{l.etiqueta}</SelectItem>
                 ))}
               </SelectContent>
             </Select>

@@ -14,6 +14,7 @@
 import type { SupabaseClient } from '@supabase/supabase-js'
 import { reportePdf, type ReportMeta } from './reports'
 import { fmtDate } from './utils'
+import { codigoDeLado } from './lados'
 
 /** Las carpetas del paquete, en el orden en que el cliente las revisa. */
 /**
@@ -241,7 +242,7 @@ export async function armarPaquete(opciones: {
         actividad: r.activity_name ?? '—',
         tramo: r.section_name ?? '—',
         progresiva: [r.prog_start_txt, r.prog_end_txt].filter(Boolean).join(' → ') || '—',
-        lado: r.side ?? '—',
+        lado: r.side ? codigoDeLado(r.side) : '—',
         cantidad: r.quantity ?? 0,
         unidad: r.unit_symbol ?? '',
       }))

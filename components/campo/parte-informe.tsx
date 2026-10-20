@@ -18,6 +18,7 @@ import { descargarPdf, ORG_DEFAULT } from '@/lib/reports'
 import { cn, fmtDate, fmtDateTime, fmtNumber, fmtProgresiva } from '@/lib/utils'
 import { toast } from 'sonner'
 import { mensajeAmigable } from '@/lib/errores'
+import { codigoDeLado, etiquetaDeLado } from '@/lib/lados'
 
 /**
  * El parte diario visto como informe.
@@ -106,7 +107,7 @@ export function ParteInforme({
           actividad: e.activity_name,
           tramo: e.section_name ?? '—',
           prog: `${fmtProgresiva(e.prog_start_m)} → ${fmtProgresiva(e.prog_end_m)}`,
-          lado: e.side ?? '—',
+          lado: e.side ? codigoDeLado(e.side) : '—',
           metrado: `${fmtNumber(e.quantity, 1)} ${e.unit_symbol ?? ''}`,
           fotos: String((porRegistro.get(e.id) ?? []).length),
         })),
@@ -230,7 +231,7 @@ export function ParteInforme({
                               <span className="font-mono">
                                 {fmtProgresiva(e.prog_start_m)} → {fmtProgresiva(e.prog_end_m)}
                               </span>
-                              <span className="capitalize">lado {e.side}</span>
+                              <span>{etiquetaDeLado(e.side)}</span>
                               {e.created_at && (
                                 <span className="flex items-center gap-1">
                                   <Clock className="size-3" />

@@ -20,6 +20,7 @@ import { rutas, nombreLibre, aCovinca, semanaDe } from './covinca'
 import { programacionSemanalXlsx } from './formato-programacion'
 import { f8Xlsx } from './formato-f8'
 import { fmtDate } from './utils'
+import { codigoDeLado } from './lados'
 
 export type RamasCovinca = {
   programacion: boolean
@@ -200,6 +201,7 @@ export async function armarEstructuraCovinca(opciones: {
         .lte('work_date', hasta)
         .order('work_date')
         .order('taken_at')
+        .order('id')
         .range(a, b)
       if (cuadrillaId) c = c.eq('crew_id', cuadrillaId)
       return c
@@ -207,10 +209,49 @@ export async function armarEstructuraCovinca(opciones: {
     const firmadas = await firmar(sb, 'evidencias', fotos.map((f) => f.storage_path))
     const originales = await firmar(sb, 'evidencias', fotos.flatMap((f) => (f.master_path ? [f.master_path] : [])))
 
+    // Los nombres se reservan antes de bajar, en el orden de toma: así
+    // COV_SV_029_foto1, foto2… y las repetidas _A, _B salen siempre iguales,
+    // termine primero la descarga que termine.
+    type Destino = { carpeta: string; archivo: string; tipo: string; detalle: string }
+    const fechaDe = (f: Foto) => (f.fecha_sello ?? f.work_date ?? '').slice(0, 10) || (f.work_date ?? '')
+    const correlativos = new Map<string, number>()
+    const destinos = fotos.map((f): Destino[] => {
+      const fecha = fechaDe(f)
+      const detalle = [f.activity_code, f.activity_name, f.crew_name, f.phase].filter(Boolean).join(' · ')
+      const reservar = (r: { carpeta: string; archivo: string }, tipo: string, extra = detalle): Destino =>
+        ({ carpeta: r.carpeta, archivo: nombreLibre(usados, r.carpeta, r.archivo), tipo, detalle: extra })
+      const lista: Destino[] = []
+      // Lo de un ítem PCI va a la rama PCI, aunque se haya tomado desde el
+      // parte, y no a la carpeta diaria de la cuadrilla (Elvis: «lo único que
+      // varía es dónde se guardan las fotos que no responden a PCI»)
+      const esPci = f.pci_code != null && f.pci_item_number != null
+      if (esPci && ramas.pci) {
+        const r = rutas.fotoPci({ pciCodigo: f.pci_code!, plazoDias: f.pci_term_days ?? 0, item: f.pci_item_number!, fase: f.phase })
+        lista.push(reservar(r, 'Foto PCI', `${f.pci_code} · ítem ${f.pci_item_number} · ${detalle}`))
+      }
+      if (!esPci && f.origen === 'parte' && ramas.rutinario) {
+        const { numero, sede } = cuadrillaDe(f)
+        const base = rutas.fotoRutinaria({ fecha, cuadrilla: numero, sede, codigo: f.activity_code, numero: 1 })
+        const clave = base.carpeta + '|' + (f.activity_code ?? '')
+        const n = (correlativos.get(clave) ?? 0) + 1
+        correlativos.set(clave, n)
+        lista.push(reservar(rutas.fotoRutinaria({ fecha, cuadrilla: numero, sede, codigo: f.activity_code, numero: n }), 'Foto mantenimiento rutinario'))
+      }
+      // Niveles de servicio: las del parte y también las del PCI (Elvis, P20)
+      if ((esPci || f.origen === 'parte') && ramas.niveles && f.sector_folder && f.activity_carpeta_ns) {
+        const r = rutas.fotoNivelDeServicio({
+          fecha, sector: f.sector_folder, carpetaNs: f.activity_carpeta_ns, progresivaM: f.progresiva_m, lado: f.side, fase: f.phase,
+        })
+        lista.push(reservar(r, 'Foto nivel de servicio', esPci ? `${f.pci_code} · ítem ${f.pci_item_number} · ${detalle}` : detalle))
+      }
+      return lista
+    })
+
     let hechas = 0
-    await enParalelo(fotos, 6, async (f) => {
+    await enParalelo(fotos, 6, async (f, i) => {
       const url = firmadas.get(f.storage_path)
-      const fecha = (f.fecha_sello ?? f.work_date ?? '').slice(0, 10) || (f.work_date ?? '')
+      const fecha = fechaDe(f)
+      if (!destinos[i].length) { avisar('Fotografías', ++hechas, fotos.length); return }
       try {
         if (!url) throw new Error('sin enlace')
         // El original del celular va tal cual: ya es JPG 4080 × 3060, con su
@@ -224,31 +265,12 @@ export async function armarEstructuraCovinca(opciones: {
         }
         const ampliada = !jpg
         if (!jpg) jpg = await aJpg(await (await fetch(url)).blob(), true)
-        const detalle = [f.activity_code, f.activity_name, f.crew_name, f.phase,
-          ampliada && 'ampliada desde la foto liviana: no tiene original'].filter(Boolean).join(' · ')
-
-        // Lo de un ítem PCI va solo a la rama PCI, aunque se haya tomado
-        // desde el parte (Elvis: «lo único que varía es dónde se guardan las
-        // fotos que no responden a PCI»)
-        const esPci = f.pci_code != null && f.pci_item_number != null
-        if (esPci && ramas.pci) {
-          const r = rutas.fotoPci({ pciCodigo: f.pci_code!, plazoDias: f.pci_term_days ?? 0, item: f.pci_item_number!, fase: f.phase })
-          poner(r.carpeta, r.archivo, jpg, { tipo: 'Foto PCI', fecha, detalle: `${f.pci_code} · ítem ${f.pci_item_number} · ${detalle}` })
-        }
-        if (!esPci && f.origen === 'parte') {
-          const { numero, sede } = cuadrillaDe(f)
-          if (ramas.rutinario) {
-            const r = rutas.fotoRutinaria({
-              fecha, cuadrilla: numero, sede, progresivaM: f.progresiva_m, lado: f.side, codigo: f.activity_code, fase: f.phase,
-            })
-            poner(r.carpeta, r.archivo, jpg, { tipo: 'Foto mantenimiento rutinario', fecha, detalle })
-          }
-          if (ramas.niveles && f.sector_folder && f.activity_carpeta_ns) {
-            const r = rutas.fotoNivelDeServicio({
-              fecha, sector: f.sector_folder, carpetaNs: f.activity_carpeta_ns, progresivaM: f.progresiva_m, lado: f.side, fase: f.phase,
-            })
-            poner(r.carpeta, r.archivo, jpg, { tipo: 'Foto nivel de servicio', fecha, detalle })
-          }
+        for (const d of destinos[i]) {
+          zip.folder(d.carpeta)!.file(d.archivo, jpg)
+          indice.push({
+            carpeta: d.carpeta, archivo: d.archivo, bytes: jpg.size, tipo: d.tipo, fecha,
+            detalle: ampliada ? `${d.detalle} · ampliada desde la foto liviana: no tiene original` : d.detalle,
+          })
         }
       } catch {
         indice.push({ carpeta: '(no se pudo descargar)', archivo: f.storage_path, tipo: 'Foto', fecha, detalle: 'Reintentar la entrega', bytes: 0 })
@@ -281,24 +303,31 @@ export async function armarEstructuraCovinca(opciones: {
       correlativo.set(v.id, 'VEHICULO-' + String(n).padStart(2, '0'))
     }
 
+    // Las páginas en el orden en que se tomaron; el nombre se reserva antes
+    // de bajar para que la 2.ª página sea siempre la «_A»
     const paginas = (docs ?? []).flatMap((d: any) =>
-      (d.documento_paginas ?? []).filter((p: any) => !p.deleted_at).map((p: any) => ({ d, p })))
+      (d.documento_paginas ?? []).filter((p: any) => !p.deleted_at)
+        .sort((a: any, b: any) => String(a.taken_at).localeCompare(String(b.taken_at)))
+        .map((p: any) => {
+          const cq = cuadrillaDe({ crew_numero: d.crews?.numero, crew_sede: d.crews?.sede, crew_code: d.crews?.code, crew_name: d.crews?.name })
+          const tipo = d.tipo === 'ats' || d.tipo === 'charla' || d.tipo === 'checklist_vehicular' ? d.tipo : 'otro'
+          const r = rutas.documento({
+            fecha: d.doc_date, cuadrilla: cq.numero, sede: cq.sede, tipo,
+            detalle: d.tipo === 'checklist_vehicular' ? correlativo.get(d.vehicle_id) ?? null : d.titulo,
+            extension: '.jpg',
+          })
+          return { d, p, carpeta: r.carpeta, archivo: nombreLibre(usados, r.carpeta, r.archivo) }
+        }))
     const firmadas = await firmar(sb, 'documentos', paginas.map((x) => x.p.storage_path))
     let hechas = 0
-    await enParalelo(paginas, 6, async ({ d, p }) => {
+    await enParalelo(paginas, 6, async ({ d, p, carpeta, archivo }) => {
       try {
         const url = firmadas.get(p.storage_path)
         if (!url) throw new Error('sin enlace')
         const jpg = await aJpg(await (await fetch(url)).blob())
-        const cq = cuadrillaDe({ crew_numero: d.crews?.numero, crew_sede: d.crews?.sede, crew_code: d.crews?.code, crew_name: d.crews?.name })
-        const tipo = d.tipo === 'ats' || d.tipo === 'charla' || d.tipo === 'checklist_vehicular' ? d.tipo : 'otro'
-        const r = rutas.documento({
-          fecha: d.doc_date, cuadrilla: cq.numero, sede: cq.sede, tipo,
-          detalle: d.tipo === 'checklist_vehicular' ? correlativo.get(d.vehicle_id) ?? null : d.titulo,
-          extension: '.jpg',
-        })
-        poner(r.carpeta, r.archivo, jpg, {
-          tipo: 'Documento SSOMA (foto)', fecha: d.doc_date,
+        zip.folder(carpeta)!.file(archivo, jpg)
+        indice.push({
+          carpeta, archivo, bytes: jpg.size, tipo: 'Documento SSOMA (foto)', fecha: d.doc_date,
           detalle: `${d.crews?.name ?? ''} · ${d.tipo} · ${d.estado}`,
         })
       } catch {
@@ -332,7 +361,7 @@ export async function armarEstructuraCovinca(opciones: {
         origen: ({ programacion: 'Programado', pci: 'PCI', emergencia: 'Emergencia', no_programado: 'No programado' } as any)[r.origen] ?? r.origen ?? '—',
         tramo: r.section_name ?? '—',
         progresiva: [r.prog_start_txt, r.prog_end_txt].filter(Boolean).join(' → ') || '—',
-        lado: r.side ?? '—',
+        lado: r.side ? codigoDeLado(r.side) : '—',
         cantidad: r.quantity ?? 0,
         unidad: r.unit_symbol ?? '',
       }))
@@ -364,12 +393,13 @@ export async function armarEstructuraCovinca(opciones: {
   // ─── Programación semanal (formato PS-ST04), por semana y cuadrilla ─
   if (ramas.programacion) {
     avisar('Programación semanal', 0, 1)
-    // Las semanas cuyo lunes cae en el periodo: la carpeta es la del mes del lunes
+    // Las semanas que tocan el periodo. La que cruza dos meses va en los dos
+    // (Elvis, P27), pero solo en los meses que abarca esta entrega
     const lunes: string[] = []
     for (let d = new Date(semanaDe(desde).lunes + 'T12:00:00Z'); d.toISOString().slice(0, 10) <= hasta; d = new Date(d.getTime() + 7 * 86400000)) {
-      const l = d.toISOString().slice(0, 10)
-      if (l >= desde) lunes.push(l)
+      lunes.push(d.toISOString().slice(0, 10))
     }
+    const mesesDeLaEntrega = (mes: string) => mes >= desde.slice(0, 7) && mes <= hasta.slice(0, 7)
     let c = sb.from('plan_items').select('crew_id, scheduled_on, crews(code, name, numero, sede)')
       .eq('service_id', servicioId).gte('scheduled_on', lunes[0] ?? desde).lte('scheduled_on', hasta).is('deleted_at', null)
     if (cuadrillaId) c = c.eq('crew_id', cuadrillaId)
@@ -386,8 +416,9 @@ export async function armarEstructuraCovinca(opciones: {
         sb, servicioId, cliente: opciones.cliente, fecha: par.lunes, cuadrillaId: par.crewId, logo,
       })
       const cq = cuadrillaDe({ crew_numero: par.crew?.numero, crew_sede: par.crew?.sede, crew_code: par.crew?.code, crew_name: par.crew?.name })
-      const r = rutas.programacion({ ...semanaDe(par.lunes), cuadrilla: cq.numero, sede: cq.sede, tipo: 'ACTIVIDADES' })
-      poner(r.carpeta, r.archivo, buffer, { tipo: 'Programación semanal', fecha: par.lunes, detalle: `${par.crew?.name ?? ''} · ${filas} partidas` })
+      for (const r of rutas.programacion({ ...semanaDe(par.lunes), cuadrilla: cq.numero, sede: cq.sede, tipo: 'ACTIVIDADES' })) {
+        if (mesesDeLaEntrega(r.mes)) poner(r.carpeta, r.archivo, buffer, { tipo: 'Programación semanal', fecha: par.lunes, detalle: `${par.crew?.name ?? ''} · ${filas} partidas` })
+      }
       avisar('Programación semanal', ++hechas, pares.size)
     }
   }
