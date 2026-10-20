@@ -555,7 +555,9 @@ private fun DetalleDePedido(
 private fun FilaPedido(pedido: Pedido, alTocar: () -> Unit) {
     val (etiqueta, color) = when (pedido.status) {
         "en_cola" -> "Esperando señal" to Marca.Naranja
-        "solicitado" -> "En revisión" to Marca.Naranja
+        "solicitado" -> "Por aprobar · residente" to Marca.Naranja
+        "aprobado_residente" -> "Por aprobar · COVINCA" to Marca.Naranja
+        "observado" -> "Observado por COVINCA" to Semaforo.Vencido
         "aprobado" -> "Aprobado" to Semaforo.EnPlazo
         "parcial" -> "Entregado en parte" to Semaforo.PorVencer
         "entregado" -> "Entregado" to Marca.VerdeBandera

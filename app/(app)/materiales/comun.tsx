@@ -10,7 +10,9 @@ import { cn } from '@/lib/utils'
 
 export const PEDIDO_ESTADO = {
   borrador:   { label: 'Borrador',   variant: 'outline' as const },
-  solicitado: { label: 'Por revisar', variant: 'warning' as const },
+  solicitado: { label: 'Por aprobar · residente', variant: 'warning' as const },
+  aprobado_residente: { label: 'Por aprobar · COVINCA', variant: 'warning' as const },
+  observado:  { label: 'Observado por COVINCA', variant: 'destructive' as const },
   aprobado:   { label: 'Aprobado',   variant: 'info' as const },
   parcial:    { label: 'Entregado en parte', variant: 'warning' as const },
   entregado:  { label: 'Entregado',  variant: 'success' as const },
@@ -19,6 +21,25 @@ export const PEDIDO_ESTADO = {
 }
 
 export type EstadoPedido = keyof typeof PEDIDO_ESTADO
+
+/**
+ * Qué le toca hacer a cada rol con un pedido (Elvis, P16): el residente
+ * aprueba lo solicitado, el visor COVINCA da la aprobación final u observa,
+ * quien pidió corrige lo observado y administración entrega lo aprobado. El
+ * administrador puede hacer cualquiera de los pasos.
+ */
+export function accionDelPedido(
+  p: { status: string; created_by?: string | null },
+  rol: string,
+  puedeGestionar: boolean,
+  yo: string,
+): 'revisar_residente' | 'revisar_covinca' | 'corregir' | 'entregar' | null {
+  if (p.status === 'solicitado' && (rol === 'residente' || rol === 'admin')) return 'revisar_residente'
+  if (p.status === 'aprobado_residente' && (rol === 'visor' || rol === 'admin')) return 'revisar_covinca'
+  if (p.status === 'observado' && (p.created_by === yo || puedeGestionar)) return 'corregir'
+  if (['aprobado', 'parcial'].includes(p.status) && puedeGestionar) return 'entregar'
+  return null
+}
 
 /** Los movimientos de almacén: qué significa cada uno y hacia dónde mueve el stock. */
 export const MOVIMIENTO = {

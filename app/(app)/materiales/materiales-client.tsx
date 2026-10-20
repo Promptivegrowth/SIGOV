@@ -55,7 +55,7 @@ export function MaterialesClient() {
   const estados = activos.map((s: any) => estadoDeStock(s).estado)
   const sinStock = estados.filter((e) => e === 'sin_stock').length
   const bajoMinimo = estados.filter((e) => e === 'bajo_minimo').length
-  const porRevisar = (pedidos.data ?? []).filter((p: any) => p.status === 'solicitado').length
+  const porRevisar = (pedidos.data ?? []).filter((p: any) => ['solicitado', 'aprobado_residente', 'observado'].includes(p.status)).length
   const porEntregar = (pedidos.data ?? []).filter((p: any) => ['aprobado', 'parcial'].includes(p.status)).length
 
   return (

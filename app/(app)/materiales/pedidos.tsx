@@ -6,6 +6,7 @@ import {
   PackageSearch, Check, X, Truck, Plus, Ban, Trash2, CircleDot, AlertTriangle, Search,
 } from 'lucide-react'
 import { createClient } from '@/lib/supabase/client'
+import { useSession } from '@/lib/hooks/use-session'
 import { Button } from '@/components/ui/button'
 import { Badge } from '@/components/ui/badge'
 import { Card, CardContent } from '@/components/ui/card'
@@ -19,14 +20,14 @@ import { EmptyState } from '@/components/shared/misc'
 import { cn, fmtDate, fmtDateTime } from '@/lib/utils'
 import { toast } from 'sonner'
 import {
-  PEDIDO_ESTADO, cifra, leerCifra, paraBuscar, hoyLima, estadoDeStock,
+  PEDIDO_ESTADO, cifra, leerCifra, paraBuscar, hoyLima, estadoDeStock, accionDelPedido,
   useInsumos, useCuadrillas, useUnidades, useCategorias, Selector, InsumoPicker,
 } from './comun'
 import { mensajeAmigable } from '@/lib/errores'
 
 const FILTROS = [
-  { key: 'abiertos', label: 'Abiertos', estados: ['solicitado', 'aprobado', 'parcial'] },
-  { key: 'revisar',  label: 'Por revisar', estados: ['solicitado'] },
+  { key: 'abiertos', label: 'Abiertos', estados: ['solicitado', 'aprobado_residente', 'observado', 'aprobado', 'parcial'] },
+  { key: 'revisar',  label: 'Por aprobar', estados: ['solicitado', 'aprobado_residente', 'observado'] },
   { key: 'entregar', label: 'Por entregar', estados: ['aprobado', 'parcial'] },
   { key: 'cerrados', label: 'Cerrados', estados: ['entregado', 'rechazado', 'anulado'] },
   { key: 'todos',    label: 'Todos', estados: null },
@@ -35,12 +36,11 @@ const FILTROS = [
 /**
  * Los pedidos de materiales.
  *
- * Piden el residente o el supervisor —para una cuadrilla o para el stock de
- * la semana— y lo que ellos piden ya va autorizado. El jefe de cuadrilla ya
- * no pide (regla 1.2): ejecuta con lo que le entregan. Los pedidos que algún
- * celular dejó en cola antes del cambio igual llegan aquí, como «solicitado».
- * Cada pedido guarda quién lo pidió, quién lo autorizó y quién entregó qué y
- * cuándo.
+ * Los piden el supervisor o el residente —de la programación o sueltos—, los
+ * aprueba el ing. residente y después el visor COVINCA, que puede observarlos
+ * para que se corrijan y se reenvíen (Elvis, P16). El jefe de cuadrilla no
+ * pide (regla 1.2): ejecuta con lo que le entregan. Cada pedido guarda quién
+ * lo pidió, cada revisión y quién entregó qué y cuándo.
  */
 export function PedidosTab({ serviceId, can, profileId }: {
   serviceId: string
@@ -49,6 +49,7 @@ export function PedidosTab({ serviceId, can, profileId }: {
 }) {
   const sb = React.useMemo(() => createClient(), [])
   const qc = useQueryClient()
+  const { role } = useSession()
   const [filtro, setFiltro] = React.useState<(typeof FILTROS)[number]['key']>('abiertos')
   const [q, setQ] = React.useState('')
   const [abierto, setAbierto] = React.useState<string | null>(null)
@@ -164,11 +165,17 @@ export function PedidosTab({ serviceId, can, profileId }: {
                 {p.reason && <p className="mt-1 text-[13px]">«{p.reason}»</p>}
                 <p className="text-muted-foreground mt-1 text-[12px]">{firmas.join(' · ')}</p>
               </div>
-              {can.manage && ['solicitado', 'aprobado', 'parcial'].includes(p.status) && (
-                <Button size="sm" onClick={(e) => { e.stopPropagation(); setAbierto(p.id) }}>
-                  {p.status === 'solicitado' ? 'Revisar' : <><Truck /> Entregar</>}
-                </Button>
-              )}
+              {(() => {
+                const accion = accionDelPedido(p, role, can.manage, profileId)
+                if (!accion) return null
+                return (
+                  <Button size="sm" variant={accion === 'corregir' ? 'outline' : 'default'} onClick={(e) => { e.stopPropagation(); setAbierto(p.id) }}>
+                    {accion === 'entregar' ? <><Truck /> Entregar</>
+                      : accion === 'corregir' ? 'Corregir y reenviar'
+                      : accion === 'revisar_covinca' ? 'Revisar (COVINCA)' : 'Revisar'}
+                  </Button>
+                )
+              })()}
             </CardContent>
           </Card>
         )
@@ -188,7 +195,7 @@ export function PedidosTab({ serviceId, can, profileId }: {
       {nuevo && (
         <NuevoPedido
           serviceId={serviceId}
-          puedeAprobar={can.manage}
+          puedeAprobar={role === 'admin'}
           onClose={() => setNuevo(false)}
           onCreado={(id) => { setNuevo(false); refrescar(); setAbierto(id) }}
         />
@@ -201,7 +208,10 @@ export function PedidosTab({ serviceId, can, profileId }: {
 
 const PASO = {
   solicitado: { label: 'Pedido', color: 'text-foreground' },
-  aprobado:   { label: 'Autorizado', color: 'text-info' },
+  aprobado_residente: { label: 'Aprobado por el residente', color: 'text-info' },
+  observado:  { label: 'Observado por COVINCA', color: 'text-destructive' },
+  reenviado:  { label: 'Corregido y reenviado', color: 'text-foreground' },
+  aprobado:   { label: 'Aprobado', color: 'text-info' },
   rechazado:  { label: 'Rechazado', color: 'text-destructive' },
   entregado:  { label: 'Entregado', color: 'text-success' },
   devolucion: { label: 'Devuelto', color: 'text-warning' },
@@ -217,6 +227,7 @@ function DetallePedido({ pedidoId, serviceId, can, profileId, onClose, onCambio 
   onCambio: () => void
 }) {
   const sb = React.useMemo(() => createClient(), [])
+  const { role } = useSession()
   const insumos = useInsumos(serviceId)
   const [nota, setNota] = React.useState('')
   const [cantidades, setCantidades] = React.useState<Record<string, string>>({})
@@ -249,24 +260,30 @@ function DetallePedido({ pedidoId, serviceId, can, profileId, onClose, onCambio 
   const stockDe = (supplyId: string | null) =>
     supplyId ? insumos.data?.find((s: any) => s.id === supplyId) : null
 
-  const esRevision = p?.status === 'solicitado'
-  const esEntrega = p && ['aprobado', 'parcial'].includes(p.status)
+  const accion = p ? accionDelPedido(p, role, can.manage, profileId) : null
+  // La primera revisión (residente) fija las cantidades; la de COVINCA las
+  // ve tal cual; al corregir se pueden volver a escribir
+  const esRevision = accion === 'revisar_residente'
+  const esCovinca = accion === 'revisar_covinca'
+  const esCorreccion = accion === 'corregir'
+  const esEntrega = accion === 'entregar'
+  const editaCantidades = esRevision || esEntrega || esCorreccion
   const fueraDeCatalogo = renglones.filter((r) => r.fuera_de_catalogo)
   const puedeAnular = p && (
-    (can.manage && ['solicitado', 'aprobado', 'parcial'].includes(p.status)) ||
-    (p.created_by === profileId && p.status === 'solicitado')
+    (can.manage && ['solicitado', 'aprobado_residente', 'observado', 'aprobado', 'parcial'].includes(p.status)) ||
+    (p.created_by === profileId && ['solicitado', 'observado'].includes(p.status))
   )
 
   const valor = (r: any) => {
     const escrito = cantidades[r.id]
     if (escrito != null && escrito !== '') return leerCifra(escrito)
-    if (esRevision) return Number(r.qty_requested)
+    if (esRevision || esCorreccion) return Number(r.qty_requested)
     return Math.max(0, Number(r.qty_approved ?? r.qty_requested) - Number(r.qty_delivered))
   }
 
   const revisar = async (aprobar: boolean) => {
     if (!aprobar && !nota.trim()) {
-      toast.error('Escribe por qué se rechaza: la cuadrilla necesita saberlo')
+      toast.error(esCovinca ? 'Escribe la observación: quien pidió necesita saber qué corregir' : 'Escribe por qué se rechaza')
       return
     }
     setEnviando(true)
@@ -278,7 +295,24 @@ function DetallePedido({ pedidoId, serviceId, can, profileId, onClose, onCambio 
     })
     setEnviando(false)
     if (error) { toast.error(mensajeAmigable(error)); return }
-    toast.success(aprobar ? 'Pedido autorizado' : 'Pedido rechazado')
+    toast.success(esCovinca
+      ? (aprobar ? 'Pedido aprobado por COVINCA: pasa a entrega' : 'Pedido observado: vuelve a quien lo pidió')
+      : (aprobar ? 'Pedido aprobado: pasa al visor COVINCA' : 'Pedido rechazado'))
+    recargar()
+  }
+
+  // Lo observado se corrige y vuelve al residente
+  const reenviar = async () => {
+    const items = renglones.map((r) => r.supply_id
+      ? { supply_id: r.supply_id, qty: valor(r), notes: r.notes ?? '' }
+      : { other_name: r.nombre, other_unit_id: r.unit_id ?? null, qty: valor(r), notes: r.notes ?? '' })
+      .filter((x) => Number(x.qty) > 0)
+    if (!items.length) { toast.error('El pedido quedó sin insumos'); return }
+    setEnviando(true)
+    const { error } = await sb.rpc('reenviar_pedido', { p_request_id: pedidoId, p_items: items, p_nota: nota.trim() || undefined } as any)
+    setEnviando(false)
+    if (error) { toast.error(mensajeAmigable(error)); return }
+    toast.success('Pedido corregido y reenviado al residente')
     recargar()
   }
 
@@ -336,6 +370,12 @@ function DetallePedido({ pedidoId, serviceId, can, profileId, onClose, onCambio 
         {p && (
           <div className="space-y-5">
             {p.reason && <p className="text-[13px]">«{p.reason}»</p>}
+            {p.status === 'observado' && p.review_note && (
+              <p className="bg-destructive/10 text-destructive rounded-md px-3 py-2 text-[13px]">
+                <AlertTriangle className="mr-1 inline size-3.5" />
+                Observación de COVINCA: «{p.review_note}»
+              </p>
+            )}
 
             {/* Renglones */}
             <div className="overflow-x-auto rounded-lg border">
@@ -347,8 +387,8 @@ function DetallePedido({ pedidoId, serviceId, can, profileId, onClose, onCambio 
                     <th className="px-2 py-2 text-right font-medium">Autorizado</th>
                     <th className="px-2 py-2 text-right font-medium">Entregado</th>
                     <th className="px-2 py-2 text-right font-medium">En almacén</th>
-                    {(can.manage && (esRevision || esEntrega)) && (
-                      <th className="px-3 py-2 text-right font-medium">{esRevision ? 'Autorizar' : 'Entregar ahora'}</th>
+                    {editaCantidades && (
+                      <th className="px-3 py-2 text-right font-medium">{esRevision ? 'Aprobar' : esCorreccion ? 'Corregido' : 'Entregar ahora'}</th>
                     )}
                   </tr>
                 </thead>
@@ -378,7 +418,7 @@ function DetallePedido({ pedidoId, serviceId, can, profileId, onClose, onCambio 
                         <td className={cn('px-2 py-2 text-right tabular-nums', disponible != null && disponible <= 0 && 'text-destructive')}>
                           {disponible != null ? cifra(disponible) : '—'}
                         </td>
-                        {(can.manage && (esRevision || esEntrega)) && (
+                        {editaCantidades && (
                           <td className="px-3 py-2 text-right">
                             <Input
                               value={cantidades[r.id] ?? String(valor(r))}
@@ -399,10 +439,13 @@ function DetallePedido({ pedidoId, serviceId, can, profileId, onClose, onCambio 
             </div>
 
             {/* Acciones */}
-            {can.manage && (esRevision || esEntrega) && (
+            {(editaCantidades || esCovinca) && (
               <div className="space-y-3">
                 <div className="grid gap-3 sm:grid-cols-[1fr_180px]">
-                  <Field label="Nota" hint={esRevision ? 'Obligatoria si rechazas' : 'Guía, quién recibió…'}>
+                  <Field
+                    label={esCovinca ? 'Observación' : esCorreccion ? 'Qué se corrigió' : 'Nota'}
+                    hint={esRevision ? 'Obligatoria si rechazas' : esCovinca ? 'Obligatoria si lo observas' : esCorreccion ? 'Opcional' : 'Guía, quién recibió…'}
+                  >
                     <Textarea value={nota} onChange={(e) => setNota(e.target.value)} rows={2} />
                   </Field>
                   {esEntrega && (
@@ -462,17 +505,32 @@ function DetallePedido({ pedidoId, serviceId, can, profileId, onClose, onCambio 
               </Button>
             )
           )}
-          {can.manage && esRevision && (
+          {esRevision && (
             <>
               <Button variant="outline" disabled={enviando} onClick={() => revisar(false)}>
                 <X /> Rechazar
               </Button>
               <Button loading={enviando} onClick={() => revisar(true)}>
-                <Check /> Autorizar
+                <Check /> Aprobar (residente)
               </Button>
             </>
           )}
-          {can.manage && esEntrega && (
+          {esCovinca && (
+            <>
+              <Button variant="outline" disabled={enviando} onClick={() => revisar(false)}>
+                <AlertTriangle /> Observar
+              </Button>
+              <Button loading={enviando} onClick={() => revisar(true)}>
+                <Check /> Aprobar (COVINCA)
+              </Button>
+            </>
+          )}
+          {esCorreccion && (
+            <Button loading={enviando} onClick={reenviar}>
+              <Check /> Reenviar corregido
+            </Button>
+          )}
+          {esEntrega && (
             <Button loading={enviando} onClick={entregar}>
               <Truck /> Registrar entrega
             </Button>
@@ -511,7 +569,19 @@ function NuevoPedido({ serviceId, puedeAprobar, onClose, onCreado }: {
   const [partidaId, setPartidaId] = React.useState('')
   const [tramoId, setTramoId] = React.useState('')
   const [motivo, setMotivo] = React.useState('')
-  const [aprobar, setAprobar] = React.useState(true)
+  const [aprobar, setAprobar] = React.useState(false)
+  const [almacenId, setAlmacenId] = React.useState('')
+
+  // De dónde se retira (F7: «Almacén de retiro»; Elvis, P38)
+  const almacenes = useQuery({
+    queryKey: ['almacenes', serviceId],
+    queryFn: async () => {
+      const { data, error } = await sb.from('almacenes').select('id, codigo, nombre, tipo, crew_id')
+        .eq('service_id', serviceId).is('deleted_at', null).order('tipo', { ascending: false }).order('nombre')
+      if (error) throw error
+      return data ?? []
+    },
+  })
   const [renglones, setRenglones] = React.useState<Renglon[]>([])
   const [enviando, setEnviando] = React.useState(false)
 
@@ -570,9 +640,12 @@ function NuevoPedido({ serviceId, puedeAprobar, onClose, onCreado }: {
         : { other_name: r.nombre!.trim(), other_unit_id: r.unidadId || null, qty: leerCifra(r.qty), notes: r.notas }),
       p_aprobar: puedeAprobar && aprobar,
     } as any)
+    if (!error && almacenId) {
+      await sb.from('supply_requests').update({ almacen_id: almacenId } as any).eq('id', data as string)
+    }
     setEnviando(false)
     if (error) { toast.error(mensajeAmigable(error)); return }
-    toast.success(puedeAprobar && aprobar ? 'Pedido creado y autorizado' : 'Pedido enviado para revisión')
+    toast.success(puedeAprobar && aprobar ? 'Pedido creado y aprobado' : 'Pedido enviado al residente para su aprobación')
     onCreado(data as string)
   }
 
@@ -582,7 +655,7 @@ function NuevoPedido({ serviceId, puedeAprobar, onClose, onCreado }: {
         <DialogHeader>
           <DialogTitle>Nuevo pedido de materiales</DialogTitle>
           <DialogDescription>
-            Se numera solo. Queda firmado por ti y, si lo autorizas al crearlo, pasa directo a entrega.
+            Se numera solo y queda firmado por ti. Lo aprueba el ing. residente y después el visor COVINCA.
           </DialogDescription>
         </DialogHeader>
 
@@ -620,7 +693,15 @@ function NuevoPedido({ serviceId, puedeAprobar, onClose, onCreado }: {
               {tramos.data?.map((t: any) => <option key={t.id} value={t.id}>{t.code} · {t.name}</option>)}
             </Selector>
           </Field>
-          <Field label="Motivo" className="sm:col-span-2">
+          <Field label="Almacén de retiro">
+            <Selector value={almacenId} onChange={setAlmacenId}>
+              <option value="">Sin indicar</option>
+              {almacenes.data?.filter((a: any) => a.tipo === 'principal' || !crewId || a.crew_id === crewId).map((a: any) => (
+                <option key={a.id} value={a.id}>{a.nombre}</option>
+              ))}
+            </Selector>
+          </Field>
+          <Field label="Motivo">
             <Input value={motivo} onChange={(e) => setMotivo(e.target.value)} placeholder="Sellado de fisuras km 1081, reposición de EPP…" />
           </Field>
         </div>
@@ -681,7 +762,7 @@ function NuevoPedido({ serviceId, puedeAprobar, onClose, onCreado }: {
         {puedeAprobar && (
           <label className="flex items-center gap-2 text-[13px]">
             <Checkbox checked={aprobar} onCheckedChange={(v) => setAprobar(!!v)} />
-            Autorizarlo al crearlo (queda firmado por ti)
+            Aprobarlo al crearlo, sin pasar por el residente ni COVINCA (solo el administrador)
           </label>
         )}
 

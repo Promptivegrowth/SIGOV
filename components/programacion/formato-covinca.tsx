@@ -11,6 +11,7 @@ import { Input, Field } from '@/components/ui/input'
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription, DialogFooter } from '@/components/ui/dialog'
 import { Select, SelectTrigger, SelectValue, SelectContent, SelectItem } from '@/components/ui/select'
 import { programacionSemanalXlsx } from '@/lib/formato-programacion'
+import { f7Xlsx } from '@/lib/formato-f7'
 import { mensajeAmigable } from '@/lib/errores'
 
 /** El logo de la cabecera del formato, una sola vez por sesión. */
@@ -45,6 +46,33 @@ export function FormatoCovinca({
   const [cuadrilla, setCuadrilla] = React.useState(cuadrillas[0]?.id ?? '')
   const [cab, setCab] = React.useState({ residente: '', supervisor: '', inspector: '', semana_contrato: '', emitido_on: '' })
   const [busy, setBusy] = React.useState(false)
+  const [busyF7, setBusyF7] = React.useState(false)
+
+  /** El F7 «Requerimiento de recursos» de la semana: metrado × rendimiento − stock (P12, P36). */
+  const descargarF7 = async () => {
+    if (!cuadrilla) { toast.error('Elige la cuadrilla'); return }
+    setBusyF7(true)
+    try {
+      const { buffer, nombre, filas, sinRendimiento } = await f7Xlsx({
+        sb, servicioId: service.id, fecha: lunes, cuadrillaId: cuadrilla, logo: await logoServicon(),
+      })
+      const url = URL.createObjectURL(new Blob([buffer], { type: 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet' }))
+      const a = document.createElement('a')
+      a.href = url
+      a.download = nombre
+      document.body.appendChild(a)
+      a.click()
+      a.remove()
+      URL.revokeObjectURL(url)
+      toast.success('F7 descargado', {
+        description: `${nombre} · ${filas} renglones` + (sinRendimiento ? ` · ${sinRendimiento} partida${sinRendimiento === 1 ? '' : 's'} sin rendimiento (llenar a mano)` : ''),
+      })
+    } catch (e: any) {
+      toast.error(mensajeAmigable(e, 'No se pudo generar el F7'))
+    } finally {
+      setBusyF7(false)
+    }
+  }
 
   React.useEffect(() => {
     if (!open) return
@@ -128,6 +156,9 @@ export function FormatoCovinca({
         </div>
         <DialogFooter>
           <Button variant="ghost" onClick={onClose}>Cancelar</Button>
+          <Button variant="outline" onClick={descargarF7} loading={busyF7} title="Requerimiento de recursos (F7) de la semana">
+            <FileSpreadsheet className="size-4" />F7 · Recursos
+          </Button>
           <Button onClick={descargar} loading={busy}><FileSpreadsheet className="size-4" />Descargar Excel</Button>
         </DialogFooter>
       </DialogContent>

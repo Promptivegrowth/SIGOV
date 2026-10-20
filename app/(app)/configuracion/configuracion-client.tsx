@@ -5,7 +5,7 @@ import { useQuery, useQueryClient } from '@tanstack/react-query'
 import {
   Settings, Users, Route, ListChecks, Truck, Building2, ShieldCheck,
   Database, HardDrive, Bell, CircleCheck, CircleX, Activity, Plus,
-  Pencil, UserPlus, KeyRound, Trash2, Copy, SlidersHorizontal,
+  Pencil, UserPlus, KeyRound, Trash2, Copy, SlidersHorizontal, Gauge,
 } from 'lucide-react'
 import { createClient } from '@/lib/supabase/client'
 import { useSession } from '@/lib/hooks/use-session'
@@ -26,6 +26,7 @@ import { storageEstimate } from '@/lib/offline/db'
 import { pushSupported, pushPermission, enablePush, isStandalone, isIOS } from '@/lib/push'
 import { toast } from 'sonner'
 import { mensajeAmigable } from '@/lib/errores'
+import { RendimientosForm } from '@/components/config/rendimientos-form'
 
 export function ConfiguracionClient() {
   const { service, services, can, profile, switchService } = useSession()
@@ -316,6 +317,7 @@ export function ConfiguracionClient() {
             <TabsTrigger value="cuadrillas"><Truck className="size-3.5" />Cuadrillas</TabsTrigger>
             <TabsTrigger value="tramos"><Route className="size-3.5" />Tramos</TabsTrigger>
             <TabsTrigger value="actividades"><ListChecks className="size-3.5" />Actividades</TabsTrigger>
+            <TabsTrigger value="rendimientos"><Gauge className="size-3.5" />Rendimientos</TabsTrigger>
             <TabsTrigger value="servicios"><Building2 className="size-3.5" />Servicios</TabsTrigger>
             <TabsTrigger value="ajustes"><SlidersHorizontal className="size-3.5" />Ajustes</TabsTrigger>
             <TabsTrigger value="dispositivo"><HardDrive className="size-3.5" />Dispositivo</TabsTrigger>
@@ -737,6 +739,10 @@ export function ConfiguracionClient() {
           </TabsContent>
 
           {/* ═══ SERVICIOS ═════════════════════════════════════════════════ */}
+          <TabsContent value="rendimientos" className="mt-4">
+            <RendimientosForm serviceId={service.id} editable={can.manage} />
+          </TabsContent>
+
           <TabsContent value="servicios" className="mt-4 space-y-3">
             <div className="flex flex-wrap items-center justify-between gap-3">
               <div>

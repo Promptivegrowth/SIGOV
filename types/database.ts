@@ -105,6 +105,64 @@ export type Database = {
           },
         ]
       }
+      almacenes: {
+        Row: {
+          codigo: string
+          created_at: string
+          crew_id: string | null
+          deleted_at: string | null
+          id: string
+          nombre: string
+          nota: string | null
+          service_id: string
+          tipo: string
+        }
+        Insert: {
+          codigo: string
+          created_at?: string
+          crew_id?: string | null
+          deleted_at?: string | null
+          id?: string
+          nombre: string
+          nota?: string | null
+          service_id: string
+          tipo: string
+        }
+        Update: {
+          codigo?: string
+          created_at?: string
+          crew_id?: string | null
+          deleted_at?: string | null
+          id?: string
+          nombre?: string
+          nota?: string | null
+          service_id?: string
+          tipo?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "almacenes_crew_id_fkey"
+            columns: ["crew_id"]
+            isOneToOne: false
+            referencedRelation: "crews"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "almacenes_crew_id_fkey"
+            columns: ["crew_id"]
+            isOneToOne: false
+            referencedRelation: "v_hygiene_today"
+            referencedColumns: ["crew_id"]
+          },
+          {
+            foreignKeyName: "almacenes_service_id_fkey"
+            columns: ["service_id"]
+            isOneToOne: false
+            referencedRelation: "services"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       asset_interventions: {
         Row: {
           action: string
@@ -3295,6 +3353,137 @@ export type Database = {
           },
         ]
       }
+      rendimientos: {
+        Row: {
+          activity_id: string
+          cantidad: number
+          created_at: string
+          id: string
+          nota: string | null
+          service_id: string
+          supply_id: string
+          updated_at: string
+          updated_by: string | null
+        }
+        Insert: {
+          activity_id: string
+          cantidad: number
+          created_at?: string
+          id?: string
+          nota?: string | null
+          service_id: string
+          supply_id: string
+          updated_at?: string
+          updated_by?: string | null
+        }
+        Update: {
+          activity_id?: string
+          cantidad?: number
+          created_at?: string
+          id?: string
+          nota?: string | null
+          service_id?: string
+          supply_id?: string
+          updated_at?: string
+          updated_by?: string | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "rendimientos_activity_id_fkey"
+            columns: ["activity_id"]
+            isOneToOne: false
+            referencedRelation: "activities_catalog"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "rendimientos_service_id_fkey"
+            columns: ["service_id"]
+            isOneToOne: false
+            referencedRelation: "services"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "rendimientos_supply_id_fkey"
+            columns: ["supply_id"]
+            isOneToOne: false
+            referencedRelation: "supplies"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "rendimientos_supply_id_fkey"
+            columns: ["supply_id"]
+            isOneToOne: false
+            referencedRelation: "v_supplies"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "rendimientos_updated_by_fkey"
+            columns: ["updated_by"]
+            isOneToOne: false
+            referencedRelation: "profiles"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      revisiones_de_pedido: {
+        Row: {
+          created_at: string
+          created_by: string | null
+          id: string
+          nota: string | null
+          paso: string
+          request_id: string
+          service_id: string
+        }
+        Insert: {
+          created_at?: string
+          created_by?: string | null
+          id?: string
+          nota?: string | null
+          paso: string
+          request_id: string
+          service_id: string
+        }
+        Update: {
+          created_at?: string
+          created_by?: string | null
+          id?: string
+          nota?: string | null
+          paso?: string
+          request_id?: string
+          service_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "revisiones_de_pedido_created_by_fkey"
+            columns: ["created_by"]
+            isOneToOne: false
+            referencedRelation: "profiles"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "revisiones_de_pedido_request_id_fkey"
+            columns: ["request_id"]
+            isOneToOne: false
+            referencedRelation: "supply_requests"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "revisiones_de_pedido_request_id_fkey"
+            columns: ["request_id"]
+            isOneToOne: false
+            referencedRelation: "v_supply_requests"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "revisiones_de_pedido_service_id_fkey"
+            columns: ["service_id"]
+            isOneToOne: false
+            referencedRelation: "services"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       road_assets: {
         Row: {
           attributes: Json
@@ -4067,6 +4256,7 @@ export type Database = {
           category: string | null
           client_id: string
           code: string
+          codigo_covinca: string | null
           created_at: string
           created_by: string | null
           deleted_at: string | null
@@ -4084,6 +4274,7 @@ export type Database = {
           category?: string | null
           client_id?: string
           code: string
+          codigo_covinca?: string | null
           created_at?: string
           created_by?: string | null
           deleted_at?: string | null
@@ -4101,6 +4292,7 @@ export type Database = {
           category?: string | null
           client_id?: string
           code?: string
+          codigo_covinca?: string | null
           created_at?: string
           created_by?: string | null
           deleted_at?: string | null
@@ -4252,6 +4444,7 @@ export type Database = {
       }
       supply_requests: {
         Row: {
+          almacen_id: string | null
           cancelled_at: string | null
           cancelled_by: string | null
           client_id: string
@@ -4275,6 +4468,7 @@ export type Database = {
           updated_at: string
         }
         Insert: {
+          almacen_id?: string | null
           cancelled_at?: string | null
           cancelled_by?: string | null
           client_id?: string
@@ -4298,6 +4492,7 @@ export type Database = {
           updated_at?: string
         }
         Update: {
+          almacen_id?: string | null
           cancelled_at?: string | null
           cancelled_by?: string | null
           client_id?: string
@@ -4321,6 +4516,13 @@ export type Database = {
           updated_at?: string
         }
         Relationships: [
+          {
+            foreignKeyName: "supply_requests_almacen_id_fkey"
+            columns: ["almacen_id"]
+            isOneToOne: false
+            referencedRelation: "almacenes"
+            referencedColumns: ["id"]
+          },
           {
             foreignKeyName: "supply_requests_cancelled_by_fkey"
             columns: ["cancelled_by"]
@@ -6813,6 +7015,7 @@ export type Database = {
         }
         Returns: Json
       }
+      avisar_pedido: { Args: { p_id: string }; Returns: undefined }
       buscar: {
         Args: { p_limit?: number; p_q: string; p_service_id: string }
         Returns: Json
@@ -7185,6 +7388,10 @@ export type Database = {
         Returns: boolean
       }
       quitar_pagina_documento: { Args: { p_client_id: string }; Returns: Json }
+      reenviar_pedido: {
+        Args: { p_items: Json; p_nota?: string; p_request_id: string }
+        Returns: undefined
+      }
       registrar_reemplazo: {
         Args: {
           p_crew: string
@@ -7235,7 +7442,7 @@ export type Database = {
           p_nota: string
           p_request_id: string
         }
-        Returns: undefined
+        Returns: Database["public"]["Enums"]["supply_request_status"]
       }
       role_in: {
         Args: { sid: string }
@@ -7455,6 +7662,8 @@ export type Database = {
       supply_request_status:
         | "borrador"
         | "solicitado"
+        | "aprobado_residente"
+        | "observado"
         | "aprobado"
         | "parcial"
         | "entregado"
@@ -7743,6 +7952,8 @@ export const Constants = {
       supply_request_status: [
         "borrador",
         "solicitado",
+        "aprobado_residente",
+        "observado",
         "aprobado",
         "parcial",
         "entregado",

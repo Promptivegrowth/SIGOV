@@ -17,6 +17,7 @@ import type { SupabaseClient } from '@supabase/supabase-js'
 import { construirIndice, type FilaIndice } from './paquete'
 import { rutas, nombreLibre, aCovinca, semanaDe } from './covinca'
 import { programacionSemanalXlsx } from './formato-programacion'
+import { f7Xlsx } from './formato-f7'
 import { f8Xlsx } from './formato-f8'
 import { fmtDate } from './utils'
 import { datosFor001, for001Pdf } from './formato-for001'
@@ -405,6 +406,11 @@ export async function armarEstructuraCovinca(opciones: {
       const cq = cuadrillaDe({ crew_numero: par.crew?.numero, crew_sede: par.crew?.sede, crew_code: par.crew?.code, crew_name: par.crew?.name })
       for (const r of rutas.programacion({ ...semanaDe(par.lunes), cuadrilla: cq.numero, sede: cq.sede, tipo: 'ACTIVIDADES' })) {
         if (mesesDeLaEntrega(r.mes)) poner(r.carpeta, r.archivo, buffer, { tipo: 'Programación semanal', fecha: par.lunes, detalle: `${par.crew?.name ?? ''} · ${filas} partidas` })
+      }
+      // El F7 de la semana, al lado (Elvis, P36: uno por semana)
+      const f7 = await f7Xlsx({ sb, servicioId, fecha: par.lunes, cuadrillaId: par.crewId, logo })
+      for (const r of rutas.programacion({ ...semanaDe(par.lunes), cuadrilla: cq.numero, sede: cq.sede, tipo: 'RECURSOS' })) {
+        if (mesesDeLaEntrega(r.mes)) poner(r.carpeta, r.archivo, f7.buffer, { tipo: 'Requerimiento de recursos (F7)', fecha: par.lunes, detalle: `${par.crew?.name ?? ''} · ${f7.filas} renglones` })
       }
       avisar('Programación semanal', ++hechas, pares.size)
     }
