@@ -6,7 +6,7 @@ import { useQuery } from '@tanstack/react-query'
 import dynamic from 'next/dynamic'
 import {
   TriangleAlert, Filter, ArrowRight, ListChecks, Camera, Users, Route,
-  CalendarClock, FileDown, Plus, ClipboardList,
+  CalendarClock, FileDown, Plus, ClipboardList, Layers, MapPinned, ImageOff,
 } from 'lucide-react'
 import { createClient } from '@/lib/supabase/client'
 import { useSession } from '@/lib/hooks/use-session'
@@ -67,6 +67,8 @@ export function PciTableroClient() {
   const [plazo, setPlazo] = React.useState<string>(TODOS)
   const [tramo, setTramo] = React.useState<string>(TODOS)
   const [cuadrilla, setCuadrilla] = React.useState<string>(TODOS)
+  // Un PCI en particular: todos sus ítems, sin importar el periodo
+  const [pciSel, setPciSel] = React.useState<string>(TODOS)
 
   const rango = React.useMemo(() => {
     const dias = PERIODOS.find((p) => p.key === periodo)!.dias
@@ -104,9 +106,23 @@ export function PciTableroClient() {
     staleTime: 10 * 60_000,
   })
 
+  const documentos = useQuery({
+    queryKey: ['pcis-tablero', service.id],
+    queryFn: async () => {
+      const { data } = await sb
+        .from('pcis')
+        .select('id, code, title')
+        .eq('service_id', service.id)
+        .is('deleted_at', null)
+        .order('registered_on', { ascending: false })
+      return data ?? []
+    },
+    staleTime: 5 * 60_000,
+  })
+
   // ── El tablero completo, en un solo viaje ──────────────────────────────
   const tablero = useQuery({
-    queryKey: ['pci-tablero', service.id, rango.from, rango.to, plazo, tramo, cuadrilla],
+    queryKey: ['pci-tablero', service.id, rango.from, rango.to, plazo, tramo, cuadrilla, pciSel],
     queryFn: async () => {
       const { data, error } = await sb.rpc('pci_tablero', {
         p_service_id: service.id,
@@ -115,6 +131,7 @@ export function PciTableroClient() {
         p_term: plazo === TODOS ? undefined : Number(plazo),
         p_section: tramo === TODOS ? undefined : tramo,
         p_crew: cuadrilla === TODOS ? undefined : cuadrilla,
+        p_pci: pciSel === TODOS ? undefined : pciSel,
       })
       if (error) throw error
       return data as any
@@ -140,9 +157,11 @@ export function PciTableroClient() {
       }
     })
   }, [t])
-  const conFiltro = plazo !== TODOS || tramo !== TODOS || cuadrilla !== TODOS
+  const conFiltro = plazo !== TODOS || tramo !== TODOS || cuadrilla !== TODOS || pciSel !== TODOS
+  const pciElegido = (documentos.data ?? []).find((d: any) => d.id === pciSel)
 
   const limpiar = () => {
+    setPciSel(TODOS)
     setPlazo(TODOS)
     setTramo(TODOS)
     setCuadrilla(TODOS)
@@ -168,8 +187,20 @@ export function PciTableroClient() {
         {/* ═══ Filtros ══════════════════════════════════════════════════ */}
         <Card>
           <CardContent className="flex flex-wrap items-end gap-3 py-4">
+            <Campo label="PCI">
+              <Select value={pciSel} onValueChange={setPciSel}>
+                <SelectTrigger className="w-[190px]"><SelectValue /></SelectTrigger>
+                <SelectContent>
+                  <SelectItem value={TODOS}>Todos los PCI</SelectItem>
+                  {(documentos.data ?? []).map((d: any) => (
+                    <SelectItem key={d.id} value={d.id}>{d.code}</SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+            </Campo>
+
             <Campo label="Periodo">
-              <Select value={periodo} onValueChange={(v) => setPeriodo(v as PeriodoKey)}>
+              <Select value={periodo} onValueChange={(v) => setPeriodo(v as PeriodoKey)} disabled={pciSel !== TODOS}>
                 <SelectTrigger className="w-[168px]"><SelectValue /></SelectTrigger>
                 <SelectContent>
                   {PERIODOS.map((p) => (
@@ -228,17 +259,25 @@ export function PciTableroClient() {
 
         {/* ═══ Contadores ═══════════════════════════════════════════════ */}
         {tablero.isLoading ? (
-          <div className="grid grid-cols-1 gap-3 sm:grid-cols-2 xl:grid-cols-3 2xl:grid-cols-6">
-            {Array.from({ length: 6 }).map((_, i) => <SkeletonKpi key={i} />)}
+          <div className="grid grid-cols-1 gap-3 sm:grid-cols-2 xl:grid-cols-4 2xl:grid-cols-7">
+            {Array.from({ length: 7 }).map((_, i) => <SkeletonKpi key={i} />)}
           </div>
         ) : (
-          <div className="grid grid-cols-1 gap-3 sm:grid-cols-2 xl:grid-cols-3 2xl:grid-cols-6">
-            <StatCard index={0} label="Ítems en el periodo" value={Number(resumen?.total ?? 0)} icon={ListChecks} tone="primary" hint={`del ${fmtDate(rango.from)} al ${fmtDate(rango.to)}`} />
+          <div className="grid grid-cols-1 gap-3 sm:grid-cols-2 xl:grid-cols-4 2xl:grid-cols-7">
+            <StatCard
+              index={0}
+              label={pciElegido ? `Ítems del ${pciElegido.code}` : 'Ítems en el periodo'}
+              value={Number(resumen?.total ?? 0)}
+              icon={ListChecks}
+              tone="primary"
+              hint={pciElegido ? 'todo el PCI' : `del ${fmtDate(rango.from)} al ${fmtDate(rango.to)}`}
+            />
             <StatCard index={1} label="Pendientes" value={Number(resumen?.pendientes ?? 0)} icon={ClipboardList} tone="warning" hint="sin empezar" />
             <StatCard index={2} label="En atención" value={Number(resumen?.en_atencion ?? 0)} icon={CalendarClock} tone="info" hint="cuadrilla trabajando" />
             <StatCard index={3} label="Levantados" value={Number(resumen?.levantados ?? 0) + Number(resumen?.validados ?? 0)} icon={ListChecks} tone="success" hint={`${fmtNumber(resumen?.validados ?? 0)} ya validados`} />
             <StatCard index={4} label="Vencidos" value={Number(resumen?.vencidos ?? 0)} icon={TriangleAlert} tone={Number(resumen?.vencidos ?? 0) > 0 ? 'danger' : 'success'} hint={`${fmtNumber(resumen?.por_vencer ?? 0)} por vencer`} />
             <StatCard index={5} label="Sin evidencia" value={Number(resumen?.sin_evidencia ?? 0)} icon={Camera} tone={Number(resumen?.sin_evidencia ?? 0) > 0 ? 'warning' : 'success'} hint="abiertos y exigen foto" />
+            <StatCard index={6} label="Fotos observadas" value={Number(resumen?.fotos_observadas ?? 0)} icon={ImageOff} tone={Number(resumen?.fotos_observadas ?? 0) > 0 ? 'danger' : 'success'} hint="COVINCA pide tomarlas de nuevo" />
           </div>
         )}
 
@@ -322,6 +361,24 @@ export function PciTableroClient() {
               nombre: f.codigo ? `${f.codigo} · ${f.tramo}` : f.tramo,
               ...f,
             }))}
+            cargando={tablero.isLoading}
+          />
+        </div>
+
+        {/* ═══ Por defecto y por sector: como Elvis lleva su control ════ */}
+        <div className="grid grid-cols-1 gap-4 xl:grid-cols-2">
+          <TablaCumplimiento
+            titulo="Ítems PCI por defecto"
+            descripcion="Qué defectos no admitidos se repiten"
+            icono={Layers}
+            filas={(t?.por_defecto ?? []).map((f: any) => ({ clave: f.defecto, nombre: f.defecto, ...f }))}
+            cargando={tablero.isLoading}
+          />
+          <TablaCumplimiento
+            titulo="Ítems PCI por sector"
+            descripcion="Sector de la progresiva de cada ítem (2.1, 2.2…)"
+            icono={MapPinned}
+            filas={(t?.por_sector ?? []).map((f: any) => ({ clave: f.sector, nombre: f.sector === 'Sin sector' ? f.sector : `Sector ${f.sector}`, ...f }))}
             cargando={tablero.isLoading}
           />
         </div>

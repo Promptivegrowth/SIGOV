@@ -1193,6 +1193,7 @@ export type Database = {
           deleted_at: string | null
           id: string
           is_active: boolean
+          jefe_nombre: string | null
           leader_id: string | null
           name: string
           numero: number | null
@@ -1213,6 +1214,7 @@ export type Database = {
           deleted_at?: string | null
           id?: string
           is_active?: boolean
+          jefe_nombre?: string | null
           leader_id?: string | null
           name: string
           numero?: number | null
@@ -1233,6 +1235,7 @@ export type Database = {
           deleted_at?: string | null
           id?: string
           is_active?: boolean
+          jefe_nombre?: string | null
           leader_id?: string | null
           name?: string
           numero?: number | null
@@ -2709,6 +2712,7 @@ export type Database = {
           published_at: string | null
           published_by: string | null
           received_on: string | null
+          registered_on: string
           service_id: string
           source: string | null
           status: Database["public"]["Enums"]["pci_status"]
@@ -2716,6 +2720,7 @@ export type Database = {
           suspension_applied_at: string | null
           title: string
           updated_at: string
+          vencimientos: Json
         }
         Insert: {
           code: string
@@ -2733,6 +2738,7 @@ export type Database = {
           published_at?: string | null
           published_by?: string | null
           received_on?: string | null
+          registered_on?: string
           service_id: string
           source?: string | null
           status?: Database["public"]["Enums"]["pci_status"]
@@ -2740,6 +2746,7 @@ export type Database = {
           suspension_applied_at?: string | null
           title: string
           updated_at?: string
+          vencimientos?: Json
         }
         Update: {
           code?: string
@@ -2757,6 +2764,7 @@ export type Database = {
           published_at?: string | null
           published_by?: string | null
           received_on?: string | null
+          registered_on?: string
           service_id?: string
           source?: string | null
           status?: Database["public"]["Enums"]["pci_status"]
@@ -2764,6 +2772,7 @@ export type Database = {
           suspension_applied_at?: string | null
           title?: string
           updated_at?: string
+          vencimientos?: Json
         }
         Relationships: [
           {
@@ -7012,6 +7021,10 @@ export type Database = {
         Args: { p_items: string[]; p_motivo?: string; p_plazo: number }
         Returns: Json
       }
+      pci_fijar_vencimientos: {
+        Args: { p_fechas: Json; p_pci: string }
+        Returns: Json
+      }
       pci_geojson: { Args: { p_service_id: string }; Returns: Json }
       pci_iniciar_atencion: { Args: { p_item: string }; Returns: Json }
       pci_item_semaforo: {
@@ -7027,6 +7040,7 @@ export type Database = {
         Args: {
           p_crew?: string
           p_from: string
+          p_pci?: string
           p_section?: string
           p_service_id: string
           p_term?: number
@@ -7201,6 +7215,10 @@ export type Database = {
         Returns: string
       }
       vencimiento_aviso: { Args: { p_due: string }; Returns: string }
+      vencimiento_pci: {
+        Args: { p_pci: string; p_plazo: number }
+        Returns: string
+      }
       vencimiento_semaforo: { Args: { p_due: string }; Returns: string }
       work_entries_geojson: {
         Args: {

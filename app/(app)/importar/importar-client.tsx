@@ -18,14 +18,14 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@
 import { Progress } from '@/components/ui/primitives'
 import { EmptyState } from '@/components/shared/misc'
 import {
-  IMPORT_KINDS, autoMap, coerce, normKey,
+  IMPORT_KINDS, autoMap, coerce, normKey, filaDeEncabezados,
   type ImportKind, type RowIssue,
 } from '@/lib/import-schemas'
-import { cn, fmtDate, fmtNumber, fmtRelative, toISODate, parseFecha } from '@/lib/utils'
+import { cn, fmtDate, fmtNumber, fmtRelative, toISODate } from '@/lib/utils'
 import { toast } from 'sonner'
 import Link from 'next/link'
 import { usePlazosPci, etiquetaPlazo } from '@/lib/hooks/use-plazos-pci'
-import { SINONIMOS_DE_LADO } from '@/lib/lados'
+import { SINONIMOS_DE_LADO, ladoDesdeTexto } from '@/lib/lados'
 
 /** «Detectar el PCI desde la columna del Excel» en vez de elegir uno. */
 const PCI_DESDE_EXCEL = '__excel__'
@@ -46,6 +46,10 @@ export function ImportarClient() {
   const [rows, setRows] = React.useState<any[]>([])
   const [mapping, setMapping] = React.useState<Record<string, string>>({})
   const [issues, setIssues] = React.useState<RowIssue[]>([])
+  // Lo que entra igual, pero conviene revisar (el encargado que no es de ninguna cuadrilla)
+  const [avisos, setAvisos] = React.useState<RowIssue[]>([])
+  // La fila del Excel donde están los encabezados (0 = la primera)
+  const [filaEncabezado, setFilaEncabezado] = React.useState(0)
   const [valid, setValid] = React.useState<any[]>([])
   const [importing, setImporting] = React.useState(false)
   const [result, setResult] = React.useState<any>(null)
@@ -58,12 +62,14 @@ export function ImportarClient() {
   const lookups = useQuery({
     queryKey: ['import-lookups', service.id],
     queryFn: async () => {
-      const [acts, secs, crews, units, types] = await Promise.all([
+      const [acts, secs, crews, units, types, sectores] = await Promise.all([
         sb.from('activities_catalog').select('id, code, name').eq('service_id', service.id).is('deleted_at', null),
         sb.from('road_sections').select('id, code, name').eq('service_id', service.id).is('deleted_at', null),
-        sb.from('crews').select('id, code, name').eq('service_id', service.id).is('deleted_at', null),
+        sb.from('crews').select('id, code, name, jefe_nombre').eq('service_id', service.id).is('deleted_at', null),
         sb.from('units').select('id, code, symbol'),
         sb.from('asset_types').select('id, code, name'),
+        // El control del PCI nombra el sector (2.1, 2.2…): su tramo
+        sb.from('service_sectors').select('code, section_id').eq('service_id', service.id),
       ])
       const toMap = (arr: any[], keys: string[]) => {
         const m = new Map<string, string>()
@@ -72,8 +78,19 @@ export function ImportarClient() {
       }
       return {
         activity: toMap(acts.data ?? [], ['code', 'name']),
-        section: toMap(secs.data ?? [], ['code', 'name']),
-        crew: toMap(crews.data ?? [], ['code', 'name']),
+        section: new Map([
+          ...(sectores.data ?? []).filter((x: any) => x.code && x.section_id)
+            .map((x: any) => [normKey(String(x.code)), x.section_id] as [string, string]),
+          ...toMap(secs.data ?? [], ['code', 'name']),
+        ]),
+        // La cuadrilla por código, nombre o el nombre de su jefe (ENCARGADO del PCI)
+        crew: new Map([
+          ...(crews.data ?? []).filter((c: any) => c.jefe_nombre).flatMap((c: any) => [
+            [normKey(c.jefe_nombre), c.id] as [string, string],
+            [normKey(String(c.jefe_nombre).trim().split(/\s+/)[0]), c.id] as [string, string],
+          ]),
+          ...toMap(crews.data ?? [], ['code', 'name']),
+        ]),
         unit: toMap(units.data ?? [], ['code', 'symbol']),
         asset_type: toMap(types.data ?? [], ['code', 'name']),
         condition: new Map(
@@ -119,7 +136,11 @@ export function ImportarClient() {
     const buf = await f.arrayBuffer()
     const wb = XLSX.read(buf, { cellDates: false })
     const sheet = wb.Sheets[wb.SheetNames[0]]
-    const json = XLSX.utils.sheet_to_json<any>(sheet, { defval: '', raw: true })
+    // Los encabezados no siempre están en la primera fila
+    const matriz = XLSX.utils.sheet_to_json<unknown[]>(sheet, { header: 1, defval: '', raw: true })
+    const desde = schema ? filaDeEncabezados(matriz, schema.fields) : 0
+    const json = XLSX.utils.sheet_to_json<any>(sheet, { defval: '', raw: true, range: desde })
+    setFilaEncabezado(desde)
     if (!json.length) {
       toast.error('La hoja está vacía')
       return
@@ -136,7 +157,12 @@ export function ImportarClient() {
   const validate = () => {
     if (!schema || !lookups.data) return
     const problems: RowIssue[] = []
+    const advertencias: RowIssue[] = []
     const ok: any[] = []
+    // El número de fila tal como se ve en el Excel
+    const filaExcel = (i: number) => i + filaEncabezado + 2
+    // Un PCI no puede traer dos veces el mismo ítem (el PCI 55 trae el 607 dos veces)
+    const itemsVistos = new Map<string, number>()
 
     rows.forEach((raw, i) => {
       const out: any = {}
@@ -144,30 +170,47 @@ export function ImportarClient() {
       for (const f of schema.fields) {
         const col = mapping[f.key]
         const cell = col ? raw[col] : null
-        const { value, error } = coerce(cell, f, lookups.data as any)
+        const { value, error, aviso } = coerce(cell, f, lookups.data as any)
         if (error) {
-          problems.push({ row: i + 2, field: f.label, message: error })
+          problems.push({ row: filaExcel(i), field: f.label, message: error })
           rowOk = false
         }
+        if (aviso) advertencias.push({ row: filaExcel(i), field: f.label, message: aviso })
         out[f.key] = value
+      }
+      // Sin columna de lado, el control del PCI lo escribe en la observación
+      // («L.D. MENSAJE SUCIO», «Calzada / C.I.»)
+      if (schema.key === 'pci' && !out.side) out.side = ladoDesdeTexto(out.notes)
+      if (schema.key === 'pci' && out.item_number != null) {
+        const clave = `${String(out.pci_code ?? '').trim()}|${out.item_number}`
+        const antes = itemsVistos.get(clave)
+        if (antes != null) {
+          problems.push({
+            row: filaExcel(i),
+            field: 'N.º de ítem',
+            message: `El ítem ${out.item_number} ya está en la fila ${antes}: corrige el número en el Excel`,
+          })
+          rowOk = false
+        } else itemsVistos.set(clave, filaExcel(i))
       }
       // OBS-08: el plazo es de la lista cerrada del contrato (las carpetas de COVINCA)
       if (schema.key === 'pci' && out.term_days != null && !plazos.includes(Number(out.term_days))) {
         problems.push({
-          row: i + 2,
+          row: filaExcel(i),
           field: 'Plazo (días)',
           message: `${out.term_days} días no es un plazo del contrato (${plazos.map(etiquetaPlazo).join(', ')})`,
         })
         rowOk = false
       }
       if (schema.key === 'pci' && pciId === PCI_DESDE_EXCEL && !out.pci_code) {
-        problems.push({ row: i + 2, field: 'N.º de PCI', message: 'Falta el número de PCI de la fila' })
+        problems.push({ row: filaExcel(i), field: 'N.º de PCI', message: 'Falta el número de PCI de la fila' })
         rowOk = false
       }
       if (rowOk) ok.push(out)
     })
 
     setIssues(problems)
+    setAvisos(advertencias)
     setValid(ok)
     setStep('validacion')
   }
@@ -351,7 +394,7 @@ export function ImportarClient() {
 
   const reset = () => {
     setFile(null); setHeaders([]); setRows([]); setMapping({})
-    setIssues([]); setValid([]); setResult(null); setStep(kind ? 'archivo' : 'tipo')
+    setIssues([]); setAvisos([]); setValid([]); setResult(null); setStep(kind ? 'archivo' : 'tipo')
   }
 
   const requiredMissing = schema?.fields.filter(
@@ -624,6 +667,33 @@ export function ImportarClient() {
                 </Card>
               )}
 
+              {avisos.length > 0 && (
+                <Card>
+                  <CardContent className="p-0">
+                    <div className="border-b border-border px-4 py-3">
+                      <p className="flex items-center gap-2 text-[13px] font-semibold">
+                        <TriangleAlert className="text-warning size-4" />
+                        {avisos.length} {avisos.length === 1 ? 'fila entra' : 'filas entran'} con un dato por revisar
+                      </p>
+                      <p className="text-muted-foreground text-[11.5px]">
+                        Se importan igual. Asígnalas después desde el detalle del PCI.
+                      </p>
+                    </div>
+                    <div className="max-h-56 overflow-y-auto">
+                      <ul className="divide-y divide-border">
+                        {avisos.slice(0, 200).map((i, idx) => (
+                          <li key={idx} className="flex items-center gap-3 px-4 py-2 text-[12px]">
+                            <span className="text-muted-foreground w-16 shrink-0 font-mono text-[11px]">fila {i.row}</span>
+                            <span className="w-32 shrink-0 truncate font-medium">{i.field}</span>
+                            <span className="min-w-0 flex-1 truncate">{i.message}</span>
+                          </li>
+                        ))}
+                      </ul>
+                    </div>
+                  </CardContent>
+                </Card>
+              )}
+
               {/* Previsualización */}
               {valid.length > 0 && (
                 <Card>
@@ -851,12 +921,9 @@ function buildRow(
         status: 'programado',
       }
     case 'pci': {
-      // El vencimiento corre desde la recepción (o la notificación), igual
-      // que cuando se fija el plazo en el detalle (pci_fijar_plazo).
-      const desdeTexto = pci?.received_on ?? pci?.notified_on
-      const desde = desdeTexto ? (parseFecha(desdeTexto) ?? new Date()) : new Date()
+      // El vencimiento lo pone la base: el registro del PCI + el plazo, o la
+      // fecha fijada para ese plazo (Elvis, P2; vencimiento_pci)
       const term = v.term_days ?? pci?.default_days ?? 7
-      const due = new Date(desde.getTime() + term * 86400000)
       return {
         ...base,
         pci_id: pci?.id,
@@ -871,7 +938,6 @@ function buildRow(
         notes: v.notes ?? null,
         assigned_crew_id: v.crew_code ?? null,
         term_days: term,
-        due_date: toISODate(due),
         status: 'pendiente',
       }
     }

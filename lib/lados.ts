@@ -39,3 +39,26 @@ export const SINONIMOS_DE_LADO: ReadonlyArray<readonly [string, Lado]> = [
   ['cd', 'calzada_derecha'], ['ci', 'calzada_izquierda'],
   ['calzadader', 'calzada_derecha'], ['calzadaizq', 'calzada_izquierda'],
 ]
+
+/**
+ * El lado escrito dentro de un texto libre, como la «Observación» del
+ * control del PCI 55: «L.D. MENSAJE SUCIO», «Calzada / C.I. (M/S)»,
+ * «L.D. Y L.I.», «EJE.». Sin lado reconocible, null.
+ */
+export function ladoDesdeTexto(texto: string | null | undefined): Lado | null {
+  if (!texto) return null
+  const t = ' ' + texto.toUpperCase().normalize('NFD').replace(/[\u0300-\u036f]/g, '').replace(/\./g, '').replace(/[^A-Z0-9]+/g, ' ') + ' '
+  const hay = (palabra: string) => t.includes(' ' + palabra + ' ')
+  const d = hay('LD')
+  const i = hay('LI')
+  if (d && i) return 'ambos'
+  if (d) return 'derecho'
+  if (i) return 'izquierdo'
+  const cd = hay('CD')
+  const ci = hay('CI')
+  if (cd && ci) return 'ambos'
+  if (cd) return 'calzada_derecha'
+  if (ci) return 'calzada_izquierda'
+  if (hay('EJE')) return 'eje'
+  return null
+}

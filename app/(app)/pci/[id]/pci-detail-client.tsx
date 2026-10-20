@@ -23,6 +23,7 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@
 import { EmptyState, SemaforoBadge, Progresiva, ProgressBar } from '@/components/shared/misc'
 import { SuspensionDialog } from '@/components/pci/suspension-dialog'
 import { PciItemSheet } from '@/components/pci/pci-item-sheet'
+import { VencimientosPorPlazo } from '@/components/pci/vencimientos-por-plazo'
 import { descargarPdf, descargarExcel, type ReportMeta } from '@/lib/reports'
 import { PCI_PRIORITY, PCI_ITEM_STATUS, SEMAFORO, type Semaforo } from '@/lib/constants'
 import { cn, fmtDate, fmtNumber, truncate, toISODate } from '@/lib/utils'
@@ -96,6 +97,13 @@ export function PciDetailClient({ pciId }: { pciId: string }) {
   const counts = React.useMemo(() => {
     const acc: Record<string, number> = {}
     for (const r of items.data ?? []) acc[r.semaforo!] = (acc[r.semaforo!] ?? 0) + 1
+    return acc
+  }, [items.data])
+
+  // Cuántos ítems tiene cada plazo, para la tabla de vencimientos
+  const porPlazo = React.useMemo(() => {
+    const acc: Record<number, number> = {}
+    for (const r of items.data ?? []) if (r.term_days != null) acc[r.term_days] = (acc[r.term_days] ?? 0) + 1
     return acc
   }, [items.data])
 
@@ -283,6 +291,9 @@ export function PciDetailClient({ pciId }: { pciId: string }) {
               Notificado el <strong className="text-foreground">{fmtDate(p.notified_on)}</strong>
             </span>
             <span className="text-muted-foreground text-[12.5px]">
+              Registrado el <strong className="text-foreground">{fmtDate(p.registered_on)}</strong>
+            </span>
+            <span className="text-muted-foreground text-[12.5px]">
               Fuente <strong className="text-foreground">{p.source}</strong>
             </span>
             {p.suspension_applied_at && (
@@ -305,6 +316,18 @@ export function PciDetailClient({ pciId }: { pciId: string }) {
       </PageHeader>
 
       <PageBody className="space-y-4">
+        {p && (
+          <VencimientosPorPlazo
+            pci={{ id: p.id, registered_on: p.registered_on, vencimientos: (p.vencimientos ?? {}) as Record<string, string> }}
+            porPlazo={porPlazo}
+            editable={can.manage}
+            onGuardado={() => {
+              qc.invalidateQueries({ queryKey: ['pci', pciId] })
+              qc.invalidateQueries({ queryKey: ['pci-items', pciId] })
+            }}
+          />
+        )}
+
         {/* Filtros por semáforo — el color con su etiqueta y su cifra */}
         <div className="flex flex-wrap gap-2">
           <button

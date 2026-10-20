@@ -5,8 +5,8 @@
  *   npx tsx scripts/probar-importar.ts
  */
 import assert from 'node:assert/strict'
-import { autoMap, coerce, IMPORT_KINDS, normKey } from '../lib/import-schemas'
-import { SINONIMOS_DE_LADO } from '../lib/lados'
+import { autoMap, coerce, IMPORT_KINDS, normKey, filaDeEncabezados } from '../lib/import-schemas'
+import { SINONIMOS_DE_LADO, ladoDesdeTexto } from '../lib/lados'
 
 let ok = 0
 const caso = (nombre: string, fn: () => void) => {
@@ -83,11 +83,59 @@ caso('Progresivas y plazo', () => {
 })
 
 caso('Un valor que no está en el catálogo es un error, aunque el campo sea opcional', () => {
-  const cuadrilla = campos.find((f) => f.key === 'crew_code')!
+  // En la programación la cuadrilla equivocada omite la fila
+  const cuadrilla = IMPORT_KINDS.programacion.fields.find((f) => f.key === 'crew_code')!
   const crew = new Map([[normKey('CUA-01'), 'id-1']])
   assert.equal(coerce('CUA-01', cuadrilla, { crew }).value, 'id-1')
   assert.match(coerce('CUA-1O', cuadrilla, { crew }).error ?? '', /no existe/)
   assert.equal(coerce('', cuadrilla, { crew }).error, undefined)
+})
+
+caso('PCI: el encargado asigna la cuadrilla; el desconocido entra sin asignar y con aviso', () => {
+  const cuadrilla = campos.find((f) => f.key === 'crew_code')!
+  // El importador agrega el nombre del jefe y su nombre de pila
+  const crew = new Map([[normKey('CUA_04'), 'id-4'], [normKey('José Ramos'), 'id-4'], [normKey('José'), 'id-4'], [normKey('Huver'), 'id-5']])
+  assert.equal(coerce('JOSE RAMOS ', cuadrilla, { crew }).value, 'id-4')
+  assert.equal(coerce('HUVER ', cuadrilla, { crew }).value, 'id-5')
+  assert.equal(coerce('Jose', cuadrilla, { crew }).value, 'id-4')
+  const augusto = coerce('AUGUSTO', cuadrilla, { crew })
+  assert.equal(augusto.value, null)
+  assert.equal(augusto.error, undefined)
+  assert.match(augusto.aviso ?? '', /sin asignar/)
+})
+
+caso('PCI 55: encabezados en la segunda fila y columnas reconocidas', () => {
+  const matriz = [
+    ['', '', '', '', '', '', '', '', '', '', '', '', 'BARREDORA', ''],
+    ['Ítem', 'Defecto no admitido', 'SECTOR', 'Desde Km.', 'Hasta Km.', 'Total de Km.', 'Plazo (días)', 'Observación', 'ENCARGADO', 'ATENDIDO', 'FECHA', 'DRIVE', 'CUADRILLA DE 7P', 'OBS'],
+    [1, 'Existencia de material suelto.', 2.1, 1000060, '', 0, 1, 'Calzada (Resonador) M/S', 'GUSTAVO'],
+  ]
+  assert.equal(filaDeEncabezados(matriz, campos), 1)
+  const m = autoMap(matriz[1] as string[], campos)
+  assert.equal(m.item_number, 'Ítem')
+  assert.equal(m.description, 'Defecto no admitido')
+  assert.equal(m.section_code, 'SECTOR')
+  assert.equal(m.prog_start_m, 'Desde Km.')
+  assert.equal(m.prog_end_m, 'Hasta Km.')
+  assert.equal(m.term_days, 'Plazo (días)')
+  assert.equal(m.notes, 'Observación')
+  assert.equal(m.crew_code, 'ENCARGADO')
+  // Las progresivas vienen en metros
+  const ini = campos.find((f) => f.key === 'prog_start_m')!
+  assert.equal(coerce(1000060, ini, {}).value, 1000060)
+  // El sector da el tramo (el importador agrega los sectores al mapa de tramos)
+  const tramo = campos.find((f) => f.key === 'section_code')!
+  assert.equal(coerce(2.1, tramo, { section: new Map([[normKey('2.1'), 'tramo-aqp2']]) }).value, 'tramo-aqp2')
+})
+
+caso('PCI 55: el lado se lee de la observación', () => {
+  assert.equal(ladoDesdeTexto('L.D. MENSAJE SUCIO + SOPORTE.'), 'derecho')
+  assert.equal(ladoDesdeTexto('L.I.  DBB'), 'izquierdo')
+  assert.equal(ladoDesdeTexto('Calzada / C.I.(M/S)'), 'calzada_izquierda')
+  assert.equal(ladoDesdeTexto('L.D. Y L.I.'), 'ambos')
+  assert.equal(ladoDesdeTexto('EJE.'), 'eje')
+  assert.equal(ladoDesdeTexto('Pérdida de tachas reflectivas.'), null)
+  assert.equal(ladoDesdeTexto('Calzada (Resonador) M/S'), null)
 })
 
 console.log(`\n${ok} casos correctos`)

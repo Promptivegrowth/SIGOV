@@ -15,6 +15,12 @@ export interface ImportField {
   aliases: string[]
   type: 'text' | 'number' | 'date' | 'progresiva' | 'lookup'
   lookup?: 'activity' | 'section' | 'crew' | 'unit' | 'asset_type' | 'condition' | 'side'
+  /**
+   * Qué pasa si el valor no está en el catálogo: por omisión es un error y
+   * la fila se omite; con «aviso» la fila entra con el campo vacío y se
+   * avisa (el encargado del PCI 55 que no es de ninguna cuadrilla).
+   */
+  siNoExiste?: 'error' | 'aviso'
 }
 
 export interface ImportKind {
@@ -74,15 +80,15 @@ export const IMPORT_KINDS: Record<ImportKind['key'], ImportKind> = {
       { key: 'item_number', label: 'N.º de ítem', required: true, type: 'number',
         aliases: ['item', 'nro', 'numero', 'n', 'correlativo'] },
       { key: 'description', label: 'Descripción', required: true, type: 'text',
-        aliases: ['descripcion', 'detalle', 'incumplimiento', 'deficiencia'] },
+        aliases: ['descripcion', 'detalle', 'incumplimiento', 'deficiencia', 'defectonoadmitido', 'defecto'] },
       { key: 'section_code', label: 'Tramo', required: false, type: 'lookup', lookup: 'section',
-        aliases: ['tramo', 'seccion', 'ruta', 'sector'] },
+        aliases: ['tramo', 'seccion', 'ruta', 'sector'], hint: 'Tramo o sector (2.1, 2.2…)' },
       { key: 'prog_start_m', label: 'Progresiva inicio', required: false, type: 'progresiva',
         aliases: ['progresiva', 'progresivainicio', 'progini', 'kminicio', 'km', 'desde', 'ubicacion'] },
       { key: 'prog_end_m', label: 'Progresiva fin', required: false, type: 'progresiva',
         aliases: ['progresivafin', 'progfin', 'kmfin', 'hasta'] },
       { key: 'side', label: 'Lado', required: false, type: 'lookup', lookup: 'side',
-        aliases: ['lado'], hint: 'LD, LI, LD-LI (ambos) o EJE' },
+        aliases: ['lado'], hint: 'LD, LI, LD-LI, EJE, CD o CI; si no hay columna, se lee de la observación' },
       { key: 'term_days', label: 'Plazo (días)', required: false, type: 'number',
         aliases: ['plazo', 'plazodias', 'dias', 'diasplazo'],
         hint: 'Uno de los plazos del contrato; si falta, el plazo base del PCI' },
@@ -93,7 +99,8 @@ export const IMPORT_KINDS: Record<ImportKind['key'], ImportKind> = {
       { key: 'notes', label: 'Observaciones', required: false, type: 'text',
         aliases: ['observaciones', 'observacion', 'notas', 'nota', 'comentario'] },
       { key: 'crew_code', label: 'Cuadrilla', required: false, type: 'lookup', lookup: 'crew',
-        aliases: ['cuadrilla', 'crew'], hint: 'Código o nombre de la cuadrilla que lo atiende' },
+        aliases: ['cuadrilla', 'crew', 'encargado', 'jefe', 'responsable', 'capataz'],
+        hint: 'Código o nombre de la cuadrilla, o el nombre de su jefe (ENCARGADO)', siNoExiste: 'aviso' },
       { key: 'received_on', label: 'Fecha de recepción', required: false, type: 'date',
         aliases: ['fecharecepcion', 'recepcion', 'recibido'], hint: 'Solo para crear un PCI nuevo' },
     ],
@@ -192,7 +199,7 @@ export function coerce(
   value: any,
   field: ImportField,
   lookups: Record<string, Map<string, string>>
-): { value: any; error?: string } {
+): { value: any; error?: string; aviso?: string } {
   if (value == null || value === '') {
     return field.required ? { value: null, error: `${field.label} es obligatorio` } : { value: null }
   }
@@ -230,11 +237,17 @@ export function coerce(
       const table = lookups[field.lookup!]
       if (!table) return { value: String(value) }
       const key = norm(String(value))
+      // Una cuadrilla también se reconoce por el nombre de pila de su jefe:
+      // «JOSE RAMOS» es la de José
       const found = table.get(key)
+        ?? (field.lookup === 'crew' ? table.get(norm(String(value).trim().split(/\s+/)[0] ?? '')) : undefined)
       // Aunque el campo sea opcional, un valor escrito que no existe es un
       // error: una errata en «Cuadrilla» dejaba el ítem sin asignar y nadie
       // se enteraba. La celda vacía sí es válida (se resolvió arriba).
       if (!found) {
+        if (field.siNoExiste === 'aviso') {
+          return { value: null, aviso: `${field.label}: "${String(value).trim()}" no corresponde a ninguna; queda sin asignar` }
+        }
         return { value: null, error: `${field.label}: "${value}" no existe en el catálogo` }
       }
       return { value: found }
@@ -245,3 +258,17 @@ export function coerce(
 }
 
 export const normKey = norm
+
+/**
+ * La fila de los encabezados: la primera, entre las diez de arriba, que
+ * nombra al menos dos campos del esquema. El control del PCI 55 trae una
+ * fila suelta («BARREDORA») encima de los encabezados.
+ */
+export function filaDeEncabezados(matriz: unknown[][], fields: ImportField[]): number {
+  const nombres = new Set(fields.flatMap((f) => [f.key, f.label, ...f.aliases].map(norm)))
+  for (let i = 0; i < Math.min(10, matriz.length); i++) {
+    const celdas = (matriz[i] ?? []).map((c) => norm(String(c ?? ''))).filter(Boolean)
+    if (celdas.filter((c) => nombres.has(c)).length >= 2) return i
+  }
+  return 0
+}
