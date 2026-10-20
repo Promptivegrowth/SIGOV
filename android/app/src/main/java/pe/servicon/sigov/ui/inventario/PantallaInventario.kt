@@ -1,6 +1,12 @@
 package pe.servicon.sigov.ui.inventario
 
-import android.graphics.Color as ColorAndroid
+import androidx.activity.compose.rememberLauncherForActivityResult
+import androidx.activity.result.contract.ActivityResultContracts
+import androidx.core.content.FileProvider
+import androidx.compose.material.icons.outlined.Add
+import androidx.compose.material.icons.outlined.ChevronRight
+import androidx.compose.material.icons.outlined.Schedule
+import java.io.File
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.horizontalScroll
@@ -61,21 +67,6 @@ import pe.servicon.sigov.ui.componentes.ArmazonDeApartado
 import pe.servicon.sigov.ui.theme.Marca
 import pe.servicon.sigov.ui.theme.TintaSuave
 
-/**
- * El inventario del tramo sobre el mapa.
- *
- * Es la misma pantalla del panel web, hecha para el bolsillo: el supervisor
- * está parado en la carretera y necesita saber qué tiene cerca que hace
- * tiempo nadie toca. Por eso el color del punto es el tiempo sin intervenir
- * y no el estado de conservación, y por eso los filtros están arriba, a un
- * toque del pulgar.
- *
- * La cartografía de fondo necesita señal. Cuando no la hay, el mapa queda
- * gris pero los puntos, los filtros y las fichas siguen funcionando con lo
- * que se bajó la última vez: en carretera eso es la diferencia entre una
- * herramienta y un adorno.
- */
-
 private val COLOR_SEMAFORO = mapOf(
     Semaforo.AL_DIA to Color(0xFF16A34A),
     Semaforo.POR_VENCER to Color(0xFFF59E0B),
@@ -83,40 +74,55 @@ private val COLOR_SEMAFORO = mapOf(
     Semaforo.SIN_INTERVENIR to Color(0xFF64748B),
 )
 
+/** El rojo de lo observado en campo. */
+private val ROJO_OBSERVADO = Color(0xFFB91C1C)
+
 private const val FUENTE = "src-inventario"
 private const val CAPA = "capa-inventario"
 
+/** «#7C3AED» → Color; si no se entiende, gris. */
+internal fun colorDe(hex: String?): Color =
+    runCatching { Color(android.graphics.Color.parseColor(hex ?: "")) }.getOrDefault(Color(0xFF64748B))
+
+/**
+ * El inventario del tramo (boceto de Elvis del 14/10).
+ *
+ * Arriba el tramo (Tramo 1 a 4) y los componentes, que se pueden elegir
+ * varios; luego la leyenda del estado. En el mapa cada componente lleva su
+ * color, y el borde dice cómo está: verde intervenido, ámbar por vencer, rojo
+ * crítico. Debajo, los elementos del tramo para abrir su ficha.
+ *
+ * La cartografía de fondo necesita señal. Cuando no la hay, el mapa queda
+ * gris pero los puntos, los filtros y las fichas siguen funcionando con lo
+ * que se bajó la última vez.
+ */
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun PantallaInventario(
     vm: InventarioViewModel = hiltViewModel(),
     alVolver: () -> Unit,
+    alVerPciEnMapa: () -> Unit = {},
 ) {
     val estado by vm.estado.collectAsStateWithLifecycle()
     val avisos = remember { SnackbarHostState() }
-    var filtrosAbiertos by remember { mutableStateOf(false) }
 
-    LaunchedEffect(estado.error) {
-        estado.error?.let { avisos.showSnackbar(it); vm.avisoVisto() }
+    LaunchedEffect(estado.error, estado.aviso) {
+        if (estado.abierto != null) return@LaunchedEffect
+        (estado.error ?: estado.aviso)?.let { avisos.showSnackbar(it); vm.avisoVisto() }
     }
 
     ArmazonDeApartado(
         titulo = "Inventario vial",
         seccion = "Lo que hay en tu tramo",
         alVolver = alVolver,
-        ayuda = "En rojo, lo que hace tiempo que nadie interviene.",
         avisos = avisos,
         acciones = {
-            IconButton(onClick = { filtrosAbiertos = true }) {
-                Icon(Icons.Outlined.FilterList, "Filtros", tint = Marca.Azul)
-            }
             IconButton(onClick = vm::refrescar) {
                 Icon(Icons.Outlined.Refresh, "Actualizar", tint = Marca.Azul)
             }
         },
     ) { relleno ->
-        Box(Modifier.fillMaxSize().padding(relleno)) {
-
+        Column(Modifier.fillMaxSize().padding(relleno)) {
             if (estado.cargando && estado.todos.isEmpty()) {
                 Column(
                     Modifier.fillMaxSize(),
@@ -125,85 +131,222 @@ fun PantallaInventario(
                 ) {
                     CircularProgressIndicator(color = Marca.Verde, strokeWidth = 3.dp)
                     Spacer(Modifier.height(14.dp))
-                    Text("Bajando el inventario…", style = MaterialTheme.typography.bodySmall,
-                        color = TintaSuave)
+                    Text("Bajando el inventario…", style = MaterialTheme.typography.bodySmall, color = TintaSuave)
                 }
-            } else {
+                return@Column
+            }
+
+            // ── Tramo ─────────────────────────────────────────────────
+            Rotulo("TRAMO", Modifier.padding(start = 14.dp, top = 8.dp))
+            LazyRow(
+                contentPadding = PaddingValues(horizontal = 12.dp),
+                horizontalArrangement = Arrangement.spacedBy(7.dp),
+            ) {
+                item {
+                    FilterChip(
+                        selected = estado.tramoId == null,
+                        onClick = { vm.elegirTramo(null) },
+                        label = { Text("Todo el contrato", fontSize = 12.5.sp) },
+                        colors = chipAzul(),
+                    )
+                }
+                items(estado.tramos, key = { it.id }) { t ->
+                    FilterChip(
+                        selected = estado.tramoId == t.id,
+                        onClick = { vm.elegirTramo(t.id) },
+                        label = { Text(t.etiqueta, fontSize = 12.5.sp) },
+                        colors = chipAzul(),
+                    )
+                }
+            }
+
+            // ── Componentes: varios a la vez, cada uno con su color ───
+            Row(Modifier.padding(start = 14.dp, end = 4.dp), verticalAlignment = Alignment.CenterVertically) {
+                Rotulo("COMPONENTES", Modifier.weight(1f))
+                if (estado.tipos.isNotEmpty()) {
+                    TextButton(onClick = vm::limpiarTipos) { Text("Limpiar", fontSize = 12.sp) }
+                } else {
+                    Text("Puedes elegir varios", fontSize = 11.sp, color = TintaSuave, modifier = Modifier.padding(end = 10.dp, top = 6.dp, bottom = 6.dp))
+                }
+            }
+            LazyRow(
+                contentPadding = PaddingValues(horizontal = 12.dp),
+                horizontalArrangement = Arrangement.spacedBy(7.dp),
+            ) {
+                items(estado.resumen, key = { it.codigo }) { t ->
+                    val color = colorDe(estado.colores[t.codigo])
+                    val activo = t.codigo in estado.tipos
+                    FilterChip(
+                        selected = activo,
+                        onClick = { vm.alternarTipo(t.codigo) },
+                        leadingIcon = { Box(Modifier.size(10.dp).clip(CircleShape).background(color)) },
+                        label = { Text("${t.nombre} · ${t.total}", fontSize = 12.sp) },
+                        colors = FilterChipDefaults.filterChipColors(
+                            selectedContainerColor = color.copy(alpha = 0.16f),
+                            selectedLabelColor = MaterialTheme.colorScheme.onSurface,
+                        ),
+                        border = FilterChipDefaults.filterChipBorder(
+                            enabled = true, selected = activo,
+                            selectedBorderColor = color, selectedBorderWidth = 1.5.dp,
+                        ),
+                    )
+                }
+            }
+
+            // ── La leyenda del estado, que también filtra ─────────────
+            Row(
+                Modifier
+                    .fillMaxWidth()
+                    .horizontalScroll(rememberScrollState())
+                    .padding(horizontal = 10.dp, vertical = 6.dp),
+                horizontalArrangement = Arrangement.spacedBy(6.dp),
+                verticalAlignment = Alignment.CenterVertically,
+            ) {
+                Semaforo.entries.forEach { s ->
+                    Leyenda(s.etiqueta, estado.porSemaforo[s] ?: 0, COLOR_SEMAFORO[s] ?: Color.Gray, s in estado.semaforos) {
+                        vm.alternarSemaforo(s)
+                    }
+                }
+                Leyenda("Observados", estado.observados, ROJO_OBSERVADO, estado.soloObservados, cuadrado = true) {
+                    vm.alternarObservados()
+                }
+            }
+
+            // ── El mapa ───────────────────────────────────────────────
+            Box(Modifier.fillMaxWidth().weight(1f)) {
                 MapaDelInventario(
                     elementos = estado.visibles,
                     alTocar = vm::abrir,
                     modifier = Modifier.fillMaxSize(),
                 )
-
-                // ── El semáforo, siempre a la vista ───────────────────
-                Row(
-                    Modifier
-                        .align(Alignment.TopCenter)
-                        .padding(10.dp)
-                        .clip(RoundedCornerShape(10.dp))
-                        .background(Color.White.copy(alpha = 0.94f))
-                        .horizontalScroll(rememberScrollState())
-                        .padding(horizontal = 10.dp, vertical = 7.dp),
-                    horizontalArrangement = Arrangement.spacedBy(12.dp),
-                    verticalAlignment = Alignment.CenterVertically,
+                Button(
+                    onClick = alVerPciEnMapa,
+                    colors = ButtonDefaults.buttonColors(containerColor = Marca.Azul),
+                    shape = RoundedCornerShape(10.dp),
+                    contentPadding = PaddingValues(horizontal = 12.dp),
+                    modifier = Modifier.align(Alignment.BottomEnd).padding(10.dp).height(40.dp),
                 ) {
-                    Semaforo.entries.forEach { s ->
-                        val activo = s in estado.semaforos
-                        val cuantos = estado.porSemaforo[s] ?: 0
-                        Row(
-                            Modifier
-                                .clip(RoundedCornerShape(7.dp))
-                                .background(if (activo) Marca.Azul.copy(alpha = 0.10f) else Color.Transparent)
-                                .clickable { vm.alternarSemaforo(s) }
-                                .padding(horizontal = 6.dp, vertical = 3.dp),
-                            verticalAlignment = Alignment.CenterVertically,
-                            horizontalArrangement = Arrangement.spacedBy(5.dp),
-                        ) {
-                            Box(Modifier.size(9.dp).clip(CircleShape)
-                                .background(COLOR_SEMAFORO[s] ?: Color.Gray))
-                            Text(s.etiqueta, fontSize = 11.5.sp,
-                                fontWeight = if (activo) FontWeight.SemiBold else FontWeight.Normal)
-                            Text("$cuantos", fontSize = 11.sp, color = TintaSuave)
-                        }
-                    }
-                }
-
-                // ── Cuántos se están viendo ───────────────────────────
-                Surface(
-                    Modifier.align(Alignment.BottomStart).padding(10.dp),
-                    shape = RoundedCornerShape(9.dp),
-                    color = Color.White.copy(alpha = 0.94f),
-                    shadowElevation = 2.dp,
-                ) {
-                    Text(
-                        "${estado.visibles.size} de ${estado.todos.size} elementos",
-                        Modifier.padding(horizontal = 10.dp, vertical = 6.dp),
-                        fontSize = 11.5.sp,
-                        fontWeight = FontWeight.Medium,
-                    )
+                    Text("Ver PCI en mapa", fontSize = 12.5.sp)
+                    Icon(Icons.Outlined.ChevronRight, null, Modifier.size(18.dp))
                 }
             }
-        }
-    }
 
-    // ── Los filtros ───────────────────────────────────────────────────
-    if (filtrosAbiertos) {
-        ModalBottomSheet(onDismissRequest = { filtrosAbiertos = false }) {
-            HojaDeFiltros(
-                estado = estado,
-                alElegirTramo = vm::elegirTramo,
-                alAlternarTipo = vm::alternarTipo,
-                alLimpiar = vm::limpiarTipos,
-            )
+            // ── Los elementos del tramo ───────────────────────────────
+            ListaDeElementos(estado, vm, Modifier.fillMaxWidth().weight(0.85f))
         }
     }
 
     // ── La ficha del elemento ─────────────────────────────────────────
     estado.abierto?.let { elemento ->
-        ModalBottomSheet(onDismissRequest = vm::cerrarFicha) {
-            FichaDelElemento(elemento, estado, urlGrande = vm::urlGrande)
+        ModalBottomSheet(onDismissRequest = vm::cerrarFicha, sheetState = rememberModalBottomSheetState(skipPartiallyExpanded = true)) {
+            FichaDelElemento(elemento, estado, vm)
         }
     }
+}
+
+@Composable
+private fun chipAzul() = FilterChipDefaults.filterChipColors(
+    selectedContainerColor = Marca.Azul,
+    selectedLabelColor = Color.White,
+)
+
+@Composable
+private fun Rotulo(texto: String, modifier: Modifier = Modifier) {
+    Text(texto, fontSize = 10.5.sp, letterSpacing = 1.sp, fontWeight = FontWeight.SemiBold, color = TintaSuave, modifier = modifier)
+}
+
+@Composable
+private fun Leyenda(etiqueta: String, cuantos: Int, color: Color, activo: Boolean, cuadrado: Boolean = false, alTocar: () -> Unit) {
+    Row(
+        Modifier
+            .clip(RoundedCornerShape(8.dp))
+            .background(if (activo) color.copy(alpha = 0.14f) else MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.6f))
+            .clickable(onClick = alTocar)
+            .padding(horizontal = 8.dp, vertical = 5.dp),
+        verticalAlignment = Alignment.CenterVertically,
+        horizontalArrangement = Arrangement.spacedBy(5.dp),
+    ) {
+        Box(Modifier.size(9.dp).clip(if (cuadrado) RoundedCornerShape(2.dp) else CircleShape).background(color))
+        Text(etiqueta, fontSize = 11.5.sp, fontWeight = if (activo) FontWeight.Bold else FontWeight.Medium)
+        Text("$cuantos", fontSize = 11.5.sp, fontWeight = FontWeight.Bold, color = color)
+    }
+}
+
+/** «Elementos en el tramo»: la lista que acompaña al mapa (boceto). */
+@Composable
+private fun ListaDeElementos(estado: EstadoInventario, vm: InventarioViewModel, modifier: Modifier) {
+    // Lo que pide atención primero: lo observado, lo crítico y lo que vence
+    val lista = remember(estado.visibles) {
+        estado.visibles.sortedWith(
+            compareByDescending<ElementoVial> { it.observado }
+                .thenBy { Semaforo.de(it.semaforo).let { s -> listOf(Semaforo.CRITICO, Semaforo.POR_VENCER, Semaforo.SIN_INTERVENIR, Semaforo.AL_DIA).indexOf(s) } }
+                .thenBy { it.progresivaM ?: 0.0 },
+        )
+    }
+    Column(modifier) {
+        Row(Modifier.padding(horizontal = 14.dp, vertical = 6.dp), verticalAlignment = Alignment.CenterVertically) {
+            Text(
+                "Elementos en ${estado.etiquetaDelTramo?.lowercase() ?: "el contrato"}",
+                style = MaterialTheme.typography.titleSmall, fontWeight = FontWeight.Bold,
+            )
+            Spacer(Modifier.width(6.dp))
+            Text("${lista.size}", style = MaterialTheme.typography.titleSmall, fontWeight = FontWeight.Bold, color = Marca.Azul,
+                modifier = Modifier.weight(1f))
+            if (estado.tipos.isNotEmpty()) {
+                Text("Filtrados: ${estado.tipos.size} ${if (estado.tipos.size == 1) "componente" else "componentes"}",
+                    fontSize = 11.sp, color = TintaSuave)
+            }
+        }
+        HorizontalDivider()
+        LazyColumn(Modifier.fillMaxSize()) {
+            items(lista, key = { it.id }) { e -> FilaDeElemento(e, vm) { vm.abrir(e) } }
+        }
+    }
+}
+
+@Composable
+private fun FilaDeElemento(e: ElementoVial, vm: InventarioViewModel, alAbrir: () -> Unit) {
+    val semaforo = Semaforo.de(e.semaforo)
+    // La miniatura se firma solo cuando la fila aparece en pantalla
+    val url by produceState<String?>(null, e.fotoActual) { value = vm.urlMiniatura(e.fotoActual) }
+    Row(
+        Modifier
+            .fillMaxWidth()
+            .clickable(onClick = alAbrir)
+            .padding(horizontal = 14.dp, vertical = 8.dp),
+        verticalAlignment = Alignment.CenterVertically,
+        horizontalArrangement = Arrangement.spacedBy(10.dp),
+    ) {
+        Box(
+            Modifier
+                .size(52.dp)
+                .clip(RoundedCornerShape(8.dp))
+                .background(colorDe(e.color).copy(alpha = 0.18f)),
+            contentAlignment = Alignment.Center,
+        ) {
+            if (url != null) {
+                AsyncImage(model = url, contentDescription = null, contentScale = ContentScale.Crop, modifier = Modifier.fillMaxSize())
+            } else {
+                Box(Modifier.size(14.dp).clip(CircleShape).background(colorDe(e.color)))
+            }
+        }
+        Column(Modifier.weight(1f)) {
+            Text(e.name ?: e.tipo ?: "Elemento", fontSize = 13.5.sp, fontWeight = FontWeight.SemiBold, maxLines = 1)
+            Text(
+                listOfNotNull(e.tipo, e.tramoCorto, e.progresiva?.let { "km $it" }).joinToString(" · "),
+                fontSize = 11.5.sp, color = TintaSuave, maxLines = 1,
+            )
+            Row(horizontalArrangement = Arrangement.spacedBy(6.dp), verticalAlignment = Alignment.CenterVertically) {
+                val (texto, color) = if (e.observado) "Observado" to ROJO_OBSERVADO else semaforo.etiqueta to (COLOR_SEMAFORO[semaforo] ?: Color.Gray)
+                Text(texto, fontSize = 11.sp, fontWeight = FontWeight.SemiBold, color = color,
+                    modifier = Modifier.background(color.copy(alpha = 0.12f), RoundedCornerShape(5.dp)).padding(horizontal = 6.dp, vertical = 1.dp))
+                e.diasSinIntervenir?.let { Text("Hace $it días", fontSize = 11.sp, color = TintaSuave) }
+            }
+        }
+        Text("Abrir", fontSize = 12.5.sp, color = Marca.Azul, fontWeight = FontWeight.SemiBold)
+        Icon(Icons.Outlined.ChevronRight, null, Modifier.size(18.dp), tint = Marca.Azul)
+    }
+    HorizontalDivider(color = MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.5f))
 }
 
 // ═══ El mapa ══════════════════════════════════════════════════════════
@@ -211,21 +354,19 @@ fun PantallaInventario(
 /**
  * El lienzo de MapLibre dentro de Compose.
  *
- * Se dibuja una sola capa de círculos coloreada por el semáforo, igual que
- * en la web. Miles de puntos en una capa vectorial se mueven sin tirones; un
- * marcador por elemento habría dejado el mapa inservible.
+ * Una sola capa de círculos: el relleno es el color del componente (Elvis:
+ * «que tenga distintos colores al momento de filtrar») y el borde, el estado.
+ * Miles de puntos en una capa vectorial se mueven sin tirones.
  */
 @Composable
-private fun MapaDelInventario(
+internal fun MapaDelInventario(
     elementos: List<ElementoVial>,
     alTocar: (ElementoVial) -> Unit,
     modifier: Modifier = Modifier,
 ) {
     val contexto = LocalContext.current
     // El oyente de toques se registra una sola vez, con el mapa: tiene que
-    // leer siempre la lista vigente. Si se quedaba con la de la primera
-    // carga —la guardada en el equipo—, al llegar el inventario del servidor
-    // con otros elementos ningún toque abría la ficha.
+    // leer siempre la lista vigente.
     val porId by rememberUpdatedState(remember(elementos) { elementos.associateBy { it.id } })
     val tocar by rememberUpdatedState(alTocar)
     var mapa by remember { mutableStateOf<MapLibreMap?>(null) }
@@ -254,39 +395,27 @@ private fun MapaDelInventario(
                     estilo.addSource(GeoJsonSource(FUENTE, FeatureCollection.fromFeatures(emptyList())))
                     estilo.addLayer(
                         CircleLayer(CAPA, FUENTE).withProperties(
-                            PropertyFactory.circleColor(
-                                Expression.match(
-                                    Expression.get("semaforo"),
-                                    Expression.color(COLOR_SEMAFORO[Semaforo.SIN_INTERVENIR]!!.toArgb()),
-                                    Expression.stop("al_dia", Expression.color(COLOR_SEMAFORO[Semaforo.AL_DIA]!!.toArgb())),
-                                    Expression.stop("por_vencer", Expression.color(COLOR_SEMAFORO[Semaforo.POR_VENCER]!!.toArgb())),
-                                    Expression.stop("critico", Expression.color(COLOR_SEMAFORO[Semaforo.CRITICO]!!.toArgb())),
-                                )
-                            ),
+                            PropertyFactory.circleColor(Expression.toColor(Expression.get("color"))),
                             PropertyFactory.circleRadius(
                                 Expression.interpolate(
                                     Expression.linear(), Expression.zoom(),
-                                    Expression.stop(6, 2f),
-                                    Expression.stop(9, 3.5f),
-                                    Expression.stop(12, 6f),
-                                    Expression.stop(16, 11f),
+                                    Expression.stop(6, 2.5f),
+                                    Expression.stop(9, 4f),
+                                    Expression.stop(12, 7f),
+                                    Expression.stop(16, 12f),
                                 )
                             ),
-                            // El borde blanco aparece al acercarse. A vista de
-                            // contrato hay dos mil setecientos puntos casi
-                            // pegados y sus bordes se fundían en una banda
-                            // blanca que tapaba los colores del semáforo.
                             PropertyFactory.circleStrokeWidth(
                                 Expression.interpolate(
                                     Expression.linear(), Expression.zoom(),
-                                    Expression.stop(6, 0f),
-                                    Expression.stop(10, 0f),
-                                    Expression.stop(12, 1.2f),
-                                    Expression.stop(16, 1.8f),
+                                    Expression.stop(6, 0.6f),
+                                    Expression.stop(10, 1.2f),
+                                    Expression.stop(13, 2.4f),
+                                    Expression.stop(16, 3.2f),
                                 )
                             ),
-                            PropertyFactory.circleStrokeColor(ColorAndroid.WHITE),
-                            PropertyFactory.circleOpacity(0.92f),
+                            PropertyFactory.circleStrokeColor(Expression.toColor(Expression.get("borde"))),
+                            PropertyFactory.circleOpacity(0.95f),
                         )
                     )
                     estiloListo = true
@@ -294,8 +423,7 @@ private fun MapaDelInventario(
 
                 m.addOnMapClickListener { punto ->
                     val pantalla = m.projection.toScreenLocation(punto)
-                    // Un dedo no acierta un círculo de siete píxeles: se
-                    // busca en un cuadrado de tolerancia alrededor del toque.
+                    // Un dedo no acierta un círculo de siete píxeles
                     val radio = 26f
                     val caja = android.graphics.RectF(
                         pantalla.x - radio, pantalla.y - radio,
@@ -319,9 +447,11 @@ private fun MapaDelInventario(
         val rasgos = elementos.mapNotNull { e ->
             val lat = e.lat ?: return@mapNotNull null
             val lng = e.lng ?: return@mapNotNull null
+            val borde = if (e.observado) ROJO_OBSERVADO else COLOR_SEMAFORO[Semaforo.de(e.semaforo)] ?: Color.Gray
             Feature.fromGeometry(Point.fromLngLat(lng, lat)).apply {
                 addStringProperty("id", e.id)
-                addStringProperty("semaforo", e.semaforo ?: "sin_intervenir")
+                addStringProperty("color", e.color ?: "#64748B")
+                addStringProperty("borde", hex(borde))
             }
         }
 
@@ -340,15 +470,17 @@ private fun MapaDelInventario(
                     .include(LatLng(lats.max(), lngs.max()))
                     .build()
                 runCatching {
-                    m.animateCamera(CameraUpdateFactory.newLatLngBounds(limites, 60), 700)
+                    m.animateCamera(CameraUpdateFactory.newLatLngBounds(limites, 50), 700)
                 }
             }
         }
     }
 }
 
+internal fun hex(c: Color): String = String.format("#%06X", 0xFFFFFF and c.toArgb())
+
 /** La misma cartografía abierta que usa el panel web: sin clave ni licencia. */
-private const val ESTILO_CALLES = """
+internal const val ESTILO_CALLES = """
 {
   "version": 8,
   "sources": {
@@ -363,110 +495,31 @@ private const val ESTILO_CALLES = """
 }
 """
 
-// ═══ Los filtros ══════════════════════════════════════════════════════
-
-@Composable
-private fun HojaDeFiltros(
-    estado: EstadoInventario,
-    alElegirTramo: (String?) -> Unit,
-    alAlternarTipo: (String) -> Unit,
-    alLimpiar: () -> Unit,
-) {
-    Column(
-        Modifier
-            .fillMaxWidth()
-            .verticalScroll(rememberScrollState())
-            .padding(start = 16.dp, end = 16.dp, bottom = 28.dp),
-        verticalArrangement = Arrangement.spacedBy(14.dp),
-    ) {
-        Text("Filtrar el inventario", style = MaterialTheme.typography.titleMedium,
-            fontWeight = FontWeight.Bold)
-
-        // El tramo
-        Column(verticalArrangement = Arrangement.spacedBy(7.dp)) {
-            Text("TRAMO", fontSize = 10.5.sp, letterSpacing = 1.sp,
-                fontWeight = FontWeight.SemiBold, color = TintaSuave)
-            LazyRow(horizontalArrangement = Arrangement.spacedBy(7.dp)) {
-                item {
-                    FilterChip(
-                        selected = estado.tramoId == null,
-                        onClick = { alElegirTramo(null) },
-                        label = { Text("Todo el contrato", fontSize = 12.sp) },
-                    )
-                }
-                items(estado.tramos) { t ->
-                    FilterChip(
-                        selected = estado.tramoId == t.id,
-                        onClick = { alElegirTramo(t.id) },
-                        label = { Text(t.code, fontSize = 12.sp) },
-                    )
-                }
-            }
-        }
-
-        // Los componentes
-        Column(verticalArrangement = Arrangement.spacedBy(7.dp)) {
-            Row(verticalAlignment = Alignment.CenterVertically) {
-                Text("COMPONENTE", fontSize = 10.5.sp, letterSpacing = 1.sp,
-                    fontWeight = FontWeight.SemiBold, color = TintaSuave,
-                    modifier = Modifier.weight(1f))
-                if (estado.tipos.isNotEmpty()) {
-                    TextButton(onClick = alLimpiar) { Text("Ver todos", fontSize = 12.sp) }
-                }
-            }
-
-            estado.resumen.forEach { t ->
-                val activo = t.codigo in estado.tipos
-                Surface(
-                    onClick = { alAlternarTipo(t.codigo) },
-                    shape = RoundedCornerShape(10.dp),
-                    color = if (activo) Marca.Azul.copy(alpha = 0.08f) else Color.Transparent,
-                    border = androidx.compose.foundation.BorderStroke(
-                        1.dp,
-                        if (activo) Marca.Azul.copy(alpha = 0.45f) else Color(0xFFE2E6EE),
-                    ),
-                    modifier = Modifier.fillMaxWidth(),
-                ) {
-                    Row(
-                        Modifier.padding(horizontal = 12.dp, vertical = 10.dp),
-                        verticalAlignment = Alignment.CenterVertically,
-                        horizontalArrangement = Arrangement.spacedBy(10.dp),
-                    ) {
-                        Column(Modifier.weight(1f)) {
-                            Text(t.nombre, fontSize = 13.5.sp, fontWeight = FontWeight.Medium)
-                            Text(t.category ?: "", fontSize = 11.sp, color = TintaSuave)
-                        }
-                        Column(horizontalAlignment = Alignment.End) {
-                            Text("${t.total}", fontSize = 13.sp, fontWeight = FontWeight.Bold)
-                            if (t.porAtender > 0) {
-                                Text("${t.porAtender} por atender", fontSize = 10.5.sp,
-                                    color = COLOR_SEMAFORO[Semaforo.CRITICO]!!)
-                            }
-                        }
-                    }
-                }
-            }
-        }
-    }
-}
-
 // ═══ La ficha ═════════════════════════════════════════════════════════
 
+/**
+ * El detalle del elemento (boceto «Registro de foto de intervención»): la
+ * foto base del inventario siempre queda; al lado, las tres últimas fotos de
+ * intervención con su fecha y hora, y el recuadro para registrar otra. Las
+ * más viejas dejan de verse aquí pero siguen en la base (Elvis).
+ */
 @Composable
 private fun FichaDelElemento(
     elemento: ElementoVial,
     estado: EstadoInventario,
-    urlGrande: suspend (String?) -> String? = { null },
+    vm: InventarioViewModel,
 ) {
     // La foto ampliada, cuando se toca una
     var ampliada by remember { mutableStateOf<String?>(null) }
+    var registrando by remember { mutableStateOf(false) }
     val alcance = rememberCoroutineScope()
-    val ampliar: (String?) -> Unit = { ruta ->
-        alcance.launch { ampliada = urlGrande(ruta) }
-    }
+    val ampliar: (String?) -> Unit = { ruta -> alcance.launch { ampliada = vm.urlGrande(ruta) } }
 
     val semaforo = Semaforo.de(elemento.semaforo)
-    val color = COLOR_SEMAFORO[semaforo] ?: Color.Gray
+    val color = if (elemento.observado) ROJO_OBSERVADO else COLOR_SEMAFORO[semaforo] ?: Color.Gray
+
+    val base = estado.galeria.lastOrNull { it.first.esBase }
+    val intervenciones = estado.galeria.filter { !it.first.esBase }
 
     Column(
         Modifier
@@ -478,18 +531,19 @@ private fun FichaDelElemento(
         Column {
             Text(elemento.name ?: elemento.tipo ?: "Elemento",
                 style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.Bold)
-            Text("${elemento.code ?: ""} · ${elemento.tipo ?: ""}",
-                fontSize = 12.sp, color = TintaSuave)
+            Text("${elemento.code ?: ""} · ${elemento.tipo ?: ""}", fontSize = 12.sp, color = TintaSuave)
         }
 
-        // El semáforo: lo que trajo al supervisor hasta aquí
-        Surface(shape = RoundedCornerShape(10.dp), color = color.copy(alpha = 0.10f),
-            modifier = Modifier.fillMaxWidth()) {
+        // El estado: lo que trajo al supervisor hasta aquí
+        Surface(shape = RoundedCornerShape(10.dp), color = color.copy(alpha = 0.10f), modifier = Modifier.fillMaxWidth()) {
             Column(Modifier.padding(horizontal = 12.dp, vertical = 10.dp)) {
-                Text(semaforo.etiqueta, fontSize = 13.sp, fontWeight = FontWeight.Bold, color = color)
+                Text(if (elemento.observado) "Observado" else semaforo.etiqueta, fontSize = 13.sp, fontWeight = FontWeight.Bold, color = color)
+                elemento.observacion?.takeIf { elemento.observado }?.let {
+                    Text(it, fontSize = 12.5.sp, color = color)
+                }
                 Text(
                     elemento.ultimaIntervencion?.let {
-                        "Última intervención el $it · hace ${elemento.diasSinIntervenir ?: 0} días"
+                        "Última intervención el ${fechaDma(it)} · hace ${elemento.diasSinIntervenir ?: 0} días"
                     } ?: "Nunca se registró una intervención",
                     fontSize = 12.sp, color = TintaSuave,
                 )
@@ -508,7 +562,7 @@ private fun FichaDelElemento(
             )
             DatoFicha("Lado", pe.servicon.sigov.datos.Lados.etiqueta(elemento.side) ?: "—", Modifier.weight(1f))
         }
-        DatoFicha("Tramo", elemento.tramo ?: "—", Modifier.fillMaxWidth())
+        DatoFicha("Tramo", listOfNotNull(elemento.tramoCorto, elemento.tramo).joinToString(" · ").ifBlank { "—" }, Modifier.fillMaxWidth())
         Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
             DatoFicha("Conservación", elemento.condition ?: "—", Modifier.weight(1f))
             DatoFicha("Visitas", "${elemento.visitas}", Modifier.weight(1f))
@@ -522,18 +576,14 @@ private fun FichaDelElemento(
                 Row(verticalAlignment = Alignment.CenterVertically) {
                     Icon(Icons.Outlined.ListAlt, null, Modifier.size(14.dp), tint = TintaSuave)
                     Spacer(Modifier.width(5.dp))
-                    Text("DATOS DEL INVENTARIO", fontSize = 10.5.sp, letterSpacing = 1.sp,
-                        fontWeight = FontWeight.SemiBold, color = TintaSuave)
+                    Rotulo("DATOS DEL INVENTARIO")
                 }
-                Surface(shape = RoundedCornerShape(10.dp), color = Color(0xFFF5F7FA),
-                    modifier = Modifier.fillMaxWidth()) {
+                Surface(shape = RoundedCornerShape(10.dp), color = Color(0xFFF5F7FA), modifier = Modifier.fillMaxWidth()) {
                     Column(Modifier.padding(horizontal = 12.dp, vertical = 6.dp)) {
                         campos.forEachIndexed { i, (etiqueta, valor) ->
                             if (i > 0) HorizontalDivider(color = Color(0xFFE3E8EF))
-                            Row(Modifier.fillMaxWidth().padding(vertical = 6.dp),
-                                verticalAlignment = Alignment.CenterVertically) {
-                                Text(etiqueta, fontSize = 12.sp, color = TintaSuave,
-                                    modifier = Modifier.weight(1f))
+                            Row(Modifier.fillMaxWidth().padding(vertical = 6.dp), verticalAlignment = Alignment.CenterVertically) {
+                                Text(etiqueta, fontSize = 12.sp, color = TintaSuave, modifier = Modifier.weight(1f))
                                 Text(valor, fontSize = 13.sp, fontWeight = FontWeight.Medium)
                             }
                         }
@@ -544,67 +594,66 @@ private fun FichaDelElemento(
 
         // Cuando la coordenada del Excel no era de fiar
         if (texto(elemento, "ubicacion") == "progresiva") {
-            Surface(shape = RoundedCornerShape(10.dp), color = Color(0xFFF5F7FA),
-                modifier = Modifier.fillMaxWidth()) {
+            Surface(shape = RoundedCornerShape(10.dp), color = Color(0xFFF5F7FA), modifier = Modifier.fillMaxWidth()) {
                 Row(Modifier.padding(10.dp)) {
                     Icon(Icons.Outlined.Info, null, Modifier.size(15.dp), tint = TintaSuave)
                     Spacer(Modifier.width(7.dp))
                     Text(
                         "Ubicado por su progresiva sobre la vía oficial." +
-                            (texto(elemento, "motivo_ubicacion")
-                                ?.let { " La coordenada del inventario quedaba $it." } ?: ""),
+                            (texto(elemento, "motivo_ubicacion")?.let { " La coordenada del inventario quedaba $it." } ?: ""),
                         fontSize = 11.5.sp, color = TintaSuave,
                     )
                 }
             }
         }
 
-        // Las dos fotos
+        // ── Fotografías: la base, las tres últimas y «Registrar nueva foto» ─
         Column(verticalArrangement = Arrangement.spacedBy(7.dp)) {
             Row(verticalAlignment = Alignment.CenterVertically) {
                 Icon(Icons.Outlined.PhotoCamera, null, Modifier.size(14.dp), tint = TintaSuave)
                 Spacer(Modifier.width(5.dp))
-                Text("FOTOGRAFÍAS", fontSize = 10.5.sp, letterSpacing = 1.sp,
-                    fontWeight = FontWeight.SemiBold, color = TintaSuave,
-                    modifier = Modifier.weight(1f))
-                elemento.diasEntreFotos?.let {
-                    Text("$it días entre una y otra", fontSize = 10.5.sp, color = TintaSuave)
+                Rotulo("FOTOGRAFÍAS")
+            }
+            Surface(shape = RoundedCornerShape(10.dp), color = Marca.Azul.copy(alpha = 0.06f), modifier = Modifier.fillMaxWidth()) {
+                Row(Modifier.padding(10.dp), verticalAlignment = Alignment.CenterVertically) {
+                    Icon(Icons.Outlined.Info, null, Modifier.size(16.dp), tint = Marca.Azul)
+                    Spacer(Modifier.width(7.dp))
+                    Text("Cada intervención agrega una nueva foto con fecha y hora; no reemplaza la foto base.",
+                        fontSize = 11.5.sp, color = Marca.Azul)
                 }
             }
-
-            when {
-                estado.cargandoFicha ->
-                    Box(Modifier.fillMaxWidth().height(60.dp), Alignment.Center) {
-                        CircularProgressIndicator(Modifier.size(22.dp), strokeWidth = 2.dp,
-                            color = Marca.Verde)
+            if (estado.cargandoFicha) {
+                Box(Modifier.fillMaxWidth().height(60.dp), Alignment.Center) {
+                    CircularProgressIndicator(Modifier.size(22.dp), strokeWidth = 2.dp, color = Marca.Verde)
+                }
+            } else {
+                LazyRow(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                    base?.let { (foto, url) ->
+                        item { FotoDeFicha("Foto base", url, pieDeFoto(foto.ruta, foto.tomada), Modifier.width(118.dp), alTocar = { ampliar(foto.ruta) }) }
                     }
-
-                estado.urlActual == null ->
-                    Surface(shape = RoundedCornerShape(10.dp), color = Color(0xFFF5F7FA),
-                        modifier = Modifier.fillMaxWidth()) {
-                        Text(
-                            "Todavía no hay fotografías de este elemento. Aparecerán cuando " +
-                                "una cuadrilla registre trabajo en esta progresiva.",
-                            Modifier.padding(12.dp), fontSize = 12.sp, color = TintaSuave,
+                    items(intervenciones.take(3), key = { it.first.id }) { (foto, url) ->
+                        FotoDeFicha(
+                            if (foto.estado == "observado") "Observado" else "Intervención",
+                            url, fechaYHora(foto.tomada), Modifier.width(118.dp), destacada = true,
+                            colorTitulo = if (foto.estado == "observado") ROJO_OBSERVADO else Marca.Azul,
+                            alTocar = { ampliar(foto.ruta) },
                         )
                     }
-
-                else -> Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                    FotoDeFicha("Ahora", estado.urlActual,
-                        pieDeFoto(elemento.fotoActual, elemento.fotoActualFecha),
-                        Modifier.weight(1f), destacada = true,
-                        alTocar = { ampliar(elemento.fotoActual) })
-                    if (estado.urlAnterior != null) {
-                        FotoDeFicha("Antes", estado.urlAnterior,
-                            pieDeFoto(elemento.fotoAnterior, elemento.fotoAnteriorFecha),
-                            Modifier.weight(1f),
-                            alTocar = { ampliar(elemento.fotoAnterior) })
-                    } else {
-                        Surface(shape = RoundedCornerShape(10.dp), color = Color(0xFFF5F7FA),
-                            modifier = Modifier.weight(1f).aspectRatio(1f)) {
-                            Box(Modifier.padding(10.dp), Alignment.Center) {
-                                Text("Todavía no hay una visita anterior con la que comparar",
-                                    fontSize = 10.5.sp, color = TintaSuave)
+                    item {
+                        Surface(
+                            onClick = { registrando = true },
+                            shape = RoundedCornerShape(10.dp),
+                            color = Marca.VerdeBandera.copy(alpha = 0.06f),
+                            border = androidx.compose.foundation.BorderStroke(1.5.dp, Marca.VerdeBandera.copy(alpha = 0.6f)),
+                            modifier = Modifier.width(118.dp).aspectRatio(1f),
+                        ) {
+                            Column(Modifier.padding(8.dp), verticalArrangement = Arrangement.Center, horizontalAlignment = Alignment.CenterHorizontally) {
+                                Box(Modifier.size(30.dp).clip(CircleShape).background(Marca.VerdeBandera), contentAlignment = Alignment.Center) {
+                                    Icon(Icons.Outlined.Add, null, tint = Color.White)
+                                }
+                                Spacer(Modifier.height(6.dp))
+                                Text("Registrar nueva foto", fontSize = 11.5.sp, fontWeight = FontWeight.SemiBold,
+                                    color = Marca.VerdeBandera, textAlign = androidx.compose.ui.text.style.TextAlign.Center)
                             }
                         }
                     }
@@ -612,48 +661,169 @@ private fun FichaDelElemento(
             }
         }
 
-        // Todas las fotos: las tres vistas de una alcantarilla, las calzadas
-        // del peaje. La comparación enseña dos; aquí están todas.
+        // ── Historial de intervenciones (las fotos, de la más nueva a la base) ─
         if (estado.galeria.isNotEmpty()) {
-            Column(verticalArrangement = Arrangement.spacedBy(5.dp)) {
-                Text("Todas las fotos del elemento · ${estado.galeria.size}",
-                    fontSize = 11.sp, color = TintaSuave)
-                LazyRow(horizontalArrangement = Arrangement.spacedBy(6.dp)) {
-                    items(estado.galeria, key = { it.first.id }) { (foto, url) ->
-                        AsyncImage(
-                            model = url,
-                            contentDescription = foto.caption,
-                            contentScale = ContentScale.Crop,
-                            modifier = Modifier
-                                .size(78.dp)
-                                .clip(RoundedCornerShape(8.dp))
-                                .background(Color(0xFFE9EDF3))
-                                .clickable { ampliar(foto.ruta) },
+            Column(verticalArrangement = Arrangement.spacedBy(6.dp)) {
+                Rotulo("HISTORIAL DE INTERVENCIONES")
+                (intervenciones + listOfNotNull(base)).forEach { (foto, url) ->
+                    Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(9.dp),
+                        modifier = Modifier.fillMaxWidth().clickable { ampliar(foto.ruta) }) {
+                        val c = when {
+                            foto.esBase -> Color(0xFF64748B)
+                            foto.estado == "observado" -> ROJO_OBSERVADO
+                            else -> Marca.Azul
+                        }
+                        Box(Modifier.size(8.dp).clip(CircleShape).background(c))
+                        Text(
+                            when { foto.esBase -> "Foto base"; foto.estado == "observado" -> "Observado"; else -> "Intervención" },
+                            fontSize = 12.5.sp, fontWeight = FontWeight.SemiBold, modifier = Modifier.width(88.dp),
                         )
+                        AsyncImage(model = url, contentDescription = null, contentScale = ContentScale.Crop,
+                            modifier = Modifier.size(width = 46.dp, height = 34.dp).clip(RoundedCornerShape(5.dp)).background(Color(0xFFE9EDF3)))
+                        Column(Modifier.weight(1f)) {
+                            Text(if (foto.esBase) pieDeFoto(foto.ruta, foto.tomada) else fechaYHora(foto.tomada), fontSize = 12.sp)
+                            foto.caption?.takeIf { it.isNotBlank() && !foto.esBase }?.let {
+                                Text(it, fontSize = 11.sp, color = TintaSuave, maxLines = 2)
+                            }
+                        }
                     }
                 }
             }
         }
 
-        // El historial
-        if (estado.historial.isNotEmpty()) {
-            Column(verticalArrangement = Arrangement.spacedBy(5.dp)) {
-                Text("ÚLTIMAS INTERVENCIONES", fontSize = 10.5.sp, letterSpacing = 1.sp,
-                    fontWeight = FontWeight.SemiBold, color = TintaSuave)
-                estado.historial.forEach { h ->
-                    Row(horizontalArrangement = Arrangement.spacedBy(7.dp)) {
-                        Box(Modifier.padding(top = 5.dp).size(5.dp).clip(CircleShape)
-                            .background(Marca.Azul.copy(alpha = 0.6f)))
-                        Text("${h.fecha} · ${h.action ?: "intervención"}", fontSize = 12.sp)
-                    }
-                }
-            }
+        if (estado.galeria.isEmpty() && !estado.cargandoFicha) {
+            Text("Todavía no hay fotografías de este elemento. Registra la primera.", fontSize = 12.sp, color = TintaSuave)
         }
+
+        // El aviso, dentro de la ficha: abajo quedaría tapado
+        (estado.error ?: estado.aviso)?.let { t ->
+            val c = if (estado.error != null) ROJO_OBSERVADO else Marca.VerdeBandera
+            Text(t, fontSize = 12.5.sp, color = c,
+                modifier = Modifier.fillMaxWidth().background(c.copy(alpha = 0.10f), RoundedCornerShape(10.dp)).padding(12.dp))
+        }
+    }
+
+    if (registrando) {
+        DialogoNuevaFoto(
+            vm = vm,
+            guardando = estado.guardandoFoto,
+            alCerrar = { registrando = false },
+            alGuardar = { toma, est, comentario ->
+                vm.registrarFoto(toma, est, comentario)
+                registrando = false
+            },
+        )
     }
 
     ampliada?.let { url ->
         pe.servicon.sigov.ui.componentes.VisorConZoom(modelo = url, descripcion = null, alCerrar = { ampliada = null })
     }
+}
+
+/**
+ * «Registrar nueva foto»: tomar la foto, un comentario opcional y el
+ * semáforo de dos colores (Elvis): verde si está bien, rojo si se observa
+ * algo («el panel de la señal vertical está doblado»). La fecha y la hora
+ * las pone el equipo.
+ */
+@Composable
+private fun DialogoNuevaFoto(
+    vm: InventarioViewModel,
+    guardando: Boolean,
+    alCerrar: () -> Unit,
+    alGuardar: (File, String, String?) -> Unit,
+) {
+    val contexto = LocalContext.current
+    var destino by remember { mutableStateOf<File?>(null) }
+    var toma by remember { mutableStateOf<File?>(null) }
+    var comentario by remember { mutableStateOf("") }
+    var estado by remember { mutableStateOf("ok") }
+    var error by remember { mutableStateOf<String?>(null) }
+    val camara = rememberLauncherForActivityResult(ActivityResultContracts.TakePicture()) { bien ->
+        toma = destino?.takeIf { bien && it.exists() && it.length() > 0 }
+        if (toma != null) error = null
+    }
+    fun tomar() {
+        val archivo = vm.archivoTemporal()
+        destino = archivo
+        camara.launch(FileProvider.getUriForFile(contexto, "${contexto.packageName}.fileprovider", archivo))
+    }
+
+    AlertDialog(
+        onDismissRequest = alCerrar,
+        title = { Text("Registrar nueva foto") },
+        text = {
+            Column(verticalArrangement = Arrangement.spacedBy(10.dp)) {
+                OutlinedButton(onClick = ::tomar, modifier = Modifier.fillMaxWidth().height(52.dp), shape = RoundedCornerShape(10.dp)) {
+                    Icon(Icons.Outlined.PhotoCamera, null, Modifier.size(18.dp))
+                    Spacer(Modifier.width(8.dp))
+                    Text(if (toma == null) "Tomar foto" else "Volver a tomar", modifier = Modifier.weight(1f))
+                    Icon(Icons.Outlined.ChevronRight, null, Modifier.size(18.dp))
+                }
+                toma?.let {
+                    AsyncImage(model = it, contentDescription = "La foto tomada", contentScale = ContentScale.Crop,
+                        modifier = Modifier.fillMaxWidth().height(150.dp).clip(RoundedCornerShape(10.dp)))
+                }
+                Text("¿Cómo está?", fontSize = 12.5.sp, fontWeight = FontWeight.SemiBold)
+                Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                    listOf("ok" to "OK", "observado" to "Observado").forEach { (clave, texto) ->
+                        val c = if (clave == "ok") Marca.VerdeBandera else ROJO_OBSERVADO
+                        FilterChip(
+                            selected = estado == clave,
+                            onClick = { estado = clave },
+                            leadingIcon = { Box(Modifier.size(10.dp).clip(CircleShape).background(c)) },
+                            label = { Text(texto) },
+                            colors = FilterChipDefaults.filterChipColors(selectedContainerColor = c.copy(alpha = 0.16f), selectedLabelColor = c),
+                            modifier = Modifier.weight(1f),
+                        )
+                    }
+                }
+                OutlinedTextField(
+                    value = comentario,
+                    onValueChange = { comentario = it.take(200) },
+                    label = { Text(if (estado == "observado") "Observación (obligatoria)" else "Agregar comentario (opcional)") },
+                    placeholder = { Text("Estado actual, observaciones…") },
+                    supportingText = { Text("${comentario.length}/200") },
+                    minLines = 2,
+                    modifier = Modifier.fillMaxWidth(),
+                )
+                Row(Modifier.fillMaxWidth().background(Marca.VerdeBandera.copy(alpha = 0.08f), RoundedCornerShape(10.dp)).padding(10.dp),
+                    verticalAlignment = Alignment.CenterVertically) {
+                    Icon(Icons.Outlined.Schedule, null, Modifier.size(18.dp), tint = Marca.VerdeBandera)
+                    Spacer(Modifier.width(8.dp))
+                    Text("Fecha y hora automáticas: se registra con la fecha y hora actual del equipo.",
+                        fontSize = 11.5.sp, color = Marca.VerdeBandera)
+                }
+                error?.let { Text(it, color = ROJO_OBSERVADO, fontSize = 12.sp) }
+            }
+        },
+        confirmButton = {
+            TextButton(
+                enabled = !guardando,
+                onClick = {
+                    error = when {
+                        toma == null -> "Toma la foto primero."
+                        estado == "observado" && comentario.isBlank() -> "Escribe qué se observa: el supervisor lo ve en el mapa."
+                        else -> null
+                    }
+                    if (error == null) alGuardar(toma!!, estado, comentario)
+                },
+            ) { Text("Guardar evidencia") }
+        },
+        dismissButton = { TextButton(onClick = alCerrar) { Text("Cancelar") } },
+    )
+}
+
+private fun fechaDma(iso: String): String =
+    iso.take(10).split("-").let { if (it.size == 3) "${it[2]}/${it[1]}/${it[0]}" else iso }
+
+/** «14/10/2026 · 07:55», en la hora de Perú. */
+private fun fechaYHora(iso: String?): String {
+    if (iso.isNullOrBlank()) return "Sin fecha"
+    return runCatching {
+        val z = java.time.OffsetDateTime.parse(iso).atZoneSameInstant(pe.servicon.sigov.datos.Peru.zona)
+        z.format(java.time.format.DateTimeFormatter.ofPattern("dd/MM/yyyy · HH:mm"))
+    }.getOrDefault(fechaDma(iso))
 }
 
 @Composable
@@ -673,6 +843,7 @@ private fun FotoDeFicha(
     pie: String,
     modifier: Modifier = Modifier,
     destacada: Boolean = false,
+    colorTitulo: Color = Marca.Azul,
     alTocar: () -> Unit = {},
 ) {
     Column(modifier) {
@@ -693,7 +864,7 @@ private fun FotoDeFicha(
             Surface(
                 Modifier.padding(5.dp),
                 shape = RoundedCornerShape(5.dp),
-                color = if (destacada) Marca.Azul.copy(alpha = 0.9f) else Color.Black.copy(alpha = 0.6f),
+                color = if (destacada) colorTitulo.copy(alpha = 0.9f) else Color.Black.copy(alpha = 0.6f),
             ) {
                 Text(titulo, Modifier.padding(horizontal = 5.dp, vertical = 2.dp),
                     fontSize = 9.5.sp, color = Color.White, fontWeight = FontWeight.SemiBold)

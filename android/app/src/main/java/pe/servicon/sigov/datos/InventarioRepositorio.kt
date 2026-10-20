@@ -54,7 +54,17 @@ data class ElementoVial(
     @SerialName("dias_entre_fotos") val diasEntreFotos: Int? = null,
     /** Lo que el inventario oficial registra del elemento: clasificación, dimensiones… */
     val atributos: JsonObject? = null,
-)
+    @SerialName("section_code") val tramoCodigo: String? = null,
+    /** Tramo 1, 2, 3, 4: como lo nombra la cuadrilla (Elvis). */
+    @SerialName("section_numero") val tramoNumero: Int? = null,
+    @SerialName("type_icon") val icono: String? = null,
+    /** La última foto de campo lo dejó observado. */
+    val observado: Boolean = false,
+    val observacion: String? = null,
+) {
+    /** «Tramo 1» si el tramo tiene número; si no, su código. */
+    val tramoCorto: String? get() = tramoNumero?.let { "Tramo $it" } ?: tramoCodigo
+}
 
 /** Cuántos elementos hay de cada componente y cómo está su semáforo. */
 @Serializable
@@ -95,7 +105,12 @@ data class FotoDeActivo(
     @SerialName("thumb_path") val miniatura: String? = null,
     @SerialName("taken_at") val tomada: String? = null,
     val caption: String? = null,
-)
+    /** Foto de intervención: ok u observado. */
+    @SerialName("estado_activo") val estado: String? = null,
+) {
+    /** La del Inventario Vial 2024: la base, que nunca se reemplaza. */
+    val esBase: Boolean get() = ruta.contains("/inventario-")
+}
 
 @Serializable
 private data class VinculoConFoto(val evidences: FotoDeActivo? = null)
@@ -209,7 +224,7 @@ class InventarioRepositorio @Inject constructor(
         runCatching {
             supabase.postgrest.from("evidence_links")
                 .select(io.github.jan.supabase.postgrest.query.Columns.raw(
-                    "evidences(id, storage_path, thumb_path, taken_at, caption)"))
+                    "evidences(id, storage_path, thumb_path, taken_at, caption, estado_activo)"))
                 { filter { eq("asset_id", activoId) } }
                 .decodeList<VinculoConFoto>()
                 .mapNotNull { it.evidences }
@@ -251,6 +266,28 @@ class InventarioRepositorio @Inject constructor(
         val mini = if (ruta.contains("/inventario-") && ruta.endsWith(".webp"))
             ruta.removeSuffix(".webp") + "_t.webp" else ruta
         return urlDeFoto(mini) ?: urlDeFoto(ruta)
+    }
+
+    /**
+     * Dónde cae cada ítem PCI sobre la vía, interpolado por su progresiva en
+     * el servidor (el mismo cálculo del mapa web). Para «PCI en mapa».
+     */
+    suspend fun posicionesPci(servicioId: String): Map<String, Pair<Double, Double>> = withContext(Dispatchers.IO) {
+        runCatching {
+            val geo = supabase.postgrest.rpc("pci_geojson", buildJsonObject { put("p_service_id", servicioId) })
+                .decodeAs<JsonObject>()
+            val rasgos = geo["features"] as? kotlinx.serialization.json.JsonArray ?: return@runCatching emptyMap()
+            rasgos.mapNotNull { r ->
+                val o = r as? JsonObject ?: return@mapNotNull null
+                val id = (o["properties"] as? JsonObject)?.get("id")?.let { (it as? kotlinx.serialization.json.JsonPrimitive)?.content }
+                    ?: return@mapNotNull null
+                val c = ((o["geometry"] as? JsonObject)?.get("coordinates") as? kotlinx.serialization.json.JsonArray)
+                    ?: return@mapNotNull null
+                val lng = (c.getOrNull(0) as? kotlinx.serialization.json.JsonPrimitive)?.content?.toDoubleOrNull() ?: return@mapNotNull null
+                val lat = (c.getOrNull(1) as? kotlinx.serialization.json.JsonPrimitive)?.content?.toDoubleOrNull() ?: return@mapNotNull null
+                id to (lat to lng)
+            }.toMap()
+        }.getOrDefault(emptyMap())
     }
 
     suspend fun urlDeFoto(ruta: String?): String? = withContext(Dispatchers.IO) {

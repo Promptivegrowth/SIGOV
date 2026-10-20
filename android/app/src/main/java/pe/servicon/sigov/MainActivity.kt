@@ -191,7 +191,17 @@ class MainActivity : ComponentActivity() {
                         )
                     }
                     composable("inventario") {
-                        PantallaInventario(alVolver = { nav.popBackStack() })
+                        PantallaInventario(
+                            alVolver = { nav.popBackStack() },
+                            alVerPciEnMapa = { nav.navigate("pci-en-mapa") },
+                        )
+                    }
+                    composable("pci-en-mapa") {
+                        pe.servicon.sigov.ui.inventario.PantallaPciEnMapa(
+                            alVolver = { nav.popBackStack() },
+                            alVerFicha = { nav.navigate("pci") },
+                            alTomarFoto = { registroId, fase -> nav.navigate("evidencia/$registroId?fase=${fase.valor}") },
+                        )
                     }
                     composable("equipos") {
                         PantallaEquipos(alVolver = { nav.popBackStack() })

@@ -1899,6 +1899,7 @@ export type Database = {
           deleted_at: string | null
           device_id: string | null
           device_model: string | null
+          estado_activo: string | null
           geom: unknown
           heading: number | null
           height: number | null
@@ -1943,6 +1944,7 @@ export type Database = {
           deleted_at?: string | null
           device_id?: string | null
           device_model?: string | null
+          estado_activo?: string | null
           geom?: unknown
           heading?: number | null
           height?: number | null
@@ -1987,6 +1989,7 @@ export type Database = {
           deleted_at?: string | null
           device_id?: string | null
           device_model?: string | null
+          estado_activo?: string | null
           geom?: unknown
           heading?: number | null
           height?: number | null
@@ -3575,6 +3578,9 @@ export type Database = {
           name: string | null
           next_inspection_on: string | null
           notes: string | null
+          observacion: string | null
+          observado: boolean
+          observado_at: string | null
           progresiva_fin_m: number | null
           progresiva_m: number | null
           section_id: string | null
@@ -3600,6 +3606,9 @@ export type Database = {
           name?: string | null
           next_inspection_on?: string | null
           notes?: string | null
+          observacion?: string | null
+          observado?: boolean
+          observado_at?: string | null
           progresiva_fin_m?: number | null
           progresiva_m?: number | null
           section_id?: string | null
@@ -3625,6 +3634,9 @@ export type Database = {
           name?: string | null
           next_inspection_on?: string | null
           notes?: string | null
+          observacion?: string | null
+          observado?: boolean
+          observado_at?: string | null
           progresiva_fin_m?: number | null
           progresiva_m?: number | null
           section_id?: string | null
@@ -3677,6 +3689,7 @@ export type Database = {
           lanes: number | null
           length_m: number | null
           name: string
+          numero: number | null
           prog_end_m: number
           prog_start_m: number
           route_code: string | null
@@ -3696,6 +3709,7 @@ export type Database = {
           lanes?: number | null
           length_m?: number | null
           name: string
+          numero?: number | null
           prog_end_m: number
           prog_start_m?: number
           route_code?: string | null
@@ -3715,6 +3729,7 @@ export type Database = {
           lanes?: number | null
           length_m?: number | null
           name?: string
+          numero?: number | null
           prog_end_m?: number
           prog_start_m?: number
           route_code?: string | null
@@ -5938,12 +5953,16 @@ export type Database = {
           lng: number | null
           name: string | null
           notes: string | null
+          observacion: string | null
+          observado: boolean | null
+          observado_at: string | null
           progresiva_fin_m: number | null
           progresiva_m: number | null
           progresiva_txt: string | null
           section_code: string | null
           section_id: string | null
           section_name: string | null
+          section_numero: number | null
           semaforo: Database["public"]["Enums"]["semaforo_intervencion"] | null
           service_id: string | null
           side: Database["public"]["Enums"]["road_side"] | null

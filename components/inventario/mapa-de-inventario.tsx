@@ -34,7 +34,7 @@ import { etiquetaDeLado } from '@/lib/lados'
  */
 
 const SEMAFOROS = {
-  al_dia: { label: 'Al día', color: '#16a34a', ayuda: 'Intervenido dentro de su frecuencia' },
+  al_dia: { label: 'Intervenido', color: '#16a34a', ayuda: 'Intervenido dentro de su frecuencia' },
   por_vencer: { label: 'Por vencer', color: '#f59e0b', ayuda: 'Se acerca el plazo de intervención' },
   critico: { label: 'Crítico', color: '#dc2626', ayuda: 'Pasó su plazo de intervención' },
   sin_intervenir: { label: 'Sin intervenir', color: '#64748b', ayuda: 'Nunca se registró una intervención' },
@@ -83,13 +83,14 @@ export function MapaDeInventario() {
   const [semaforos, setSemaforos] = React.useState<Set<ClaveSemaforo>>(new Set())
   const [elegido, setElegido] = React.useState<any | null>(null)
   const [panel, setPanel] = React.useState(true)
+  const [soloObservados, setSoloObservados] = React.useState(false)
 
   // ── Los tramos, para acotar la vista a «mi tramo» ────────────────────
   const tramos = useQuery({
     queryKey: ['tramos-inventario', service.id],
     queryFn: async () => {
       const { data } = await sb.from('road_sections')
-        .select('id, code, name').eq('service_id', service.id)
+        .select('id, code, name, numero').eq('service_id', service.id)
         .is('deleted_at', null).eq('is_active', true).order('code')
       return data ?? []
     },
@@ -201,29 +202,40 @@ export function MapaDeInventario() {
     },
   })
 
+  // Solo lo que la última foto de campo dejó observado
+  const datos = React.useMemo(() => {
+    if (!puntos.data || !soloObservados) return puntos.data
+    return { ...puntos.data, features: (puntos.data.features ?? []).filter((f: any) => f.properties?.observado) }
+  }, [puntos.data, soloObservados])
+  const observados = React.useMemo(
+    () => (puntos.data?.features ?? []).filter((f: any) => f.properties?.observado).length, [puntos.data])
+
   // ── Dibujar ──────────────────────────────────────────────────────────
   React.useEffect(() => {
-    if (!mapa || !puntos.data) return
+    if (!mapa || !datos) return
     const vacio = { type: 'FeatureCollection', features: [] }
 
     if (!mapa.getSource('src-inv')) {
-      mapa.addSource('src-inv', { type: 'geojson', data: puntos.data ?? vacio })
+      mapa.addSource('src-inv', { type: 'geojson', data: datos ?? vacio })
 
       mapa.addLayer({
         id: 'l-inv',
         type: 'circle',
         source: 'src-inv',
         paint: {
-          'circle-color': [
-            'match', ['get', 'semaforo'],
-            'al_dia', SEMAFOROS.al_dia.color,
-            'por_vencer', SEMAFOROS.por_vencer.color,
-            'critico', SEMAFOROS.critico.color,
-            SEMAFOROS.sin_intervenir.color,
-          ],
+          // El relleno, el componente (Elvis: «distintos colores al filtrar»);
+          // el borde, el estado: observado en campo, crítico, por vencer…
+          'circle-color': ['coalesce', ['get', 'color'], '#64748b'],
           'circle-radius': ['interpolate', ['linear'], ['zoom'], 7, 3.5, 12, 7, 16, 11],
-          'circle-stroke-width': 1.6,
-          'circle-stroke-color': '#ffffff',
+          'circle-stroke-width': ['interpolate', ['linear'], ['zoom'], 7, 1, 12, 2.2, 16, 3],
+          'circle-stroke-color': [
+            'case', ['==', ['get', 'observado'], true], '#b91c1c',
+            ['match', ['get', 'semaforo'],
+              'al_dia', SEMAFOROS.al_dia.color,
+              'por_vencer', SEMAFOROS.por_vencer.color,
+              'critico', SEMAFOROS.critico.color,
+              SEMAFOROS.sin_intervenir.color],
+          ],
           'circle-opacity': 0.94,
         },
       })
@@ -235,18 +247,18 @@ export function MapaDeInventario() {
       mapa.on('mouseenter', 'l-inv', () => { mapa.getCanvas().style.cursor = 'pointer' })
       mapa.on('mouseleave', 'l-inv', () => { mapa.getCanvas().style.cursor = '' })
     } else {
-      ;(mapa.getSource('src-inv') as any).setData(puntos.data ?? vacio)
+      ;(mapa.getSource('src-inv') as any).setData(datos ?? vacio)
     }
-  }, [mapa, puntos.data])
+  }, [mapa, datos])
 
   // Al cambiar de tramo, el mapa va a ese tramo
   React.useEffect(() => {
-    if (!mapa || !puntos.data?.features?.length) return
-    const coords = puntos.data.features.map((f: any) => f.geometry.coordinates)
+    if (!mapa || !datos?.features?.length) return
+    const coords = datos.features.map((f: any) => f.geometry.coordinates)
     const lngs = coords.map((c: any) => c[0])
     const lats = coords.map((c: any) => c[1])
     mapaRef.current?.fitTo([Math.min(...lngs), Math.min(...lats), Math.max(...lngs), Math.max(...lats)], 60)
-  }, [mapa, tramo, puntos.data])
+  }, [mapa, tramo, datos])
 
   const alternar = <T,>(conjunto: Set<T>, valor: T, fijar: (s: Set<T>) => void) => {
     const n = new Set(conjunto)
@@ -265,7 +277,7 @@ export function MapaDeInventario() {
     }
   }, [resumen.data])
 
-  const visibles = puntos.data?.features?.length ?? 0
+  const visibles = datos?.features?.length ?? 0
 
   return (
     <div className="relative h-[calc(100dvh-13rem)] min-h-[520px] overflow-hidden rounded-xl border border-border">
@@ -301,7 +313,7 @@ export function MapaDeInventario() {
                   <SelectContent>
                     <SelectItem value={TODOS}>Todo el contrato</SelectItem>
                     {(tramos.data ?? []).map((t: any) => (
-                      <SelectItem key={t.id} value={t.id}>{t.code} · {t.name}</SelectItem>
+                      <SelectItem key={t.id} value={t.id}>{t.numero ? `Tramo ${t.numero}` : t.code} · {t.name}</SelectItem>
                     ))}
                   </SelectContent>
                 </Select>
@@ -338,6 +350,18 @@ export function MapaDeInventario() {
                     )
                   })}
                 </div>
+                <button
+                  onClick={() => setSoloObservados((v) => !v)}
+                  className={cn(
+                    'flex w-full items-center gap-1.5 rounded-lg border px-2 py-1.5 text-left transition-all',
+                    soloObservados ? 'border-destructive bg-destructive/8' : 'border-border hover:border-destructive/30'
+                  )}
+                  title="La última foto de campo lo dejó observado"
+                >
+                  <span className="size-2.5 shrink-0 rounded-[3px] bg-[#b91c1c]" />
+                  <span className="flex-1 text-[11px] font-medium">Observados en campo</span>
+                  <span className="text-muted-foreground text-[10.5px] tabular-nums">{fmtNumber(observados)}</span>
+                </button>
               </div>
 
               {/* Los componentes del inventario */}
@@ -460,6 +484,12 @@ export function MapaDeInventario() {
                     </p>
                   </div>
                 </div>
+                {elegido.observado && (
+                  <div className="bg-destructive/8 border-destructive/25 rounded-lg border px-3 py-2">
+                    <p className="text-destructive text-[12px] font-semibold">Observado en campo</p>
+                    <p className="text-muted-foreground text-[11.5px]">{elegido.observacion}</p>
+                  </div>
+                )}
 
                 {/* Dónde está */}
                 <div className="grid grid-cols-2 gap-2">

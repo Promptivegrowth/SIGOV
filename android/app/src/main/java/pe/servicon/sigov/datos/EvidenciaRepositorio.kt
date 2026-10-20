@@ -135,6 +135,12 @@ class EvidenciaRepositorio @Inject constructor(
          * La hora real de la toma se guarda igual, aparte.
          */
         momentoDelSello: Instant? = null,
+        /**
+         * Foto de intervención sobre un elemento del inventario: el elemento
+         * y su estado (ok u observado). No cuelga de ningún registro del
+         * parte: va sola y la nube la engancha al elemento.
+         */
+        activo: Pair<String, String>? = null,
     ): EvidenciaLocal = withContext(Dispatchers.IO) {
         val punto = ubicacion.actual()
         val tomadaEn = Instant.now()
@@ -205,7 +211,7 @@ class EvidenciaRepositorio @Inject constructor(
         val medidas = medir(destino)
         val evidencia = EvidenciaLocal(
             clientId = clientId,
-            registroClientId = registro.clientId,
+            registroClientId = if (activo != null) null else registro.clientId,
             servicioId = registro.servicioId,
             fase = fase.valor,
             rutaLocal = destino.absolutePath,
@@ -228,7 +234,7 @@ class EvidenciaRepositorio @Inject constructor(
             tabla = "evidences",
             clientId = clientId,
             // La foto espera a que su registro exista en la nube
-            dependeDe = registro.clientId,
+            dependeDe = if (activo != null) null else registro.clientId,
             etiqueta = "Foto · " + registro.actividadNombre,
             cuerpo = buildJsonObject {
                 put("service_id", registro.servicioId)
@@ -250,6 +256,10 @@ class EvidenciaRepositorio @Inject constructor(
                 // del registro de campo: es ahí donde el cliente la busca y
                 // donde se cuenta si falta la del «después».
                 registro.pciItemId?.let { put("pci_item_id", it) }
+                activo?.let { (activoId, estado) ->
+                    put("asset_id", activoId)
+                    put("estado_activo", estado)
+                }
                 put("taken_at", DateTimeFormatter.ISO_INSTANT.format(tomadaEn.atOffset(ZoneOffset.UTC)))
                 momentoDelSello?.let {
                     put("stamped_at", DateTimeFormatter.ISO_INSTANT.format(it.atOffset(ZoneOffset.UTC)))
@@ -273,6 +283,55 @@ class EvidenciaRepositorio @Inject constructor(
         if (conOriginal) encolarOriginal(clientId, registro.servicioId, tomadaEn, archivoOriginal)
 
         evidencia
+    }
+
+    /**
+     * La foto de intervención de un elemento del inventario (boceto de Elvis
+     * del 14/10): se sella como cualquier evidencia, con el nombre y la
+     * progresiva del elemento, el comentario y el estado OK u Observado. No
+     * reemplaza la foto base: se agrega al historial del elemento.
+     */
+    suspend fun guardarDeActivo(
+        servicioId: String,
+        activoId: String,
+        nombre: String,
+        tramoId: String?,
+        tramo: String?,
+        progresiva: Double?,
+        lado: String?,
+        original: File,
+        estado: String,
+        comentario: String?,
+        cuadrilla: String?,
+        sello: Sello,
+    ): EvidenciaLocal {
+        // Un registro de mentira, solo para el sello y los metadatos: no se
+        // guarda ni se envía
+        val registro = RegistroLocal(
+            clientId = UUID.randomUUID().toString(),
+            parteClientId = "",
+            servicioId = servicioId,
+            actividadId = "",
+            actividadNombre = nombre,
+            tramoId = tramoId,
+            tramoNombre = tramo,
+            progresivaInicio = progresiva,
+            progresivaFin = null,
+            lado = lado ?: "derecho",
+            cantidad = 0.0,
+            unidad = null,
+            origen = "inventario",
+        )
+        return guardar(
+            registro = registro,
+            original = original,
+            fase = Fase.GENERAL,
+            leyenda = comentario,
+            conMarcaDeAgua = true,
+            sello = sello,
+            cuadrilla = cuadrilla,
+            activo = activoId to estado,
+        )
     }
 
     /**
