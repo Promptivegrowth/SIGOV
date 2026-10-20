@@ -250,7 +250,7 @@ fun PantallaParte(
         DialogoEnviar(
             registros = estado.registros.size,
             sinFotos = estado.registros.count { (estado.fotosPorRegistro[it.clientId] ?: 0) == 0 },
-            faltanDatos = estado.parte?.let { it.clima == null || it.horaInicio == null || it.personal == null } ?: false,
+            faltanDatos = estado.parte?.let { it.horaInicio == null || it.personal == null } ?: false,
             alCerrar = { confirmandoEnvio = false },
             alEnviar = { vm.enviar(); confirmandoEnvio = false },
         )
@@ -261,6 +261,7 @@ fun PantallaParte(
             stock = estado.stockCuadrilla,
             insumos = estado.insumos,
             registros = estado.registros,
+            rendimientos = estado.rendimientos,
             alCerrar = { anotandoMaterial = false },
             alGuardar = { id, nombre, unidad, cantidad, registro ->
                 vm.registrarConsumo(id, nombre, unidad, cantidad, registro)
@@ -269,6 +270,12 @@ fun PantallaParte(
         )
     }
 
+    // La partida de la que se llegó, fija mientras el formulario está abierto
+    val desdePartida = remember(formularioAbierto) {
+        estado.partidaInicial?.let { OrigenDelTrabajo.Programado(it) }
+    }
+    var guardados by remember(formularioAbierto) { mutableIntStateOf(0) }
+
     if (formularioAbierto) {
         FormularioActividad(
             actividades = estado.actividades,
@@ -276,12 +283,17 @@ fun PantallaParte(
             programadas = estado.programadas,
             pcis = estado.pcis,
             tramoPorDefecto = estado.tramoPorDefecto,
-            inicial = estado.partidaInicial?.let { OrigenDelTrabajo.Programado(it) },
+            inicial = desdePartida,
             guardando = estado.guardando,
+            registrados = estado.registros.flatMap { listOfNotNull(it.planItemId, it.pciItemId) }.toSet(),
+            cuadrilla = estado.cuadrilla,
+            guardados = guardados,
             alCerrar = { formularioAbierto = false; vm.partidaInicialAtendida() },
             alGuardar = { actividad, tramo, ini, fin, lado, cantidad, obs, origen, detalle ->
                 vm.registrar(actividad, tramo, ini, fin, lado, cantidad, obs, origen, detalle) {
-                    formularioAbierto = false
+                    // Desde una partida se vuelve a ella; si no, a la lista del paso 2
+                    if (desdePartida != null) { formularioAbierto = false; vm.partidaInicialAtendida() }
+                    else guardados++
                 }
             },
         )

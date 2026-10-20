@@ -23,6 +23,8 @@ data class EstadoProgramacion(
     val items: List<ItemProgramado> = emptyList(),
     /** El enlace de la foto referencial abierta. */
     val referencia: String? = null,
+    /** Ir a la cámara: el registro y la etapa. Se consume una vez. */
+    val irACamara: Pair<String, pe.servicon.sigov.datos.Fase>? = null,
     val cuadrilla: String = "",
     val trabajando: String? = null,   // el id de la partida que se está cambiando
     val aviso: String? = null,
@@ -75,6 +77,23 @@ class ProgramacionViewModel @Inject constructor(
     }
 
     fun cerrarReferencia() = _estado.update { it.copy(referencia = null) }
+
+    /** La foto de una etapa de la partida: sobre su registro del reporte de hoy. */
+    fun tomarFoto(item: ItemProgramado, fase: pe.servicon.sigov.datos.Fase) {
+        _estado.update { it.copy(trabajando = item.id, error = null) }
+        viewModelScope.launch {
+            runCatching {
+                val cuadrilla = sesion.cuadrilla() ?: error("Tu usuario no dirige ninguna cuadrilla.")
+                campo.registroDeLaPartida(cuadrilla.servicioId, cuadrilla.id, item)
+            }.onSuccess { registro ->
+                _estado.update { it.copy(trabajando = null, irACamara = registro.clientId to fase) }
+            }.onFailure { fallo ->
+                _estado.update { it.copy(trabajando = null, error = fallo.enCristiano()) }
+            }
+        }
+    }
+
+    fun camaraAbierta() = _estado.update { it.copy(irACamara = null) }
 
     fun iniciar(item: ItemProgramado) = accion(item, "Partida iniciada. Suerte allá afuera.") {
         campo.iniciarPartida(item.id)

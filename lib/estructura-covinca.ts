@@ -75,7 +75,7 @@ function cuadrillaDe(f: { crew_numero: number | null; crew_sede: string | null; 
  * la medida que exige COVINCA (OBS-23): se recorta al centro lo que no sea
  * 4:3. Es el camino de las fotos que no tienen original guardado.
  */
-async function aJpg(blob: Blob, covinca = false): Promise<Blob> {
+export async function aJpg(blob: Blob, covinca = false): Promise<Blob> {
   if (blob.type === 'image/jpeg' && !covinca) return blob
   try {
     const bmp = await createImageBitmap(blob)
@@ -107,7 +107,7 @@ async function aJpg(blob: Blob, covinca = false): Promise<Blob> {
 }
 
 /** Trae todas las filas (PostgREST corta en mil). */
-async function todas<T>(pedir: (desde: number, hasta: number) => PromiseLike<{ data: any; error: any }>): Promise<T[]> {
+export async function todas<T>(pedir: (desde: number, hasta: number) => PromiseLike<{ data: any; error: any }>): Promise<T[]> {
   const filas: T[] = []
   for (let desde = 0; ; desde += 1000) {
     const { data, error } = await pedir(desde, desde + 999)
@@ -119,7 +119,7 @@ async function todas<T>(pedir: (desde: number, hasta: number) => PromiseLike<{ d
 }
 
 /** Firma URLs en tandas de cien. */
-async function firmar(sb: SupabaseClient<any>, bucket: string, rutasArchivo: string[]): Promise<Map<string, string>> {
+export async function firmar(sb: SupabaseClient<any>, bucket: string, rutasArchivo: string[]): Promise<Map<string, string>> {
   const firmadas = new Map<string, string>()
   for (let i = 0; i < rutasArchivo.length; i += 100) {
     const { data } = await sb.storage.from(bucket).createSignedUrls(rutasArchivo.slice(i, i + 100), 3600)
@@ -129,7 +129,7 @@ async function firmar(sb: SupabaseClient<any>, bucket: string, rutasArchivo: str
 }
 
 /** Baja varias cosas a la vez, sin abrir cien conexiones. */
-async function enParalelo<T>(items: T[], cuantos: number, hacer: (item: T, i: number) => Promise<void>) {
+export async function enParalelo<T>(items: T[], cuantos: number, hacer: (item: T, i: number) => Promise<void>) {
   let siguiente = 0
   await Promise.all(Array.from({ length: Math.min(cuantos, items.length) }, async () => {
     while (siguiente < items.length) {

@@ -21,6 +21,14 @@ import javax.inject.Inject
 import javax.inject.Singleton
 
 /** Un insumo del contrato, con lo que queda en almacén. */
+/** Material por unidad de partida (P12). */
+@Serializable
+data class Rendimiento(
+    @SerialName("activity_id") val actividadId: String,
+    @SerialName("supply_id") val insumoId: String,
+    val cantidad: Double,
+)
+
 @Serializable
 data class Insumo(
     val id: String,
@@ -126,6 +134,24 @@ class MaterialRepositorio @Inject constructor(
             catalogo.de("supplies", servicioId)
                 .mapNotNull { runCatching { json.decodeFromString<Insumo>(it.datos) }.getOrNull() }
                 .sortedBy { it.name }
+        }
+    }
+
+    /**
+     * Los rendimientos del maestro: cuánto material lleva cada unidad de una
+     * partida. Con ellos el reporte sugiere el material de las actividades
+     * del día (Elvis, video del 14/10). Si no hay señal, la última copia.
+     */
+    suspend fun rendimientos(servicioId: String): List<Rendimiento> = withContext(Dispatchers.IO) {
+        runCatching {
+            val filas = supabase.postgrest.from("rendimientos")
+                .select { filter { eq("service_id", servicioId) } }
+                .decodeList<JsonObject>()
+            espejar("rendimientos", servicioId, filas)
+            filas.map { json.decodeFromString<Rendimiento>(it.toString()) }
+        }.getOrElse {
+            catalogo.de("rendimientos", servicioId)
+                .mapNotNull { runCatching { json.decodeFromString<Rendimiento>(it.datos) }.getOrNull() }
         }
     }
 

@@ -169,6 +169,7 @@ class MainActivity : ComponentActivity() {
                         PantallaProgramacion(
                             alVolver = { nav.popBackStack() },
                             alRegistrarAvance = { nav.navigate("parte?partida=" + it.id) },
+                            alTomarFoto = { registroId, fase -> nav.navigate("evidencia/$registroId?fase=${fase.valor}") },
                         )
                     }
                     composable("pci") {
@@ -205,6 +206,7 @@ class MainActivity : ComponentActivity() {
                         PantallaProgramacion(
                             alVolver = { nav.popBackStack() },
                             alRegistrarAvance = { nav.navigate("parte?partida=" + it.id) },
+                            alTomarFoto = { registroId, fase -> nav.navigate("evidencia/$registroId?fase=${fase.valor}") },
                         )
                     }
                     composable("perfil") {

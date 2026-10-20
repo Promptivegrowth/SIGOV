@@ -2,6 +2,22 @@ package pe.servicon.sigov.ui.parte
 
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
+import androidx.compose.foundation.horizontalScroll
+import androidx.compose.foundation.shape.CircleShape
+import androidx.compose.ui.draw.clip
+import androidx.compose.material.icons.automirrored.outlined.ArrowBack
+import androidx.compose.material.icons.outlined.CalendarMonth
+import androidx.compose.material.icons.outlined.Check
+import androidx.compose.material.icons.outlined.ChevronRight
+import androidx.compose.material.icons.outlined.Description
+import androidx.compose.material.icons.outlined.EditNote
+import androidx.compose.material.icons.outlined.ExpandLess
+import androidx.compose.material.icons.outlined.ExpandMore
+import androidx.compose.material.icons.outlined.Lock
+import androidx.compose.material.icons.outlined.WarningAmber
+import pe.servicon.sigov.ui.pci.Plazo
+import pe.servicon.sigov.ui.pci.cumple
+import pe.servicon.sigov.ui.theme.Semaforo
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
@@ -63,24 +79,22 @@ internal fun ladoDesdeProgramacion(texto: String?): String? {
 }
 
 /**
- * El formulario de una actividad ejecutada.
+ * Registrar actividad, en tres pasos (boceto de Elvis del 13/10/2026):
  *
- * Primero se dice de dónde sale el trabajo, y eso decide lo demás:
+ * 1. **Origen**: Programado, PCI, Otros o Emergencia, en cuatro tarjetas.
+ * 2. **Actividad**: las partidas que el supervisor programó para el día o los
+ *    ítems PCI disponibles (con filtro de plazo), cada uno con «Seleccionar».
+ *    Lo ya registrado se marca «Registrado»; un PCI con sus tres fotos queda
+ *    registrado solo, y en rojo si le falta alguna.
+ * 3. **Avance**: lo que trae la partida o el ítem va bloqueado (🔒) y solo se
+ *    escribe lo que pasó en campo. En lo programado se pueden corregir el
+ *    tramo, las progresivas y el lado («me programaron del 12 al 14 y ejecuté
+ *    del 12 al 13»); en un PCI todo es fijo, salvo la observación.
  *
- * · Programado hoy: solo las partidas que el supervisor programó para esta
- *   cuadrilla en la fecha del reporte, no el catálogo entero. La actividad,
- *   el tramo y las progresivas vienen de la programación y no se vuelven a
- *   escribir (OBS-02); solo el metrado, la observación y, si cambió en
- *   campo, dónde se ejecutó de verdad.
- * · PCI: el ítem que se atiende.
- * · Otros: lo que la cuadrilla hizo además de lo programado porque le
- *   alcanzó el tiempo; aquí sí se elige del catálogo completo, con buscador.
- * · Emergencia: igual que «Otros», con la justificación obligatoria.
- *
- * El tramo de la cuadrilla viene puesto (Elvis: «si es Santos, del tramo 1,
- * ya le debe aparecer Dv. Quilca – Arequipa»). Y la progresiva solo se
- * revisa contra el tramo cuando la escribe el capataz: la que viene de la
- * programación o del PCI es la oficial y no se discute (OBS-03).
+ * Otros y Emergencia saltan del paso 1 al 3 con el formulario completo. Al
+ * guardar se vuelve al paso 2 para seguir con la siguiente (Elvis: «no me
+ * va a botar al primer paso»). Si se llegó desde una partida («Registrar
+ * avance»), se abre directo en el paso 3.
  */
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
@@ -93,6 +107,11 @@ fun FormularioActividad(
     /** Cuando se llega desde una partida («Registrar avance»): ya elegida. */
     inicial: OrigenDelTrabajo? = null,
     guardando: Boolean,
+    /** Los id de partidas e ítems PCI que ya tienen registro en este reporte. */
+    registrados: Set<String> = emptySet(),
+    cuadrilla: String = "",
+    /** Sube cada vez que se guardó bien: el formulario vuelve al paso 2. */
+    guardados: Int = 0,
     alCerrar: () -> Unit,
     alGuardar: (
         actividad: Actividad,
@@ -112,12 +131,9 @@ fun FormularioActividad(
         programadas.filter { it.status !in setOf("ejecutado", "por_validar", "validado") }
     }
 
-    var origen by remember {
-        mutableStateOf(
-            inicial ?: pendientes.firstOrNull()?.let { OrigenDelTrabajo.Programado(it) }
-            ?: OrigenDelTrabajo.NoProgramado
-        )
-    }
+    var paso by remember { mutableIntStateOf(if (inicial != null) 3 else 1) }
+    var verPci by remember { mutableStateOf(false) }
+    var origen by remember { mutableStateOf(inicial ?: OrigenDelTrabajo.NoProgramado) }
     var actividad by remember { mutableStateOf<Actividad?>(null) }
     var tramo by remember { mutableStateOf(tramoPorDefecto) }
     var progIni by remember { mutableStateOf("") }
@@ -132,254 +148,386 @@ fun FormularioActividad(
     var longitud by remember { mutableStateOf("") }
     var ancho by remember { mutableStateOf("") }
     var espesor by remember { mutableStateOf("") }
+    var verFor001 by remember { mutableStateOf(false) }
     var error by remember { mutableStateOf<String?>(null) }
     var buscando by remember { mutableStateOf(false) }
 
-    // Al señalar de dónde sale el trabajo, el formulario se rellena solo
+    // Al elegir de dónde sale el trabajo, el formulario se rellena solo
     fun adoptar(nuevo: OrigenDelTrabajo) {
         origen = nuevo
         error = null
+        metrado = ""
+        observacion = ""
+        horaIni = ""; horaFin = ""; personas = ""; longitud = ""; ancho = ""; espesor = ""
         when (nuevo) {
             is OrigenDelTrabajo.Programado -> {
                 actividad = actividades.firstOrNull { it.id == nuevo.item.actividadId }
                     ?: nuevo.item.actividadId?.let { id ->
                         Actividad(id = id, code = nuevo.item.actividadCodigo ?: "", name = nuevo.item.actividad ?: "")
                     }
-                tramo = tramos.firstOrNull { it.id == nuevo.item.tramoId } ?: tramo
+                tramo = tramos.firstOrNull { it.id == nuevo.item.tramoId } ?: tramoPorDefecto
                 progIni = nuevo.item.progresivaInicio?.let { Progresiva.aTexto(it) } ?: ""
                 progFin = nuevo.item.progresivaFin?.let { Progresiva.aTexto(it) } ?: ""
-                ladoDesdeProgramacion(nuevo.item.lado)?.let { lado = it }
+                lado = ladoDesdeProgramacion(nuevo.item.lado) ?: "derecho"
             }
             is OrigenDelTrabajo.Pci -> {
                 actividad = actividades.firstOrNull { it.id == nuevo.item.actividadId }
-                tramo = tramos.firstOrNull { it.name == nuevo.item.tramo } ?: tramo
+                    ?: nuevo.item.actividadId?.let { id ->
+                        Actividad(id = id, code = nuevo.item.actividadCodigo ?: "", name = nuevo.item.actividad ?: "")
+                    }
+                tramo = tramos.firstOrNull { it.id == nuevo.item.tramoId || it.name == nuevo.item.tramo } ?: tramoPorDefecto
                 progIni = nuevo.item.progresiva?.let { Progresiva.aTexto(it) } ?: ""
                 progFin = nuevo.item.progresivaFin?.let { Progresiva.aTexto(it) } ?: ""
-                nuevo.item.side?.let { lado = it }
+                lado = nuevo.item.side ?: "derecho"
+                // El metrado del PCI es el del ítem: puntual o por intervalo (Elvis)
+                metrado = nuevo.item.quantity?.let { cifra(it) } ?: ""
             }
             OrigenDelTrabajo.NoProgramado, OrigenDelTrabajo.Emergencia -> {
                 // Se elige del catálogo; el tramo vuelve al de la cuadrilla
                 actividad = null
-                tramo = tramoPorDefecto ?: tramo
+                tramo = tramoPorDefecto
                 progIni = ""
                 progFin = ""
+                lado = "derecho"
             }
         }
     }
 
-    // La primera vez, rellenar con lo que trae el origen inicial
-    LaunchedEffect(Unit) { adoptar(origen) }
+    // La primera vez, rellenar con lo que trae la partida de la que se llegó
+    LaunchedEffect(Unit) { inicial?.let { adoptar(it) } }
+
+    // Guardado bien: a la lista del paso 2 (o al paso 1 si era manual)
+    LaunchedEffect(guardados) {
+        if (guardados > 0) {
+            error = null
+            paso = if (origen is OrigenDelTrabajo.Programado || origen is OrigenDelTrabajo.Pci) 2 else 1
+        }
+    }
 
     val manual = origen is OrigenDelTrabajo.NoProgramado || origen is OrigenDelTrabajo.Emergencia
+    val itemPci = (origen as? OrigenDelTrabajo.Pci)?.item
+    val partida = (origen as? OrigenDelTrabajo.Programado)?.item
+
+    fun atras() {
+        error = null
+        paso = when {
+            paso == 3 && inicial != null -> { alCerrar(); 3 }
+            paso == 3 && manual -> 1
+            else -> paso - 1
+        }
+    }
 
     Dialog(
         onDismissRequest = alCerrar,
         properties = DialogProperties(usePlatformDefaultWidth = false),
     ) {
         Surface(
-            modifier = Modifier.fillMaxWidth(0.96f).fillMaxHeight(0.92f),
+            modifier = Modifier.fillMaxWidth(0.96f).fillMaxHeight(0.94f),
             shape = RoundedCornerShape(20.dp),
             color = MaterialTheme.colorScheme.surface,
         ) {
             Column(Modifier.fillMaxSize()) {
-                Text(
-                    "Registrar avance",
-                    style = MaterialTheme.typography.headlineSmall,
-                    modifier = Modifier.padding(20.dp, 20.dp, 20.dp, 4.dp),
-                )
-                Text(
-                    "Lo que hizo la cuadrilla, dónde y cuánto",
-                    style = MaterialTheme.typography.bodySmall,
-                    color = MaterialTheme.colorScheme.onSurfaceVariant,
-                    modifier = Modifier.padding(horizontal = 20.dp),
-                )
+                // ─── Cabecera e indicador de pasos ─────────────────────
+                Row(Modifier.padding(start = 6.dp, end = 16.dp, top = 12.dp), verticalAlignment = Alignment.CenterVertically) {
+                    IconButton(onClick = { if (paso == 1) alCerrar() else atras() }) {
+                        Icon(Icons.AutoMirrored.Outlined.ArrowBack, contentDescription = "Atrás")
+                    }
+                    Column {
+                        Text(
+                            if (paso == 3) "Registrar avance" else "Registrar actividad",
+                            style = MaterialTheme.typography.titleLarge,
+                            fontWeight = FontWeight.SemiBold,
+                        )
+                        if (cuadrilla.isNotBlank()) {
+                            Text(cuadrilla, style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
+                        }
+                    }
+                }
+                IndicadorDePasos(paso, Modifier.padding(horizontal = 24.dp, vertical = 10.dp))
+                HorizontalDivider()
 
                 Column(
                     Modifier
                         .weight(1f)
                         .verticalScroll(rememberScrollState())
-                        .padding(20.dp),
+                        .padding(18.dp),
                     verticalArrangement = Arrangement.spacedBy(14.dp),
                 ) {
-                    // Si se llegó desde una partida, ya se sabe de dónde sale el
-                    // trabajo: elegir otra vez confundiría (Elvis, video del 13/10)
-                    if (inicial == null) {
-                        SelectorDeOrigen(
-                            origen = origen,
-                            pendientes = pendientes,
-                            pcis = pcis,
-                            alElegir = { adoptar(it) },
-                        )
-                    } else if (inicial is OrigenDelTrabajo.Programado) {
-                        val dia = runCatching { java.time.LocalDate.parse(inicial.item.fecha) }.getOrNull()
-                        Text(
-                            "Avance de la partida programada" + (dia?.let { " del " + pe.servicon.sigov.datos.Peru.fechaCorta(it) } ?: ""),
-                            style = MaterialTheme.typography.bodyMedium,
-                            color = MaterialTheme.colorScheme.onSurfaceVariant,
-                        )
-                    }
+                    when (paso) {
+                        // ─── 1 · Origen ────────────────────────────────
+                        1 -> {
+                            TituloDePaso("1. Seleccionar origen del trabajo", "¿De dónde sale este trabajo?")
+                            Row(horizontalArrangement = Arrangement.spacedBy(12.dp)) {
+                                TarjetaDeOrigen(
+                                    "Programado", "Trabajo del programa del día", Icons.Outlined.CalendarMonth,
+                                    cuenta = pendientes.size, habilitada = pendientes.isNotEmpty(), modifier = Modifier.weight(1f),
+                                ) { verPci = false; paso = 2 }
+                                TarjetaDeOrigen(
+                                    "PCI", "Trabajo del inventario PCI", Icons.Outlined.Description,
+                                    cuenta = pcis.size, habilitada = pcis.isNotEmpty(), modifier = Modifier.weight(1f),
+                                ) { verPci = true; paso = 2 }
+                            }
+                            Row(horizontalArrangement = Arrangement.spacedBy(12.dp)) {
+                                TarjetaDeOrigen(
+                                    "Otros", "Trabajo no programado", Icons.Outlined.EditNote,
+                                    destacada = false, modifier = Modifier.weight(1f),
+                                ) { adoptar(OrigenDelTrabajo.NoProgramado); paso = 3 }
+                                TarjetaDeOrigen(
+                                    "Emergencia", "Atención inmediata", Icons.Outlined.WarningAmber,
+                                    destacada = false, color = Marca.Naranja, modifier = Modifier.weight(1f),
+                                ) { adoptar(OrigenDelTrabajo.Emergencia); paso = 3 }
+                            }
+                            Aviso("El jefe de cuadrilla no debe reconstruir manualmente lo que ya viene asignado.", Marca.Azul)
+                        }
 
-                    if (manual) {
-                        // Buscador del catálogo completo: 191 partidas no caben en un desplegable
-                        Box {
+                        // ─── 2 · Actividad ─────────────────────────────
+                        2 -> {
+                            Aviso("Desde aquí se selecciona el trabajo real, sin volver a digitar todo.", Marca.Azul)
+                            Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                                Pestana("Si viene de Programado", !verPci, Modifier.weight(1f)) { verPci = false }
+                                Pestana("Si viene de PCI", verPci, Modifier.weight(1f)) { verPci = true }
+                            }
+                            if (!verPci) {
+                                Text("Actividades programadas del día", style = MaterialTheme.typography.titleSmall, fontWeight = FontWeight.SemiBold)
+                                if (pendientes.isEmpty()) {
+                                    Text("El supervisor no programó partidas pendientes para este día.",
+                                        style = MaterialTheme.typography.bodyMedium, color = MaterialTheme.colorScheme.onSurfaceVariant)
+                                }
+                                pendientes.forEach { p ->
+                                    TarjetaDePartida(p, registrada = p.id in registrados) {
+                                        adoptar(OrigenDelTrabajo.Programado(p)); paso = 3
+                                    }
+                                }
+                            } else {
+                                ListaDeItemsPci(pcis, registrados) { item -> adoptar(OrigenDelTrabajo.Pci(item)); paso = 3 }
+                            }
+                        }
+
+                        // ─── 3 · Avance ────────────────────────────────
+                        else -> {
+                            TituloDePaso("3. Registrar avance", "Lo que hizo la cuadrilla, dónde y cuánto")
+                            if (inicial is OrigenDelTrabajo.Programado) {
+                                val dia = runCatching { java.time.LocalDate.parse(inicial.item.fecha) }.getOrNull()
+                                Text(
+                                    "Avance de la partida programada" + (dia?.let { " del " + pe.servicon.sigov.datos.Peru.fechaCorta(it) } ?: ""),
+                                    style = MaterialTheme.typography.bodyMedium,
+                                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                                )
+                            }
+                            CampoFijo(
+                                "Origen del trabajo",
+                                when (origen) {
+                                    is OrigenDelTrabajo.Programado -> "Programado"
+                                    is OrigenDelTrabajo.Pci -> "PCI · " + listOfNotNull(itemPci?.pciCorto, itemPci?.numero?.let { "Ítem $it" }).joinToString(" · ")
+                                    OrigenDelTrabajo.NoProgramado -> "Otros · trabajo no programado"
+                                    OrigenDelTrabajo.Emergencia -> "Emergencia"
+                                },
+                            )
+
+                            if (manual) {
+                                // Buscador del catálogo completo: 191 partidas no caben en un desplegable
+                                Box {
+                                    OutlinedTextField(
+                                        value = actividad?.name ?: "",
+                                        onValueChange = {},
+                                        readOnly = true,
+                                        label = { Text("Actividad") },
+                                        placeholder = { Text("Buscar por nombre o código…") },
+                                        supportingText = actividad?.let { a -> { Text(a.code, color = MaterialTheme.colorScheme.onSurfaceVariant) } },
+                                        trailingIcon = { Icon(Icons.Outlined.Search, null) },
+                                        shape = RoundedCornerShape(12.dp),
+                                        modifier = Modifier.fillMaxWidth(),
+                                    )
+                                    // Todo el campo abre el buscador
+                                    Box(Modifier.matchParentSize().clickable { buscando = true })
+                                }
+                            } else {
+                                CampoFijo("Actividad", actividad?.name ?: partida?.actividad ?: itemPci?.actividad ?: itemPci?.tituloCorto ?: "—")
+                                itemPci?.let { CampoFijo("Ítem", it.description ?: it.tituloCorto, lineas = 3) }
+                            }
+
+                            // El tramo: fijo en el PCI; en lo demás, se corrige si hizo falta
+                            if (itemPci != null) {
+                                CampoFijo("Tramo", tramo?.name ?: itemPci.tramo ?: "—")
+                            } else {
+                                Selector(
+                                    etiqueta = "Tramo",
+                                    valor = tramo?.let { "${it.code} · ${it.name}" } ?: "",
+                                    opciones = tramos.map { "${it.code} · ${it.name}" },
+                                    alElegir = { i -> tramo = tramos[i] },
+                                )
+                            }
+
+                            if (itemPci != null) {
+                                Row(horizontalArrangement = Arrangement.spacedBy(12.dp)) {
+                                    CampoFijo("Progresiva inicio", progIni.ifBlank { "—" }, Modifier.weight(1f))
+                                    CampoFijo("Progresiva fin", progFin.ifBlank { "—" }, Modifier.weight(1f))
+                                }
+                                CampoFijo("Lado de la vía", LADOS.firstOrNull { it.first == lado }?.second ?: lado)
+                            } else {
+                                if (partida != null) {
+                                    Text("Si no ejecutaste todo el tramo programado, corrige las progresivas.",
+                                        style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
+                                }
+                                Row(horizontalArrangement = Arrangement.spacedBy(12.dp)) {
+                                    OutlinedTextField(
+                                        value = progIni,
+                                        onValueChange = { progIni = it },
+                                        label = { Text("Progresiva inicio") },
+                                        placeholder = { Text("1334.600") },
+                                        singleLine = true,
+                                        keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Decimal),
+                                        shape = RoundedCornerShape(12.dp),
+                                        modifier = Modifier.weight(1f),
+                                    )
+                                    OutlinedTextField(
+                                        value = progFin,
+                                        onValueChange = { progFin = it },
+                                        label = { Text("Progresiva fin") },
+                                        placeholder = { Text("1335.000") },
+                                        singleLine = true,
+                                        keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Decimal),
+                                        shape = RoundedCornerShape(12.dp),
+                                        modifier = Modifier.weight(1f),
+                                    )
+                                }
+                                // «1334.600» vale lo mismo que «1334+600»: el teclado
+                                // numérico no tiene «+» (Elvis, video del 13/10)
+                                Text(
+                                    "Se escribe 1334.600 o 1334+600 (km y metros).",
+                                    style = MaterialTheme.typography.bodySmall,
+                                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                                )
+                                Selector(
+                                    etiqueta = "Lado de la vía",
+                                    valor = LADOS.firstOrNull { it.first == lado }?.second ?: lado,
+                                    opciones = LADOS.map { it.second },
+                                    alElegir = { i -> lado = LADOS[i].first },
+                                )
+                            }
+
+                            // Unidad y meta, de la programación
+                            partida?.let { p ->
+                                Row(horizontalArrangement = Arrangement.spacedBy(12.dp)) {
+                                    CampoFijo("Unidad", p.unidad ?: "—", Modifier.weight(1f))
+                                    CampoFijo("Meta programada", p.meta?.let { cifra(it) } ?: "—", Modifier.weight(1f))
+                                }
+                            }
+
+                            val unidad = partida?.unidad ?: itemPci?.unidad
+                            if (itemPci != null && itemPci.quantity != null) {
+                                CampoFijo("Metrado ejecutado", "${metrado} ${unidad.orEmpty()}".trim())
+                            } else {
+                                OutlinedTextField(
+                                    value = metrado,
+                                    onValueChange = { metrado = it },
+                                    label = { Text("Metrado ejecutado *") },
+                                    suffix = unidad?.let { u -> { Text(u) } },
+                                    placeholder = { Text("350") },
+                                    singleLine = true,
+                                    keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Decimal),
+                                    shape = RoundedCornerShape(12.dp),
+                                    colors = OutlinedTextFieldDefaults.colors(
+                                        unfocusedBorderColor = Marca.VerdeBandera, focusedBorderColor = Marca.VerdeBandera,
+                                    ),
+                                    modifier = Modifier.fillMaxWidth(),
+                                )
+                            }
+
                             OutlinedTextField(
-                                value = actividad?.name ?: "",
-                                onValueChange = {},
-                                readOnly = true,
-                                label = { Text("Actividad") },
-                                placeholder = { Text("Buscar por nombre o código…") },
-                                supportingText = actividad?.let { a -> { Text(a.code, color = MaterialTheme.colorScheme.onSurfaceVariant) } },
-                                trailingIcon = { Icon(Icons.Outlined.Search, null) },
+                                value = observacion,
+                                onValueChange = { observacion = it },
+                                label = { Text(if (origen is OrigenDelTrabajo.Emergencia) "Observación (obligatoria)" else "Observación") },
+                                placeholder = { Text("Si hay alguna observación: condiciones, incidencias…") },
+                                minLines = 2,
                                 shape = RoundedCornerShape(12.dp),
                                 modifier = Modifier.fillMaxWidth(),
                             )
-                            // Todo el campo abre el buscador
-                            Box(Modifier.matchParentSize().clickable { buscando = true })
+
+                            // Lo que pide el FOR:001 de cada actividad: opcional y plegado,
+                            // para no retrasar el registro (boceto, nota 5)
+                            if (itemPci == null) {
+                                Row(
+                                    Modifier.fillMaxWidth().clickable { verFor001 = !verFor001 }.padding(vertical = 4.dp),
+                                    verticalAlignment = Alignment.CenterVertically,
+                                ) {
+                                    Text(
+                                        "Horario, personas y medidas para el reporte diario (opcional)",
+                                        style = MaterialTheme.typography.labelLarge,
+                                        fontWeight = FontWeight.SemiBold,
+                                        modifier = Modifier.weight(1f),
+                                    )
+                                    Icon(if (verFor001) Icons.Outlined.ExpandLess else Icons.Outlined.ExpandMore, contentDescription = null)
+                                }
+                                if (verFor001) {
+                                    Row(horizontalArrangement = Arrangement.spacedBy(12.dp)) {
+                                        CampoCorto(horaIni, { horaIni = it }, "Inicio", "07:30", KeyboardType.Number, Modifier.weight(1f))
+                                        CampoCorto(horaFin, { horaFin = it }, "Fin", "12:00", KeyboardType.Number, Modifier.weight(1f))
+                                        CampoCorto(personas, { personas = it }, "Personas", "6", KeyboardType.Number, Modifier.weight(1f))
+                                    }
+                                    Row(horizontalArrangement = Arrangement.spacedBy(12.dp)) {
+                                        CampoCorto(longitud, { longitud = it }, "Largo (m)", "100", KeyboardType.Decimal, Modifier.weight(1f))
+                                        CampoCorto(ancho, { ancho = it }, "Ancho (m)", "1.5", KeyboardType.Decimal, Modifier.weight(1f))
+                                        CampoCorto(espesor, { espesor = it }, "Espesor", "0.05", KeyboardType.Decimal, Modifier.weight(1f))
+                                    }
+                                }
+                            }
                         }
-                        Selector(
-                            etiqueta = "Tramo",
-                            valor = tramo?.let { "${it.code} · ${it.name}" } ?: "",
-                            opciones = tramos.map { "${it.code} · ${it.name}" },
-                            alElegir = { i -> tramo = tramos[i] },
-                        )
-                    } else {
-                        FichaDelOrigen(origen, actividad, tramo)
                     }
-
-                    Text(
-                        if (manual) "Dónde se ejecutó" else "Dónde se ejecutó (cámbialo solo si fue en otro punto)",
-                        style = MaterialTheme.typography.labelLarge,
-                        fontWeight = FontWeight.SemiBold,
-                    )
-                    Row(horizontalArrangement = Arrangement.spacedBy(12.dp)) {
-                        OutlinedTextField(
-                            value = progIni,
-                            onValueChange = { progIni = it },
-                            label = { Text("Progresiva inicio") },
-                            placeholder = { Text("1334.600") },
-                            singleLine = true,
-                            keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Decimal),
-                            shape = RoundedCornerShape(12.dp),
-                            modifier = Modifier.weight(1f),
-                        )
-                        OutlinedTextField(
-                            value = progFin,
-                            onValueChange = { progFin = it },
-                            label = { Text("Fin") },
-                            placeholder = { Text("1335.000") },
-                            singleLine = true,
-                            keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Decimal),
-                            shape = RoundedCornerShape(12.dp),
-                            modifier = Modifier.weight(1f),
-                        )
-                    }
-                    // «1334.600» vale lo mismo que «1334+600»: el teclado
-                    // numérico no tiene «+» (Elvis, video del 13/10)
-                    Text(
-                        "Se escribe 1334.600 o 1334+600 (km y metros).",
-                        style = MaterialTheme.typography.bodySmall,
-                        color = MaterialTheme.colorScheme.onSurfaceVariant,
-                    )
-
-                    Selector(
-                        etiqueta = "Lado de la vía",
-                        valor = LADOS.firstOrNull { it.first == lado }?.second ?: lado,
-                        opciones = LADOS.map { it.second },
-                        alElegir = { i -> lado = LADOS[i].first },
-                    )
-
-                    OutlinedTextField(
-                        value = metrado,
-                        onValueChange = { metrado = it },
-                        label = { Text("Metrado ejecutado") },
-                        suffix = (origen as? OrigenDelTrabajo.Programado)?.item?.unidad?.let { u -> { Text(u) } },
-                        placeholder = { Text("400") },
-                        singleLine = true,
-                        keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Decimal),
-                        shape = RoundedCornerShape(12.dp),
-                        modifier = Modifier.fillMaxWidth(),
-                    )
-
-                    // Lo que pide el reporte diario FOR:001 de cada actividad
-                    Text(
-                        "Para el reporte diario: horario, personas y medidas (m)",
-                        style = MaterialTheme.typography.labelLarge,
-                        fontWeight = FontWeight.SemiBold,
-                    )
-                    Row(horizontalArrangement = Arrangement.spacedBy(12.dp)) {
-                        CampoCorto(horaIni, { horaIni = it }, "Inicio", "07:30", KeyboardType.Number, Modifier.weight(1f))
-                        CampoCorto(horaFin, { horaFin = it }, "Fin", "12:00", KeyboardType.Number, Modifier.weight(1f))
-                        CampoCorto(personas, { personas = it }, "Personas", "6", KeyboardType.Number, Modifier.weight(1f))
-                    }
-                    Row(horizontalArrangement = Arrangement.spacedBy(12.dp)) {
-                        CampoCorto(longitud, { longitud = it }, "Largo (m)", "100", KeyboardType.Decimal, Modifier.weight(1f))
-                        CampoCorto(ancho, { ancho = it }, "Ancho (m)", "1.5", KeyboardType.Decimal, Modifier.weight(1f))
-                        CampoCorto(espesor, { espesor = it }, "Espesor", "0.05", KeyboardType.Decimal, Modifier.weight(1f))
-                    }
-
-                    OutlinedTextField(
-                        value = observacion,
-                        onValueChange = { observacion = it },
-                        label = { Text(if (origen is OrigenDelTrabajo.Emergencia) "Observación (obligatoria)" else "Observación") },
-                        placeholder = { Text("Condiciones encontradas, incidencias…") },
-                        minLines = 2,
-                        shape = RoundedCornerShape(12.dp),
-                        modifier = Modifier.fillMaxWidth(),
-                    )
                 }
 
                 // El aviso y el error van fuera del scroll, pegados a los botones
-                if (manual) revisar(tramo, progIni)?.let { Aviso(it, Marca.Naranja, margen = 20.dp) }
+                if (paso == 3 && manual) revisar(tramo, progIni)?.let { Aviso(it, Marca.Naranja, margen = 20.dp) }
                 error?.let { Aviso(it, MaterialTheme.colorScheme.error, margen = 20.dp) }
 
-                HorizontalDivider()
-                Row(
-                    Modifier.fillMaxWidth().padding(16.dp),
-                    horizontalArrangement = Arrangement.spacedBy(12.dp),
-                ) {
-                    OutlinedButton(
-                        onClick = alCerrar,
-                        modifier = Modifier.weight(1f).height(52.dp),
-                        shape = RoundedCornerShape(12.dp),
-                    ) { Text("Cancelar") }
-
-                    Button(
-                        onClick = {
-                            error = validar(actividad, tramo, progIni, progFin, metrado, origen, observacion)
-                                ?: validarFor001(horaIni, horaFin, personas, longitud, ancho, espesor)
-                            if (error == null) {
-                                alGuardar(
-                                    actividad!!,
-                                    tramo,
-                                    Progresiva.aMetros(progIni),
-                                    Progresiva.aMetros(progFin),
-                                    lado,
-                                    metrado.replace(",", ".").toDouble(),
-                                    observacion.ifBlank { null },
-                                    origen,
-                                    DetalleFor001(
-                                        horaInicio = DetalleFor001.hora(horaIni),
-                                        horaFin = DetalleFor001.hora(horaFin),
-                                        personas = personas.trim().toIntOrNull(),
-                                        longitud = DetalleFor001.numero(longitud),
-                                        ancho = DetalleFor001.numero(ancho),
-                                        espesor = DetalleFor001.numero(espesor),
-                                    ),
-                                )
-                            }
-                        },
-                        enabled = !guardando,
-                        modifier = Modifier.weight(1f).height(52.dp),
-                        shape = RoundedCornerShape(12.dp),
+                if (paso == 3) {
+                    HorizontalDivider()
+                    Row(
+                        Modifier.fillMaxWidth().padding(16.dp),
+                        horizontalArrangement = Arrangement.spacedBy(12.dp),
                     ) {
-                        if (guardando) {
-                            CircularProgressIndicator(
-                                Modifier.size(20.dp),
-                                strokeWidth = 2.dp,
-                                color = MaterialTheme.colorScheme.onPrimary,
-                            )
-                        } else {
-                            Text("Guardar", fontWeight = FontWeight.SemiBold)
+                        Button(
+                            onClick = { if (inicial != null) alCerrar() else atras() },
+                            colors = ButtonDefaults.buttonColors(containerColor = Marca.Azul),
+                            modifier = Modifier.weight(1f).height(52.dp),
+                            shape = RoundedCornerShape(12.dp),
+                        ) { Text("Cancelar") }
+
+                        Button(
+                            onClick = {
+                                error = validar(actividad, tramo, progIni, progFin, metrado, origen, observacion)
+                                    ?: validarFor001(horaIni, horaFin, personas, longitud, ancho, espesor)
+                                if (error == null) {
+                                    alGuardar(
+                                        actividad!!,
+                                        tramo,
+                                        Progresiva.aMetros(progIni),
+                                        Progresiva.aMetros(progFin),
+                                        lado,
+                                        metrado.replace(",", ".").toDouble(),
+                                        observacion.ifBlank { null },
+                                        origen,
+                                        DetalleFor001(
+                                            horaInicio = DetalleFor001.hora(horaIni),
+                                            horaFin = DetalleFor001.hora(horaFin),
+                                            personas = personas.trim().toIntOrNull(),
+                                            longitud = DetalleFor001.numero(longitud),
+                                            ancho = DetalleFor001.numero(ancho),
+                                            espesor = DetalleFor001.numero(espesor),
+                                        ),
+                                    )
+                                }
+                            },
+                            enabled = !guardando,
+                            colors = ButtonDefaults.buttonColors(containerColor = Marca.VerdeBandera),
+                            modifier = Modifier.weight(1f).height(52.dp),
+                            shape = RoundedCornerShape(12.dp),
+                        ) {
+                            if (guardando) {
+                                CircularProgressIndicator(Modifier.size(20.dp), strokeWidth = 2.dp, color = Color.White)
+                            } else {
+                                Text("Guardar avance", fontWeight = FontWeight.SemiBold)
+                            }
                         }
                     }
                 }
@@ -396,63 +544,237 @@ fun FormularioActividad(
     }
 }
 
-/** Lo que trae la partida o el ítem: se muestra, no se vuelve a escribir. */
+/** «1 Origen · 2 Actividad · 3 Avance», con lo ya hecho marcado. */
 @Composable
-private fun FichaDelOrigen(origen: OrigenDelTrabajo, actividad: Actividad?, tramo: Tramo?) {
-    val item = (origen as? OrigenDelTrabajo.Programado)?.item
-    Surface(
-        shape = RoundedCornerShape(12.dp),
-        color = Marca.Azul.copy(alpha = 0.06f),
-        modifier = Modifier.fillMaxWidth(),
-    ) {
-        Column(Modifier.padding(14.dp), verticalArrangement = Arrangement.spacedBy(3.dp)) {
-            Text(
-                actividad?.name ?: item?.actividad ?: (origen as? OrigenDelTrabajo.Pci)?.item?.description ?: "—",
-                style = MaterialTheme.typography.titleSmall,
-                fontWeight = FontWeight.SemiBold,
-            )
-            // El código va, pero en segundo plano: el capataz trabaja por el nombre (regla 1.3)
-            (item?.actividadCodigo ?: actividad?.code)?.takeIf { it.isNotBlank() }?.let {
-                Text(it, style = MaterialTheme.typography.labelSmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
-            }
-            Text(
-                listOfNotNull(
-                    tramo?.name,
-                    item?.sector?.let { "sector $it" },
-                    item?.lado,
-                ).joinToString(" · "),
-                style = MaterialTheme.typography.bodySmall,
-            )
-            item?.let { p ->
-                val meta = p.meta ?: 0.0
-                val hecho = p.ejecutado ?: 0.0
-                if (meta > 0) {
-                    Text(
-                        if (hecho >= meta) "Ya cubrió su meta de ${cifra(meta)}${unidad(p.unidad)}."
-                        else "Meta ${cifra(meta)}${unidad(p.unidad)} · faltan ${cifra(meta - hecho)}${unidad(p.unidad)}",
-                        style = MaterialTheme.typography.bodySmall,
-                        color = if (hecho >= meta) Marca.VerdeBandera else Marca.Azul,
-                    )
+private fun IndicadorDePasos(paso: Int, modifier: Modifier = Modifier) {
+    Row(modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
+        listOf("Origen", "Actividad", "Avance").forEachIndexed { i, nombre ->
+            val n = i + 1
+            val hecho = n < paso
+            val actual = n == paso
+            Column(horizontalAlignment = Alignment.CenterHorizontally) {
+                Box(
+                    Modifier
+                        .size(28.dp)
+                        .clip(CircleShape)
+                        .background(if (hecho || actual) Marca.Azul else MaterialTheme.colorScheme.surfaceVariant),
+                    contentAlignment = Alignment.Center,
+                ) {
+                    if (hecho) Icon(Icons.Outlined.Check, contentDescription = null, tint = Color.White, modifier = Modifier.size(16.dp))
+                    else Text("$n", color = if (actual) Color.White else MaterialTheme.colorScheme.onSurfaceVariant,
+                        style = MaterialTheme.typography.labelLarge, fontWeight = FontWeight.Bold)
                 }
-                p.notes?.takeIf { it.isNotBlank() }?.let {
-                    Text("Indicación: $it", style = MaterialTheme.typography.bodySmall,
-                        color = MaterialTheme.colorScheme.onSurfaceVariant)
-                }
+                Text(nombre, style = MaterialTheme.typography.labelSmall,
+                    fontWeight = if (actual) FontWeight.Bold else FontWeight.Normal,
+                    color = if (actual) Marca.Azul else MaterialTheme.colorScheme.onSurfaceVariant)
             }
-            (origen as? OrigenDelTrabajo.Pci)?.item?.let { pci ->
-                Text(
-                    when (val dias = pci.diasRestantes) {
-                        null -> "Sin plazo indicado."
-                        0 -> "Vence hoy."
-                        in Int.MIN_VALUE..-1 -> "Venció hace ${-dias} días."
-                        else -> "Faltan $dias días para que venza."
-                    },
-                    style = MaterialTheme.typography.bodySmall,
-                    color = if ((pci.diasRestantes ?: 99) <= 1) Marca.Naranja else Marca.Azul,
+            if (n < 3) {
+                Box(
+                    Modifier
+                        .weight(1f)
+                        .padding(horizontal = 6.dp)
+                        .padding(bottom = 14.dp)
+                        .height(2.dp)
+                        .background(if (hecho) Marca.Azul else MaterialTheme.colorScheme.surfaceVariant),
                 )
             }
         }
     }
+}
+
+@Composable
+private fun TituloDePaso(titulo: String, subtitulo: String) {
+    Column {
+        Text(titulo, style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.Bold)
+        Text(subtitulo, style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
+    }
+}
+
+/** Una de las cuatro tarjetas grandes del paso 1. */
+@Composable
+private fun TarjetaDeOrigen(
+    titulo: String,
+    detalle: String,
+    icono: androidx.compose.ui.graphics.vector.ImageVector,
+    modifier: Modifier = Modifier,
+    cuenta: Int? = null,
+    habilitada: Boolean = true,
+    destacada: Boolean = true,
+    color: Color = Marca.Azul,
+    alTocar: () -> Unit,
+) {
+    OutlinedCard(
+        onClick = alTocar,
+        enabled = habilitada,
+        shape = RoundedCornerShape(16.dp),
+        colors = CardDefaults.outlinedCardColors(
+            containerColor = if (destacada) Marca.Azul.copy(alpha = 0.06f) else MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.5f),
+        ),
+        border = androidx.compose.foundation.BorderStroke(1.dp, if (destacada) Marca.Azul.copy(alpha = 0.35f) else MaterialTheme.colorScheme.outlineVariant),
+        modifier = modifier.height(130.dp),
+    ) {
+        Column(Modifier.fillMaxSize().padding(14.dp)) {
+            Icon(icono, contentDescription = null, tint = if (habilitada) color else MaterialTheme.colorScheme.onSurfaceVariant,
+                modifier = Modifier.size(32.dp))
+            Spacer(Modifier.weight(1f))
+            Row(verticalAlignment = Alignment.CenterVertically) {
+                Text(
+                    titulo + (cuenta?.let { " · $it" } ?: ""),
+                    style = MaterialTheme.typography.titleMedium,
+                    fontWeight = FontWeight.Bold,
+                    modifier = Modifier.weight(1f),
+                )
+                Icon(Icons.Outlined.ChevronRight, contentDescription = null)
+            }
+            Text(detalle, style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant, maxLines = 2)
+        }
+    }
+}
+
+@Composable
+private fun Pestana(texto: String, elegida: Boolean, modifier: Modifier, alTocar: () -> Unit) {
+    Surface(
+        onClick = alTocar,
+        shape = RoundedCornerShape(10.dp),
+        color = if (elegida) Marca.Azul else MaterialTheme.colorScheme.surfaceVariant,
+        modifier = modifier.height(44.dp),
+    ) {
+        Box(contentAlignment = Alignment.Center) {
+            Text(texto, style = MaterialTheme.typography.labelLarge, fontWeight = FontWeight.SemiBold,
+                color = if (elegida) Color.White else MaterialTheme.colorScheme.onSurface)
+        }
+    }
+}
+
+/** Una partida programada para el día, con su botón «Seleccionar». */
+@Composable
+private fun TarjetaDePartida(p: ItemProgramado, registrada: Boolean, alSeleccionar: () -> Unit) {
+    OutlinedCard(shape = RoundedCornerShape(14.dp), modifier = Modifier.fillMaxWidth()) {
+        Column(Modifier.padding(14.dp), verticalArrangement = Arrangement.spacedBy(2.dp)) {
+            Text(p.actividad ?: "Partida sin nombre", style = MaterialTheme.typography.titleSmall, fontWeight = FontWeight.SemiBold)
+            Text("Tramo: ${p.tramo ?: "—"}", style = MaterialTheme.typography.bodySmall)
+            Text(
+                "Progresivas: " + (Progresiva.rango(p.progresivaInicio, p.progresivaFin) ?: "—") +
+                    " · " + (p.lado?.takeIf { it.isNotBlank() }?.let { "lado " + (pe.servicon.sigov.datos.Lados.codigo(it) ?: it) } ?: "lado sin indicar"),
+                style = MaterialTheme.typography.bodySmall,
+            )
+            Text(
+                "Meta: ${p.meta?.let { cifra(it) } ?: "—"}${unidad(p.unidad)} | Unidad: ${p.unidad ?: "—"}",
+                style = MaterialTheme.typography.bodySmall,
+                color = MaterialTheme.colorScheme.onSurfaceVariant,
+            )
+            Spacer(Modifier.height(6.dp))
+            Row(verticalAlignment = Alignment.CenterVertically) {
+                if (registrada) Etiqueta("Registrado", Marca.VerdeBandera)
+                Spacer(Modifier.weight(1f))
+                BotonSeleccionar(alSeleccionar)
+            }
+        }
+    }
+}
+
+/** Los ítems PCI de la cuadrilla, con el filtro de plazo (Elvis: «solo los de un día»). */
+@Composable
+private fun ListaDeItemsPci(pcis: List<ItemPci>, registrados: Set<String>, alSeleccionar: (ItemPci) -> Unit) {
+    var plazo by remember { mutableStateOf<Plazo?>(null) }
+    Text("Ítems PCI disponibles", style = MaterialTheme.typography.titleSmall, fontWeight = FontWeight.SemiBold)
+    Row(
+        Modifier.fillMaxWidth().horizontalScroll(rememberScrollState()),
+        horizontalArrangement = Arrangement.spacedBy(8.dp),
+    ) {
+        FilterChip(selected = plazo == null, onClick = { plazo = null }, label = { Text("Cualquier plazo") })
+        Plazo.entries.forEach { p ->
+            val n = pcis.count { cumple(it, p) }
+            FilterChip(selected = plazo == p, onClick = { plazo = if (plazo == p) null else p }, label = { Text("${p.etiqueta} · $n") })
+        }
+    }
+    val visibles = pcis.filter { cumple(it, plazo) }
+        .sortedWith(compareBy<ItemPci> { it.vence ?: "9999-12-31" }.thenBy { it.numero ?: Int.MAX_VALUE })
+    if (visibles.isEmpty()) {
+        Text("Ningún ítem en ese plazo.", style = MaterialTheme.typography.bodyMedium, color = MaterialTheme.colorScheme.onSurfaceVariant)
+    }
+    visibles.forEach { item ->
+        val fotos = item.fotosAntes + item.fotosDurante + item.fotosDespues
+        OutlinedCard(shape = RoundedCornerShape(14.dp), modifier = Modifier.fillMaxWidth()) {
+            Column(Modifier.padding(14.dp), verticalArrangement = Arrangement.spacedBy(2.dp)) {
+                Text(
+                    listOfNotNull(item.pciCorto, item.numero?.let { "Ítem $it" }).joinToString(" · "),
+                    style = MaterialTheme.typography.labelLarge,
+                    color = Marca.Azul,
+                    fontWeight = FontWeight.SemiBold,
+                )
+                Text(item.tituloCorto, style = MaterialTheme.typography.titleSmall, fontWeight = FontWeight.SemiBold)
+                Text("Tramo: ${item.tramo ?: "—"}", style = MaterialTheme.typography.bodySmall)
+                Text(
+                    "Progresivas: " + (Progresiva.rango(item.progresiva, item.progresivaFin) ?: "—") + " · " +
+                        (pe.servicon.sigov.datos.Lados.codigo(item.side)?.let { "lado $it" } ?: "lado sin indicar"),
+                    style = MaterialTheme.typography.bodySmall,
+                )
+                Spacer(Modifier.height(6.dp))
+                Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(6.dp)) {
+                    when {
+                        // Con sus tres fotos queda registrado solo en el reporte (Elvis)
+                        item.fotosCompletas -> Etiqueta("Registrado", Marca.VerdeBandera)
+                        fotos > 0 || item.id in registrados -> Etiqueta(
+                            "Faltan fotos: " + listOfNotNull(
+                                "antes".takeIf { item.fotosAntes == 0 },
+                                "durante".takeIf { item.fotosDurante == 0 },
+                                "después".takeIf { item.fotosDespues == 0 },
+                            ).joinToString(", "),
+                            Semaforo.Vencido,
+                        )
+                        item.estaObservado -> Etiqueta("Observado", Semaforo.Vencido)
+                        else -> Etiqueta(if (item.estaEnAtencion) "En ejecución" else "Pendiente", Marca.Naranja)
+                    }
+                    Spacer(Modifier.weight(1f))
+                    BotonSeleccionar { alSeleccionar(item) }
+                }
+            }
+        }
+    }
+}
+
+@Composable
+private fun BotonSeleccionar(alTocar: () -> Unit) {
+    Button(
+        onClick = alTocar,
+        colors = ButtonDefaults.buttonColors(containerColor = Marca.Azul),
+        shape = RoundedCornerShape(10.dp),
+        contentPadding = PaddingValues(horizontal = 18.dp),
+        modifier = Modifier.height(40.dp),
+    ) { Text("Seleccionar") }
+}
+
+@Composable
+private fun Etiqueta(texto: String, color: Color) {
+    Text(
+        texto,
+        style = MaterialTheme.typography.labelMedium,
+        fontWeight = FontWeight.SemiBold,
+        color = color,
+        modifier = Modifier
+            .background(color.copy(alpha = 0.12f), RoundedCornerShape(8.dp))
+            .padding(horizontal = 10.dp, vertical = 4.dp),
+    )
+}
+
+/** Lo que viene de la partida o del ítem: se muestra con candado, no se escribe. */
+@Composable
+private fun CampoFijo(etiqueta: String, valor: String, modifier: Modifier = Modifier.fillMaxWidth(), lineas: Int = 1) {
+    OutlinedTextField(
+        value = valor,
+        onValueChange = {},
+        readOnly = true,
+        label = { Text(etiqueta) },
+        trailingIcon = { Icon(Icons.Outlined.Lock, contentDescription = "Fijo", modifier = Modifier.size(18.dp)) },
+        maxLines = lineas,
+        shape = RoundedCornerShape(12.dp),
+        colors = OutlinedTextFieldDefaults.colors(
+            unfocusedContainerColor = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.5f),
+            focusedContainerColor = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.5f),
+        ),
+        modifier = modifier,
+    )
 }
 
 /** El catálogo completo, buscable por nombre o código, sin tildes. */
@@ -648,82 +970,6 @@ private fun revisar(tramo: Tramo?, progIni: String): String? {
             "${Progresiva.aTexto(tramo.progresivaFin)}). Revísala; se puede guardar igual."
     }
     return null
-}
-
-/**
- * De dónde sale el trabajo. Va primero: decide si el metrado avanza una
- * partida de la semana, sustenta un PCI, o es trabajo no programado.
- */
-@OptIn(ExperimentalLayoutApi::class)
-@Composable
-private fun SelectorDeOrigen(
-    origen: OrigenDelTrabajo,
-    pendientes: List<ItemProgramado>,
-    pcis: List<ItemPci>,
-    alElegir: (OrigenDelTrabajo) -> Unit,
-) {
-    Column(verticalArrangement = Arrangement.spacedBy(10.dp)) {
-        Text(
-            "¿De dónde sale este trabajo?",
-            style = MaterialTheme.typography.labelLarge,
-            fontWeight = FontWeight.SemiBold,
-        )
-
-        FlowRow(
-            Modifier.fillMaxWidth(),
-            horizontalArrangement = Arrangement.spacedBy(8.dp),
-            verticalArrangement = Arrangement.spacedBy(8.dp),
-        ) {
-            FilterChip(
-                selected = origen is OrigenDelTrabajo.Programado,
-                onClick = { pendientes.firstOrNull()?.let { alElegir(OrigenDelTrabajo.Programado(it)) } },
-                enabled = pendientes.isNotEmpty(),
-                label = { Text("Programado · ${pendientes.size}") },
-            )
-            FilterChip(
-                selected = origen is OrigenDelTrabajo.Pci,
-                onClick = { pcis.firstOrNull()?.let { alElegir(OrigenDelTrabajo.Pci(it)) } },
-                enabled = pcis.isNotEmpty(),
-                label = { Text("PCI · ${pcis.size}") },
-            )
-            FilterChip(
-                selected = origen is OrigenDelTrabajo.NoProgramado,
-                onClick = { alElegir(OrigenDelTrabajo.NoProgramado) },
-                label = { Text("Otros") },
-            )
-            FilterChip(
-                selected = origen is OrigenDelTrabajo.Emergencia,
-                onClick = { alElegir(OrigenDelTrabajo.Emergencia) },
-                label = { Text("Emergencia") },
-            )
-        }
-
-        when (origen) {
-            is OrigenDelTrabajo.Programado -> Selector(
-                etiqueta = "Partida programada",
-                valor = rotulo(origen.item),
-                opciones = pendientes.map { rotulo(it) },
-                alElegir = { i -> alElegir(OrigenDelTrabajo.Programado(pendientes[i])) },
-            )
-
-            is OrigenDelTrabajo.Pci -> Selector(
-                etiqueta = "Ítem de PCI",
-                valor = rotulo(origen.item),
-                opciones = pcis.map { rotulo(it) },
-                alElegir = { i -> alElegir(OrigenDelTrabajo.Pci(pcis[i])) },
-            )
-
-            OrigenDelTrabajo.NoProgramado -> Aviso(
-                "Trabajo hecho además de lo programado. Elige la actividad del catálogo.",
-                Marca.Azul,
-            )
-
-            OrigenDelTrabajo.Emergencia -> Aviso(
-                "No descuenta de la programación. Explica en la observación qué pasó.",
-                Marca.Naranja,
-            )
-        }
-    }
 }
 
 @Composable

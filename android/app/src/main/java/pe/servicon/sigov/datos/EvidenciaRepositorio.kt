@@ -66,6 +66,11 @@ data class EvidenciaEnGaleria(
     val watermarked: Boolean = true,
     val sha256: String? = null,
     @SerialName("created_by_name") val tomadaPor: String? = null,
+    @SerialName("activity_id") val actividadId: String? = null,
+    @SerialName("pci_item_number") val pciItem: Int? = null,
+    val side: String? = null,
+    /** Si COVINCA la observó. */
+    val revision: String? = null,
 ) {
     /** Si la foto sigue en el equipo se muestra de ahí: no gasta datos. */
     var rutaLocal: String? = null
@@ -361,9 +366,11 @@ class EvidenciaRepositorio @Inject constructor(
                         gte("work_date", desde)
                         lte("work_date", hasta)
                         fase?.let { eq("phase", it) }
+                        // Las de la programación y las de sus PCI (no las del inventario)
+                        isIn("origen", listOf("parte", "pci"))
                     }
                     order("taken_at", Order.DESCENDING)
-                    limit(500)
+                    limit(1000)
                 }
                 .decodeList<JsonObject>()
             espejarGaleria(servicioId, filas)

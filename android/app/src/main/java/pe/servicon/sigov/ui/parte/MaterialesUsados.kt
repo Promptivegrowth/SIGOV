@@ -95,10 +95,27 @@ fun DialogoMaterialUsado(
     stock: List<StockDeCuadrilla>,
     insumos: List<Insumo>,
     registros: List<RegistroLocal>,
+    rendimientos: List<pe.servicon.sigov.datos.Rendimiento> = emptyList(),
     alCerrar: () -> Unit,
     alGuardar: (insumoId: String, nombre: String, unidad: String?, cantidad: Double, registro: RegistroLocal?) -> Unit,
 ) {
     data class Opcion(val id: String, val nombre: String, val unidad: String?, val tiene: Double?)
+    // El material de las actividades registradas hoy, según los rendimientos
+    // del maestro (Elvis: «que jale qué insumos se necesitan para esas
+    // actividades… y solo colocar la cantidad»). La cantidad estimada es la
+    // que sale del metrado; se escribe la real.
+    data class Sugerido(val opcion: Opcion, val estimado: Double, val registro: RegistroLocal)
+    val sugeridos = remember(rendimientos, registros, stock, insumos) {
+        registros.flatMap { r ->
+            rendimientos.filter { it.actividadId == r.actividadId }.mapNotNull { rend ->
+                val insumo = insumos.firstOrNull { it.id == rend.insumoId }
+                val propio = stock.firstOrNull { it.insumoId == rend.insumoId }
+                val nombre = insumo?.name ?: propio?.nombre ?: return@mapNotNull null
+                Sugerido(Opcion(rend.insumoId, nombre, insumo?.unidad ?: propio?.unidad, propio?.stock), rend.cantidad * r.cantidad, r)
+            }
+        }
+    }
+    var estimado by remember { mutableStateOf<Double?>(null) }
     val opciones = remember(stock, insumos) {
         val propios = stock.filter { it.stock > 0 }.map { Opcion(it.insumoId, it.nombre, it.unidad, it.stock) }
         val ids = propios.map { it.id }.toSet()
@@ -126,7 +143,32 @@ fun DialogoMaterialUsado(
                         label = { Text("Buscar material") }, singleLine = true,
                         modifier = Modifier.fillMaxWidth(),
                     )
-                    LazyColumn(Modifier.heightIn(max = 280.dp)) {
+                    LazyColumn(Modifier.heightIn(max = 320.dp)) {
+                        if (buscar.isBlank() && sugeridos.isNotEmpty()) {
+                            item {
+                                Text("Para las actividades de hoy", style = MaterialTheme.typography.labelLarge,
+                                    color = Marca.Azul, modifier = Modifier.padding(top = 4.dp, bottom = 2.dp))
+                            }
+                            items(sugeridos, key = { "s" + it.opcion.id + it.registro.clientId }) { sg ->
+                                Column(
+                                    Modifier.fillMaxWidth().clickable {
+                                        elegido = sg.opcion; registro = sg.registro; estimado = sg.estimado
+                                    }.padding(vertical = 8.dp),
+                                ) {
+                                    Text(sg.opcion.nombre, style = MaterialTheme.typography.bodyMedium, fontWeight = FontWeight.SemiBold)
+                                    Text(
+                                        "${sg.registro.actividadNombre} · aprox. ${Numeros.tres(sg.estimado)} ${sg.opcion.unidad.orEmpty()}",
+                                        style = MaterialTheme.typography.labelSmall,
+                                        color = Marca.Azul,
+                                    )
+                                }
+                                HorizontalDivider()
+                            }
+                            item {
+                                Text("Todo el catálogo", style = MaterialTheme.typography.labelLarge,
+                                    color = MaterialTheme.colorScheme.onSurfaceVariant, modifier = Modifier.padding(top = 8.dp, bottom = 2.dp))
+                            }
+                        }
                         items(filtradas, key = { it.id }) { o ->
                             Column(Modifier.fillMaxWidth().clickable { elegido = o }.padding(vertical = 8.dp)) {
                                 Text(o.nombre, style = MaterialTheme.typography.bodyMedium)
@@ -145,14 +187,15 @@ fun DialogoMaterialUsado(
                             Text(elegido!!.nombre, style = MaterialTheme.typography.bodyLarge, fontWeight = FontWeight.SemiBold)
                             elegido!!.tiene?.let { Text("Tiene ${Numeros.tres(it)} ${elegido!!.unidad.orEmpty()}", style = MaterialTheme.typography.labelSmall) }
                         }
-                        TextButton(onClick = { elegido = null }) { Text("Cambiar") }
+                        TextButton(onClick = { elegido = null; estimado = null }) { Text("Cambiar") }
                     }
                     OutlinedTextField(
                         value = cantidad,
                         onValueChange = { v -> cantidad = v.filter { it.isDigit() || it == '.' || it == ',' } },
                         label = { Text("Cantidad") },
                         suffix = { elegido!!.unidad?.let { Text(it) } },
-                        supportingText = { Text("Hasta 3 decimales: 0,125") },
+                        placeholder = estimado?.let { e -> { Text("aprox. ${Numeros.tres(e)}") } },
+                        supportingText = { Text(estimado?.let { "Según el rendimiento, unos ${Numeros.tres(it)}. Escribe lo que se usó." } ?: "Hasta 3 decimales: 0,125") },
                         singleLine = true,
                         keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Decimal),
                         modifier = Modifier.fillMaxWidth(),

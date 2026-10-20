@@ -60,6 +60,8 @@ data class EstadoParte(
     val recursos: List<pe.servicon.sigov.datos.RecursoDelDia> = emptyList(),
     val stockCuadrilla: List<pe.servicon.sigov.datos.StockDeCuadrilla> = emptyList(),
     val insumos: List<pe.servicon.sigov.datos.Insumo> = emptyList(),
+    /** Material por unidad de partida: sugiere el material del día. */
+    val rendimientos: List<pe.servicon.sigov.datos.Rendimiento> = emptyList(),
     /** Lo que observó el supervisor al devolver el parte. */
     val observacion: String? = null,
     val guardando: Boolean = false,
@@ -234,6 +236,19 @@ class ParteViewModel @Inject constructor(
 
         viewModelScope.launch {
             runCatching {
+                // El ítem PCI o la partida ya tienen su registro si se les
+                // tomaron fotos: se completa ese mismo, no se duplica la línea
+                val existente = when (origen) {
+                    is OrigenDelTrabajo.Pci -> _estado.value.registros.firstOrNull { r -> r.pciItemId == origen.item.id }
+                    is OrigenDelTrabajo.Programado -> _estado.value.registros
+                        .firstOrNull { r -> r.planItemId == origen.item.id && r.cantidad == 0.0 }
+                    else -> null
+                }
+                if (existente != null) {
+                    campo.completarRegistro(existente, tramo, progresivaInicio, progresivaFin, lado, cantidad,
+                        observacion ?: existente.observacion, detalle)
+                    return@runCatching
+                }
                 campo.registrarActividad(
                     parte = parte,
                     actividad = actividad,
@@ -500,7 +515,8 @@ class ParteViewModel @Inject constructor(
                 val consumos = consumoRepo.delDia(cuadrilla.servicioId, cuadrilla.id, fecha, _estado.value.registros)
                 val stock = consumoRepo.stock(cuadrilla.servicioId, cuadrilla.id)
                 val insumos = runCatching { materialRepo.insumos(cuadrilla.servicioId) }.getOrDefault(emptyList())
-                _estado.update { it.copy(consumos = consumos, stockCuadrilla = stock, insumos = insumos) }
+                val rendimientos = runCatching { materialRepo.rendimientos(cuadrilla.servicioId) }.getOrDefault(emptyList())
+                _estado.update { it.copy(consumos = consumos, stockCuadrilla = stock, insumos = insumos, rendimientos = rendimientos) }
             }
         }
     }

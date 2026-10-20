@@ -188,6 +188,10 @@ interface ParteDao {
     @Query("SELECT * FROM registros WHERE parteClientId = :parteId AND pciItemId = :pciItemId ORDER BY creadoEn LIMIT 1")
     suspend fun registroDePci(parteId: String, pciItemId: String): RegistroLocal?
 
+    /** El registro de una partida en un parte: el que sostiene sus fotos (Elvis, 13/10). */
+    @Query("SELECT * FROM registros WHERE parteClientId = :parteId AND planItemId = :planItemId ORDER BY creadoEn LIMIT 1")
+    suspend fun registroDePartida(parteId: String, planItemId: String): RegistroLocal?
+
     /** Avance anotado en el equipo para una partida, haya subido o no. */
     @Query("SELECT COUNT(*) FROM registros WHERE planItemId = :planItemId")
     suspend fun registrosDePartida(planItemId: String): Int

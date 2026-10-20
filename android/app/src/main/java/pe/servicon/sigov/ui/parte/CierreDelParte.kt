@@ -33,7 +33,7 @@ fun estadoDelParte(estado: String?): String = when (estado) {
 val ParteLocal.editable: Boolean get() = estado == "borrador" || estado == "observado"
 
 /**
- * Los datos del día que van en la cabecera del reporte (OBS-27/33): clima,
+ * Los datos del día que van en la cabecera del reporte (OBS-27/33), sin clima (Elvis, 13/10):
  * horario y personal. Se ven de un vistazo y se corrigen con un toque.
  */
 @Composable
@@ -51,13 +51,13 @@ fun DatosDelDia(parte: ParteLocal, alEditar: () -> Unit, vehiculos: List<String>
             Spacer(Modifier.width(12.dp))
             Column(Modifier.weight(1f)) {
                 Text("Datos del día", style = MaterialTheme.typography.titleSmall, fontWeight = FontWeight.SemiBold)
-                val falta = parte.clima == null || parte.horaInicio == null || parte.personal == null
+                // Sin clima: retrasa y confunde al encargado (Elvis, video del 13/10)
+                val falta = parte.horaInicio == null || parte.personal == null
                 Text(
                     listOfNotNull(
-                        parte.clima,
                         listOfNotNull(parte.horaInicio, parte.horaFin).joinToString(" a ").ifBlank { null },
                         parte.personal?.let { "$it personas" },
-                    ).joinToString(" · ").ifBlank { "Clima, horario y personal" },
+                    ).joinToString(" · ").ifBlank { "Horario y personal" },
                     style = MaterialTheme.typography.bodySmall,
                     color = if (falta && parte.editable) Marca.Naranja else MaterialTheme.colorScheme.onSurfaceVariant,
                 )
@@ -82,7 +82,6 @@ fun DialogoDatosDelDia(
     alGuardar: (clima: String?, inicio: String?, fin: String?, personal: Int?, notas: String?) -> Unit,
     personalSugerido: Int? = null,
 ) {
-    val climas = listOf("Soleado", "Nublado", "Lluvia", "Viento fuerte", "Neblina")
     var clima by remember { mutableStateOf(parte.clima) }
     var inicio by remember { mutableStateOf(parte.horaInicio ?: "07:00") }
     var fin by remember { mutableStateOf(parte.horaFin ?: "16:00") }
@@ -96,12 +95,6 @@ fun DialogoDatosDelDia(
         title = { Text("Datos del día") },
         text = {
             Column(verticalArrangement = Arrangement.spacedBy(10.dp)) {
-                Text("Clima", style = MaterialTheme.typography.labelLarge)
-                Row(Modifier.horizontalScroll(rememberScrollState()), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                    climas.forEach { c ->
-                        FilterChip(selected = clima == c, onClick = { clima = if (clima == c) null else c }, label = { Text(c) })
-                    }
-                }
                 Row(horizontalArrangement = Arrangement.spacedBy(10.dp)) {
                     OutlinedTextField(inicio, { inicio = it.take(5) }, label = { Text("Inicio") }, placeholder = { Text("07:00") },
                         singleLine = true, isError = inicio.isNotBlank() && !hora.matches(inicio), modifier = Modifier.weight(1f))
@@ -165,7 +158,7 @@ fun DialogoEnviar(registros: Int, sinFotos: Int, faltanDatos: Boolean, alCerrar:
             Column(verticalArrangement = Arrangement.spacedBy(6.dp)) {
                 Text("$registros actividad(es) registradas.")
                 if (sinFotos > 0) Text("$sinFotos actividad(es) sin foto.", color = Marca.Naranja)
-                if (faltanDatos) Text("Faltan los datos del día (clima, horario o personal).", color = Marca.Naranja)
+                if (faltanDatos) Text("Faltan los datos del día (horario o personal).", color = Marca.Naranja)
                 Text(
                     "Después de enviarlo ya no podrás agregar actividades, salvo que el supervisor lo observe.",
                     style = MaterialTheme.typography.bodySmall,

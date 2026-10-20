@@ -10,6 +10,7 @@ import {
   RAIZ, carpetaCuadrilla, codigoCuadrilla, progresiva, kmDeFoto, lado, fase,
   carpetaPlazo, carpetaPci, semanaDe, rutas, nombreLibre, aCovinca, letraDeRepetida, semanaDelContrato,
 } from '../lib/covinca'
+import { nombreDeExportacion, rutaDeExportacion, rutasDeExportacion, type FotoExportable } from '../lib/exportar-evidencias'
 
 let ok = 0
 const caso = (nombre: string, fn: () => void) => {
@@ -126,6 +127,63 @@ caso('nombres repetidos y limpieza', () => {
   assert.equal(letraDeRepetida(25), 'Z')
   assert.equal(letraDeRepetida(26), 'AA')
   assert.equal(aCovinca('Señales verticales – Ñandú'), 'SENALES_VERTICALES_NANDU')
+})
+
+// ─── Exportar evidencias (boceto de Elvis del 13/10) ──────────────────
+const foto = (x: Partial<FotoExportable>): FotoExportable => ({
+  id: 'x', storage_path: 's', master_path: null, phase: 'antes', work_date: '2026-10-13', fecha_sello: null,
+  taken_at: '2026-10-13T08:00:00Z', origen: 'parte', crew_numero: 2, crew_sede: 'Pedregal', crew_code: 'CUA_02',
+  crew_name: 'Cuadrilla 2', activity_code: 'MR-14', activity_name: 'Pintado de marcas en el pavimento',
+  activity_carpeta_ns: 'MARCAS_EN_EL_PAVIMENTO', sector_code: '1.1', sector_folder: 'SECTOR_1.1_852+335_877+000',
+  progresiva_m: 852400, side: 'derecho', pci_code: null, pci_item_number: null, pci_term_days: null,
+  revision: null, revision_nota: null, ...x,
+})
+
+caso('exportar evidencias: raíz', () => {
+  assert.equal(nombreDeExportacion('2026-10-01', '2026-10-13'), 'EXPORTACION_01-10-2026_AL_13-10-2026')
+})
+
+caso('exportar evidencias: PCI oficial y del boceto', () => {
+  const f = foto({ pci_code: 'PCI-2026-044', pci_item_number: 19, pci_term_days: 3, phase: 'durante' })
+  assert.deepEqual(rutaDeExportacion(f, { estructura: true, oficial: true }),
+    { carpeta: '02_PCI/PCI_44/3_DIAS/ITEM_19', archivo: 'ITEM_19(2).jpg' })
+  assert.deepEqual(rutaDeExportacion(f, { estructura: true, oficial: false }),
+    { carpeta: '02_PCI/PCI-2026-044/PLAZO_3_DIAS/ITEM_019', archivo: 'ITEM_019(2).jpg' })
+  assert.equal(rutaDeExportacion(foto({ pci_code: 'PCI-2026-051', pci_item_number: 5, pci_term_days: 1, phase: 'despues' }),
+    { estructura: true, oficial: true }).carpeta, '02_PCI/PCI_51/1_DIA/ITEM_5')
+})
+
+caso('exportar evidencias: MR por subsector', () => {
+  assert.deepEqual(rutaDeExportacion(foto({}), { estructura: true, oficial: true }), {
+    carpeta: '01_MR/CUADRILLA_2_PEDREGAL/2026-10-13/SECTOR_1.1_852+335_877+000/MARCAS_EN_EL_PAVIMENTO/ANTES',
+    archivo: '2026-10-13_KM-852+400_LD_ANTES.jpg',
+  })
+  // Sin etapa no hay subcarpeta de etapa
+  assert.equal(rutaDeExportacion(foto({ phase: 'general' }), { estructura: true, oficial: true }).carpeta,
+    '01_MR/CUADRILLA_2_PEDREGAL/2026-10-13/SECTOR_1.1_852+335_877+000/MARCAS_EN_EL_PAVIMENTO')
+  assert.deepEqual(rutaDeExportacion(foto({}), { estructura: true, oficial: false }, 3), {
+    carpeta: '01_MR/Programacion/Cuadrilla_2/2026-10-13/Sector_1.1/Pintado_de_marcas_en_el_pavimento/ANTES',
+    archivo: 'foto003.jpg',
+  })
+})
+
+caso('exportar evidencias: sin carpetas, correlativos y observadas', () => {
+  assert.deepEqual(
+    rutaDeExportacion(foto({ pci_code: 'PCI-2026-044', pci_item_number: 19, pci_term_days: 3 }), { estructura: false, oficial: true }),
+    { carpeta: '', archivo: '02_PCI_PCI_44_3_DIAS_ITEM_19_ITEM_19(1).jpg' })
+  const r = rutasDeExportacion([
+    foto({ id: 'b', taken_at: '2026-10-13T09:00:00Z' }),
+    foto({ id: 'a', taken_at: '2026-10-13T08:00:00Z' }),
+    foto({ id: 'c', revision: 'observada' }),
+    foto({ id: 'd', taken_at: '2026-10-13T10:00:00Z' }),
+  ], { estructura: true, oficial: false })
+  assert.deepEqual(r.map((x) => x.foto.id + ':' + x.archivo), ['a:foto001.jpg', 'b:foto002.jpg', 'd:foto003.jpg'])
+  // Dos fotos del antes del mismo ítem: la segunda lleva _A
+  const p = rutasDeExportacion([
+    foto({ id: '1', pci_code: 'PCI-2026-044', pci_item_number: 19, pci_term_days: 3 }),
+    foto({ id: '2', pci_code: 'PCI-2026-044', pci_item_number: 19, pci_term_days: 3, taken_at: '2026-10-13T09:00:00Z' }),
+  ], { estructura: true, oficial: true })
+  assert.deepEqual(p.map((x) => x.archivo), ['ITEM_19(1).jpg', 'ITEM_19(1)_A.jpg'])
 })
 
 console.log(`\n${ok} casos correctos`)

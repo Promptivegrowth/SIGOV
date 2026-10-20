@@ -335,11 +335,101 @@ class CampoRepositorio @Inject constructor(
     }
 
     /**
+     * El registro de una partida en el reporte de hoy, para tomarle fotos
+     * desde la tarjeta («Tomar fotos», Elvis, video del 13/10). Si no lo
+     * tiene, se abre en cero; «Registrar avance» lo completa después.
+     */
+    suspend fun registroDeLaPartida(servicioId: String, cuadrillaId: String?, item: ItemProgramado): RegistroLocal {
+        val parte = abrirParteDeHoy(servicioId, cuadrillaId)
+        partes.registroDePartida(parte.clientId, item.id)?.let { return it }
+        val actividad = actividades(servicioId).firstOrNull { it.id == item.actividadId }
+            ?: Actividad(
+                id = item.actividadId ?: error("La partida no tiene actividad. Avisa al supervisor."),
+                code = item.actividadCodigo ?: "",
+                name = item.actividad ?: "Partida",
+            )
+        return registrarActividad(
+            parte = parte,
+            actividad = actividad,
+            tramo = tramos(servicioId).firstOrNull { it.id == item.tramoId },
+            progresivaInicio = item.progresivaInicio,
+            progresivaFin = item.progresivaFin,
+            lado = pe.servicon.sigov.ui.parte.ladoDesdeProgramacion(item.lado) ?: "derecho",
+            cantidad = 0.0,
+            unidad = item.unidad,
+            observacion = null,
+            origen = OrigenDelTrabajo.Programado(item),
+        )
+    }
+
+    /**
+     * Completa un registro que ya existe (el que abrieron las fotos de la
+     * partida o del ítem PCI) con lo que se anotó en «Registrar avance». La
+     * nube lo actualiza por su llave: no aparece una segunda línea.
+     */
+    suspend fun completarRegistro(
+        registro: RegistroLocal,
+        tramo: Tramo?,
+        progresivaInicio: Double?,
+        progresivaFin: Double?,
+        lado: String,
+        cantidad: Double,
+        observacion: String?,
+        detalle: DetalleFor001,
+    ): RegistroLocal = withContext(Dispatchers.IO) {
+        val nuevo = registro.copy(
+            tramoId = tramo?.id ?: registro.tramoId,
+            tramoNombre = tramo?.name ?: registro.tramoNombre,
+            progresivaInicio = progresivaInicio,
+            progresivaFin = progresivaFin,
+            lado = lado,
+            cantidad = cantidad,
+            observacion = observacion,
+        )
+        partes.guardarRegistro(nuevo)
+        val anterior = cola.envio(registro.clientId)
+            ?.let { runCatching { json.parseToJsonElement(it.cuerpo) as JsonObject }.getOrNull() }
+        cola.encolar(
+            tabla = "work_entries",
+            clientId = registro.clientId,
+            dependeDe = registro.parteClientId,
+            etiqueta = registro.actividadNombre + " · " + cantidad,
+            cuerpo = buildJsonObject {
+                anterior?.forEach { (k, v) -> if (k != "client_id" && k != "work_order_id") put(k, v) }
+                if (anterior == null) {
+                    put("service_id", registro.servicioId)
+                    put("activity_id", registro.actividadId)
+                    put("origen", registro.origen)
+                    registro.pciItemId?.let { put("pci_item_id", it) }
+                    registro.planItemId?.let { put("plan_item_id", it) }
+                }
+                nuevo.tramoId?.let { put("section_id", it) }
+                progresivaInicio?.let { put("prog_start_m", it) }
+                progresivaFin?.let { put("prog_end_m", it) }
+                put("side", lado)
+                put("quantity", cantidad)
+                observacion?.takeIf { it.isNotBlank() }?.let { put("observation", it) }
+                detalle.horaInicio?.let { put("hora_inicio", it.toString()) }
+                detalle.horaFin?.let { put("hora_fin", it.toString()) }
+                detalle.personas?.let { put("personas", it) }
+                detalle.longitud?.let { put("longitud_m", it) }
+                detalle.ancho?.let { put("ancho_m", it) }
+                detalle.espesor?.let { put("espesor_m", it) }
+            },
+        )
+        nuevo
+    }
+
+    /**
      * El metrado ejecutado de un ítem PCI (OBS-13). Se corrige el mismo
      * registro: la nube lo actualiza por su llave, no crea otro.
      */
-    suspend fun fijarMetrado(registro: RegistroLocal, cantidad: Double): RegistroLocal = withContext(Dispatchers.IO) {
-        val nuevo = registro.copy(cantidad = cantidad)
+    suspend fun fijarMetrado(
+        registro: RegistroLocal,
+        cantidad: Double,
+        observacion: String? = registro.observacion,
+    ): RegistroLocal = withContext(Dispatchers.IO) {
+        val nuevo = registro.copy(cantidad = cantidad, observacion = observacion)
         partes.guardarRegistro(nuevo)
         val anterior = cola.envio(registro.clientId)
             ?.let { runCatching { json.parseToJsonElement(it.cuerpo) as JsonObject }.getOrNull() }
@@ -363,6 +453,7 @@ class CampoRepositorio @Inject constructor(
                     registro.planItemId?.let { put("plan_item_id", it) }
                 }
                 put("quantity", cantidad)
+                observacion?.takeIf { it.isNotBlank() }?.let { put("observation", it) }
             },
         )
         nuevo

@@ -14,6 +14,7 @@ import androidx.compose.material.icons.outlined.ChevronRight
 import androidx.compose.material.icons.outlined.CalendarMonth
 import androidx.compose.material.icons.outlined.CheckCircle
 import androidx.compose.material.icons.outlined.Image
+import androidx.compose.material.icons.outlined.PhotoCamera
 import androidx.compose.material.icons.outlined.EditNote
 import androidx.compose.material.icons.outlined.EventAvailable
 import androidx.compose.material.icons.outlined.PlayArrow
@@ -52,8 +53,45 @@ fun PantallaProgramacion(
     vm: ProgramacionViewModel = hiltViewModel(),
     alVolver: () -> Unit,
     alRegistrarAvance: (ItemProgramado) -> Unit = {},
+    alTomarFoto: (registroId: String, fase: pe.servicon.sigov.datos.Fase) -> Unit = { _, _ -> },
 ) {
     val estado by vm.estado.collectAsStateWithLifecycle()
+    var fotografiando by remember { mutableStateOf<ItemProgramado?>(null) }
+
+    // A la cámara con la etapa ya elegida
+    val tomarFoto by androidx.compose.runtime.rememberUpdatedState(alTomarFoto)
+    LaunchedEffect(estado.irACamara) {
+        estado.irACamara?.let { (registro, fase) ->
+            vm.camaraAbierta()
+            tomarFoto(registro, fase)
+        }
+    }
+
+    fotografiando?.let { partida ->
+        AlertDialog(
+            onDismissRequest = { fotografiando = null },
+            title = { Text("Tomar fotos") },
+            text = {
+                Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
+                    Text(partida.actividad ?: "Partida", style = MaterialTheme.typography.bodyMedium, fontWeight = FontWeight.SemiBold)
+                    Text("¿De qué etapa es la foto?", style = MaterialTheme.typography.bodySmall)
+                    listOf(pe.servicon.sigov.datos.Fase.ANTES, pe.servicon.sigov.datos.Fase.DURANTE, pe.servicon.sigov.datos.Fase.DESPUES).forEach { fase ->
+                        OutlinedButton(
+                            onClick = { fotografiando = null; vm.tomarFoto(partida, fase) },
+                            modifier = Modifier.fillMaxWidth().height(52.dp),
+                            shape = RoundedCornerShape(10.dp),
+                        ) {
+                            Icon(Icons.Outlined.PhotoCamera, contentDescription = null, modifier = Modifier.size(18.dp))
+                            Spacer(Modifier.width(8.dp))
+                            Text(fase.etiqueta)
+                        }
+                    }
+                }
+            },
+            confirmButton = {},
+            dismissButton = { TextButton(onClick = { fotografiando = null }) { Text("Cancelar") } },
+        )
+    }
     val avisos = remember { SnackbarHostState() }
     var impedimento by remember { mutableStateOf<ItemProgramado?>(null) }
 
@@ -165,6 +203,7 @@ fun PantallaProgramacion(
                             alReportar = { impedimento = item },
                             alRegistrarAvance = { alRegistrarAvance(item) },
                             alVerReferencia = { vm.verReferencia(item) },
+                            alTomarFotos = { fotografiando = item },
                         )
                     }
                 }
@@ -290,6 +329,7 @@ private fun Partida(
     alReportar: () -> Unit = {},
     alRegistrarAvance: () -> Unit = {},
     alVerReferencia: () -> Unit = {},
+    alTomarFotos: () -> Unit = {},
 ) {
     val avance = ((item.avance ?: 0.0) / 100.0).coerceIn(0.0, 1.0).toFloat()
 
@@ -418,8 +458,13 @@ private fun Partida(
                         // Iniciar → Registrar avance → Evidencias → Finalizar, en la
                         // misma tarjeta (OBS-02)
                         item.estaEnCurso -> Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
-                            Boton("Registrar avance", Icons.Outlined.EditNote, Marca.Azul,
-                                ocupada, Modifier.fillMaxWidth(), alRegistrarAvance)
+                            Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                                Boton("Registrar avance", Icons.Outlined.EditNote, Marca.Azul,
+                                    ocupada, Modifier.weight(1f), alRegistrarAvance)
+                                // Las fotos de esta actividad, desde la misma tarjeta (Elvis, 13/10)
+                                Boton("Tomar fotos", Icons.Outlined.PhotoCamera, Marca.Azul,
+                                    ocupada, Modifier.weight(1f), alTomarFotos)
+                            }
                             Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
                                 Boton("Finalizar", Icons.Outlined.CheckCircle, Marca.VerdeBandera,
                                     ocupada, Modifier.weight(1f), alFinalizar)
