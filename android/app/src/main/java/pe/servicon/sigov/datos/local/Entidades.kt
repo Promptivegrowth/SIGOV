@@ -167,6 +167,13 @@ data class ConteoEvidencias(
     val cuantas: Int,
 )
 
+/** Cuántas fotos de cada etapa tiene una actividad (A · D · DP). */
+data class ConteoPorFase(
+    val registroClientId: String,
+    val fase: String,
+    val cuantas: Int,
+)
+
 /** Cuántas fotos de un ítem PCI, en una fase, esperan su envío. */
 data class FotosPorEnviar(
     val pciItemId: String,

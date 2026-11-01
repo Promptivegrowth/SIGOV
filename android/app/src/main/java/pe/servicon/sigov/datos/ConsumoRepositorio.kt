@@ -42,6 +42,8 @@ data class Consumo(
     val cantidad: Double,
     val actividad: String?,
     val enviado: Boolean,
+    /** La actividad del parte en que se usó (para acumular y editarla ahí). */
+    val registroClientId: String? = null,
 )
 
 /**
@@ -80,6 +82,7 @@ class ConsumoRepositorio @Inject constructor(
     suspend fun delDia(servicioId: String, cuadrillaId: String, fecha: LocalDate, registros: List<RegistroLocal>): List<Consumo> =
         withContext(Dispatchers.IO) {
             val nombres = registros.associate { it.clientId to it.actividadNombre }
+            val porServidor = actividadesPorId(supabase, colaDao, registros)
             val locales = colaDao.sinConfirmarDe(TABLA).mapNotNull { envio ->
                 val o = runCatching { json.parseToJsonElement(envio.cuerpo) as JsonObject }.getOrNull() ?: return@mapNotNull null
                 if (o["crew_id"]?.jsonPrimitive?.content != cuadrillaId || o["occurred_on"]?.jsonPrimitive?.content != fecha.toString()) return@mapNotNull null
@@ -89,20 +92,27 @@ class ConsumoRepositorio @Inject constructor(
                     nombre = o["_nombre"]?.jsonPrimitive?.content ?: "Material",
                     unidad = o["_unidad"]?.jsonPrimitive?.contentOrNull,
                     cantidad = o["qty"]?.jsonPrimitive?.content?.toDoubleOrNull() ?: 0.0,
-                    actividad = envio.dependeDe?.let { nombres[it] },
+                    actividad = envio.dependeDe?.let { nombres[it] }
+                        ?: o["_registro"]?.jsonPrimitive?.contentOrNull?.let { nombres[it] },
                     enviado = false,
+                    registroClientId = o["_registro"]?.jsonPrimitive?.contentOrNull
+                        ?: envio.dependeDe?.takeIf { it in nombres }
+                        ?: o["work_entry_id"]?.jsonPrimitive?.contentOrNull?.let { porServidor[it] },
                 )
             }
             // El client_id de lo que ya llegó a la nube: lo que sube entre una
             // lectura y otra no se muestra dos veces (SEG-V2-OBS-15)
-            val llaves = runCatching {
+            val filasDeLaNube = runCatching {
                 supabase.postgrest.from("movimientos_cuadrilla")
-                    .select(io.github.jan.supabase.postgrest.query.Columns.list("id", "client_id")) {
+                    .select(io.github.jan.supabase.postgrest.query.Columns.list("id", "client_id", "work_entry_id")) {
                         filter { eq("crew_id", cuadrillaId); eq("occurred_on", fecha.toString()) }
                     }
                     .decodeList<JsonObject>()
-                    .associate { it["id"]?.jsonPrimitive?.contentOrNull to it["client_id"]?.jsonPrimitive?.contentOrNull }
-            }.getOrDefault(emptyMap())
+            }.getOrDefault(emptyList())
+            val llaves = filasDeLaNube.associate { it["id"]?.jsonPrimitive?.contentOrNull to it["client_id"]?.jsonPrimitive?.contentOrNull }
+            val actividadDe = filasDeLaNube.associate {
+                it["id"]?.jsonPrimitive?.contentOrNull to it["work_entry_id"]?.jsonPrimitive?.contentOrNull?.let { w -> porServidor[w] }
+            }
             val remotos = runCatching {
                 supabase.postgrest.from("v_kardex_cuadrilla")
                     .select {
@@ -123,6 +133,7 @@ class ConsumoRepositorio @Inject constructor(
                             cantidad = o["salida"]?.jsonPrimitive?.contentOrNull?.toDoubleOrNull() ?: 0.0,
                             actividad = o["notes"]?.jsonPrimitive?.contentOrNull?.takeIf { it.isNotBlank() },
                             enviado = true,
+                            registroClientId = actividadDe[id],
                         )
                     }
             }.getOrDefault(emptyList())
@@ -167,6 +178,7 @@ class ConsumoRepositorio @Inject constructor(
                 registro?.let { put("notes", listOfNotNull(it.actividadNombre, Progresiva.rango(it.progresivaInicio, it.progresivaFin)).joinToString(" · ")) }
                 // Solo para mostrarlo sin señal; la nube los ignora
                 put("_nombre", nombre)
+                registro?.let { put("_registro", it.clientId) }
                 unidad?.let { put("_unidad", it) }
             },
         )
@@ -185,4 +197,30 @@ object Numeros {
     fun tres(n: Double): String =
         if (n % 1.0 == 0.0) n.toLong().toString()
         else "%.3f".format(java.util.Locale.US, n).trimEnd('0').trimEnd('.')
+}
+
+/**
+ * El id de la nube de cada actividad del parte → su llave en el teléfono. El
+ * id queda en la cola al enviarse; si la cola ya lo olvidó, se pregunta a la
+ * nube (la llave de la actividad es su client_id).
+ */
+internal suspend fun actividadesPorId(
+    supabase: io.github.jan.supabase.SupabaseClient,
+    colaDao: pe.servicon.sigov.datos.local.ColaDao,
+    registros: List<RegistroLocal>,
+): Map<String, String> {
+    val mapa = registros.mapNotNull { r -> (r.idEnServidor ?: colaDao.porId(r.clientId)?.idEnServidor)?.let { it to r.clientId } }
+        .toMap().toMutableMap()
+    val faltan = registros.map { it.clientId }.filter { it !in mapa.values }
+    if (faltan.isNotEmpty()) runCatching {
+        supabase.postgrest.from("work_entries")
+            .select(io.github.jan.supabase.postgrest.query.Columns.list("id", "client_id")) { filter { isIn("client_id", faltan) } }
+            .decodeList<JsonObject>()
+            .forEach { o ->
+                val id = o["id"]?.jsonPrimitive?.contentOrNull
+                val llave = o["client_id"]?.jsonPrimitive?.contentOrNull
+                if (id != null && llave != null) mapa[id] = llave
+            }
+    }
+    return mapa
 }

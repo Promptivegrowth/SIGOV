@@ -56,7 +56,7 @@ enum class Estado(val etiqueta: String) {
     POR_ATENDER("Por atender"),
     EN_EJECUCION("En ejecución"),
     OBSERVADOS("Observados"),
-    CONFORMES("Conformes"),
+    CONFORMES("Atendidos"),
     TODOS("Todos"),
 }
 
@@ -132,6 +132,9 @@ data class EstadoPci(
     val referencia: String? = null,
     /** La foto referencial del ítem de la ficha, ya firmada: se ve sin tocar nada. */
     val referenciaDeFicha: String? = null,
+    /** Las fotos que ya tiene el ítem de la ficha, para verlas y quitar la que salió mal. */
+    val fotosDeFicha: List<pe.servicon.sigov.datos.FotoDelItem> = emptyList(),
+    val cargandoFotos: Boolean = false,
     val aviso: String? = null,
     val error: String? = null,
 ) {
@@ -187,6 +190,7 @@ class PciViewModel @Inject constructor(
     private val partes: ParteDao,
     private val documentos: DocumentosRepositorio,
     private val configuracion: pe.servicon.sigov.datos.Configuracion,
+    private val evidencias: pe.servicon.sigov.datos.EvidenciaRepositorio,
 ) : ViewModel() {
 
     private val _estado = MutableStateFlow(
@@ -211,6 +215,7 @@ class PciViewModel @Inject constructor(
     /** Al volver de la cámara: las fotos recién tomadas cambian las cuentas y el estado. */
     fun alVolver() {
         if (cargoUnaVez) cargar(silencioso = true)
+        _estado.value.ficha?.let { cargarFotos(it) }
     }
 
     fun abrirPci(id: String) = _estado.update { it.copy(abierto = id, estadoDelPci = Estado.PENDIENTES) }
@@ -225,7 +230,8 @@ class PciViewModel @Inject constructor(
     fun buscar(texto: String) = _estado.update { it.copy(busqueda = texto) }
 
     fun abrirFicha(item: ItemPci) {
-        _estado.update { it.copy(ficha = item.id, referenciaDeFicha = null, aviso = null, error = null) }
+        _estado.update { it.copy(ficha = item.id, referenciaDeFicha = null, fotosDeFicha = emptyList(), aviso = null, error = null) }
+        cargarFotos(item.id)
         // La foto referencial se muestra en la ficha, sin otro toque (Elvis, 21/10)
         val ruta = item.fotoReferencia ?: return
         viewModelScope.launch {
@@ -235,7 +241,41 @@ class PciViewModel @Inject constructor(
     }
 
     /** Al cerrar la ficha se va con ella lo que decía: no reaparece abajo. */
-    fun cerrarFicha() = _estado.update { it.copy(ficha = null, referenciaDeFicha = null, aviso = null, error = null) }
+    fun cerrarFicha() = _estado.update { it.copy(ficha = null, referenciaDeFicha = null, fotosDeFicha = emptyList(), aviso = null, error = null) }
+
+    /** Todas las fotos del ítem: las de este teléfono y las que ya están en la nube. */
+    private fun cargarFotos(itemId: String) {
+        _estado.update { it.copy(cargandoFotos = true) }
+        viewModelScope.launch {
+            val fotos = runCatching { evidencias.fotosDeItemPci(itemId) }.getOrDefault(emptyList())
+            _estado.update { if (it.ficha == itemId) it.copy(fotosDeFicha = fotos, cargandoFotos = false) else it }
+        }
+    }
+
+    /**
+     * Quita una foto que salió mal (Elvis, 21/10: «pueden eliminarlo y
+     * nuevamente tomar»), mientras COVINCA no valide el ítem. Si a la etapa
+     * no le queda foto, el ítem vuelve a ejecución.
+     */
+    fun quitarFoto(foto: pe.servicon.sigov.datos.FotoDelItem) {
+        val itemId = _estado.value.ficha ?: return
+        viewModelScope.launch {
+            runCatching { evidencias.eliminarPorClientId(foto.clientId) }
+                .onSuccess {
+                    _estado.update {
+                        it.copy(
+                            fotosDeFicha = it.fotosDeFicha.filterNot { f -> f.clientId == foto.clientId },
+                            aviso = "Foto quitada." + if (foto.porEnviar) "" else " Se actualiza en la nube al haber señal.",
+                        )
+                    }
+                    // La nube recalcula el estado del ítem; se vuelve a leer al rato
+                    kotlinx.coroutines.delay(2500)
+                    cargar(silencioso = true)
+                    cargarFotos(itemId)
+                }
+                .onFailure { f -> _estado.update { it.copy(error = f.enCristiano()) } }
+        }
+    }
 
     fun ordenar(o: OrdenPci) {
         configuracion.ordenPci = o.name

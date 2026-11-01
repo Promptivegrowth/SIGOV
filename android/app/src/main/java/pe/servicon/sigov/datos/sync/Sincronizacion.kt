@@ -46,7 +46,7 @@ import kotlin.math.pow
  */
 private val LLAVE_DEL_PADRE: Map<String, Map<String, String>> = mapOf(
     "work_entries" to mapOf("work_orders" to "work_order_id"),
-    "parte_recursos" to mapOf("work_orders" to "work_order_id"),
+    "parte_recursos" to mapOf("work_orders" to "work_order_id", "work_entries" to "work_entry_id"),
     "evidences" to mapOf("work_entries" to "work_entry_id", "observaciones_campo" to "observacion_id"),
     "ats_signatures" to mapOf("ats_iperc" to "ats_id"),
     "checklist_responses" to mapOf("work_orders" to "work_order_id"),

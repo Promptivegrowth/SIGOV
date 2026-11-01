@@ -311,20 +311,29 @@ class FormatosPdf @Inject constructor(
         }
         y += altoFila
 
-        // Cuerpo
+        // Cuerpo: el texto largo baja de línea (hasta tres) en vez de cortarse
+        // con «…» (Elvis, 21/10: «que se note toda la información»)
+        val interlinea = 9.5f
         filas.forEachIndexed { n, fila ->
             if (y > alto - 150) return@forEachIndexed   // una página, como el formato impreso
+            val lineas = fila.mapIndexed { i, celda ->
+                val an = anchos.getOrElse(i) { 60f } - 6
+                val partes = envolver(celda, celdaP, an).ifEmpty { listOf("") }
+                if (partes.size <= 3) partes.map { recortar(it, celdaP, an) }
+                else partes.take(2).map { recortar(it, celdaP, an) } + recortar(partes.drop(2).joinToString(" "), celdaP, an)
+            }
+            val altoDeEsta = maxOf(altoFila, 5.5f + interlinea * (lineas.maxOfOrNull { it.size } ?: 1))
             if (n % 2 == 1) {
-                c.drawRect(margen, y, ancho - margen, y + altoFila, Paint().apply { color = gris })
+                c.drawRect(margen, y, ancho - margen, y + altoDeEsta, Paint().apply { color = gris })
             }
             x = margen
-            fila.forEachIndexed { i, celda ->
+            lineas.forEachIndexed { i, texto ->
                 val an = anchos.getOrElse(i) { 60f }
-                c.drawRect(x, y, x + an, y + altoFila, borde)
-                c.drawText(recortar(celda, celdaP, an - 6), x + 3f, y + 10.5f, celdaP)
+                c.drawRect(x, y, x + an, y + altoDeEsta, borde)
+                texto.forEachIndexed { k, linea -> c.drawText(linea, x + 3f, y + 10.5f + k * interlinea, celdaP) }
                 x += an
             }
-            y += altoFila
+            y += altoDeEsta
         }
         if (filas.isEmpty()) {
             c.drawText("Sin registros", margen + 4f, y + 11f, pintura(8f, false, Color.GRAY))

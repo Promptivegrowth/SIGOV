@@ -57,6 +57,10 @@ data class EstadoParte(
     val vehiculosDelDia: List<String> = emptyList(),
     val supervisor: String? = null,
     val fotosPorRegistro: Map<String, Int> = emptyMap(),
+    /** Las fotos de cada actividad por etapa (antes, durante, después…). */
+    val fotosPorFase: Map<String, Map<String, Int>> = emptyMap(),
+    /** Los ítems PCI del reporte, en cualquier estado: su n.º y su partida para el PDF. */
+    val itemsPciDelDia: Map<String, ItemPci> = emptyMap(),
     /** Material usado en el día (Formato 8) y lo que la cuadrilla tiene. */
     val consumos: List<pe.servicon.sigov.datos.Consumo> = emptyList(),
     /** Equipos y otros recursos del día (FOR:001, secciones IV y V). */
@@ -76,6 +80,17 @@ data class EstadoParte(
     val error: String? = null,
 ) {
     val metradoTotal: Double get() = registros.sumOf { it.cantidad }
+
+    /** Lo que falta completar: sin metrado no se valoriza (Elvis, 21/10: «en rojo»). */
+    val porCompletar: Int get() = registros.count { it.cantidad <= 0.0 }
+
+    /** El código de partida COVINCA de un registro. */
+    fun codigoDe(r: RegistroLocal): String? =
+        actividades.firstOrNull { a -> a.id == r.actividadId }?.code
+            ?: r.pciItemId?.let { itemsPciDelDia[it]?.actividadCodigo }
+
+    /** «Ítem 7» de un registro de PCI. */
+    fun itemDe(r: RegistroLocal): Int? = r.pciItemId?.let { itemsPciDelDia[it]?.numero }
 }
 
 /**
@@ -223,7 +238,22 @@ class ParteViewModel @Inject constructor(
         vigilancia = viewModelScope.launch {
             launch {
                 campo.registrosDe(parteId).collectLatest { filas ->
+                    val antes = _estado.value.registros.map { it.clientId }.toSet()
                     _estado.update { it.copy(registros = filas) }
+                    cargarItemsDelDia(filas)
+                    // Materiales y equipos se amarran a sus actividades: con
+                    // actividades nuevas se vuelven a leer
+                    if (filas.map { it.clientId }.toSet() != antes) { cargarMateriales(); cargarRecursos() }
+                }
+            }
+            launch {
+                partes.conteoPorFase(parteId).collectLatest { conteos ->
+                    _estado.update { estado ->
+                        estado.copy(
+                            fotosPorFase = conteos.groupBy { it.registroClientId }
+                                .mapValues { (_, cs) -> cs.associate { c -> c.fase to c.cuantas } },
+                        )
+                    }
                 }
             }
             // Las fotos se cuentan aparte: al volver de la cámara la lista se
@@ -312,6 +342,36 @@ class ParteViewModel @Inject constructor(
         }
     }
 
+    /** Los ítems PCI que tiene el reporte, aunque ya estén atendidos. */
+    private fun cargarItemsDelDia(registros: List<RegistroLocal>) {
+        val faltan = registros.mapNotNull { it.pciItemId }.filter { it !in _estado.value.itemsPciDelDia }.toSet()
+        if (faltan.isEmpty()) return
+        viewModelScope.launch {
+            runCatching {
+                val servicio = registros.first().servicioId
+                campo.itemsPciPorId(servicio, faltan)
+            }.onSuccess { items ->
+                _estado.update { it.copy(itemsPciDelDia = it.itemsPciDelDia + items.associateBy { i -> i.id }) }
+            }
+        }
+    }
+
+    /**
+     * Completa una actividad desde su tarjeta del reporte: el metrado y la
+     * observación (Elvis, 21/10: «metrado, materiales, equipos y
+     * observación»). Se corrige el mismo registro, no se crea otro.
+     */
+    fun completar(registro: RegistroLocal, cantidad: Double, observacion: String?, alTerminar: () -> Unit = {}) {
+        viewModelScope.launch {
+            runCatching { campo.fijarMetrado(registro, cantidad, observacion?.trim()?.ifBlank { null }) }
+                .onSuccess {
+                    _estado.update { it.copy(aviso = "Actividad actualizada. Se enviará al haber señal.") }
+                    alTerminar()
+                }
+                .onFailure { f -> _estado.update { it.copy(error = f.enCristiano()) } }
+        }
+    }
+
     private fun refrescarOrigenes() {
         viewModelScope.launch {
             runCatching {
@@ -360,30 +420,33 @@ class ParteViewModel @Inject constructor(
                     // traía la nota del parte, y lo anotado en cada registro
                     // —«PRUEBA OFFLINE» en la prueba— no salía (OBS-28/30/31).
                     // Con el código de partida COVINCA (OBS-29)
-                    columnas = listOf("Código", "Actividad", "Origen", "Prog. inicio", "Prog. fin", "Lado",
-                        "Cantidad", "Observación", "Fotos"),
-                    anchos = listOf(48f, 100f, 54f, 46f, 46f, 34f, 48f, 101f, 30f),
+                    // Elvis (21/10): la descripción completa (en dos líneas si
+                    // hace falta), el ítem del PCI, el lado entero, el código
+                    // COVINCA; sin fotos (van aparte, digitales), sin clima y
+                    // sin «metrado total», que no suma partidas de unidades distintas
+                    columnas = listOf("Código", "Actividad", "Origen", "Ítem", "Prog. inicio", "Prog. fin", "Lado",
+                        "Cantidad", "Observación"),
+                    anchos = listOf(60f, 124f, 40f, 26f, 44f, 44f, 40f, 44f, 105f),
                     filas = e.registros.map { r ->
                         listOf(
-                            e.actividades.firstOrNull { a -> a.id == r.actividadId }?.code ?: "—",
+                            e.codigoDe(r) ?: "—",
                             r.actividadNombre,
                             origenDe(r),
+                            e.itemDe(r)?.toString() ?: "—",
                             r.progresivaInicio?.let { progresiva(it) } ?: "—",
                             r.progresivaFin?.takeIf { it != r.progresivaInicio }?.let { progresiva(it) } ?: "—",
-                            r.lado.replaceFirstChar { it.uppercase() },
-                            "%.2f %s".format(r.cantidad, r.unidad ?: ""),
+                            pe.servicon.sigov.datos.Lados.etiqueta(r.lado) ?: r.lado,
+                            pe.servicon.sigov.datos.Numeros.tres(r.cantidad) + (r.unidad?.let { " $it" } ?: ""),
                             r.observacion?.takeIf { it.isNotBlank() } ?: "—",
-                            (e.fotosPorRegistro[r.clientId] ?: 0).toString(),
                         )
                     },
                     contextoExtra = listOf(
-                        "Clima" to (parte.clima ?: "—"),
-                        "Personal" to (parte.personal?.toString() ?: "—"),
+                        // Lo que el sistema ya sabe se completa solo (como en el FOR:001 de la web)
+                        "Personal" to ((parte.personal ?: e.personalSugerido)?.toString() ?: "—"),
                         "Vehículo" to e.vehiculosDelDia.joinToString(", ").ifBlank { "—" },
                         "Supervisor" to (e.supervisor ?: "—"),
                         "Jornada" to listOfNotNull(parte.horaInicio, parte.horaFin)
                             .joinToString(" a ").ifBlank { "—" },
-                        "Metrado total" to "%.2f".format(e.metradoTotal),
                     ),
                     nota = parte.notas,
                     firmas = listOf(
@@ -417,9 +480,9 @@ class ParteViewModel @Inject constructor(
             runCatching {
                 val servicio = campo.contrato(parte.servicioId)
                 val fecha = LocalDate.parse(parte.fecha)
-                val columnas = listOf("Fecha", "Cuadrilla", "Actividad", "Origen", "Tramo",
+                val columnas = listOf("Fecha", "Cuadrilla", "Código", "Actividad", "Origen", "Ítem", "Tramo",
                     "Progresiva inicio", "Progresiva fin", "Lado", "Cantidad", "Unidad",
-                    "Observación", "Fotos")
+                    "Observación")
                 val nombre = "PARTE_${parte.fecha}_${e.cuadrilla.filter { it.isLetterOrDigit() }}"
                 val archivo = if (comoExcel) {
                     formatos.armarXlsx(
@@ -431,16 +494,17 @@ class ParteViewModel @Inject constructor(
                                 "Cliente" to (servicio?.cliente ?: ""),
                                 "Cuadrilla" to e.cuadrilla,
                                 "Fecha" to "%02d/%02d/%d".format(fecha.dayOfMonth, fecha.monthValue, fecha.year),
-                                "Metrado total" to "%.2f".format(java.util.Locale.US, e.metradoTotal),
                             ),
                             columnas = columnas,
-                            anchos = listOf(11.0, 22.0, 40.0, 16.0, 26.0, 14.0, 14.0, 9.0, 11.0, 8.0, 40.0, 7.0),
+                            anchos = listOf(11.0, 22.0, 13.0, 40.0, 16.0, 7.0, 26.0, 14.0, 14.0, 9.0, 11.0, 8.0, 40.0),
                             filas = e.registros.map { r ->
                                 listOf(
                                     Celda.Fecha(fecha),
                                     celdaTexto(e.cuadrilla),
+                                    celdaTexto(e.codigoDe(r)),
                                     celdaTexto(r.actividadNombre),
                                     celdaTexto(origenDe(r)),
+                                    e.itemDe(r)?.let { Celda.Numero(it.toDouble()) } ?: celdaTexto(null),
                                     celdaTexto(r.tramoNombre),
                                     celdaTexto(r.progresivaInicio?.let { progresiva(it) }),
                                     celdaTexto(r.progresivaFin?.let { progresiva(it) }),
@@ -448,7 +512,6 @@ class ParteViewModel @Inject constructor(
                                     Celda.Numero(r.cantidad),
                                     celdaTexto(r.unidad),
                                     celdaTexto(r.observacion),
-                                    Celda.Numero((e.fotosPorRegistro[r.clientId] ?: 0).toDouble()),
                                 )
                             },
                         )),
@@ -461,8 +524,10 @@ class ParteViewModel @Inject constructor(
                             listOf(
                                 parte.fecha,
                                 e.cuadrilla,
+                                e.codigoDe(r) ?: "",
                                 r.actividadNombre,
                                 origenDe(r),
+                                e.itemDe(r)?.toString() ?: "",
                                 r.tramoNombre ?: "",
                                 r.progresivaInicio?.let { progresiva(it) } ?: "",
                                 r.progresivaFin?.let { progresiva(it) } ?: "",
@@ -471,7 +536,6 @@ class ParteViewModel @Inject constructor(
                                 "%.2f".format(java.util.Locale.US, r.cantidad),
                                 r.unidad ?: "",
                                 r.observacion ?: "",
-                                (e.fotosPorRegistro[r.clientId] ?: 0).toString(),
                             )
                         },
                     )
@@ -573,15 +637,18 @@ class ParteViewModel @Inject constructor(
     fun cargarRecursos() {
         val parte = _estado.value.parte ?: return
         viewModelScope.launch {
-            runCatching { recursoRepo.delParte(parte) }
+            runCatching { recursoRepo.delParte(parte, _estado.value.registros) }
                 .onSuccess { r -> _estado.update { it.copy(recursos = r) } }
         }
     }
 
-    fun registrarRecurso(tipo: String, codigo: String?, descripcion: String, unidad: String?, cantidad: Double?, observacion: String?) {
+    fun registrarRecurso(
+        tipo: String, codigo: String?, descripcion: String, unidad: String?, cantidad: Double?, observacion: String?,
+        registro: RegistroLocal? = null,
+    ) {
         val parte = _estado.value.parte ?: return
         viewModelScope.launch {
-            runCatching { recursoRepo.registrar(parte, tipo, codigo, descripcion, unidad, cantidad, observacion) }
+            runCatching { recursoRepo.registrar(parte, tipo, codigo, descripcion, unidad, cantidad, observacion, registro) }
                 .onSuccess {
                     _estado.update { it.copy(aviso = if (tipo == "equipo") "Equipo anotado." else "Recurso anotado.") }
                     cargarRecursos()

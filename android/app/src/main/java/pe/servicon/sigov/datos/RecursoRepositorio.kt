@@ -13,6 +13,7 @@ import kotlinx.serialization.json.jsonPrimitive
 import kotlinx.serialization.json.put
 import pe.servicon.sigov.datos.local.ColaDao
 import pe.servicon.sigov.datos.local.ParteLocal
+import pe.servicon.sigov.datos.local.RegistroLocal
 import pe.servicon.sigov.datos.sync.ColaRepositorio
 import java.util.UUID
 import javax.inject.Inject
@@ -29,6 +30,8 @@ data class RecursoDelDia(
     val cantidad: Double?,
     val observacion: String?,
     val enviado: Boolean,
+    /** La actividad del parte en que se usó; sin ella, es del día. */
+    val registroClientId: String? = null,
 )
 
 /**
@@ -45,13 +48,29 @@ class RecursoRepositorio @Inject constructor(
     private val json = Json { ignoreUnknownKeys = true }
 
     /** Los del parte: lo que ya está en la nube y lo que espera señal. */
-    suspend fun delParte(parte: ParteLocal): List<RecursoDelDia> = withContext(Dispatchers.IO) {
+    suspend fun delParte(parte: ParteLocal, registros: List<RegistroLocal> = emptyList()): List<RecursoDelDia> = withContext(Dispatchers.IO) {
+        // La actividad de cada equipo: en el teléfono por su llave, en la nube por su id
+        val porServidor = actividadesPorId(supabase, colaDao, registros)
         val locales = colaDao.sinConfirmarDe(TABLA).mapNotNull { envio ->
             val o = runCatching { json.parseToJsonElement(envio.cuerpo) as JsonObject }.getOrNull() ?: return@mapNotNull null
             if (o["_parte"]?.jsonPrimitive?.content != parte.clientId) return@mapNotNull null
-            deFila(envio.clientId, o, enviado = false)
+            deFila(envio.clientId, o, enviado = false, registroClientId = o["_registro"]?.jsonPrimitive?.contentOrNull)
         }
-        val remotos = parte.idEnServidor?.let { id ->
+        // El id del parte en la nube: en la cola al enviarse, o por cuadrilla y fecha
+        val idDelParte = parte.idEnServidor ?: colaDao.porId(parte.clientId)?.idEnServidor ?: runCatching {
+            supabase.postgrest.from("work_orders")
+                .select(io.github.jan.supabase.postgrest.query.Columns.list("id")) {
+                    filter {
+                        eq("service_id", parte.servicioId)
+                        parte.cuadrillaId?.let { eq("crew_id", it) }
+                        eq("work_date", parte.fecha)
+                        exact("deleted_at", null)
+                    }
+                    limit(1)
+                }
+                .decodeList<JsonObject>().firstOrNull()?.get("id")?.jsonPrimitive?.contentOrNull
+        }.getOrNull()
+        val remotos = idDelParte?.let { id ->
             runCatching {
                 supabase.postgrest.from(TABLA)
                     .select {
@@ -59,7 +78,12 @@ class RecursoRepositorio @Inject constructor(
                         order("created_at", Order.ASCENDING)
                     }
                     .decodeList<JsonObject>()
-                    .map { deFila(it["client_id"]?.jsonPrimitive?.contentOrNull ?: it["id"]?.jsonPrimitive?.contentOrNull ?: "", it, enviado = true) }
+                    .map {
+                        deFila(
+                            it["client_id"]?.jsonPrimitive?.contentOrNull ?: it["id"]?.jsonPrimitive?.contentOrNull ?: "", it, enviado = true,
+                            registroClientId = it["work_entry_id"]?.jsonPrimitive?.contentOrNull?.let { id -> porServidor[id] },
+                        )
+                    }
             }.getOrDefault(emptyList())
         } ?: emptyList()
         // Lo que ya subió deja de figurar como pendiente
@@ -75,20 +99,29 @@ class RecursoRepositorio @Inject constructor(
         unidad: String?,
         cantidad: Double?,
         observacion: String?,
+        registro: RegistroLocal? = null,
     ) = withContext(Dispatchers.IO) {
         require(descripcion.isNotBlank()) { "Escribe qué equipo o recurso fue." }
         require(tipo == "equipo" || tipo == "otro")
         val clientId = UUID.randomUUID().toString()
-        // Espera a su parte solo si el parte todavía está en la cola
+        // Espera a su actividad (o a su parte) solo si todavía está en la cola;
+        // la nube toma el parte de la actividad
         val parteEnCola = colaDao.porId(parte.clientId) != null
+        val registroEnCola = registro != null && colaDao.porId(registro.clientId) != null
         cola.encolar(
             tabla = TABLA,
             clientId = clientId,
-            dependeDe = if (parteEnCola) parte.clientId else null,
+            dependeDe = when {
+                registroEnCola -> registro!!.clientId
+                registro?.idEnServidor == null && parteEnCola -> parte.clientId
+                else -> null
+            },
             etiqueta = (if (tipo == "equipo") "Equipo · " else "Recurso · ") + descripcion.trim(),
             cuerpo = buildJsonObject {
                 put("service_id", parte.servicioId)
                 if (!parteEnCola) parte.idEnServidor?.let { put("work_order_id", it) }
+                if (registro != null && !registroEnCola) registro.idEnServidor?.let { put("work_entry_id", it) }
+                registro?.let { put("_registro", it.clientId) }
                 put("tipo", tipo)
                 codigo?.trim()?.takeIf { it.isNotEmpty() }?.let { put("codigo", it) }
                 put("descripcion", descripcion.trim())
@@ -104,7 +137,7 @@ class RecursoRepositorio @Inject constructor(
     /** Quita uno anotado por error, si todavía no salió del teléfono. */
     suspend fun descartar(clientId: String) = cola.descartar(clientId)
 
-    private fun deFila(clientId: String, o: JsonObject, enviado: Boolean) = RecursoDelDia(
+    private fun deFila(clientId: String, o: JsonObject, enviado: Boolean, registroClientId: String? = null) = RecursoDelDia(
         clientId = clientId,
         tipo = o["tipo"]?.jsonPrimitive?.content ?: "otro",
         codigo = o["codigo"]?.jsonPrimitive?.content?.takeIf { it != "null" },
@@ -113,6 +146,7 @@ class RecursoRepositorio @Inject constructor(
         cantidad = o["cantidad"]?.jsonPrimitive?.content?.toDoubleOrNull(),
         observacion = o["observacion"]?.jsonPrimitive?.content?.takeIf { it != "null" },
         enviado = enviado,
+        registroClientId = registroClientId,
     )
 
     companion object {

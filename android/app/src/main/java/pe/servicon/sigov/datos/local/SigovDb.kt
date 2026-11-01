@@ -238,6 +238,32 @@ interface ParteDao {
         """
     )
     fun conteoEvidencias(parteId: String): Flow<List<ConteoEvidencias>>
+
+    /** Las fotos de cada actividad por etapa: el reporte muestra A · D · DP (Elvis, 21/10). */
+    @Query(
+        """
+        SELECT e.registroClientId AS registroClientId, e.fase AS fase, COUNT(*) AS cuantas
+        FROM evidencias e
+        JOIN registros r ON r.clientId = e.registroClientId
+        WHERE r.parteClientId = :parteId
+        GROUP BY e.registroClientId, e.fase
+        """
+    )
+    fun conteoPorFase(parteId: String): Flow<List<ConteoPorFase>>
+
+    /** Las fotos de un ítem PCI que están en este teléfono, de cualquier día. */
+    @Query(
+        """
+        SELECT e.* FROM evidencias e
+        JOIN registros r ON r.clientId = e.registroClientId
+        WHERE r.pciItemId = :pciItemId
+        ORDER BY e.tomadaEn
+        """
+    )
+    suspend fun evidenciasDePci(pciItemId: String): List<EvidenciaLocal>
+
+    @Query("SELECT * FROM evidencias WHERE clientId = :id")
+    suspend fun evidencia(id: String): EvidenciaLocal?
 }
 
 @Dao

@@ -2644,6 +2644,7 @@ export type Database = {
           tipo: string
           unidad: string | null
           updated_at: string
+          work_entry_id: string | null
           work_order_id: string
         }
         Insert: {
@@ -2660,6 +2661,7 @@ export type Database = {
           tipo: string
           unidad?: string | null
           updated_at?: string
+          work_entry_id?: string | null
           work_order_id: string
         }
         Update: {
@@ -2676,6 +2678,7 @@ export type Database = {
           tipo?: string
           unidad?: string | null
           updated_at?: string
+          work_entry_id?: string | null
           work_order_id?: string
         }
         Relationships: [
@@ -2691,6 +2694,20 @@ export type Database = {
             columns: ["service_id"]
             isOneToOne: false
             referencedRelation: "services"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "parte_recursos_work_entry_id_fkey"
+            columns: ["work_entry_id"]
+            isOneToOne: false
+            referencedRelation: "v_work_entries"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "parte_recursos_work_entry_id_fkey"
+            columns: ["work_entry_id"]
+            isOneToOne: false
+            referencedRelation: "work_entries"
             referencedColumns: ["id"]
           },
           {

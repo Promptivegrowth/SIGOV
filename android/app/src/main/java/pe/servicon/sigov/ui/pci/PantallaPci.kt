@@ -80,6 +80,8 @@ fun PantallaPci(
     val estado by vm.estado.collectAsStateWithLifecycle()
     val avisos = remember { SnackbarHostState() }
     var eligiendoFase by remember { mutableStateOf<ItemPci?>(null) }
+    var fotoAbierta by remember { mutableStateOf<pe.servicon.sigov.datos.FotoDelItem?>(null) }
+    var quitando by remember { mutableStateOf<pe.servicon.sigov.datos.FotoDelItem?>(null) }
 
     // Con la ficha abierta el mensaje va dentro de ella: abajo quedaría tapado
     LaunchedEffect(estado.aviso, estado.error, estado.ficha) {
@@ -115,6 +117,18 @@ fun PantallaPci(
     estado.referencia?.let { url ->
         VisorConZoom(modelo = url, descripcion = "Foto referencial", alCerrar = vm::cerrarReferencia)
     }
+    fotoAbierta?.let { f ->
+        VisorConZoom(modelo = f.modelo, descripcion = "Foto del " + nombreDeFase(f.fase), alCerrar = { fotoAbierta = null })
+    }
+    quitando?.let { f ->
+        AlertDialog(
+            onDismissRequest = { quitando = null },
+            title = { Text("¿Quitar esta foto?") },
+            text = { Text("Se quita la foto del ${nombreDeFase(f.fase)}. Si la etapa queda sin foto, el ítem vuelve a ejecución.") },
+            confirmButton = { TextButton(onClick = { vm.quitarFoto(f); quitando = null }) { Text("Quitar", color = Semaforo.Vencido) } },
+            dismissButton = { TextButton(onClick = { quitando = null }) { Text("Cancelar") } },
+        )
+    }
 
     eligiendoFase?.let { item ->
         DialogoDeFase(
@@ -140,6 +154,10 @@ fun PantallaPci(
                 error = estado.error,
                 aviso = estado.aviso,
                 referencia = estado.referenciaDeFicha,
+                fotos = estado.fotosDeFicha,
+                cargandoFotos = estado.cargandoFotos,
+                alVerFoto = { fotoAbierta = it },
+                alQuitarFoto = { quitando = it },
                 alTomarFoto = { fase -> vm.tomarFoto(item, fase) },
                 alVerReferencia = { vm.verReferencia(item) },
                 alRegistrarMetrado = { vm.registrarMetrado(item, it) },
@@ -302,7 +320,7 @@ private fun ListaDeItems(estado: EstadoPci, vm: PciViewModel, alRegistrarFotos: 
         if (!general) {
             item {
                 Text(
-                    "A = Antes · D = Durante · DP = Después. Con las tres fotos el ítem pasa solo a Conformes y a la validación de COVINCA.",
+                    "A = Antes · D = Durante · DP = Después, con cuántas fotos lleva cada etapa. Con las tres el ítem pasa solo a Atendidos y a la validación de COVINCA.",
                     style = MaterialTheme.typography.labelSmall,
                     color = MaterialTheme.colorScheme.onSurfaceVariant,
                     modifier = Modifier.padding(horizontal = 16.dp, vertical = 6.dp),
@@ -445,7 +463,7 @@ private fun TarjetaDeItem(
                 if (conBotones) {
                     Spacer(Modifier.height(8.dp))
                     Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                        if (estado != Estado.CONFORMES || item.estaObservado) {
+                        if (!item.esConforme) {
                             Boton("Registrar fotos", Icons.Outlined.PhotoCamera, Marca.Azul, ocupado, true, Modifier.weight(1f), alRegistrarFotos)
                         }
                         Boton(
@@ -472,7 +490,7 @@ private fun ContadorDeFotos(item: ItemPci) {
         listOf("A" to item.fotosAntes, "D" to item.fotosDurante, "DP" to item.fotosDespues).forEach { (letra, n) ->
             val color = if (n > 0) Semaforo.EnPlazo else Semaforo.Vencido
             Text(
-                "$letra ${minOf(n, 1)}/1",
+                "$letra $n",
                 style = MaterialTheme.typography.labelSmall,
                 fontWeight = FontWeight.SemiBold,
                 color = color,
@@ -529,6 +547,10 @@ private fun FichaDelItem(
     error: String?,
     aviso: String?,
     referencia: String?,
+    fotos: List<pe.servicon.sigov.datos.FotoDelItem>,
+    cargandoFotos: Boolean,
+    alVerFoto: (pe.servicon.sigov.datos.FotoDelItem) -> Unit,
+    alQuitarFoto: (pe.servicon.sigov.datos.FotoDelItem) -> Unit,
     alTomarFoto: (Fase) -> Unit,
     alVerReferencia: () -> Unit,
     alRegistrarMetrado: (Double) -> Unit,
@@ -609,13 +631,16 @@ private fun FichaDelItem(
 
         if (item.estaLevantado) {
             Text(
-                if (item.esConforme) "COVINCA validó este ítem."
-                else "Conforme con sus tres fotos: espera la revisión de COVINCA.",
+                if (item.esConforme) "COVINCA validó este ítem: sus fotos ya no se cambian."
+                else "Atendido con sus tres fotos: espera la revisión de COVINCA. Si una salió mal, quítala y toma otra.",
                 style = MaterialTheme.typography.bodyMedium,
                 color = MaterialTheme.colorScheme.onSurfaceVariant,
             )
-            return@Column
         }
+
+        // Las fotos que ya se tomaron, por etapa (Elvis, 21/10)
+        FotosTomadas(fotos, cargandoFotos, quitables = !item.esConforme, alVer = alVerFoto, alQuitar = alQuitarFoto)
+        if (item.esConforme) return@Column
 
         // Las tres fotos, cada una con su botón: la cámara se abre en esa fase
         Text("Fotos", style = MaterialTheme.typography.titleSmall)
@@ -637,7 +662,7 @@ private fun FichaDelItem(
             when {
                 faltan.isNotEmpty() && item.exigeEvidencia ->
                     "Falta la foto del " + (if (faltan.size == 1) faltan[0] else faltan.dropLast(1).joinToString(", ") + " y " + faltan.last()) +
-                        ". Con las tres pasa solo a Conformes."
+                        ". Con las tres pasa solo a Atendidos."
                 fotosPorEnviar > 0 ->
                     "Ya tiene las tres fotos. ${if (fotosPorEnviar == 1) "1 foto sigue" else "$fotosPorEnviar fotos siguen"} en el teléfono: se envían solas al haber señal y entonces pasa a revisión de COVINCA."
                 else -> "Ya tiene las tres fotos: pasa a revisión de COVINCA."
@@ -785,9 +810,9 @@ private fun ubicacion(item: ItemPci): String =
 /** El estado dicho como en la propuesta, con el matiz que hace falta. */
 private fun etiquetaDe(item: ItemPci): String = when (estadoDe(item)) {
     Estado.CONFORMES -> when {
-        item.esConforme -> "Conforme · validado"
-        item.estaLevantado -> "Conforme · por revisar"
-        else -> "Conforme · por enviar"
+        item.esConforme -> "Conforme COVINCA"
+        item.estaLevantado -> "Atendido · por revisar"
+        else -> "Atendido · por enviar"
     }
     Estado.OBSERVADOS -> "Observado"
     Estado.EN_EJECUCION -> "En ejecución"
@@ -910,6 +935,101 @@ private fun FotoReferencialDeFicha(item: ItemPci, url: String?, alVer: () -> Uni
                     color = MaterialTheme.colorScheme.onSurfaceVariant,
                 )
             }
+        }
+    }
+}
+
+private fun nombreDeFase(fase: String): String = when (fase) {
+    "antes" -> "antes"
+    "durante" -> "durante"
+    "despues" -> "después"
+    else -> "registro"
+}
+
+/**
+ * Las fotos del ítem por etapa, en miniatura: tocar una la abre con zoom y la
+ * X la quita (mientras COVINCA no valide). Así se elige en el punto cuál
+ * sirve, sin tener que volver (Elvis, 21/10).
+ */
+@Composable
+private fun FotosTomadas(
+    fotos: List<pe.servicon.sigov.datos.FotoDelItem>,
+    cargando: Boolean,
+    quitables: Boolean,
+    alVer: (pe.servicon.sigov.datos.FotoDelItem) -> Unit,
+    alQuitar: (pe.servicon.sigov.datos.FotoDelItem) -> Unit,
+) {
+    Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
+        Text("Fotos tomadas", style = MaterialTheme.typography.titleSmall)
+        if (fotos.isEmpty()) {
+            Text(
+                if (cargando) "Buscando las fotos…" else "Todavía no hay fotos de este ítem.",
+                style = MaterialTheme.typography.bodySmall,
+                color = MaterialTheme.colorScheme.onSurfaceVariant,
+            )
+            return@Column
+        }
+        listOf("antes", "durante", "despues").forEach { fase ->
+            val deLaFase = fotos.filter { it.fase == fase }
+            Row(verticalAlignment = Alignment.CenterVertically) {
+                Text(
+                    nombreDeFase(fase).replaceFirstChar { it.uppercase() } + " · " + deLaFase.size,
+                    style = MaterialTheme.typography.labelLarge,
+                    color = if (deLaFase.isEmpty()) Semaforo.Vencido else MaterialTheme.colorScheme.onSurface,
+                    modifier = Modifier.width(96.dp),
+                )
+                if (deLaFase.isEmpty()) {
+                    Text("Falta", style = MaterialTheme.typography.bodySmall, color = Semaforo.Vencido)
+                }
+                Row(
+                    Modifier.weight(1f).horizontalScroll(rememberScrollState()),
+                    horizontalArrangement = Arrangement.spacedBy(8.dp),
+                ) {
+                    deLaFase.forEach { f ->
+                        Box(Modifier.size(76.dp)) {
+                            AsyncImage(
+                                model = f.modelo,
+                                contentDescription = "Foto del " + nombreDeFase(fase),
+                                contentScale = ContentScale.Crop,
+                                modifier = Modifier
+                                    .fillMaxSize()
+                                    .clip(RoundedCornerShape(10.dp))
+                                    .background(MaterialTheme.colorScheme.surfaceVariant)
+                                    .clickable { alVer(f) },
+                            )
+                            if (f.porEnviar) {
+                                Text(
+                                    "Por enviar",
+                                    style = MaterialTheme.typography.labelSmall,
+                                    color = Color.White,
+                                    modifier = Modifier
+                                        .align(Alignment.BottomStart)
+                                        .padding(3.dp)
+                                        .background(Marca.Naranja, RoundedCornerShape(6.dp))
+                                        .padding(horizontal = 4.dp, vertical = 1.dp),
+                                )
+                            }
+                            if (quitables) {
+                                Box(
+                                    Modifier
+                                        .align(Alignment.TopEnd)
+                                        .padding(3.dp)
+                                        .size(24.dp)
+                                        .background(Color.Black.copy(alpha = 0.55f), RoundedCornerShape(12.dp))
+                                        .clickable { alQuitar(f) },
+                                    contentAlignment = Alignment.Center,
+                                ) {
+                                    Icon(Icons.Outlined.Close, contentDescription = "Quitar la foto", tint = Color.White, modifier = Modifier.size(16.dp))
+                                }
+                            }
+                        }
+                    }
+                }
+            }
+        }
+        // Las de registro general (sin etapa), si alguna hubo
+        fotos.filter { it.fase !in setOf("antes", "durante", "despues") }.takeIf { it.isNotEmpty() }?.let { otras ->
+            Text("Otras fotos · ${otras.size}", style = MaterialTheme.typography.labelLarge)
         }
     }
 }

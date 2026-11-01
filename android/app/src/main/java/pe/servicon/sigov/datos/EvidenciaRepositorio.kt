@@ -26,6 +26,8 @@ import kotlinx.serialization.json.Json
 import kotlinx.serialization.json.JsonObject
 import kotlinx.serialization.json.buildJsonObject
 import kotlinx.serialization.json.put
+import kotlinx.serialization.json.contentOrNull
+import kotlinx.serialization.json.jsonPrimitive
 import pe.servicon.sigov.datos.local.EvidenciaLocal
 import pe.servicon.sigov.datos.local.CatalogoDao
 import pe.servicon.sigov.datos.local.FilaCatalogo
@@ -406,6 +408,77 @@ class EvidenciaRepositorio @Inject constructor(
         runCatching { File(foto.rutaLocal).delete() }
     }
 
+    // ─── Las fotos de un ítem PCI ─────────────────────────────────────────
+
+    /**
+     * Todas las fotos de un ítem PCI, de este teléfono y de la nube (Elvis,
+     * 21/10): el encargado tiene que ver las que tomó —dos del antes, tres
+     * del después…— para elegir cuál sirve antes de irse del punto.
+     */
+    suspend fun fotosDeItemPci(pciItemId: String): List<FotoDelItem> = withContext(Dispatchers.IO) {
+        val locales = partes.evidenciasDePci(pciItemId)
+        val remotas = runCatching {
+            supabase.postgrest.from("v_evidences")
+                .select(io.github.jan.supabase.postgrest.query.Columns.list("client_id", "phase", "storage_path", "taken_at")) {
+                    filter { eq("pci_item_id", pciItemId) }
+                    order("taken_at", Order.ASCENDING)
+                }
+                .decodeList<JsonObject>()
+        }.getOrDefault(emptyList())
+
+        val enCola = locales.associateBy { it.clientId }
+        val fotos = mutableListOf<FotoDelItem>()
+        val vistas = mutableSetOf<String>()
+        remotas.forEach { o ->
+            val id = o["client_id"]?.jsonPrimitive?.contentOrNull ?: return@forEach
+            vistas += id
+            val local = enCola[id]?.takeIf { File(it.rutaLocal).exists() }
+            fotos += FotoDelItem(
+                clientId = id,
+                fase = o["phase"]?.jsonPrimitive?.contentOrNull ?: "general",
+                ruta = o["storage_path"]?.jsonPrimitive?.contentOrNull,
+                archivo = local?.rutaLocal,
+                tomadaEn = o["taken_at"]?.jsonPrimitive?.contentOrNull,
+                porEnviar = false,
+            )
+        }
+        // Lo que todavía no sube, o lo que se tomó sin señal
+        locales.filter { it.clientId !in vistas && File(it.rutaLocal).exists() }.forEach { l ->
+            val envio = cola.envio(l.clientId)
+            fotos += FotoDelItem(
+                clientId = l.clientId,
+                fase = l.fase,
+                ruta = l.rutaDestino,
+                archivo = l.rutaLocal,
+                tomadaEn = Instant.ofEpochMilli(l.tomadaEn).toString(),
+                porEnviar = envio != null && envio.estado != EstadoEnvio.ENVIADO,
+            )
+        }
+        // Las de la nube que no están en el teléfono se piden firmadas
+        val porFirmar = fotos.filter { it.archivo == null }.mapNotNull { it.ruta }.distinct()
+        val firmadas = if (porFirmar.isEmpty()) emptyMap() else runCatching {
+            supabase.storage.from("evidencias")
+                .createSignedUrls(1.hours, porFirmar)
+                .associate { it.path to completar(it.signedURL) }
+        }.getOrDefault(emptyMap())
+        fotos.map { f -> if (f.archivo == null) f.copy(url = f.ruta?.let { firmadas[it] }) else f }
+            .sortedBy { it.tomadaEn }
+    }
+
+    /**
+     * Quita una foto del ítem, esté o no en este teléfono. La base no deja
+     * quitarla si COVINCA ya validó el ítem.
+     */
+    suspend fun eliminarPorClientId(clientId: String) = withContext(Dispatchers.IO) {
+        val local = partes.evidencia(clientId)
+        if (local != null) eliminar(local)
+        else cola.encolar(
+            tabla = "rpc:dar_de_baja_evidencia",
+            etiqueta = "Foto eliminada",
+            cuerpo = buildJsonObject { put("p_client_id", clientId) },
+        )
+    }
+
     // ─── La galería ───────────────────────────────────────────────────────
 
     /**
@@ -770,3 +843,17 @@ private const val CALIDAD_ORIGINAL = 88
 
 /** Desde este lado mayor la toma sostiene un original 4080 × 3060. */
 private const val LADO_MINIMO_ORIGINAL = 2400
+
+/** Una foto de un ítem PCI: en el teléfono (archivo) o en la nube (url firmada). */
+data class FotoDelItem(
+    val clientId: String,
+    val fase: String,
+    val ruta: String?,
+    val archivo: String?,
+    val tomadaEn: String?,
+    val porEnviar: Boolean,
+    val url: String? = null,
+) {
+    /** Lo que se le pasa a la imagen: el archivo local primero. */
+    val modelo: Any? get() = archivo?.let { File(it) } ?: url
+}

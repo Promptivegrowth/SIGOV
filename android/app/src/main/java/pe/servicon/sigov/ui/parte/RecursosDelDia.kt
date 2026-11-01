@@ -57,7 +57,16 @@ fun RecursosDelDia(
                     modifier = Modifier.padding(horizontal = 16.dp, vertical = 6.dp),
                 )
             }
-            recursos.forEach { r ->
+            // Acumulado por equipo: el mismo equipo en varias actividades suma
+            recursos.groupBy { Triple(it.tipo, it.descripcion.trim().lowercase(), it.unidad) }.values.map { grupo ->
+                if (grupo.size == 1) grupo.first()
+                else grupo.first().copy(
+                    cantidad = grupo.mapNotNull { it.cantidad }.takeIf { it.isNotEmpty() }?.sum(),
+                    observacion = "Acumulado de ${grupo.size} actividades",
+                    enviado = grupo.all { it.enviado },
+                    clientId = "",
+                )
+            }.forEach { r ->
                 Row(
                     Modifier.fillMaxWidth().padding(horizontal = 16.dp, vertical = 8.dp),
                     verticalAlignment = Alignment.CenterVertically,
@@ -82,7 +91,7 @@ fun RecursosDelDia(
                     }
                     if (!r.enviado) {
                         Icon(Icons.Outlined.CloudUpload, contentDescription = "Por enviar", tint = Marca.Naranja, modifier = Modifier.padding(start = 8.dp).size(18.dp))
-                        IconButton(onClick = { alQuitar(r) }) { Icon(Icons.Outlined.Close, contentDescription = "Quitar") }
+                        if (r.clientId.isNotEmpty()) IconButton(onClick = { alQuitar(r) }) { Icon(Icons.Outlined.Close, contentDescription = "Quitar") }
                     }
                 }
             }

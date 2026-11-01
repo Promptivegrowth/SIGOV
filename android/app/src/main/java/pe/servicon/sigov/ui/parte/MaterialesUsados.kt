@@ -62,22 +62,31 @@ fun MaterialesUsados(
                     modifier = Modifier.padding(horizontal = 16.dp, vertical = 6.dp),
                 )
             }
-            consumos.forEach { c ->
+            // El acumulado del día por material (Elvis, 21/10: un panel por
+            // señal, tres señales → «3 paneles»); cada actividad tiene el suyo
+            consumos.groupBy { it.insumoId to it.unidad }.values.forEach { grupo ->
+                val c = grupo.first()
                 Row(
                     Modifier.fillMaxWidth().padding(horizontal = 16.dp, vertical = 8.dp),
                     verticalAlignment = Alignment.CenterVertically,
                 ) {
                     Column(Modifier.weight(1f)) {
                         Text(c.nombre, style = MaterialTheme.typography.bodyLarge)
-                        c.actividad?.let { Text(it, style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant) }
+                        val detalle = if (grupo.size == 1) c.actividad
+                            else "Acumulado de ${grupo.size} anotaciones · " +
+                                grupo.mapNotNull { it.registroClientId ?: it.actividad }.distinct().size.let { n -> "$n actividad${if (n == 1) "" else "es"}" }
+                        detalle?.let { Text(it, style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant) }
                     }
                     Text(
-                        Numeros.tres(c.cantidad) + (c.unidad?.let { " $it" } ?: ""),
+                        Numeros.tres(grupo.sumOf { it.cantidad }) + (c.unidad?.let { " $it" } ?: ""),
                         style = MaterialTheme.typography.titleSmall,
                         fontWeight = FontWeight.SemiBold,
                     )
-                    if (!c.enviado) {
+                    if (grupo.any { !it.enviado }) {
                         Icon(Icons.Outlined.CloudUpload, contentDescription = "Por enviar", tint = Marca.Naranja, modifier = Modifier.padding(start = 8.dp).size(18.dp))
+                    }
+                    // Uno solo se quita aquí; los acumulados, desde su actividad
+                    if (grupo.size == 1 && !c.enviado) {
                         IconButton(onClick = { alQuitar(c) }) { Icon(Icons.Outlined.Close, contentDescription = "Quitar") }
                     }
                 }

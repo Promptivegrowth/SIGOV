@@ -89,7 +89,7 @@ internal fun ladoDesdeProgramacion(texto: String?): String? {
  * 3. **Avance**: lo que trae la partida o el ítem va bloqueado (🔒) y solo se
  *    escribe lo que pasó en campo. En lo programado se pueden corregir el
  *    tramo, las progresivas y el lado («me programaron del 12 al 14 y ejecuté
- *    del 12 al 13»); en un PCI todo es fijo, salvo la observación.
+ *    del 12 al 13»); en un PCI es fijo el lugar; el metrado se corrige.
  *
  * Otros y Emergencia saltan del paso 1 al 3 con el formulario completo. Al
  * guardar se vuelve al paso 2 para seguir con la siguiente (Elvis: «no me
@@ -274,7 +274,7 @@ fun FormularioActividad(
                                 ) { verPci = false; paso = 2 }
                                 TarjetaDeOrigen(
                                     "PCI", "Trabajo del inventario PCI", Icons.Outlined.Description,
-                                    cuenta = pcis.size, habilitada = pcis.isNotEmpty(), modifier = Modifier.weight(1f),
+                                    cuenta = pcis.count { it.estaAbierto }, habilitada = pcis.isNotEmpty(), modifier = Modifier.weight(1f),
                                 ) { verPci = true; paso = 2 }
                             }
                             Row(horizontalArrangement = Arrangement.spacedBy(12.dp)) {
@@ -425,15 +425,14 @@ fun FormularioActividad(
                             }
 
                             val unidad = partida?.unidad ?: itemPci?.unidad
-                            if (itemPci != null && itemPci.quantity != null) {
-                                CampoFijo("Metrado ejecutado", "${metrado} ${unidad.orEmpty()}".trim())
-                            } else {
+                            run {
                                 OutlinedTextField(
                                     value = metrado,
                                     onValueChange = { metrado = it },
                                     label = { Text("Metrado ejecutado *") },
                                     suffix = unidad?.let { u -> { Text(u) } },
                                     placeholder = { Text("350") },
+                                    supportingText = itemPci?.quantity?.let { q -> { Text("Pedido en el PCI: ${cifra(q)} ${unidad.orEmpty()}. Corrígelo si fue distinto.") } },
                                     singleLine = true,
                                     keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Decimal),
                                     shape = RoundedCornerShape(12.dp),
@@ -651,7 +650,7 @@ private fun TarjetaDeOrigen(
             Spacer(Modifier.weight(1f))
             Row(verticalAlignment = Alignment.CenterVertically) {
                 Text(
-                    titulo + (cuenta?.let { " · $it" } ?: ""),
+                    titulo + (cuenta?.let { " · $it ${if (it == 1) "ítem" else "ítems"}" } ?: ""),
                     style = MaterialTheme.typography.titleMedium,
                     fontWeight = FontWeight.Bold,
                     modifier = Modifier.weight(1f),
@@ -721,7 +720,13 @@ private fun ListaDeItemsPci(pcis: List<ItemPci>, registrados: Set<String>, alSel
         }
     }
     val visibles = pcis.filter { cumple(it, plazo) }
-        .sortedWith(compareBy<ItemPci> { it.vence ?: "9999-12-31" }.thenBy { it.numero ?: Int.MAX_VALUE })
+        // Primero lo que ya está en el reporte de hoy (Elvis, 21/10: «deberían
+        // aparecer los mismos ítems que estaban detrás»), luego lo que vence antes
+        .sortedWith(
+            compareByDescending<ItemPci> { it.id in registrados }
+                .thenBy { it.vence ?: "9999-12-31" }
+                .thenBy { it.numero ?: Int.MAX_VALUE },
+        )
     if (visibles.isEmpty()) {
         Text("Ningún ítem en ese plazo.", style = MaterialTheme.typography.bodyMedium, color = MaterialTheme.colorScheme.onSurfaceVariant)
     }

@@ -305,6 +305,27 @@ class CampoRepositorio @Inject constructor(
         }
 
     /**
+     * Unos ítems PCI por su id, en cualquier estado: los del reporte del día,
+     * para imprimir su n.º de ítem y su partida aunque ya estén atendidos.
+     */
+    suspend fun itemsPciPorId(servicioId: String, ids: Collection<String>): List<ItemPci> =
+        withContext(Dispatchers.IO) {
+            if (ids.isEmpty()) return@withContext emptyList()
+            runCatching {
+                ids.chunked(150).flatMap { lote ->
+                    supabase.postgrest.from("v_pci_items")
+                        .select { filter { isIn("id", lote) } }
+                        .decodeList<JsonObject>()
+                        .map { json.decodeFromString<ItemPci>(it.toString()) }
+                }
+            }.getOrElse {
+                (deLaCopia<ItemPci>("pci_items_cuadrilla", servicioId) + deLaCopia<ItemPci>("pci_items", servicioId))
+                    .filter { it.id in ids }
+                    .distinctBy { it.id }
+            }
+        }
+
+    /**
      * El registro de hoy que sostiene las fotos y el metrado de un ítem PCI.
      *
      * Se crea la primera vez que se toma una foto del ítem, con el metrado en

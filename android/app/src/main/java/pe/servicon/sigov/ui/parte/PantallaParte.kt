@@ -4,6 +4,10 @@ import pe.servicon.sigov.ui.programacion.SelectorDeDia
 import pe.servicon.sigov.datos.OrigenDelTrabajo
 import pe.servicon.sigov.datos.Peru
 import androidx.compose.foundation.background
+import androidx.compose.foundation.border
+import androidx.compose.foundation.clickable
+import androidx.compose.foundation.horizontalScroll
+import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
@@ -17,6 +21,10 @@ import androidx.compose.material.icons.outlined.PictureAsPdf
 import androidx.compose.material.icons.outlined.Description
 import androidx.compose.material.icons.outlined.TableChart
 import androidx.compose.material.icons.outlined.Straighten
+import androidx.compose.material.icons.outlined.Search
+import androidx.compose.material.icons.outlined.Close
+import androidx.compose.material.icons.outlined.ChevronRight
+import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
@@ -30,6 +38,7 @@ import pe.servicon.sigov.datos.Progresiva
 import pe.servicon.sigov.datos.local.RegistroLocal
 import pe.servicon.sigov.ui.componentes.ArmazonDeApartado
 import pe.servicon.sigov.ui.theme.Marca
+import pe.servicon.sigov.ui.theme.Semaforo
 import java.util.Locale
 
 /**
@@ -54,6 +63,14 @@ fun PantallaParte(
     var editandoDatos by remember { mutableStateOf(false) }
     var confirmandoEnvio by remember { mutableStateOf(false) }
     var menuAbierto by remember { mutableStateOf(false) }
+    // La actividad abierta para completarla, y a cuál se le anota material o equipo
+    var abierto by remember { mutableStateOf<String?>(null) }
+    var materialDe by remember { mutableStateOf<RegistroLocal?>(null) }
+    var recursoDe by remember { mutableStateOf<RegistroLocal?>(null) }
+    // Con muchas actividades (200 ítems al día), filtrar y buscar (Elvis, 21/10)
+    var filtro by rememberSaveable { mutableStateOf("todos") }
+    var busqueda by rememberSaveable { mutableStateOf("") }
+    var verTodas by rememberSaveable { mutableStateOf(false) }
 
     // Desde una partida («Registrar avance») el formulario se abre solo
     LaunchedEffect(estado.partidaInicial) {
@@ -189,13 +206,58 @@ fun PantallaParte(
                         }
                     }
                 } else {
-                    items(estado.registros, key = { it.clientId }) { registro ->
+                    val filtrados = estado.registros
+                        .filter { r -> cumpleFiltro(r, filtro) }
+                        .filter { r -> coincide(r, busqueda, estado.itemDe(r)) }
+                    val visibles = if (verTodas) filtrados else filtrados.take(LIMITE)
+                    if (estado.registros.size > 3) {
+                        item {
+                            FiltrosDeActividades(
+                                registros = estado.registros,
+                                filtro = filtro,
+                                alFiltrar = { filtro = it; verTodas = false },
+                                busqueda = busqueda,
+                                alBuscar = { busqueda = it; verTodas = false },
+                                conBuscador = estado.registros.size > LIMITE,
+                            )
+                        }
+                    }
+                    if (filtrados.isEmpty()) {
+                        item {
+                            Text(
+                                "Ninguna actividad en este filtro.",
+                                style = MaterialTheme.typography.bodySmall,
+                                color = MaterialTheme.colorScheme.onSurfaceVariant,
+                                modifier = Modifier.padding(vertical = 8.dp),
+                            )
+                        }
+                    }
+                    items(visibles, key = { it.clientId }) { registro ->
                         Registro(
                             registro = registro,
-                            fotos = estado.fotosPorRegistro[registro.clientId] ?: 0,
+                            item = estado.itemDe(registro),
+                            fases = estado.fotosPorFase[registro.clientId].orEmpty(),
+                            materiales = estado.consumos.count { c -> c.registroClientId == registro.clientId },
+                            equipos = estado.recursos.count { r -> r.registroClientId == registro.clientId },
+                            editable = estado.parte?.editable == true,
                             porEnviar = registro.clientId in estado.porEnviar,
+                            alAbrir = { abierto = registro.clientId },
                             alTomarEvidencia = { alTomarEvidencia(registro.clientId) },
                         )
+                    }
+                    // Un corte: lo demás queda a un toque, y abajo el resumen sigue a la mano
+                    if (filtrados.size > visibles.size) {
+                        item {
+                            OutlinedButton(onClick = { verTodas = true }, modifier = Modifier.fillMaxWidth()) {
+                                Text("Ver las ${filtrados.size - visibles.size} actividades restantes")
+                            }
+                        }
+                    } else if (verTodas && filtrados.size > LIMITE) {
+                        item {
+                            TextButton(onClick = { verTodas = false }, modifier = Modifier.fillMaxWidth()) {
+                                Text("Mostrar solo las primeras $LIMITE")
+                            }
+                        }
                     }
                 }
                 item {
@@ -223,14 +285,36 @@ fun PantallaParte(
       }
     }
 
-    if (anotandoRecurso) {
+    if (anotandoRecurso || recursoDe != null) {
         DialogoRecurso(
-            alCerrar = { anotandoRecurso = false },
+            alCerrar = { anotandoRecurso = false; recursoDe = null },
             alGuardar = { tipo, codigo, descripcion, unidad, cantidad, observacion ->
-                vm.registrarRecurso(tipo, codigo, descripcion, unidad, cantidad, observacion)
-                anotandoRecurso = false
+                vm.registrarRecurso(tipo, codigo, descripcion, unidad, cantidad, observacion, recursoDe)
+                anotandoRecurso = false; recursoDe = null
             },
         )
+    }
+
+    // Completar una actividad: metrado, materiales, equipos y observación
+    estado.registros.firstOrNull { it.clientId == abierto }?.let { r ->
+        if (materialDe == null && recursoDe == null) {
+            DetalleDelRegistro(
+                registro = r,
+                codigo = estado.codigoDe(r),
+                item = estado.itemDe(r),
+                fases = estado.fotosPorFase[r.clientId].orEmpty(),
+                consumos = estado.consumos.filter { c -> c.registroClientId == r.clientId },
+                recursos = estado.recursos.filter { x -> x.registroClientId == r.clientId },
+                editable = estado.parte?.editable == true,
+                alGuardar = { cantidad, obs -> vm.completar(r, cantidad, obs) { abierto = null } },
+                alAgregarMaterial = { materialDe = r },
+                alAgregarEquipo = { recursoDe = r },
+                alQuitarConsumo = vm::descartarConsumo,
+                alQuitarRecurso = vm::descartarRecurso,
+                alTomarFoto = { abierto = null; alTomarEvidencia(r.clientId) },
+                alCerrar = { abierto = null },
+            )
+        }
     }
 
     if (editandoDatos) {
@@ -257,16 +341,17 @@ fun PantallaParte(
         )
     }
 
-    if (anotandoMaterial) {
+    if (anotandoMaterial || materialDe != null) {
         DialogoMaterialUsado(
             stock = estado.stockCuadrilla,
             insumos = estado.insumos,
-            registros = estado.registros,
+            // Desde una actividad, el material queda en ella
+            registros = materialDe?.let { listOf(it) } ?: estado.registros,
             rendimientos = estado.rendimientos,
-            alCerrar = { anotandoMaterial = false },
+            alCerrar = { anotandoMaterial = false; materialDe = null },
             alGuardar = { id, nombre, unidad, cantidad, registro ->
                 vm.registrarConsumo(id, nombre, unidad, cantidad, registro)
-                anotandoMaterial = false
+                anotandoMaterial = false; materialDe = null
             },
         )
     }
@@ -282,7 +367,9 @@ fun PantallaParte(
             actividades = estado.actividades,
             tramos = estado.tramos,
             programadas = estado.programadas,
-            pcis = estado.pcis,
+            // Los ítems del reporte que ya se atendieron también se ofrecen,
+            // marcados «Registrado»: elegirlos completa su misma línea
+            pcis = estado.pcis + estado.itemsPciDelDia.values.filter { i -> estado.pcis.none { it.id == i.id } },
             tramoPorDefecto = estado.tramoPorDefecto,
             inicial = desdePartida,
             guardando = estado.guardando,
@@ -314,38 +401,123 @@ private fun Resumen(estado: EstadoParte) {
             Modifier.padding(18.dp),
             horizontalArrangement = Arrangement.SpaceBetween,
         ) {
-            Dato("Registros", estado.registros.size.toString())
-            Dato("Metrado", String.format(Locale("es", "PE"), "%.1f", estado.metradoTotal))
+            Dato("Actividades", estado.registros.size.toString())
+            Dato("Por completar", estado.porCompletar.toString(), if (estado.porCompletar > 0) Semaforo.Vencido else Marca.Azul)
             Dato("Estado", estadoDelParte(estado.parte?.estado, ("envio:" + estado.parte?.clientId) in estado.porEnviar))
         }
     }
 }
 
 @Composable
-private fun Dato(etiqueta: String, valor: String) {
+private fun Dato(etiqueta: String, valor: String, color: Color = Marca.Azul) {
     Column {
         Text(
             etiqueta.uppercase(),
             style = MaterialTheme.typography.labelSmall,
             color = MaterialTheme.colorScheme.onSurfaceVariant,
         )
-        Text(valor, style = MaterialTheme.typography.headlineSmall, color = Marca.Azul)
+        Text(valor, style = MaterialTheme.typography.headlineSmall, color = color)
     }
 }
 
+private const val LIMITE = 8
+
+private fun cumpleFiltro(r: RegistroLocal, filtro: String): Boolean = when (filtro) {
+    "programacion" -> r.origen == "programacion"
+    "pci" -> r.origen == "pci"
+    "otros" -> r.origen != "programacion" && r.origen != "pci"
+    "completar" -> r.cantidad <= 0.0
+    else -> true
+}
+
+private fun coincide(r: RegistroLocal, q: String, item: Int?): Boolean {
+    val t = q.trim().lowercase()
+    if (t.isEmpty()) return true
+    val numero = t.removePrefix("ítem").removePrefix("item").trim()
+    return r.actividadNombre.lowercase().contains(t) ||
+        (item != null && numero.isNotEmpty() && item.toString() == numero) ||
+        r.pciCodigo?.lowercase()?.contains(t) == true ||
+        Progresiva.rango(r.progresivaInicio, r.progresivaFin)?.contains(t) == true
+}
+
+/** Programado · PCI · Otros, como en «Registrar actividad», y lo que falta completar. */
+@Composable
+private fun FiltrosDeActividades(
+    registros: List<RegistroLocal>,
+    filtro: String,
+    alFiltrar: (String) -> Unit,
+    busqueda: String,
+    alBuscar: (String) -> Unit,
+    conBuscador: Boolean,
+) {
+    Column(verticalArrangement = Arrangement.spacedBy(6.dp)) {
+        Row(Modifier.horizontalScroll(rememberScrollState()), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+            listOf(
+                "todos" to "Todas",
+                "programacion" to "Programado",
+                "pci" to "PCI",
+                "otros" to "Otros",
+                "completar" to "Por completar",
+            ).forEach { (clave, nombre) ->
+                val n = registros.count { cumpleFiltro(it, clave) }
+                if (clave == "todos" || n > 0) {
+                    FilterChip(
+                        selected = filtro == clave,
+                        onClick = { alFiltrar(clave) },
+                        label = { Text("$nombre · $n") },
+                        colors = if (clave == "completar") FilterChipDefaults.filterChipColors(
+                            labelColor = Semaforo.Vencido,
+                            selectedContainerColor = Semaforo.Vencido.copy(alpha = 0.14f),
+                            selectedLabelColor = Semaforo.Vencido,
+                        ) else FilterChipDefaults.filterChipColors(),
+                    )
+                }
+            }
+        }
+        if (conBuscador) {
+            OutlinedTextField(
+                value = busqueda,
+                onValueChange = alBuscar,
+                placeholder = { Text("Buscar actividad, ítem o progresiva") },
+                leadingIcon = { Icon(Icons.Outlined.Search, null) },
+                trailingIcon = if (busqueda.isNotEmpty()) {
+                    { IconButton(onClick = { alBuscar("") }) { Icon(Icons.Outlined.Close, "Borrar la búsqueda") } }
+                } else null,
+                singleLine = true,
+                shape = RoundedCornerShape(12.dp),
+                modifier = Modifier.fillMaxWidth(),
+            )
+        }
+    }
+}
+
+/**
+ * Una actividad del reporte. Tocarla la abre para completar metrado,
+ * materiales, equipos y observación; mientras le falte el metrado va en
+ * rojo (Elvis, 21/10). Las fotos se cuentan por etapa: A · D · DP.
+ */
 @Composable
 private fun Registro(
     registro: RegistroLocal,
-    fotos: Int,
+    item: Int?,
+    fases: Map<String, Int>,
+    materiales: Int,
+    equipos: Int,
+    editable: Boolean,
     porEnviar: Boolean = false,
+    alAbrir: () -> Unit,
     alTomarEvidencia: () -> Unit,
 ) {
+    val incompleta = editable && registro.cantidad <= 0.0
     Card(
         shape = RoundedCornerShape(14.dp),
-        colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface),
+        colors = CardDefaults.cardColors(
+            containerColor = if (incompleta) Semaforo.Vencido.copy(alpha = 0.04f) else MaterialTheme.colorScheme.surface,
+        ),
         elevation = CardDefaults.cardElevation(defaultElevation = 0.dp),
-        border = CardDefaults.outlinedCardBorder(),
-        modifier = Modifier.fillMaxWidth(),
+        border = if (incompleta) androidx.compose.foundation.BorderStroke(1.5.dp, Semaforo.Vencido.copy(alpha = 0.7f))
+                 else CardDefaults.outlinedCardBorder(),
+        modifier = Modifier.fillMaxWidth().clickable(onClick = alAbrir),
     ) {
         Column(Modifier.padding(16.dp)) {
             Row(
@@ -354,6 +526,14 @@ private fun Registro(
                 verticalAlignment = Alignment.Top,
             ) {
                 Column(Modifier.weight(1f)) {
+                    if (registro.origen == "pci") {
+                        Text(
+                            listOfNotNull(registro.pciCodigo?.let { pe.servicon.sigov.datos.codigoCortoDePci(it) }, item?.let { "Ítem $it" })
+                                .joinToString(" · "),
+                            style = MaterialTheme.typography.labelMedium,
+                            color = MaterialTheme.colorScheme.onSurfaceVariant,
+                        )
+                    }
                     Text(
                         registro.actividadNombre,
                         style = MaterialTheme.typography.titleSmall,
@@ -369,11 +549,14 @@ private fun Registro(
                         color = MaterialTheme.colorScheme.onSurfaceVariant,
                     )
                 }
-                Text(
-                    String.format(Locale("es", "PE"), "%.1f", registro.cantidad),
-                    style = MaterialTheme.typography.headlineSmall,
-                    color = Marca.Azul,
-                )
+                Column(horizontalAlignment = Alignment.End) {
+                    Text(
+                        pe.servicon.sigov.datos.Numeros.tres(registro.cantidad),
+                        style = MaterialTheme.typography.headlineSmall,
+                        color = if (incompleta) Semaforo.Vencido else Marca.Azul,
+                    )
+                    registro.unidad?.let { Text(it, style = MaterialTheme.typography.labelSmall, color = MaterialTheme.colorScheme.onSurfaceVariant) }
+                }
             }
 
             // De dónde salió. En la valorización es lo primero que se revisa:
@@ -384,26 +567,10 @@ private fun Registro(
                 "pci" -> "Levantamiento de PCI" to Marca.Naranja
                 else -> "No programado" to MaterialTheme.colorScheme.onSurfaceVariant
             }
-            Row(horizontalArrangement = Arrangement.spacedBy(6.dp)) {
-                Text(
-                    rotulo,
-                    style = MaterialTheme.typography.labelSmall,
-                    color = tinte,
-                    modifier = Modifier
-                        .background(tinte.copy(alpha = 0.12f), RoundedCornerShape(8.dp))
-                        .padding(horizontal = 8.dp, vertical = 4.dp),
-                )
+            Row(horizontalArrangement = Arrangement.spacedBy(6.dp), verticalAlignment = Alignment.CenterVertically) {
+                Etiqueta(rotulo, tinte)
                 // Guardado en el equipo, sube al haber señal (SEG-V2-OBS-03)
-                if (porEnviar) {
-                    Text(
-                        "Por enviar",
-                        style = MaterialTheme.typography.labelSmall,
-                        color = Marca.Naranja,
-                        modifier = Modifier
-                            .background(Marca.Naranja.copy(alpha = 0.12f), RoundedCornerShape(8.dp))
-                            .padding(horizontal = 8.dp, vertical = 4.dp),
-                    )
-                }
+                if (porEnviar) Etiqueta("Por enviar", Marca.Naranja)
             }
 
             registro.observacion?.takeIf { it.isNotBlank() }?.let {
@@ -415,38 +582,54 @@ private fun Registro(
                 )
             }
 
-            Spacer(Modifier.height(12.dp))
-            // Una partida sin foto no se valoriza: el aviso es naranja hasta
-            // que la evidencia existe.
-            val conFotos = fotos > 0
-            val color = if (conFotos) Marca.VerdeBandera else Marca.Naranja
-            Surface(
-                onClick = alTomarEvidencia,
-                shape = RoundedCornerShape(10.dp),
-                color = color.copy(alpha = 0.10f),
-            ) {
-                Row(
-                    verticalAlignment = Alignment.CenterVertically,
-                    horizontalArrangement = Arrangement.spacedBy(8.dp),
-                    modifier = Modifier.padding(horizontal = 12.dp, vertical = 8.dp),
+            Spacer(Modifier.height(10.dp))
+            // Las fotos por etapa, como en el módulo PCI; tocar agrega otra
+            Row(verticalAlignment = Alignment.CenterVertically) {
+                Surface(
+                    onClick = alTomarEvidencia,
+                    shape = RoundedCornerShape(10.dp),
+                    color = Marca.Azul.copy(alpha = 0.06f),
                 ) {
-                    Icon(
-                        Icons.Outlined.PhotoCamera,
-                        contentDescription = null,
-                        tint = color,
-                        modifier = Modifier.size(18.dp),
-                    )
-                    Text(
-                        when (fotos) {
-                            0 -> "Tomar evidencia fotográfica"
-                            1 -> "1 foto · agregar otra"
-                            else -> "$fotos fotos · agregar otra"
-                        },
-                        style = MaterialTheme.typography.bodySmall,
-                        color = color,
-                    )
+                    Row(
+                        verticalAlignment = Alignment.CenterVertically,
+                        horizontalArrangement = Arrangement.spacedBy(8.dp),
+                        modifier = Modifier.padding(horizontal = 10.dp, vertical = 7.dp),
+                    ) {
+                        Icon(Icons.Outlined.PhotoCamera, contentDescription = "Tomar foto", tint = Marca.Azul, modifier = Modifier.size(18.dp))
+                        if (fases.values.sum() == 0 && registro.origen != "pci") {
+                            Text("Tomar evidencia fotográfica", style = MaterialTheme.typography.bodySmall, color = Marca.Naranja)
+                        } else {
+                            ContadorPorEtapa(fases, exigeLasTres = registro.origen == "pci")
+                        }
+                    }
                 }
+                Spacer(Modifier.weight(1f))
+                Icon(Icons.Outlined.ChevronRight, contentDescription = "Completar", tint = MaterialTheme.colorScheme.onSurfaceVariant)
             }
+
+            // Lo que le falta o lo que ya tiene
+            Spacer(Modifier.height(6.dp))
+            Text(
+                listOfNotNull(
+                    if (incompleta) "Falta el metrado · tócala para completarla" else null,
+                    if (materiales > 0) "$materiales material${if (materiales == 1) "" else "es"}" else null,
+                    if (equipos > 0) "$equipos equipo${if (equipos == 1) "" else "s"}" else null,
+                ).joinToString(" · ").ifEmpty { if (editable) "Toca para anotar materiales y equipos" else "" },
+                style = MaterialTheme.typography.labelSmall,
+                color = if (incompleta) Semaforo.Vencido else MaterialTheme.colorScheme.onSurfaceVariant,
+            )
         }
     }
+}
+
+@Composable
+private fun Etiqueta(texto: String, color: Color) {
+    Text(
+        texto,
+        style = MaterialTheme.typography.labelSmall,
+        color = color,
+        modifier = Modifier
+            .background(color.copy(alpha = 0.12f), RoundedCornerShape(8.dp))
+            .padding(horizontal = 8.dp, vertical = 4.dp),
+    )
 }
