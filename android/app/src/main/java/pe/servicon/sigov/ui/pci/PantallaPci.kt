@@ -20,6 +20,7 @@ import androidx.compose.material.icons.outlined.Close
 import androidx.compose.material.icons.outlined.Image
 import androidx.compose.material.icons.outlined.PhotoCamera
 import androidx.compose.material.icons.outlined.Search
+import androidx.compose.material.icons.outlined.SwapVert
 import androidx.compose.material.icons.outlined.Straighten
 import androidx.compose.material.icons.outlined.WarningAmber
 import androidx.compose.material3.*
@@ -52,6 +53,9 @@ import pe.servicon.sigov.datos.ResumenPci
 import pe.servicon.sigov.datos.codigoCortoDePci
 import pe.servicon.sigov.ui.componentes.ArmazonDeApartado
 import pe.servicon.sigov.ui.componentes.VisorConZoom
+import coil.compose.AsyncImage
+import androidx.compose.ui.draw.clip
+import androidx.compose.ui.layout.ContentScale
 import pe.servicon.sigov.ui.theme.Marca
 import pe.servicon.sigov.ui.theme.Semaforo
 
@@ -135,6 +139,7 @@ fun PantallaPci(
                 ocupado = estado.trabajando == item.id,
                 error = estado.error,
                 aviso = estado.aviso,
+                referencia = estado.referenciaDeFicha,
                 alTomarFoto = { fase -> vm.tomarFoto(item, fase) },
                 alVerReferencia = { vm.verReferencia(item) },
                 alRegistrarMetrado = { vm.registrarMetrado(item, it) },
@@ -148,7 +153,7 @@ fun PantallaPci(
         seccion = "Apartado 4.5",
         alVolver = { if (estado.abierto != null) vm.cerrarPci() else alVolver() },
         cuadrilla = estado.cuadrilla.ifBlank { null },
-        ayuda = if (pci == null) "Los ítems de tus PCI activos, por vencimiento."
+        ayuda = if (pci == null) "Los ítems de tus PCI activos, ${estado.orden.etiqueta.lowercase()}."
                 else "${pci.items} ítems de tu cuadrilla en este PCI.",
         avisos = avisos,
     ) { relleno ->
@@ -263,14 +268,19 @@ private fun ListaDeItems(estado: EstadoPci, vm: PciViewModel, alRegistrarFotos: 
                     )
                 }
             }
-            Text(
-                "Mostrando ${visibles.size} ${if (visibles.size == 1) "ítem" else "ítems"}" +
-                    (if (estado.estadoEnVista != Estado.TODOS) " ${estado.estadoEnVista.etiqueta.lowercase()}" else "") +
-                    " · Orden: vencimiento",
-                style = MaterialTheme.typography.labelMedium,
-                color = MaterialTheme.colorScheme.onSurfaceVariant,
-                modifier = Modifier.padding(horizontal = 16.dp, vertical = 2.dp),
-            )
+            Row(
+                Modifier.fillMaxWidth().padding(start = 16.dp, end = 8.dp),
+                verticalAlignment = Alignment.CenterVertically,
+            ) {
+                Text(
+                    "Mostrando ${visibles.size} ${if (visibles.size == 1) "ítem" else "ítems"}" +
+                        (if (estado.estadoEnVista != Estado.TODOS) " ${estado.estadoEnVista.etiqueta.lowercase()}" else ""),
+                    style = MaterialTheme.typography.labelMedium,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                    modifier = Modifier.weight(1f),
+                )
+                SelectorDeOrden(estado.orden, vm::ordenar)
+            }
         }
 
         if (visibles.isEmpty()) {
@@ -409,6 +419,9 @@ private fun TarjetaDeItem(
                 Spacer(Modifier.height(6.dp))
                 Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(10.dp)) {
                     ContadorDeFotos(item)
+                    if (item.fotoReferencia != null) {
+                        Icon(Icons.Outlined.Image, contentDescription = "Tiene foto referencial", tint = Marca.Azul, modifier = Modifier.size(18.dp))
+                    }
                     Spacer(Modifier.weight(1f))
                     textoDelPlazo(item).takeIf { it.isNotEmpty() }?.let {
                         Text(it, style = MaterialTheme.typography.labelMedium, fontWeight = FontWeight.SemiBold, color = colorDelPlazo(item))
@@ -515,6 +528,7 @@ private fun FichaDelItem(
     ocupado: Boolean,
     error: String?,
     aviso: String?,
+    referencia: String?,
     alTomarFoto: (Fase) -> Unit,
     alVerReferencia: () -> Unit,
     alRegistrarMetrado: (Double) -> Unit,
@@ -591,9 +605,7 @@ private fun FichaDelItem(
             }
         }
 
-        if (item.fotoReferencia != null) {
-            Boton("Foto referencial", Icons.Outlined.Image, Marca.Azul, false, true, Modifier.fillMaxWidth(), alVerReferencia)
-        }
+        FotoReferencialDeFicha(item, referencia, alVerReferencia)
 
         if (item.estaLevantado) {
             Text(
@@ -824,3 +836,81 @@ private fun colorDe(e: Estado): Color = when (e) {
 
 private fun numero(n: Double): String =
     if (n % 1.0 == 0.0) n.toLong().toString() else "%.2f".format(java.util.Locale.US, n).trimEnd('0').trimEnd('.')
+
+/** El orden de la lista: por vencimiento, por km (en los dos sentidos) o por ítem. */
+@Composable
+private fun SelectorDeOrden(orden: OrdenPci, alElegir: (OrdenPci) -> Unit) {
+    var abierto by remember { mutableStateOf(false) }
+    Box {
+        TextButton(onClick = { abierto = true }) {
+            Icon(Icons.Outlined.SwapVert, contentDescription = null, modifier = Modifier.size(18.dp))
+            Spacer(Modifier.width(4.dp))
+            Text("Orden: ${orden.corto}", style = MaterialTheme.typography.labelLarge)
+        }
+        DropdownMenu(expanded = abierto, onDismissRequest = { abierto = false }) {
+            OrdenPci.entries.forEach { o ->
+                DropdownMenuItem(
+                    text = { Text(o.etiqueta, fontWeight = if (o == orden) FontWeight.SemiBold else null) },
+                    leadingIcon = if (o == orden) {
+                        { Icon(Icons.Outlined.CheckCircle, contentDescription = null, tint = Marca.Azul) }
+                    } else null,
+                    onClick = { abierto = false; alElegir(o) },
+                )
+            }
+        }
+    }
+}
+
+/**
+ * La foto referencial dentro de la ficha (Elvis, 21/10): dónde queda el
+ * ítem, «cerca de una curva, una señal vertical», para tomar las fotos desde
+ * ahí. Se ve sin otro toque; al tocarla se abre con zoom. Si aún no la
+ * cargan, la ficha lo dice para que el encargado sepa a quién pedirla.
+ */
+@Composable
+private fun FotoReferencialDeFicha(item: ItemPci, url: String?, alVer: () -> Unit) {
+    Column(verticalArrangement = Arrangement.spacedBy(6.dp)) {
+        Text("Foto referencial", style = MaterialTheme.typography.titleSmall)
+        when {
+            item.fotoReferencia == null -> Text(
+                "Aún no tiene foto referencial. La cargan el supervisor o el visor COVINCA desde la web, del panel fotográfico de COVINCA.",
+                style = MaterialTheme.typography.bodySmall,
+                color = MaterialTheme.colorScheme.onSurfaceVariant,
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .background(MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.5f), RoundedCornerShape(10.dp))
+                    .padding(12.dp),
+            )
+            url == null -> Box(
+                Modifier
+                    .fillMaxWidth()
+                    .height(180.dp)
+                    .clip(RoundedCornerShape(12.dp))
+                    .background(MaterialTheme.colorScheme.surfaceVariant)
+                    .clickable(onClick = alVer),
+                contentAlignment = Alignment.Center,
+            ) {
+                Text("Cargando la foto… sin señal, toca para reintentar", style = MaterialTheme.typography.bodySmall)
+            }
+            else -> {
+                AsyncImage(
+                    model = url,
+                    contentDescription = "Foto referencial del ítem",
+                    contentScale = ContentScale.Crop,
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .height(180.dp)
+                        .clip(RoundedCornerShape(12.dp))
+                        .background(MaterialTheme.colorScheme.surfaceVariant)
+                        .clickable(onClick = alVer),
+                )
+                Text(
+                    "Toca la foto para verla completa y con zoom.",
+                    style = MaterialTheme.typography.labelSmall,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                )
+            }
+        }
+    }
+}
+

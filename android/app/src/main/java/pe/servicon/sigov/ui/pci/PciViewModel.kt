@@ -26,6 +26,17 @@ import javax.inject.Inject
  * 7, 14 días, vencidos». Cada plazo incluye a los más cortos: «7 días» es lo
  * que vence de hoy a siete días.
  */
+/**
+ * El orden de la lista. Por km, la cuadrilla avanza por la vía sin saltos:
+ * el número de ítem del PCI no sigue el orden de los lugares (Elvis, 21/10).
+ */
+enum class OrdenPci(val etiqueta: String, val corto: String) {
+    VENCIMIENTO("Por vencimiento", "vencimiento"),
+    KM_ASC("Por km, de menor a mayor", "km ascendente"),
+    KM_DESC("Por km, de mayor a menor", "km descendente"),
+    ITEM("Por n.º de ítem", "n.º de ítem"),
+}
+
 enum class Plazo(val etiqueta: String, val dias: Int) {
     UN_DIA("1 día", 1),
     DOS_DIAS("2 días", 2),
@@ -106,6 +117,7 @@ data class EstadoPci(
     /** El filtro de dentro de un PCI, aparte del de la vista general. */
     val estadoDelPci: Estado = Estado.PENDIENTES,
     val plazo: Plazo? = null,
+    val orden: OrdenPci = OrdenPci.VENCIMIENTO,
     val busqueda: String = "",
     /** La ficha del ítem abierta. */
     val ficha: String? = null,
@@ -118,6 +130,8 @@ data class EstadoPci(
     val irACamara: Pair<String, Fase>? = null,
     /** El enlace de la foto referencial abierta. */
     val referencia: String? = null,
+    /** La foto referencial del ítem de la ficha, ya firmada: se ve sin tocar nada. */
+    val referenciaDeFicha: String? = null,
     val aviso: String? = null,
     val error: String? = null,
 ) {
@@ -137,15 +151,19 @@ data class EstadoPci(
 
     val estadoEnVista: Estado get() = if (abierto == null) estado else estadoDelPci
 
-    /** Los ítems que se ven, por vencimiento: lo más urgente arriba. */
+    /** Los ítems que se ven, en el orden elegido (por omisión, lo que vence antes). */
     val visibles: List<ItemPci>
-        get() = itemsEnVista
-            .filter { cumple(it, estadoEnVista) && cumple(it, plazo) && coincide(it, busqueda) }
-            .sortedWith(
-                compareBy<ItemPci> { it.vence ?: "9999-12-31" }
-                    .thenBy { it.pciCodigo }
-                    .thenBy { it.numero ?: Int.MAX_VALUE },
-            )
+        get() {
+            val filtrados = itemsEnVista.filter { cumple(it, estadoEnVista) && cumple(it, plazo) && coincide(it, busqueda) }
+            val porItem = compareBy<ItemPci> { it.pciCodigo }.thenBy { it.numero ?: Int.MAX_VALUE }
+            return when (orden) {
+                OrdenPci.VENCIMIENTO -> filtrados.sortedWith(compareBy<ItemPci> { it.vence ?: "9999-12-31" }.then(porItem))
+                // Los ítems sin progresiva van al final en los dos sentidos
+                OrdenPci.KM_ASC -> filtrados.sortedWith(compareBy<ItemPci> { it.progresiva ?: Double.MAX_VALUE }.then(porItem))
+                OrdenPci.KM_DESC -> filtrados.sortedWith(compareByDescending<ItemPci> { it.progresiva ?: -1.0 }.then(porItem))
+                OrdenPci.ITEM -> filtrados.sortedWith(porItem)
+            }
+        }
 
     fun cuantos(e: Estado): Int = itemsEnVista.count { cumple(it, e) }
     fun cuantos(p: Plazo): Int = itemsEnVista.count { cumple(it, p) && cumple(it, estadoEnVista) }
@@ -168,9 +186,12 @@ class PciViewModel @Inject constructor(
     private val sesion: SesionRepositorio,
     private val partes: ParteDao,
     private val documentos: DocumentosRepositorio,
+    private val configuracion: pe.servicon.sigov.datos.Configuracion,
 ) : ViewModel() {
 
-    private val _estado = MutableStateFlow(EstadoPci())
+    private val _estado = MutableStateFlow(
+        EstadoPci(orden = OrdenPci.entries.firstOrNull { it.name == configuracion.ordenPci } ?: OrdenPci.VENCIMIENTO)
+    )
     val estado: StateFlow<EstadoPci> = _estado.asStateFlow()
 
     /** Ya llegó la primera carga: desde ahí, cada regreso a la pantalla recarga. */
@@ -203,9 +224,23 @@ class PciViewModel @Inject constructor(
     fun filtrarPlazo(p: Plazo?) = _estado.update { it.copy(plazo = if (it.plazo == p) null else p) }
     fun buscar(texto: String) = _estado.update { it.copy(busqueda = texto) }
 
-    fun abrirFicha(item: ItemPci) = _estado.update { it.copy(ficha = item.id, aviso = null, error = null) }
+    fun abrirFicha(item: ItemPci) {
+        _estado.update { it.copy(ficha = item.id, referenciaDeFicha = null, aviso = null, error = null) }
+        // La foto referencial se muestra en la ficha, sin otro toque (Elvis, 21/10)
+        val ruta = item.fotoReferencia ?: return
+        viewModelScope.launch {
+            val url = documentos.enlace(ruta)
+            _estado.update { if (it.ficha == item.id) it.copy(referenciaDeFicha = url) else it }
+        }
+    }
+
     /** Al cerrar la ficha se va con ella lo que decía: no reaparece abajo. */
-    fun cerrarFicha() = _estado.update { it.copy(ficha = null, aviso = null, error = null) }
+    fun cerrarFicha() = _estado.update { it.copy(ficha = null, referenciaDeFicha = null, aviso = null, error = null) }
+
+    fun ordenar(o: OrdenPci) {
+        configuracion.ordenPci = o.name
+        _estado.update { it.copy(orden = o) }
+    }
     fun camaraAbierta() = _estado.update { it.copy(irACamara = null) }
     fun avisoVisto() = _estado.update { it.copy(aviso = null, error = null) }
 

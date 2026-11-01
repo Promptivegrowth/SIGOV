@@ -103,6 +103,11 @@ class Configuracion @Inject constructor(
         it.momento.atZone(Peru.zona).toInstant().plus(Duration.between(it.editadaEn, Instant.now()))
     }
 
+    /** Cómo ordena la cuadrilla la lista de ítems PCI (nombre del orden). */
+    var ordenPci: String?
+        get() = guardado.getString(CLAVE_ORDEN_PCI, null)
+        set(valor) { guardado.edit().putString(CLAVE_ORDEN_PCI, valor).apply() }
+
     private fun leer(): Sello? =
         guardado.getString(CLAVE_SELLO, null)
             ?.let { runCatching { json.decodeFromString<Sello>(it) }.getOrNull() }
@@ -111,6 +116,7 @@ class Configuracion @Inject constructor(
         const val CLAVE_SELLO = "sello"
         const val CLAVE_ORIGINALES = "originales_con_datos"
         const val CLAVE_MODO_ORIGINALES = "modo_originales"
+        const val CLAVE_ORDEN_PCI = "orden_pci"
     }
 }
 

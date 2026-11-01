@@ -8,7 +8,7 @@ import { useQuery, useQueryClient } from '@tanstack/react-query'
 import { useVirtualizer } from '@tanstack/react-virtual'
 import {
   ArrowLeft, TriangleAlert, Zap, Search, Camera, CircleCheck,
-  Download, Users, RotateCcw, ChevronDown, Send,
+  Download, Users, RotateCcw, ChevronDown, Send, Image as ImageIcon, ArrowUpDown,
 } from 'lucide-react'
 import { createClient, fetchAll } from '@/lib/supabase/client'
 import { useSession } from '@/lib/hooks/use-session'
@@ -23,6 +23,7 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@
 import { EmptyState, SemaforoBadge, Progresiva, ProgressBar } from '@/components/shared/misc'
 import { SuspensionDialog } from '@/components/pci/suspension-dialog'
 import { PciItemSheet } from '@/components/pci/pci-item-sheet'
+import { FotosReferencialesLote } from '@/components/pci/fotos-referenciales-lote'
 import { VencimientosPorPlazo } from '@/components/pci/vencimientos-por-plazo'
 import { CuadrillasDelPci } from '@/components/pci/cuadrillas-del-pci'
 import { descargarPdf, descargarExcel, type ReportMeta } from '@/lib/reports'
@@ -32,7 +33,7 @@ import { toast } from 'sonner'
 import { mensajeAmigable } from '@/lib/errores'
 
 export function PciDetailClient({ pciId }: { pciId: string }) {
-  const { service, can, profile } = useSession()
+  const { service, can, profile, role } = useSession()
   const params = useSearchParams()
   const qc = useQueryClient()
   const sb = React.useMemo(() => createClient(), [])
@@ -44,6 +45,9 @@ export function PciDetailClient({ pciId }: { pciId: string }) {
   const [suspOpen, setSuspOpen] = React.useState(params.get('suspension') === '1')
   const [sheetItem, setSheetItem] = React.useState<any>(null)
   const [exporting, setExporting] = React.useState<string | null>(null)
+  // Por km para que la cuadrilla avance en orden por la vía (Elvis, 21/10)
+  const [orden, setOrden] = React.useState<'item' | 'km_asc' | 'km_desc' | 'vence'>('item')
+  const [lote, setLote] = React.useState(false)
 
   const scrollRef = React.useRef<HTMLDivElement>(null)
 
@@ -84,8 +88,15 @@ export function PciDetailClient({ pciId }: { pciId: string }) {
           r.section_name?.toLowerCase().includes(s)
       )
     }
+    const km = (r: any, sinDato: number) => (r.prog_start_m == null ? sinDato : Number(r.prog_start_m))
+    const porItem = (a: any, b: any) => (a.item_number ?? 0) - (b.item_number ?? 0)
+    if (orden === 'km_asc') rows = [...rows].sort((a, b) => km(a, Infinity) - km(b, Infinity) || porItem(a, b))
+    else if (orden === 'km_desc') rows = [...rows].sort((a, b) => km(b, -Infinity) - km(a, -Infinity) || porItem(a, b))
+    else if (orden === 'vence') rows = [...rows].sort((a, b) => String(a.due_date ?? '9999').localeCompare(String(b.due_date ?? '9999')) || porItem(a, b))
     return rows
-  }, [items.data, semFilter, statusFilter, q])
+  }, [items.data, semFilter, statusFilter, q, orden])
+
+  const conReferencia = React.useMemo(() => (items.data ?? []).filter((r: any) => r.foto_referencia_path).length, [items.data])
 
   // Virtualización: un PCI puede traer cientos de ítems
   const virtualizer = useVirtualizer({
@@ -265,6 +276,12 @@ export function PciDetailClient({ pciId }: { pciId: string }) {
                 {p?.suspension_applied_at ? 'Ver reprogramación' : 'Reprogramar semana'}
               </Button>
             )}
+            {(can.manage || role === 'visor') && (
+              <Button variant="outline" onClick={() => setLote(true)} title="Cargar las fotos del panel fotográfico de COVINCA, una por ítem">
+                <ImageIcon className="size-4" />
+                Fotos referenciales
+              </Button>
+            )}
             <Button variant="outline" loading={exporting === 'pdf'} onClick={() => exportar('pdf')}>
               <Download className="size-4" />
               PDF
@@ -380,8 +397,20 @@ export function PciDetailClient({ pciId }: { pciId: string }) {
               ))}
             </SelectContent>
           </Select>
+          <Select value={orden} onValueChange={(v) => setOrden(v as typeof orden)}>
+            <SelectTrigger className="w-60" aria-label="Ordenar">
+              <ArrowUpDown className="text-muted-foreground size-3.5" />
+              <SelectValue />
+            </SelectTrigger>
+            <SelectContent>
+              <SelectItem value="item">Por n.º de ítem</SelectItem>
+              <SelectItem value="km_asc">Por km, de menor a mayor</SelectItem>
+              <SelectItem value="km_desc">Por km, de mayor a menor</SelectItem>
+              <SelectItem value="vence">Por vencimiento</SelectItem>
+            </SelectContent>
+          </Select>
           <span className="text-muted-foreground ml-auto text-[12px] tabular-nums">
-            {fmtNumber(filtered.length)} ítems
+            {fmtNumber(filtered.length)} ítems · {fmtNumber(conReferencia)} con foto referencial
           </span>
         </div>
 
@@ -473,8 +502,9 @@ export function PciDetailClient({ pciId }: { pciId: string }) {
                           />
                         </span>
                       )}
-                      <span className="text-muted-foreground w-10 font-mono text-[11.5px] tabular-nums">
+                      <span className="text-muted-foreground flex w-10 items-center gap-1 font-mono text-[11.5px] tabular-nums">
                         {r.item_number}
+                        {r.foto_referencia_path && <ImageIcon className="text-primary size-3" aria-label="Con foto referencial" />}
                       </span>
                       <span className="min-w-0 flex-1">
                         <span className="block truncate font-medium">{truncate(r.description, 110)}</span>
@@ -523,6 +553,8 @@ export function PciDetailClient({ pciId }: { pciId: string }) {
           </Card>
         )}
       </PageBody>
+
+      <FotosReferencialesLote open={lote} onOpenChange={setLote} items={(items.data ?? []) as any} />
 
       <PciItemSheet
         item={sheetItem}
