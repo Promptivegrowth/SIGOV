@@ -39,8 +39,8 @@ android {
         applicationId = "pe.servicon.sigov"
         minSdk = 26          // Android 8: cubre los equipos de obra en uso
         targetSdk = 34
-        versionCode = 9
-        versionName = "1.6.1"
+        versionCode = 10
+        versionName = "1.7.0"
 
         testInstrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"
 
