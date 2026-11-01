@@ -501,8 +501,13 @@ class EvidenciaRepositorio @Inject constructor(
                     filter {
                         eq("service_id", servicioId)
                         cuadrillaId?.let { eq("crew_id", it) }
-                        gte("work_date", desde)
-                        lte("work_date", hasta)
+                        // Dos filtros sobre la misma columna: la librería solo
+                        // mandaba uno y llegaban fotos de fuera del rango (Elvis,
+                        // 24/10). El rango va en un solo «and».
+                        and {
+                            gte("work_date", desde)
+                            lte("work_date", hasta)
+                        }
                         fase?.let { eq("phase", it) }
                         // Las de la programación y las de sus PCI (no las del inventario)
                         isIn("origen", listOf("parte", "pci"))
@@ -513,12 +518,15 @@ class EvidenciaRepositorio @Inject constructor(
                 .decodeList<JsonObject>()
             espejarGaleria(servicioId, filas)
             filas.map { json.decodeFromString<EvidenciaEnGaleria>(it.toString()) }
+                // Y por si acaso, el rango se vuelve a cumplir aquí
+                .filter { (it.fecha ?: diaDeLima(it.tomadaEn)).let { d -> d != null && d >= desde && d <= hasta } }
         }.getOrElse {
             catalogo.de("evidencias_galeria", servicioId)
                 .mapNotNull {
                     runCatching { json.decodeFromString<EvidenciaEnGaleria>(it.datos) }.getOrNull()
                 }
-                .filter { it.fecha == null || (it.fecha >= desde && it.fecha <= hasta) }
+                // Sin la fecha del parte vale el día en que se tomó: nada fuera del rango
+                .filter { (it.fecha ?: diaDeLima(it.tomadaEn)).let { d -> d != null && d >= desde && d <= hasta } }
                 .filter { cuadrillaId == null || it.cuadrillaId == cuadrillaId }
                 .filter { fase == null || it.phase == fase }
                 .sortedByDescending { it.tomadaEn }
@@ -539,7 +547,7 @@ class EvidenciaRepositorio @Inject constructor(
         val yaListadas = fotos.mapNotNull { it.clientId }.toSet()
         val enCola = partes.evidenciasEnElEquipo(servicioId)
             .filter { it.clientId !in yaListadas }
-            .filter { it.fecha == null || (it.fecha >= desde && it.fecha <= hasta) }
+            .filter { (it.fecha ?: Instant.ofEpochMilli(it.tomadaEn).atZone(Peru.zona).toLocalDate().toString()).let { d -> d >= desde && d <= hasta } }
             .filter { fase == null || it.fase == fase }
             .map { local ->
                 EvidenciaEnGaleria(
@@ -580,6 +588,11 @@ class EvidenciaRepositorio @Inject constructor(
         }
         todas
     }
+
+    /** «2026-10-22T14:30:00Z» → el día en Lima, «2026-10-22». */
+    private fun diaDeLima(momento: String?): String? =
+        momento?.let { runCatching { Instant.parse(it).atZone(Peru.zona).toLocalDate().toString() }.getOrNull() }
+            ?: momento?.take(10)
 
     /**
      * Supabase devuelve la url firmada como ruta relativa; el visor necesita

@@ -206,6 +206,22 @@ private fun ListaDeItems(estado: EstadoPci, vm: PciViewModel, alRegistrarFotos: 
         contentPadding = PaddingValues(bottom = 24.dp),
         verticalArrangement = Arrangement.spacedBy(10.dp),
     ) {
+        if (!general && estado.pcis.size > 1) {
+            item {
+                Row(
+                    Modifier.fillMaxWidth().horizontalScroll(rememberScrollState()).padding(horizontal = 12.dp, vertical = 6.dp),
+                    horizontalArrangement = Arrangement.spacedBy(8.dp),
+                ) {
+                    estado.pcisOrdenados.forEach { p ->
+                        FilterChip(
+                            selected = p.pciId == estado.abierto,
+                            onClick = { vm.abrirPci(p.pciId) },
+                            label = { Text(codigoCortoDePci(p.code) ?: p.code) },
+                        )
+                    }
+                }
+            }
+        }
         if (general) {
             // Los cuatro contadores filtran al tocarlos
             item {
@@ -306,7 +322,8 @@ private fun ListaDeItems(estado: EstadoPci, vm: PciViewModel, alRegistrarFotos: 
             Box(Modifier.padding(horizontal = 16.dp)) {
                 TarjetaDeItem(
                     item = item,
-                    conBotones = !general,
+                    conBotones = true,
+                    conPci = general,
                     ocupado = estado.trabajando == item.id,
                     alTocar = { vm.abrirFicha(item) },
                     alRegistrarFotos = { alRegistrarFotos(item) },
@@ -395,6 +412,8 @@ private fun TarjetaDePci(pci: ResumenPci, alTocar: () -> Unit) {
 private fun TarjetaDeItem(
     item: ItemPci,
     conBotones: Boolean,
+    /** En la vista general la tarjeta dice de qué PCI es. */
+    conPci: Boolean = false,
     ocupado: Boolean,
     alTocar: () -> Unit,
     alRegistrarFotos: () -> Unit,
@@ -412,7 +431,7 @@ private fun TarjetaDeItem(
             Column(Modifier.weight(1f).padding(start = 14.dp, top = 12.dp, bottom = 12.dp)) {
                 Row(verticalAlignment = Alignment.CenterVertically) {
                     Text(
-                        listOfNotNull(item.numero?.let { "Ítem $it" }, item.pciCorto.takeIf { !conBotones }).joinToString(" · "),
+                        listOfNotNull(item.numero?.let { "Ítem $it" }, item.pciCorto.takeIf { conPci }).joinToString(" · "),
                         style = MaterialTheme.typography.labelLarge,
                         fontWeight = FontWeight.SemiBold,
                         color = MaterialTheme.colorScheme.onSurfaceVariant,
@@ -611,16 +630,18 @@ private fun FichaDelItem(
         FotosTomadas(fotos, cargandoFotos, quitables = !item.esConforme, alVer = alVerFoto, alQuitar = alQuitarFoto)
         if (item.esConforme) return@Column
 
-        // Las tres fotos, cada una con su botón: la cámara se abre en esa fase
-        Text("Fotos", style = MaterialTheme.typography.titleSmall)
-        Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-            listOf(
-                Fase.ANTES to item.fotosAntes,
-                Fase.DURANTE to item.fotosDurante,
-                Fase.DESPUES to item.fotosDespues,
-            ).forEach { (fase, cuantas) ->
-                BotonDeFoto(fase, cuantas, ocupado, Modifier.weight(1f)) { alTomarFoto(fase) }
-            }
+        // Un solo botón: la cámara ya trae Antes, Durante y Después, y abre en
+        // la primera etapa sin foto (Elvis, 24/10: elegirla dos veces era un doble paso)
+        Boton(
+            "Tomar fotos", Icons.Outlined.PhotoCamera, Marca.Azul, ocupado, true, Modifier.fillMaxWidth(),
+        ) {
+            alTomarFoto(
+                when {
+                    item.fotosAntes == 0 -> Fase.ANTES
+                    item.fotosDurante == 0 -> Fase.DURANTE
+                    else -> Fase.DESPUES
+                },
+            )
         }
         val faltan = buildList {
             if (item.fotosAntes == 0) add("antes")
@@ -715,31 +736,6 @@ private fun SinNada(titulo: String, detalle: String) {
 }
 
 /** Un botón por fase: la foto y cuántas hay, en dos líneas para que quepa. */
-@Composable
-private fun BotonDeFoto(fase: Fase, cuantas: Int, ocupado: Boolean, modifier: Modifier, alTocar: () -> Unit) {
-    val color = if (cuantas > 0) Marca.VerdeBandera else Marca.Naranja
-    OutlinedButton(
-        onClick = alTocar,
-        enabled = !ocupado,
-        shape = RoundedCornerShape(10.dp),
-        contentPadding = PaddingValues(4.dp),
-        modifier = modifier.height(64.dp),
-        colors = ButtonDefaults.outlinedButtonColors(contentColor = color),
-    ) {
-        Column(horizontalAlignment = Alignment.CenterHorizontally) {
-            Row(verticalAlignment = Alignment.CenterVertically) {
-                Icon(Icons.Outlined.PhotoCamera, contentDescription = null, modifier = Modifier.size(18.dp))
-                Spacer(Modifier.width(4.dp))
-                Text(fase.etiqueta, style = MaterialTheme.typography.labelLarge, maxLines = 1)
-            }
-            Text(
-                when (cuantas) { 0 -> "sin foto"; 1 -> "1 foto"; else -> "$cuantas fotos" },
-                style = MaterialTheme.typography.labelSmall,
-            )
-        }
-    }
-}
-
 @Composable
 private fun Boton(
     texto: String,

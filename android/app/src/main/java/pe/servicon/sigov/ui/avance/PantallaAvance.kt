@@ -214,7 +214,7 @@ private fun Contadores(
     Row(horizontalArrangement = Arrangement.spacedBy(10.dp)) {
         Contador("Registros", estado.registros.toString(), Marca.Azul, Modifier.weight(1f), alAbrirParte)
         Contador("Registros con foto", estado.fotos.toString(), Marca.VerdeBandera, Modifier.weight(1f), alAbrirEvidencias)
-        Contador("PCI por atender ya", estado.pciUrgentes.toString(), if (estado.pciUrgentes > 0) Semaforo.Vencido else Marca.Naranja, Modifier.weight(1f), alAbrirPci)
+        Contador("Ítems PCI por atender ya", estado.pciUrgentes.toString(), if (estado.pciUrgentes > 0) Semaforo.Vencido else Marca.Naranja, Modifier.weight(1f), alAbrirPci)
     }
 }
 
@@ -529,7 +529,7 @@ private fun BloquePci(panel: List<PanelDePci>, alAbrir: (estado: String?, plazo:
     val vencidos = panel.sumOf { it.vencidos }
     Bloque(
         "PCI activos",
-        destacado = if (vencidos > 0) "$vencidos vencidos" else null,
+        destacado = if (vencidos > 0) "$vencidos ${if (vencidos == 1) "ítem vencido" else "ítems vencidos"}" else null,
         colorDestacado = Semaforo.Vencido,
         alTocar = { alAbrir(null, null, null) },
     ) {

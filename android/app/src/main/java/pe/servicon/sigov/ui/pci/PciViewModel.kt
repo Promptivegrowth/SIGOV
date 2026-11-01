@@ -98,6 +98,13 @@ fun cumple(item: ItemPci, plazo: Plazo?): Boolean {
 private fun coincide(item: ItemPci, busqueda: String): Boolean {
     val q = busqueda.trim().lowercase()
     if (q.isEmpty()) return true
+    // Un número es el n.º del ítem o un km, no cualquier «1» de la descripción
+    // (Elvis, 24/10: con «1» salían 58 ítems)
+    q.removePrefix("ítem").removePrefix("item").trim().takeIf { t -> t.isNotEmpty() && t.all { it.isDigit() } }?.let { n ->
+        val km = n.toLong()
+        return item.numero?.toLong() == km ||
+            listOfNotNull(item.progresiva, item.progresivaFin).any { (it / 1000).toLong() == km }
+    }
     return listOfNotNull(
         item.tramo, item.pciCodigo, item.pciCorto, item.description, item.actividad,
         item.numero?.let { "ítem $it" }, item.numero?.let { "item $it" },
