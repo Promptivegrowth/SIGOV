@@ -208,6 +208,9 @@ class PciViewModel @Inject constructor(
     /** Ya llegó la primera carga: desde ahí, cada regreso a la pantalla recarga. */
     private var cargoUnaVez = false
 
+    /** El ítem que se pidió abrir al llegar; se abre cuando los ítems cargan. */
+    private var itemPedido: String? = null
+
     init {
         // Desde Mi Avance: la cifra tocada llega ya filtrada, también dentro
         // del PCI abierto (que filtra con su propio estado)
@@ -216,8 +219,11 @@ class PciViewModel @Inject constructor(
         ruta.get<String>("plazo")?.let { p -> Plazo.entries.firstOrNull { it.name == p } }
             ?.let { p -> _estado.update { it.copy(plazo = p) } }
         ruta.get<String>("pci")?.let { id -> _estado.update { it.copy(abierto = id) } }
+        // Desde PCI en mapa: la ficha de ese ítem, ya abierta (Elvis, 26/10)
+        itemPedido = ruta.get<String>("item")
         cargar()
     }
+
 
     /** Al volver de la cámara: las fotos recién tomadas cambian las cuentas y el estado. */
     fun alVolver() {
@@ -374,6 +380,10 @@ class PciViewModel @Inject constructor(
                     }
                 val porEnviar = locales.groupBy { it.pciItemId }.mapValues { (_, l) -> l.sumOf { it.cuantas } }
                 cargoUnaVez = true
+                itemPedido?.let { id ->
+                    itemPedido = null
+                    items.firstOrNull { it.id == id }?.let { i -> viewModelScope.launch { abrirFicha(i) } }
+                }
                 _estado.update {
                     it.copy(
                         cargando = false,

@@ -177,11 +177,12 @@ class MainActivity : ComponentActivity() {
                         )
                     }
                     composable(
-                        "pci?estado={estado}&plazo={plazo}&pci={pci}",
+                        "pci?estado={estado}&plazo={plazo}&pci={pci}&item={item}",
                         arguments = listOf(
                             navArgument("estado") { type = NavType.StringType; nullable = true; defaultValue = null },
                             navArgument("plazo") { type = NavType.StringType; nullable = true; defaultValue = null },
                             navArgument("pci") { type = NavType.StringType; nullable = true; defaultValue = null },
+                            navArgument("item") { type = NavType.StringType; nullable = true; defaultValue = null },
                         ),
                     ) {
                         PantallaPci(
@@ -214,7 +215,7 @@ class MainActivity : ComponentActivity() {
                     composable("pci-en-mapa") {
                         pe.servicon.sigov.ui.inventario.PantallaPciEnMapa(
                             alVolver = { nav.popBackStack() },
-                            alVerFicha = { nav.navigate("pci") },
+                            alVerFicha = { item -> nav.navigate("pci?pci=${item.pciId}&item=${item.id}") },
                             alTomarFoto = { registroId, fase -> nav.navigate("evidencia/$registroId?fase=${fase.valor}") },
                         )
                     }

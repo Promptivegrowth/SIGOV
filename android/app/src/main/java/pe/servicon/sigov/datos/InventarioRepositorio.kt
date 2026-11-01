@@ -107,6 +107,9 @@ data class FotoDeActivo(
     val caption: String? = null,
     /** Foto de intervención: ok u observado. */
     @SerialName("estado_activo") val estado: String? = null,
+    /** La llave de la foto, para quitarla si se tomó por error. */
+    @SerialName("client_id") val clientId: String? = null,
+    @SerialName("deleted_at") val quitada: String? = null,
 ) {
     /** La del Inventario Vial 2024: la base, que nunca se reemplaza. */
     val esBase: Boolean get() = ruta.contains("/inventario-")
@@ -224,10 +227,11 @@ class InventarioRepositorio @Inject constructor(
         runCatching {
             supabase.postgrest.from("evidence_links")
                 .select(io.github.jan.supabase.postgrest.query.Columns.raw(
-                    "evidences(id, storage_path, thumb_path, taken_at, caption, estado_activo)"))
+                    "evidences(id, client_id, storage_path, thumb_path, taken_at, caption, estado_activo, deleted_at)"))
                 { filter { eq("asset_id", activoId) } }
                 .decodeList<VinculoConFoto>()
                 .mapNotNull { it.evidences }
+                .filter { it.quitada == null }
                 .sortedByDescending { it.tomada ?: "" }
         }.getOrDefault(emptyList())
     }
@@ -286,6 +290,31 @@ class InventarioRepositorio @Inject constructor(
                 val lng = (c.getOrNull(0) as? kotlinx.serialization.json.JsonPrimitive)?.content?.toDoubleOrNull() ?: return@mapNotNull null
                 val lat = (c.getOrNull(1) as? kotlinx.serialization.json.JsonPrimitive)?.content?.toDoubleOrNull() ?: return@mapNotNull null
                 id to (lat to lng)
+            }.toMap()
+        }.getOrDefault(emptyMap())
+    }
+
+    /**
+     * Los ítems PCI con intervalo (tachas, limpieza de berma de 500 m): su
+     * tramo de vía, para dibujarlos como línea y no como punto (Elvis, 26/10).
+     */
+    suspend fun tramosPci(servicioId: String): Map<String, List<Pair<Double, Double>>> = withContext(Dispatchers.IO) {
+        runCatching {
+            val geo = supabase.postgrest.rpc("pci_geojson", buildJsonObject { put("p_service_id", servicioId) })
+                .decodeAs<JsonObject>()
+            val rasgos = geo["features"] as? kotlinx.serialization.json.JsonArray ?: return@runCatching emptyMap()
+            rasgos.mapNotNull { r ->
+                val props = (r as? JsonObject)?.get("properties") as? JsonObject ?: return@mapNotNull null
+                val id = (props["id"] as? kotlinx.serialization.json.JsonPrimitive)?.content ?: return@mapNotNull null
+                val linea = props["linea"] as? JsonObject ?: return@mapNotNull null
+                val coords = linea["coordinates"] as? kotlinx.serialization.json.JsonArray ?: return@mapNotNull null
+                val puntos = coords.mapNotNull { c ->
+                    val par = c as? kotlinx.serialization.json.JsonArray ?: return@mapNotNull null
+                    val lng = (par.getOrNull(0) as? kotlinx.serialization.json.JsonPrimitive)?.content?.toDoubleOrNull() ?: return@mapNotNull null
+                    val lat = (par.getOrNull(1) as? kotlinx.serialization.json.JsonPrimitive)?.content?.toDoubleOrNull() ?: return@mapNotNull null
+                    lat to lng
+                }
+                if (puntos.size < 2) null else id to puntos
             }.toMap()
         }.getOrDefault(emptyMap())
     }

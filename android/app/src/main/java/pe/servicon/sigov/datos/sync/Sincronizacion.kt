@@ -134,7 +134,7 @@ class ColaRepositorio @Inject constructor(
         // decisión de la persona, no el reintento automático que se frenó.
         cola.revivirFallidos(System.currentTimeMillis())
         cola.revivirEnvios(System.currentTimeMillis())
-        pedirSincronizacion(contexto)
+        pedirSincronizacion(contexto, ahora = true)
     }
 
     /** Deja un registro listo para subir. Devuelve su identificador propio. */
@@ -337,7 +337,11 @@ class TrabajadorSincronizacion @AssistedInject constructor(
         // Lo ya enviado se conserva una semana por si hay que rastrear algo
         cola.limpiarViejos(ahora - 7 * 24 * 3600_000L)
 
-        return if (fallaron > 0) Result.retry() else Result.success()
+        // Cada registro ya espera su turno (proximoIntento). Un reintento del
+        // trabajo con espera exponencial dejaba todo lo nuevo detrás de un
+        // registro terco durante horas: se vuelve a mirar en un minuto.
+        if (fallaron > 0) pedirSincronizacionLuego(applicationContext)
+        return Result.success()
     }
 
     /** Cada intento falla más espaciado: de 2 segundos hasta 5 minutos. */
@@ -345,8 +349,14 @@ class TrabajadorSincronizacion @AssistedInject constructor(
         min(ESPERA_BASE_MS * 2.0.pow(intentos).toLong(), ESPERA_MAXIMA_MS)
 }
 
-/** Pide a Android que suba la cola en cuanto haya red. */
-fun pedirSincronizacion(contexto: Context) {
+/**
+ * Pide a Android que suba la cola en cuanto haya red.
+ *
+ * Con [ahora] (el botón «Sincronizar ahora») reemplaza el envío que estaba
+ * esperando: si un registro falló, el siguiente intento quedaba en pausa
+ * minutos y todo lo nuevo se ponía detrás de esa pausa.
+ */
+fun pedirSincronizacion(contexto: Context, ahora: Boolean = false) {
     val trabajo = OneTimeWorkRequestBuilder<TrabajadorSincronizacion>()
         .setConstraints(
             Constraints.Builder()
@@ -358,9 +368,18 @@ fun pedirSincronizacion(contexto: Context) {
 
     WorkManager.getInstance(contexto).enqueueUniqueWork(
         "sigov-sincronizacion",
-        ExistingWorkPolicy.APPEND_OR_REPLACE,
+        if (ahora) ExistingWorkPolicy.REPLACE else ExistingWorkPolicy.APPEND_OR_REPLACE,
         trabajo,
     )
+}
+
+/** Otra pasada en un minuto, para lo que falló y espera su turno. */
+fun pedirSincronizacionLuego(contexto: Context) {
+    val trabajo = OneTimeWorkRequestBuilder<TrabajadorSincronizacion>()
+        .setConstraints(Constraints.Builder().setRequiredNetworkType(NetworkType.CONNECTED).build())
+        .setInitialDelay(1, TimeUnit.MINUTES)
+        .build()
+    WorkManager.getInstance(contexto).enqueueUniqueWork("sigov-sincronizacion-reintento", ExistingWorkPolicy.REPLACE, trabajo)
 }
 
 /** Un repaso periódico, por si quedó algo sin subir. */

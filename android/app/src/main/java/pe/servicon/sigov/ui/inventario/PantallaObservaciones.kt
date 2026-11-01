@@ -285,8 +285,15 @@ private fun FormularioObservacion(estado: EstadoObservaciones, vm: Observaciones
     var destino by remember { mutableStateOf<File?>(null) }
     var error by remember { mutableStateOf<String?>(null) }
     var eligiendoTramo by remember { mutableStateOf(false) }
-    val camara = rememberLauncherForActivityResult(ActivityResultContracts.TakePicture()) { bien ->
-        destino?.takeIf { bien && it.exists() && it.length() > 0 }?.let { fotos += it }
+    // La cámara de SIGOV, en horizontal y con el encuadre real (Elvis, 26/10)
+    var camaraAbierta by remember { mutableStateOf(false) }
+    if (camaraAbierta) {
+        pe.servicon.sigov.ui.evidencia.CamaraSimple(
+            titulo = "Foto de la observación",
+            destino = { vm.archivoTemporal() },
+            alTomar = { f -> fotos += f; camaraAbierta = false },
+            alCerrar = { camaraAbierta = false },
+        )
     }
 
     Dialog(onDismissRequest = { vm.abrirFormulario(false) }, properties = DialogProperties(usePlatformDefaultWidth = false)) {
@@ -334,8 +341,7 @@ private fun FormularioObservacion(estado: EstadoObservaciones, vm: Observaciones
                         if (fotos.size < 3) {
                             OutlinedButton(
                                 onClick = {
-                                    val a = vm.archivoTemporal(); destino = a
-                                    camara.launch(FileProvider.getUriForFile(contexto, "${contexto.packageName}.fileprovider", a))
+                                    camaraAbierta = true
                                 },
                                 shape = RoundedCornerShape(10.dp),
                                 modifier = Modifier.size(90.dp),

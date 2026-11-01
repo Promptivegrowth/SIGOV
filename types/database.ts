@@ -175,6 +175,7 @@ export type Database = {
           created_at: string
           created_by: string | null
           crew_id: string | null
+          evidence_id: string | null
           id: string
           intervened_on: string
           notes: string | null
@@ -195,6 +196,7 @@ export type Database = {
           created_at?: string
           created_by?: string | null
           crew_id?: string | null
+          evidence_id?: string | null
           id?: string
           intervened_on?: string
           notes?: string | null
@@ -215,6 +217,7 @@ export type Database = {
           created_at?: string
           created_by?: string | null
           crew_id?: string | null
+          evidence_id?: string | null
           id?: string
           intervened_on?: string
           notes?: string | null
@@ -264,6 +267,27 @@ export type Database = {
             isOneToOne: false
             referencedRelation: "v_hygiene_today"
             referencedColumns: ["crew_id"]
+          },
+          {
+            foreignKeyName: "asset_interventions_evidence_id_fkey"
+            columns: ["evidence_id"]
+            isOneToOne: false
+            referencedRelation: "evidences"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "asset_interventions_evidence_id_fkey"
+            columns: ["evidence_id"]
+            isOneToOne: false
+            referencedRelation: "v_asset_fotos"
+            referencedColumns: ["evidence_id"]
+          },
+          {
+            foreignKeyName: "asset_interventions_evidence_id_fkey"
+            columns: ["evidence_id"]
+            isOneToOne: false
+            referencedRelation: "v_evidences"
+            referencedColumns: ["id"]
           },
           {
             foreignKeyName: "asset_interventions_pci_item_id_fkey"
@@ -3723,7 +3747,9 @@ export type Database = {
           install_year: number | null
           last_inspected_on: string | null
           lat: number | null
+          lat_inventario: number | null
           lng: number | null
+          lng_inventario: number | null
           name: string | null
           next_inspection_on: string | null
           notes: string | null
@@ -3751,7 +3777,9 @@ export type Database = {
           install_year?: number | null
           last_inspected_on?: string | null
           lat?: number | null
+          lat_inventario?: number | null
           lng?: number | null
+          lng_inventario?: number | null
           name?: string | null
           next_inspection_on?: string | null
           notes?: string | null
@@ -3779,7 +3807,9 @@ export type Database = {
           install_year?: number | null
           last_inspected_on?: string | null
           lat?: number | null
+          lat_inventario?: number | null
           lng?: number | null
+          lng_inventario?: number | null
           name?: string | null
           next_inspection_on?: string | null
           notes?: string | null

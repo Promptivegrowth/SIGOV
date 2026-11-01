@@ -413,7 +413,7 @@ internal fun rememberGiroDelEquipo(): State<Int> {
 
 /** Mientras el celular esté vertical, no se dispara: se pide girarlo. */
 @Composable
-private fun AvisoDeGirar(modifier: Modifier = Modifier) {
+internal fun AvisoDeGirar(modifier: Modifier = Modifier) {
     Column(
         modifier
             .background(Color.Black.copy(alpha = 0.65f), RoundedCornerShape(14.dp))

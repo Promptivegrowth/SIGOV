@@ -106,6 +106,7 @@ fun PantallaInventario(
 ) {
     val estado by vm.estado.collectAsStateWithLifecycle()
     val avisos = remember { SnackbarHostState() }
+    val control = remember { pe.servicon.sigov.ui.componentes.ControlDeMapa() }
 
     LaunchedEffect(estado.error, estado.aviso) {
         if (estado.abierto != null) return@LaunchedEffect
@@ -221,6 +222,14 @@ fun PantallaInventario(
                     elementos = estado.visibles,
                     alTocar = vm::abrir,
                     modifier = Modifier.fillMaxSize(),
+                    control = control,
+                )
+                // Mi ubicación y volver a ver todo (Elvis, 26/10)
+                pe.servicon.sigov.ui.componentes.ControlesDeMapa(
+                    buscando = estado.buscandoUbicacion,
+                    alMiUbicacion = { vm.buscarMiUbicacion { lat, lng -> control.miUbicacion(lat, lng) } },
+                    alVerTodo = control::verTodo,
+                    modifier = Modifier.align(Alignment.TopStart).padding(10.dp),
                 )
                 Button(
                     onClick = alVerPciEnMapa,
@@ -235,7 +244,9 @@ fun PantallaInventario(
             }
 
             // ── Los elementos del tramo ───────────────────────────────
-            ListaDeElementos(estado, vm, Modifier.fillMaxWidth().weight(0.85f))
+            ListaDeElementos(estado, vm, Modifier.fillMaxWidth().weight(0.85f)) { e ->
+                if (e.lat != null && e.lng != null) control.irA(e.lat, e.lng)
+            }
         }
     }
 
@@ -277,7 +288,7 @@ private fun Leyenda(etiqueta: String, cuantos: Int, color: Color, activo: Boolea
 
 /** «Elementos en el tramo»: la lista que acompaña al mapa (boceto). */
 @Composable
-private fun ListaDeElementos(estado: EstadoInventario, vm: InventarioViewModel, modifier: Modifier) {
+private fun ListaDeElementos(estado: EstadoInventario, vm: InventarioViewModel, modifier: Modifier, alUbicar: (ElementoVial) -> Unit) {
     // Lo que pide atención primero: lo observado, lo crítico y lo que vence
     val lista = remember(estado.visibles) {
         estado.visibles.sortedWith(
@@ -302,20 +313,21 @@ private fun ListaDeElementos(estado: EstadoInventario, vm: InventarioViewModel, 
         }
         HorizontalDivider()
         LazyColumn(Modifier.fillMaxSize()) {
-            items(lista, key = { it.id }) { e -> FilaDeElemento(e, vm) { vm.abrir(e) } }
+            items(lista, key = { it.id }) { e -> FilaDeElemento(e, vm, alUbicar = { alUbicar(e) }) { vm.abrir(e) } }
         }
     }
 }
 
 @Composable
-private fun FilaDeElemento(e: ElementoVial, vm: InventarioViewModel, alAbrir: () -> Unit) {
+private fun FilaDeElemento(e: ElementoVial, vm: InventarioViewModel, alUbicar: () -> Unit, alAbrir: () -> Unit) {
     val semaforo = Semaforo.de(e.semaforo)
     // La miniatura se firma solo cuando la fila aparece en pantalla
     val url by produceState<String?>(null, e.fotoActual) { value = vm.urlMiniatura(e.fotoActual) }
     Row(
         Modifier
             .fillMaxWidth()
-            .clickable(onClick = alAbrir)
+            // Tocar la fila lleva el mapa al elemento; «Abrir», a su ficha
+            .clickable(onClick = alUbicar)
             .padding(horizontal = 14.dp, vertical = 8.dp),
         verticalAlignment = Alignment.CenterVertically,
         horizontalArrangement = Arrangement.spacedBy(10.dp),
@@ -346,8 +358,13 @@ private fun FilaDeElemento(e: ElementoVial, vm: InventarioViewModel, alAbrir: ()
                 e.diasSinIntervenir?.let { Text("Hace $it días", fontSize = 11.sp, color = TintaSuave) }
             }
         }
-        Text("Abrir", fontSize = 12.5.sp, color = Marca.Azul, fontWeight = FontWeight.SemiBold)
-        Icon(Icons.Outlined.ChevronRight, null, Modifier.size(18.dp), tint = Marca.Azul)
+        Row(
+            Modifier.clip(RoundedCornerShape(8.dp)).clickable(onClick = alAbrir).padding(horizontal = 6.dp, vertical = 8.dp),
+            verticalAlignment = Alignment.CenterVertically,
+        ) {
+            Text("Abrir", fontSize = 12.5.sp, color = Marca.Azul, fontWeight = FontWeight.SemiBold)
+            Icon(Icons.Outlined.ChevronRight, null, Modifier.size(18.dp), tint = Marca.Azul)
+        }
     }
     HorizontalDivider(color = MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.5f))
 }
@@ -366,6 +383,7 @@ internal fun MapaDelInventario(
     elementos: List<ElementoVial>,
     alTocar: (ElementoVial) -> Unit,
     modifier: Modifier = Modifier,
+    control: pe.servicon.sigov.ui.componentes.ControlDeMapa? = null,
 ) {
     val contexto = LocalContext.current
     // El oyente de toques se registra una sola vez, con el mapa: tiene que
@@ -394,6 +412,7 @@ internal fun MapaDelInventario(
         if (mapa == null) {
             v.getMapAsync { m ->
                 mapa = m
+                control?.mapa = m
                 m.setStyle(Style.Builder().fromJson(ESTILO_CALLES)) { estilo ->
                     estilo.addSource(GeoJsonSource(FUENTE, FeatureCollection.fromFeatures(emptyList())))
                     estilo.addLayer(
@@ -472,6 +491,7 @@ internal fun MapaDelInventario(
                     .include(LatLng(lats.min(), lngs.min()))
                     .include(LatLng(lats.max(), lngs.max()))
                     .build()
+                control?.limites = limites
                 runCatching {
                     m.animateCamera(CameraUpdateFactory.newLatLngBounds(limites, 50), 700)
                 }
@@ -515,6 +535,7 @@ private fun FichaDelElemento(
     // La foto ampliada, cuando se toca una
     var ampliada by remember { mutableStateOf<String?>(null) }
     var registrando by remember { mutableStateOf(false) }
+    var quitando by remember { mutableStateOf<pe.servicon.sigov.datos.FotoDeActivo?>(null) }
     val alcance = rememberCoroutineScope()
     val ampliar: (String?) -> Unit = { ruta -> alcance.launch { ampliada = vm.urlGrande(ruta) } }
 
@@ -640,6 +661,8 @@ private fun FichaDelElemento(
                             url, fechaYHora(foto.tomada), Modifier.width(118.dp), destacada = true,
                             colorTitulo = if (foto.estado == "observado") ROJO_OBSERVADO else Marca.Azul,
                             alTocar = { ampliar(foto.ruta) },
+                            // Una foto de intervención tomada por error se quita (Elvis, 26/10)
+                            alQuitar = { quitando = foto },
                         )
                     }
                     item {
@@ -718,6 +741,15 @@ private fun FichaDelElemento(
         )
     }
 
+    quitando?.let { foto ->
+        AlertDialog(
+            onDismissRequest = { quitando = null },
+            title = { Text("¿Quitar esta foto?") },
+            text = { Text("Se quita la foto de ${fechaYHora(foto.tomada)}. El estado del elemento vuelve a lo que digan las fotos que quedan; la foto base no se toca.") },
+            confirmButton = { TextButton(onClick = { vm.quitarFoto(foto); quitando = null }) { Text("Quitar", color = ROJO_OBSERVADO) } },
+            dismissButton = { TextButton(onClick = { quitando = null }) { Text("Cancelar") } },
+        )
+    }
     ampliada?.let { url ->
         pe.servicon.sigov.ui.componentes.VisorConZoom(modelo = url, descripcion = null, alCerrar = { ampliada = null })
     }
@@ -736,21 +768,22 @@ private fun DialogoNuevaFoto(
     alCerrar: () -> Unit,
     alGuardar: (File, String, String?) -> Unit,
 ) {
-    val contexto = LocalContext.current
-    var destino by remember { mutableStateOf<File?>(null) }
     var toma by remember { mutableStateOf<File?>(null) }
     var comentario by remember { mutableStateOf("") }
     var estado by remember { mutableStateOf("ok") }
     var error by remember { mutableStateOf<String?>(null) }
-    val camara = rememberLauncherForActivityResult(ActivityResultContracts.TakePicture()) { bien ->
-        toma = destino?.takeIf { bien && it.exists() && it.length() > 0 }
-        if (toma != null) error = null
+    // La cámara de SIGOV y no la del teléfono (Elvis, 26/10): en horizontal,
+    // con el encuadre real, y vuelve sola al disparar
+    var camaraAbierta by remember { mutableStateOf(false) }
+    if (camaraAbierta) {
+        pe.servicon.sigov.ui.evidencia.CamaraSimple(
+            titulo = "Foto de intervención",
+            destino = { vm.archivoTemporal() },
+            alTomar = { f -> toma = f; error = null; camaraAbierta = false },
+            alCerrar = { camaraAbierta = false },
+        )
     }
-    fun tomar() {
-        val archivo = vm.archivoTemporal()
-        destino = archivo
-        camara.launch(FileProvider.getUriForFile(contexto, "${contexto.packageName}.fileprovider", archivo))
-    }
+    fun tomar() { camaraAbierta = true }
 
     AlertDialog(
         onDismissRequest = alCerrar,
@@ -848,6 +881,7 @@ private fun FotoDeFicha(
     destacada: Boolean = false,
     colorTitulo: Color = Marca.Azul,
     alTocar: () -> Unit = {},
+    alQuitar: (() -> Unit)? = null,
 ) {
     Column(modifier) {
         Box(
@@ -871,6 +905,13 @@ private fun FotoDeFicha(
             ) {
                 Text(titulo, Modifier.padding(horizontal = 5.dp, vertical = 2.dp),
                     fontSize = 9.5.sp, color = Color.White, fontWeight = FontWeight.SemiBold)
+            }
+            alQuitar?.let { quitar ->
+                Box(
+                    Modifier.align(Alignment.TopEnd).padding(4.dp).size(26.dp).clip(CircleShape)
+                        .background(Color.Black.copy(alpha = 0.6f)).clickable(onClick = quitar),
+                    contentAlignment = Alignment.Center,
+                ) { Icon(Icons.Outlined.Close, "Quitar la foto", tint = Color.White, modifier = Modifier.size(16.dp)) }
             }
         }
         Text(pie, fontSize = 10.5.sp, color = TintaSuave, modifier = Modifier.padding(top = 3.dp))

@@ -66,18 +66,38 @@ import pe.servicon.sigov.ui.pci.diasQueLeQuedan
 import pe.servicon.sigov.ui.pci.estadoDe
 import pe.servicon.sigov.ui.theme.Marca
 
-/** El avance de un ítem en el mapa (Elvis: «sin plazo no»). */
+/**
+ * El estado de un ítem en el mapa, el mismo del módulo PCI (Elvis, 26/10:
+ * «homogenizar con los anteriores»). Lo que no se ha tocado va en gris.
+ */
 enum class AvancePci(val etiqueta: String, val singular: String, val color: Color) {
-    ATENDIDO("Atendidos", "Atendido", Color(0xFF16A34A)),
-    POR_VENCER("Por vencer", "Por vencer", Color(0xFFF59E0B)),
-    VENCIDO("Vencidos", "Vencido", Color(0xFFDC2626)),
+    POR_ATENDER("Por atender", "Por atender", Color(0xFF64748B)),
     EN_EJECUCION("En ejecución", "En ejecución", Color(0xFF2563EB)),
+    ATENDIDO("Atendidos", "Atendido", Color(0xFF16A34A)),
+    OBSERVADO("Observados", "Observado", Color(0xFFB91C1C)),
 }
 
 fun avanceDe(item: ItemPci): AvancePci = when (estadoDe(item)) {
     Estado.CONFORMES -> AvancePci.ATENDIDO
     Estado.EN_EJECUCION -> AvancePci.EN_EJECUCION
-    else -> if ((diasQueLeQuedan(item) ?: 0) < 0) AvancePci.VENCIDO else AvancePci.POR_VENCER
+    Estado.OBSERVADOS -> AvancePci.OBSERVADO
+    else -> AvancePci.POR_ATENDER
+}
+
+/** El plazo de lo que falta atender: aparte del estado, para no mezclarlos. */
+enum class PlazoEnMapa(val etiqueta: String, val color: Color) {
+    POR_VENCER("Por vencer (2 días)", Color(0xFFF59E0B)),
+    VENCIDO("Vencidos", Color(0xFFDC2626)),
+}
+
+fun plazoDe(item: ItemPci): PlazoEnMapa? {
+    if (avanceDe(item) == AvancePci.ATENDIDO) return null
+    val dias = diasQueLeQuedan(item) ?: return null
+    return when {
+        dias < 0 -> PlazoEnMapa.VENCIDO
+        dias <= 2 -> PlazoEnMapa.POR_VENCER
+        else -> null
+    }
 }
 
 data class EstadoPciEnMapa(
@@ -86,6 +106,10 @@ data class EstadoPciEnMapa(
     val pcis: List<ResumenPci> = emptyList(),
     val items: List<ItemPci> = emptyList(),
     val posiciones: Map<String, Pair<Double, Double>> = emptyMap(),
+    /** Los ítems con intervalo, como tramo de vía. */
+    val tramos: Map<String, List<Pair<Double, Double>>> = emptyMap(),
+    val plazos: Set<PlazoEnMapa> = emptySet(),
+    val buscandoUbicacion: Boolean = false,
     /** Los PCI que se ven; al entrar, todos los activos. */
     val elegidos: Set<String> = emptySet(),
     val avances: Set<AvancePci> = emptySet(),
@@ -96,9 +120,10 @@ data class EstadoPciEnMapa(
 ) {
     private val delosPci: List<ItemPci> get() = items.filter { it.pciId in elegidos }
     val visibles: List<ItemPci>
-        get() = delosPci.filter { avances.isEmpty() || avanceDe(it) in avances }
+        get() = delosPci.filter { (avances.isEmpty() || avanceDe(it) in avances) && (plazos.isEmpty() || plazoDe(it) in plazos) }
             .sortedWith(compareBy<ItemPci> { avanceDe(it).ordinal }.thenBy { it.vence ?: "9999" })
     fun cuantos(a: AvancePci) = delosPci.count { avanceDe(it) == a }
+    fun cuantos(p: PlazoEnMapa) = delosPci.count { plazoDe(it) == p }
 }
 
 /**
@@ -111,6 +136,7 @@ class PciEnMapaViewModel @javax.inject.Inject constructor(
     private val campo: CampoRepositorio,
     private val inventario: InventarioRepositorio,
     private val sesion: SesionRepositorio,
+    private val ubicacion: pe.servicon.sigov.datos.Ubicacion,
 ) : ViewModel() {
     private val _estado = MutableStateFlow(EstadoPciEnMapa())
     val estado: StateFlow<EstadoPciEnMapa> = _estado.asStateFlow()
@@ -125,10 +151,11 @@ class PciEnMapaViewModel @javax.inject.Inject constructor(
                 val pcis = campo.pciDeLaCuadrilla(c.servicioId, c.id).filter { it.activo && !it.completado }
                 val items = campo.itemsPciDeLaCuadrilla(c.servicioId, c.id).filter { it.activoParaCuadrilla }
                 val pos = inventario.posicionesPci(c.servicioId)
+                val tramos = inventario.tramosPci(c.servicioId)
                 cargoUnaVez = true
                 _estado.update {
                     it.copy(
-                        cargando = false, cuadrilla = c.name, pcis = pcis, items = items, posiciones = pos,
+                        cargando = false, cuadrilla = c.name, pcis = pcis, items = items, posiciones = pos, tramos = tramos,
                         elegidos = it.elegidos.ifEmpty { pcis.map { p -> p.pciId }.toSet() },
                     )
                 }
@@ -139,6 +166,28 @@ class PciEnMapaViewModel @javax.inject.Inject constructor(
     fun alVolver() { if (cargoUnaVez) cargar() }
     fun alternarPci(id: String) = _estado.update { it.copy(elegidos = if (id in it.elegidos) it.elegidos - id else it.elegidos + id) }
     fun alternarAvance(a: AvancePci) = _estado.update { it.copy(avances = if (a in it.avances) it.avances - a else it.avances + a) }
+    fun alternarPlazo(p: PlazoEnMapa) = _estado.update { it.copy(plazos = if (p in it.plazos) it.plazos - p else it.plazos + p) }
+
+    fun buscarMiUbicacion(alEncontrar: (Double, Double) -> Unit) {
+        _estado.update { it.copy(buscandoUbicacion = true) }
+        viewModelScope.launch {
+            val punto = runCatching { ubicacion.actual() }.getOrNull()
+            _estado.update {
+                it.copy(buscandoUbicacion = false, error = if (punto == null) "No se pudo leer tu ubicación. Revisa el GPS y el permiso." else it.error)
+            }
+            punto?.let { alEncontrar(it.latitud, it.longitud) }
+        }
+    }
+
+    /** A la cámara de frente, en la primera etapa sin foto (Elvis, 26/10). */
+    fun tomarFotos(item: ItemPci) = tomarFoto(
+        item,
+        when {
+            item.fotosAntes == 0 -> Fase.ANTES
+            item.fotosDurante == 0 -> Fase.DURANTE
+            else -> Fase.DESPUES
+        },
+    )
     fun verEnMapa(si: Boolean) = _estado.update { it.copy(enMapa = si) }
     fun camaraAbierta() = _estado.update { it.copy(irACamara = null) }
     fun avisoVisto() = _estado.update { it.copy(error = null) }
@@ -161,12 +210,13 @@ class PciEnMapaViewModel @javax.inject.Inject constructor(
 fun PantallaPciEnMapa(
     vm: PciEnMapaViewModel = hiltViewModel(),
     alVolver: () -> Unit,
-    alVerFicha: () -> Unit,
+    /** La ficha del ítem en el módulo PCI: la misma vista en todas partes. */
+    alVerFicha: (ItemPci) -> Unit,
     alTomarFoto: (registroId: String, fase: Fase) -> Unit,
 ) {
     val estado by vm.estado.collectAsStateWithLifecycle()
     val avisos = remember { SnackbarHostState() }
-    var fotografiando by remember { mutableStateOf<ItemPci?>(null) }
+    val control = remember { pe.servicon.sigov.ui.componentes.ControlDeMapa() }
 
     LaunchedEffect(estado.error) { estado.error?.let { avisos.showSnackbar(it); vm.avisoVisto() } }
     val tomarFoto by rememberUpdatedState(alTomarFoto)
@@ -178,30 +228,6 @@ fun PantallaPciEnMapa(
         val o = LifecycleEventObserver { _, e -> if (e == Lifecycle.Event.ON_RESUME) vm.alVolver() }
         ciclo.lifecycle.addObserver(o)
         onDispose { ciclo.lifecycle.removeObserver(o) }
-    }
-
-    fotografiando?.let { item ->
-        AlertDialog(
-            onDismissRequest = { fotografiando = null },
-            title = { Text("Registrar fotos") },
-            text = {
-                Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
-                    Text(listOfNotNull(item.pciCorto, item.numero?.let { "Ítem $it" }, item.tituloCorto).joinToString(" · "),
-                        fontWeight = FontWeight.SemiBold)
-                    listOf(Fase.ANTES to item.fotosAntes, Fase.DURANTE to item.fotosDurante, Fase.DESPUES to item.fotosDespues).forEach { (f, n) ->
-                        OutlinedButton(onClick = { fotografiando = null; vm.tomarFoto(item, f) },
-                            modifier = Modifier.fillMaxWidth().height(52.dp), shape = RoundedCornerShape(10.dp)) {
-                            Icon(Icons.Outlined.PhotoCamera, null, Modifier.size(18.dp))
-                            Spacer(Modifier.width(8.dp))
-                            Text(f.etiqueta, modifier = Modifier.weight(1f))
-                            Text(if (n == 0) "sin foto" else "$n", color = if (n > 0) Marca.VerdeBandera else Marca.Naranja)
-                        }
-                    }
-                }
-            },
-            confirmButton = {},
-            dismissButton = { TextButton(onClick = { fotografiando = null }) { Text("Cancelar") } },
-        )
     }
 
     ArmazonDeApartado(
@@ -239,36 +265,53 @@ fun PantallaPciEnMapa(
                 }
                 if (estado.pcis.isEmpty()) Text("Ningún PCI activo.", fontSize = 12.sp)
             }
-            // El avance, que también filtra
-            Row(Modifier.fillMaxWidth().horizontalScroll(rememberScrollState()).padding(horizontal = 10.dp, vertical = 6.dp),
+            // El estado (como en el módulo PCI) y, aparte, el plazo de lo que falta
+            Row(Modifier.fillMaxWidth().horizontalScroll(rememberScrollState()).padding(horizontal = 10.dp, vertical = 4.dp),
                 horizontalArrangement = Arrangement.spacedBy(6.dp)) {
                 AvancePci.entries.forEach { a ->
-                    val activo = a in estado.avances
-                    Column(
-                        Modifier.clip(RoundedCornerShape(10.dp))
-                            .background(a.color.copy(alpha = if (activo) 0.22f else 0.09f))
-                            .clickable { vm.alternarAvance(a) }
-                            .padding(horizontal = 12.dp, vertical = 6.dp),
-                        horizontalAlignment = Alignment.CenterHorizontally,
-                    ) {
-                        Text("${estado.cuantos(a)}", fontWeight = FontWeight.Bold, color = a.color, fontSize = 16.sp)
-                        Text(a.etiqueta, fontSize = 11.sp)
-                    }
+                    Cifra(estado.cuantos(a), a.etiqueta, a.color, a in estado.avances) { vm.alternarAvance(a) }
+                }
+            }
+            Row(Modifier.fillMaxWidth().padding(horizontal = 12.dp, vertical = 2.dp), verticalAlignment = Alignment.CenterVertically,
+                horizontalArrangement = Arrangement.spacedBy(6.dp)) {
+                Text("Plazo", fontSize = 11.sp, color = MaterialTheme.colorScheme.onSurfaceVariant)
+                PlazoEnMapa.entries.forEach { p ->
+                    FilterChip(
+                        selected = p in estado.plazos,
+                        onClick = { vm.alternarPlazo(p) },
+                        leadingIcon = { Box(Modifier.size(9.dp).clip(CircleShape).background(p.color)) },
+                        label = { Text("${p.etiqueta} · ${estado.cuantos(p)}", fontSize = 12.sp) },
+                    )
                 }
             }
 
             if (estado.enMapa) {
-                MapaDePci(estado.visibles, estado.posiciones, Modifier.fillMaxWidth().weight(1f)) { fotografiando = it }
+                Box(Modifier.fillMaxWidth().weight(1f)) {
+                    MapaDePci(estado.visibles, estado.posiciones, estado.tramos, Modifier.fillMaxSize(), control) { alVerFicha(it) }
+                    pe.servicon.sigov.ui.componentes.ControlesDeMapa(
+                        buscando = estado.buscandoUbicacion,
+                        alMiUbicacion = { vm.buscarMiUbicacion { lat, lng -> control.miUbicacion(lat, lng) } },
+                        alVerTodo = control::verTodo,
+                        modifier = Modifier.align(Alignment.TopStart).padding(10.dp),
+                    )
+                }
             }
             Row(Modifier.padding(horizontal = 14.dp, vertical = 6.dp), verticalAlignment = Alignment.CenterVertically) {
-                Text("PCIs en el tramo", fontWeight = FontWeight.Bold, fontSize = 14.sp)
+                // Un PCI es el conjunto; lo que se ve son sus ítems (Elvis, 24/10)
+                Text("Ítems PCI en el mapa", fontWeight = FontWeight.Bold, fontSize = 14.sp)
                 Spacer(Modifier.width(6.dp))
                 Text("${estado.visibles.size}", fontWeight = FontWeight.Bold, color = Marca.Azul, fontSize = 14.sp)
             }
             HorizontalDivider()
             LazyColumn(Modifier.fillMaxWidth().weight(if (estado.enMapa) 0.9f else 1f)) {
                 items(estado.visibles, key = { it.id }) { item ->
-                    TarjetaPciEnMapa(item, estado.trabajando == item.id, alVerFicha) { fotografiando = item }
+                    TarjetaPciEnMapa(
+                        item, estado.trabajando == item.id,
+                        // Tocar el ítem lleva el mapa a su lugar (Elvis, 26/10)
+                        alUbicar = { estado.posiciones[item.id]?.let { (lat, lng) -> control.irA(lat, lng) } },
+                        alVerFicha = { alVerFicha(item) },
+                        alFotos = { vm.tomarFotos(item) },
+                    )
                 }
             }
         }
@@ -276,10 +319,10 @@ fun PantallaPciEnMapa(
 }
 
 @Composable
-private fun TarjetaPciEnMapa(item: ItemPci, ocupado: Boolean, alVerFicha: () -> Unit, alFotos: () -> Unit) {
+private fun TarjetaPciEnMapa(item: ItemPci, ocupado: Boolean, alUbicar: () -> Unit, alVerFicha: () -> Unit, alFotos: () -> Unit) {
     val a = avanceDe(item)
     val fases = listOf(item.fotosAntes, item.fotosDurante, item.fotosDespues).count { it > 0 }
-    Column(Modifier.fillMaxWidth().padding(horizontal = 14.dp, vertical = 9.dp)) {
+    Column(Modifier.fillMaxWidth().clickable(onClick = alUbicar).padding(horizontal = 14.dp, vertical = 9.dp)) {
         Row(verticalAlignment = Alignment.CenterVertically) {
             Text(listOfNotNull(item.pciCorto, item.numero?.let { "Ítem $it" }).joinToString(" · "),
                 fontWeight = FontWeight.Bold, color = Marca.Azul, fontSize = 13.sp, modifier = Modifier.weight(1f))
@@ -289,18 +332,24 @@ private fun TarjetaPciEnMapa(item: ItemPci, ocupado: Boolean, alVerFicha: () -> 
         Text(item.tituloCorto, fontSize = 13.5.sp, fontWeight = FontWeight.SemiBold, maxLines = 1, overflow = TextOverflow.Ellipsis)
         Text(listOfNotNull(item.tramo, Progresiva.rango(item.progresiva, item.progresivaFin)?.let { "km $it" }).joinToString(" · "),
             fontSize = 11.5.sp, color = MaterialTheme.colorScheme.onSurfaceVariant)
-        Row(verticalAlignment = Alignment.CenterVertically, modifier = Modifier.padding(top = 4.dp)) {
-            LinearProgressIndicator(progress = { fases / 3f }, color = a.color, trackColor = a.color.copy(alpha = 0.15f),
-                modifier = Modifier.weight(1f).height(6.dp).clip(RoundedCornerShape(3.dp)))
-            Spacer(Modifier.width(8.dp))
-            Text("${fases * 100 / 3}%", fontSize = 11.sp, fontWeight = FontWeight.SemiBold)
+        // Las fotos por etapa, como en el módulo PCI
+        Row(verticalAlignment = Alignment.CenterVertically, modifier = Modifier.padding(top = 4.dp), horizontalArrangement = Arrangement.spacedBy(6.dp)) {
+            listOf("A" to item.fotosAntes, "D" to item.fotosDurante, "DP" to item.fotosDespues).forEach { (letra, n) ->
+                val c = if (n > 0) Color(0xFF16A34A) else Color(0xFFDC2626)
+                Text("$letra $n", fontSize = 11.sp, fontWeight = FontWeight.SemiBold, color = c,
+                    modifier = Modifier.background(c.copy(alpha = 0.10f), RoundedCornerShape(6.dp)).padding(horizontal = 6.dp, vertical = 2.dp))
+            }
+            plazoDe(item)?.let { p ->
+                Spacer(Modifier.weight(1f))
+                Text(if (p == PlazoEnMapa.VENCIDO) "Vencido" else "Por vencer", fontSize = 11.sp, fontWeight = FontWeight.SemiBold, color = p.color)
+            }
         }
         Row(horizontalArrangement = Arrangement.spacedBy(8.dp), modifier = Modifier.padding(top = 6.dp)) {
             OutlinedButton(onClick = alVerFicha, modifier = Modifier.weight(1f).height(40.dp), shape = RoundedCornerShape(10.dp)) {
                 Text("Ver ficha"); Icon(Icons.Outlined.ChevronRight, null, Modifier.size(16.dp))
             }
             OutlinedButton(onClick = alFotos, enabled = !ocupado, modifier = Modifier.weight(1f).height(40.dp), shape = RoundedCornerShape(10.dp)) {
-                Text("Fotos"); Icon(Icons.Outlined.ChevronRight, null, Modifier.size(16.dp))
+                Icon(Icons.Outlined.PhotoCamera, null, Modifier.size(16.dp)); Spacer(Modifier.width(4.dp)); Text("Tomar fotos")
             }
         }
     }
@@ -311,7 +360,9 @@ private fun TarjetaPciEnMapa(item: ItemPci, ocupado: Boolean, alVerFicha: () -> 
 private fun MapaDePci(
     items: List<ItemPci>,
     posiciones: Map<String, Pair<Double, Double>>,
+    tramos: Map<String, List<Pair<Double, Double>>>,
     modifier: Modifier,
+    control: pe.servicon.sigov.ui.componentes.ControlDeMapa,
     alTocar: (ItemPci) -> Unit,
 ) {
     val contexto = LocalContext.current
@@ -328,28 +379,39 @@ private fun MapaDePci(
         if (mapa == null) {
             v.getMapAsync { m ->
                 mapa = m
+                control.mapa = m
                 m.setStyle(Style.Builder().fromJson(ESTILO_CALLES)) { estilo ->
+                    // Lo que tiene intervalo, como un tramo de vía (Elvis, 26/10)
+                    estilo.addSource(GeoJsonSource("src-pci-tramos", FeatureCollection.fromFeatures(emptyList())))
+                    estilo.addLayer(org.maplibre.android.style.layers.LineLayer("capa-pci-tramos", "src-pci-tramos").withProperties(
+                        PropertyFactory.lineColor(Expression.toColor(Expression.get("color"))),
+                        PropertyFactory.lineWidth(Expression.interpolate(Expression.linear(), Expression.zoom(),
+                            Expression.stop(8, 3f), Expression.stop(14, 7f), Expression.stop(17, 11f))),
+                        PropertyFactory.lineCap(org.maplibre.android.style.layers.Property.LINE_CAP_ROUND),
+                        PropertyFactory.lineOpacity(0.85f),
+                    ))
                     estilo.addSource(GeoJsonSource("src-pci", FeatureCollection.fromFeatures(emptyList())))
                     estilo.addLayer(CircleLayer("capa-pci", "src-pci").withProperties(
                         PropertyFactory.circleColor(Expression.toColor(Expression.get("color"))),
                         PropertyFactory.circleRadius(Expression.interpolate(Expression.linear(), Expression.zoom(),
                             Expression.stop(6, 4f), Expression.stop(12, 8f), Expression.stop(16, 13f))),
-                        PropertyFactory.circleStrokeWidth(2f),
-                        PropertyFactory.circleStrokeColor("#FFFFFF"),
+                        PropertyFactory.circleStrokeWidth(2.5f),
+                        // Lo vencido lleva el borde rojo
+                        PropertyFactory.circleStrokeColor(Expression.toColor(Expression.get("borde"))),
                     ))
                     listo = true
                 }
                 m.addOnMapClickListener { punto ->
                     val p = m.projection.toScreenLocation(punto)
                     val r = 26f
-                    val f = m.queryRenderedFeatures(android.graphics.RectF(p.x - r, p.y - r, p.x + r, p.y + r), "capa-pci")
+                    val f = m.queryRenderedFeatures(android.graphics.RectF(p.x - r, p.y - r, p.x + r, p.y + r), "capa-pci", "capa-pci-tramos")
                     f.firstOrNull()?.getStringProperty("id")?.let { id -> porId[id]?.let(tocar) }
                     f.isNotEmpty()
                 }
             }
         }
     }
-    LaunchedEffect(items, posiciones, listo) {
+    LaunchedEffect(items, posiciones, tramos, listo) {
         val m = mapa ?: return@LaunchedEffect
         if (!listo) return@LaunchedEffect
         val puntos = items.mapNotNull { i -> posiciones[i.id]?.let { (lat, lng) -> Triple(i, lat, lng) } }
@@ -357,14 +419,42 @@ private fun MapaDePci(
             Feature.fromGeometry(Point.fromLngLat(lng, lat)).apply {
                 addStringProperty("id", i.id)
                 addStringProperty("color", hex(avanceDe(i).color))
+                addStringProperty("borde", if (plazoDe(i) == PlazoEnMapa.VENCIDO) "#DC2626" else "#FFFFFF")
             }
         }
-        m.getStyle { it.getSourceAs<GeoJsonSource>("src-pci")?.setGeoJson(FeatureCollection.fromFeatures(rasgos)) }
+        val lineas = items.mapNotNull { i ->
+            tramos[i.id]?.let { t ->
+                Feature.fromGeometry(org.maplibre.geojson.LineString.fromLngLats(t.map { (lat, lng) -> Point.fromLngLat(lng, lat) })).apply {
+                    addStringProperty("id", i.id)
+                    addStringProperty("color", hex(avanceDe(i).color))
+                }
+            }
+        }
+        m.getStyle {
+            it.getSourceAs<GeoJsonSource>("src-pci")?.setGeoJson(FeatureCollection.fromFeatures(rasgos))
+            it.getSourceAs<GeoJsonSource>("src-pci-tramos")?.setGeoJson(FeatureCollection.fromFeatures(lineas))
+        }
         if (puntos.isNotEmpty()) {
             val b = LatLngBounds.Builder()
             puntos.forEach { (_, lat, lng) -> b.include(LatLng(lat, lng)) }
             if (puntos.size == 1) b.include(LatLng(puntos[0].second + 0.01, puntos[0].third + 0.01))
+            control.limites = b.build()
             runCatching { m.animateCamera(CameraUpdateFactory.newLatLngBounds(b.build(), 60), 700) }
         }
     }
 }
+
+@Composable
+private fun Cifra(n: Int, etiqueta: String, color: Color, activo: Boolean, alTocar: () -> Unit) {
+    Column(
+        Modifier.clip(RoundedCornerShape(10.dp))
+            .background(color.copy(alpha = if (activo) 0.22f else 0.09f))
+            .clickable(onClick = alTocar)
+            .padding(horizontal = 12.dp, vertical = 6.dp),
+        horizontalAlignment = Alignment.CenterHorizontally,
+    ) {
+        Text("$n", fontWeight = FontWeight.Bold, color = color, fontSize = 16.sp)
+        Text(etiqueta, fontSize = 11.sp)
+    }
+}
+

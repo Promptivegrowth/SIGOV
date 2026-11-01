@@ -59,6 +59,7 @@ data class EstadoInventario(
     val campos: Map<String, List<CampoDelTipo>> = emptyMap(),
     val cargandoFicha: Boolean = false,
     val guardandoFoto: Boolean = false,
+    val buscandoUbicacion: Boolean = false,
     val aviso: String? = null,
     val error: String? = null,
 ) {
@@ -112,6 +113,7 @@ class InventarioViewModel @Inject constructor(
     private val sesion: SesionRepositorio,
     private val evidencias: EvidenciaRepositorio,
     private val configuracion: Configuracion,
+    private val ubicacion: pe.servicon.sigov.datos.Ubicacion,
 ) : ViewModel() {
 
     private val _estado = MutableStateFlow(EstadoInventario())
@@ -198,6 +200,50 @@ class InventarioViewModel @Inject constructor(
         }
     }
 
+    /** Dónde está el teléfono, para verse en el mapa (Elvis, 26/10). */
+    fun buscarMiUbicacion(alEncontrar: (Double, Double) -> Unit) {
+        _estado.update { it.copy(buscandoUbicacion = true) }
+        viewModelScope.launch {
+            val punto = runCatching { ubicacion.actual() }.getOrNull()
+            _estado.update {
+                it.copy(
+                    buscandoUbicacion = false,
+                    error = if (punto == null) "No se pudo leer tu ubicación. Revisa el GPS y el permiso." else it.error,
+                )
+            }
+            punto?.let { alEncontrar(it.latitud, it.longitud) }
+        }
+    }
+
+    /**
+     * Quita una foto de intervención tomada por error (Elvis, 26/10). La
+     * nube recalcula el estado del elemento con las fotos que quedan.
+     */
+    fun quitarFoto(foto: FotoDeActivo) {
+        val e = _estado.value.abierto ?: return
+        val llave = foto.clientId ?: foto.id
+        viewModelScope.launch {
+            runCatching { evidencias.eliminarPorClientId(llave) }
+                .onSuccess {
+                    val quedan = _estado.value.galeria.filter { (f, _) -> f.id != foto.id && !f.esBase }
+                    val ultima = quedan.maxByOrNull { (f, _) -> f.tomada ?: "" }?.first
+                    val actualizado = e.copy(
+                        observado = ultima?.estado == "observado",
+                        observacion = if (ultima?.estado == "observado") ultima.caption ?: "Observado en campo" else null,
+                    )
+                    _estado.update {
+                        it.copy(
+                            abierto = actualizado,
+                            galeria = it.galeria.filter { (f, _) -> f.id != foto.id },
+                            todos = it.todos.map { x -> if (x.id == e.id) actualizado else x },
+                            aviso = "Foto quitada.",
+                        )
+                    }
+                }
+                .onFailure { f -> _estado.update { it.copy(error = f.enCristiano()) } }
+        }
+    }
+
     /** La foto grande, cuando se toca una miniatura para ampliarla. */
     suspend fun urlGrande(ruta: String?): String? = inventario.urlDeFoto(ruta)
 
@@ -237,6 +283,7 @@ class InventarioViewModel @Inject constructor(
                 // Se ve al instante, desde el equipo; la nube lo confirma al subir
                 val nueva = FotoDeActivo(
                     id = local.clientId,
+                    clientId = local.clientId,
                     ruta = local.rutaDestino,
                     tomada = java.time.Instant.ofEpochMilli(local.tomadaEn).toString(),
                     caption = comentario?.trim()?.ifBlank { null },
