@@ -76,6 +76,10 @@ fun PantallaParte(
     LaunchedEffect(estado.partidaInicial) {
         if (estado.partidaInicial != null) formularioAbierto = true
     }
+    // …o, si ya tenía avance hoy, se abre ese registro para corregirlo
+    LaunchedEffect(estado.corregir) {
+        estado.corregir?.let { abierto = it; vm.correccionAbierta() }
+    }
 
     LaunchedEffect(estado.aviso, estado.error) {
         (estado.aviso ?: estado.error)?.let {
@@ -378,6 +382,8 @@ fun PantallaParte(
             guardados = guardados,
             insumos = estado.insumos,
             rendimientos = estado.rendimientos,
+            conAvance = estado.conAvance,
+            alCorregir = { id -> formularioAbierto = false; vm.partidaInicialAtendida(); abierto = id },
             alCerrar = { formularioAbierto = false; vm.partidaInicialAtendida() },
             alGuardar = { actividad, tramo, ini, fin, lado, cantidad, obs, origen, detalle, materiales ->
                 vm.registrar(actividad, tramo, ini, fin, lado, cantidad, obs, origen, detalle, materiales) {

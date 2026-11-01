@@ -284,13 +284,21 @@ internal fun VisorDeCamara(onListo: (ImageCapture) -> Unit) {
     AndroidView(
         modifier = Modifier.fillMaxSize(),
         factory = { ctx ->
+            // Lo que se ve es lo que sale (Elvis, 22/10: la foto traía más a
+            // los costados que el visor). La vista previa es 4:3 como la toma
+            // y se muestra entera, sin recortarla para llenar la pantalla.
             val vista = PreviewView(ctx).apply {
-                scaleType = PreviewView.ScaleType.FILL_CENTER
+                scaleType = PreviewView.ScaleType.FIT_CENTER
             }
             val proveedorFuturo = ProcessCameraProvider.getInstance(ctx)
             proveedorFuturo.addListener({
                 val proveedor = proveedorFuturo.get()
-                val vistaPrevia = Preview.Builder().build()
+                val cuatroTercios = androidx.camera.core.resolutionselector.ResolutionSelector.Builder()
+                    .setAspectRatioStrategy(
+                        androidx.camera.core.resolutionselector.AspectRatioStrategy.RATIO_4_3_FALLBACK_AUTO_STRATEGY
+                    )
+                    .build()
+                val vistaPrevia = Preview.Builder().setResolutionSelector(cuatroTercios).build()
                     .also { it.setSurfaceProvider(vista.surfaceProvider) }
                 // La toma en la mayor resolución 4:3 del equipo: de ahí sale
                 // el original 4080 × 3060 que pide COVINCA (OBS-23)
@@ -310,9 +318,13 @@ internal fun VisorDeCamara(onListo: (ImageCapture) -> Unit) {
                     .build()
                 runCatching {
                     proveedor.unbindAll()
-                    proveedor.bindToLifecycle(
-                        dueno, CameraSelector.DEFAULT_BACK_CAMERA, vistaPrevia, captura,
-                    )
+                    // El mismo encuadre para la vista previa y la toma
+                    val grupo = androidx.camera.core.UseCaseGroup.Builder()
+                        .addUseCase(vistaPrevia)
+                        .addUseCase(captura)
+                        .apply { vista.viewPort?.let { setViewPort(it) } }
+                        .build()
+                    proveedor.bindToLifecycle(dueno, CameraSelector.DEFAULT_BACK_CAMERA, grupo)
                     onListo(captura)
                 }
             }, ContextCompat.getMainExecutor(ctx))

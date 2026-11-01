@@ -3158,6 +3158,7 @@ export type Database = {
           deleted_at: string | null
           executed_qty: number
           finished_at: string | null
+          finished_auto: boolean
           finished_by: string | null
           foto_referencia_path: string | null
           id: string
@@ -3198,6 +3199,7 @@ export type Database = {
           deleted_at?: string | null
           executed_qty?: number
           finished_at?: string | null
+          finished_auto?: boolean
           finished_by?: string | null
           foto_referencia_path?: string | null
           id?: string
@@ -3238,6 +3240,7 @@ export type Database = {
           deleted_at?: string | null
           executed_qty?: number
           finished_at?: string | null
+          finished_auto?: boolean
           finished_by?: string | null
           foto_referencia_path?: string | null
           id?: string
@@ -7697,6 +7700,10 @@ export type Database = {
       puedo_mover_partida: {
         Args: { p_crew_id: string; p_service_id: string }
         Returns: boolean
+      }
+      quitar_del_parte: {
+        Args: { p_client_id: string; p_tabla: string }
+        Returns: undefined
       }
       quitar_pagina_documento: { Args: { p_client_id: string }; Returns: Json }
       reenviar_pedido: {

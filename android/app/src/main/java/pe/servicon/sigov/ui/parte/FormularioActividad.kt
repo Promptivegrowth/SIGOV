@@ -8,6 +8,7 @@ import androidx.compose.ui.draw.clip
 import androidx.compose.material.icons.automirrored.outlined.ArrowBack
 import androidx.compose.material.icons.outlined.CalendarMonth
 import androidx.compose.material.icons.outlined.Check
+import androidx.compose.material.icons.outlined.Close
 import androidx.compose.material.icons.outlined.ChevronRight
 import androidx.compose.material.icons.outlined.Description
 import androidx.compose.material.icons.outlined.EditNote
@@ -115,6 +116,13 @@ fun FormularioActividad(
     /** El catálogo de materiales y los rendimientos, para el material de la actividad. */
     insumos: List<pe.servicon.sigov.datos.Insumo> = emptyList(),
     rendimientos: List<pe.servicon.sigov.datos.Rendimiento> = emptyList(),
+    /**
+     * Partida o ítem PCI → su registro de hoy, cuando ya tiene avance. Elegirlo
+     * no abre otro registro: abre ese para corregirlo (Elvis, 22/10: «una vez
+     * registrado ya no debería poder volverse a registrar… debería editar»).
+     */
+    conAvance: Map<String, String> = emptyMap(),
+    alCorregir: (registroClientId: String) -> Unit = {},
     alCerrar: () -> Unit,
     alGuardar: (
         actividad: Actividad,
@@ -305,11 +313,17 @@ fun FormularioActividad(
                                 }
                                 pendientes.forEach { p ->
                                     TarjetaDePartida(p, registrada = p.id in registrados) {
-                                        adoptar(OrigenDelTrabajo.Programado(p)); paso = 3
+                                        val ya = conAvance[p.id]
+                                        if (ya != null) alCorregir(ya)
+                                        else { adoptar(OrigenDelTrabajo.Programado(p)); paso = 3 }
                                     }
                                 }
                             } else {
-                                ListaDeItemsPci(pcis, registrados) { item -> adoptar(OrigenDelTrabajo.Pci(item)); paso = 3 }
+                                ListaDeItemsPci(pcis, registrados) { item ->
+                                    val ya = conAvance[item.id]
+                                    if (ya != null) alCorregir(ya)
+                                    else { adoptar(OrigenDelTrabajo.Pci(item)); paso = 3 }
+                                }
                             }
                         }
 
@@ -434,7 +448,8 @@ fun FormularioActividad(
                                     placeholder = { Text("350") },
                                     supportingText = itemPci?.quantity?.let { q -> { Text("Pedido en el PCI: ${cifra(q)} ${unidad.orEmpty()}. Corrígelo si fue distinto.") } },
                                     singleLine = true,
-                                    keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Decimal),
+                                    // Lo que se cuenta por unidad (señales, tachas…) va en enteros (Elvis, 22/10)
+                                    keyboardOptions = KeyboardOptions(keyboardType = if (unidad == "und") KeyboardType.Number else KeyboardType.Decimal),
                                     shape = RoundedCornerShape(12.dp),
                                     colors = OutlinedTextFieldDefaults.colors(
                                         unfocusedBorderColor = Marca.VerdeBandera, focusedBorderColor = Marca.VerdeBandera,
@@ -460,6 +475,7 @@ fun FormularioActividad(
                                 otros = otros,
                                 cantidades = cantidades,
                                 alAgregarOtro = { eligiendoMaterial = true },
+                                alQuitarOtro = { id -> otros.remove(id); cantidades.remove(id) },
                             )
 
                             // Lo que pide el FOR:001 de cada actividad: opcional y plegado,
@@ -827,6 +843,8 @@ private fun MaterialesDeLaActividad(
     otros: List<String>,
     cantidades: MutableMap<String, String>,
     alAgregarOtro: () -> Unit,
+    /** Elvis (22/10): «me equivoqué… no sé dónde para poder eliminarlo». */
+    alQuitarOtro: (String) -> Unit = {},
 ) {
     val filas = (rendimientos.map { it.insumoId to it.cantidad } + otros.map { it to null })
         .distinctBy { it.first }
@@ -857,6 +875,12 @@ private fun MaterialesDeLaActividad(
                     shape = RoundedCornerShape(10.dp),
                     modifier = Modifier.width(120.dp),
                 )
+                // Lo agregado a mano se puede quitar; lo del rendimiento se deja en cero
+                if (id in otros) {
+                    IconButton(onClick = { alQuitarOtro(id) }, modifier = Modifier.size(32.dp)) {
+                        Icon(Icons.Outlined.Close, contentDescription = "Quitar ${ins.name}")
+                    }
+                }
             }
         }
         TextButton(onClick = alAgregarOtro) { Text("+ Otros materiales") }

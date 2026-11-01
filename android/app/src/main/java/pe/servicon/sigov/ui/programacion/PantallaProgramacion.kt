@@ -56,7 +56,19 @@ fun PantallaProgramacion(
     alTomarFoto: (registroId: String, fase: pe.servicon.sigov.datos.Fase) -> Unit = { _, _ -> },
 ) {
     val estado by vm.estado.collectAsStateWithLifecycle()
-    var fotografiando by remember { mutableStateOf<ItemProgramado?>(null) }
+
+    // Al volver de la cámara o del reporte: las fotos y el estado cambiaron
+    val ciclo = androidx.compose.ui.platform.LocalLifecycleOwner.current
+    androidx.compose.runtime.DisposableEffect(ciclo) {
+        var primera = true
+        val observador = androidx.lifecycle.LifecycleEventObserver { _, evento ->
+            if (evento == androidx.lifecycle.Lifecycle.Event.ON_RESUME) {
+                if (primera) primera = false else vm.alVolver()
+            }
+        }
+        ciclo.lifecycle.addObserver(observador)
+        onDispose { ciclo.lifecycle.removeObserver(observador) }
+    }
 
     // A la cámara con la etapa ya elegida
     val tomarFoto by androidx.compose.runtime.rememberUpdatedState(alTomarFoto)
@@ -67,31 +79,6 @@ fun PantallaProgramacion(
         }
     }
 
-    fotografiando?.let { partida ->
-        AlertDialog(
-            onDismissRequest = { fotografiando = null },
-            title = { Text("Tomar fotos") },
-            text = {
-                Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
-                    Text(partida.actividad ?: "Partida", style = MaterialTheme.typography.bodyMedium, fontWeight = FontWeight.SemiBold)
-                    Text("¿De qué etapa es la foto?", style = MaterialTheme.typography.bodySmall)
-                    listOf(pe.servicon.sigov.datos.Fase.ANTES, pe.servicon.sigov.datos.Fase.DURANTE, pe.servicon.sigov.datos.Fase.DESPUES).forEach { fase ->
-                        OutlinedButton(
-                            onClick = { fotografiando = null; vm.tomarFoto(partida, fase) },
-                            modifier = Modifier.fillMaxWidth().height(52.dp),
-                            shape = RoundedCornerShape(10.dp),
-                        ) {
-                            Icon(Icons.Outlined.PhotoCamera, contentDescription = null, modifier = Modifier.size(18.dp))
-                            Spacer(Modifier.width(8.dp))
-                            Text(fase.etiqueta)
-                        }
-                    }
-                }
-            },
-            confirmButton = {},
-            dismissButton = { TextButton(onClick = { fotografiando = null }) { Text("Cancelar") } },
-        )
-    }
     val avisos = remember { SnackbarHostState() }
     var impedimento by remember { mutableStateOf<ItemProgramado?>(null) }
 
@@ -203,7 +190,8 @@ fun PantallaProgramacion(
                             alReportar = { impedimento = item },
                             alRegistrarAvance = { alRegistrarAvance(item) },
                             alVerReferencia = { vm.verReferencia(item) },
-                            alTomarFotos = { fotografiando = item },
+                            fases = estado.fases[item.id].orEmpty(),
+                            alTomarFotos = { vm.tomarFotos(item) },
                         )
                     }
                 }
@@ -329,6 +317,7 @@ private fun Partida(
     alReportar: () -> Unit = {},
     alRegistrarAvance: () -> Unit = {},
     alVerReferencia: () -> Unit = {},
+    fases: Map<String, Int> = emptyMap(),
     alTomarFotos: () -> Unit = {},
 ) {
     val avance = ((item.avance ?: 0.0) / 100.0).coerceIn(0.0, 1.0).toFloat()
@@ -435,12 +424,27 @@ private fun Partida(
                 trackColor = Marca.Azul.copy(alpha = 0.10f),
             )
             Spacer(Modifier.height(6.dp))
-            Text(
-                "Ejecutado ${cifra(item.ejecutado ?: 0.0)} de ${cifra(item.meta ?: 0.0)}" +
-                    (item.unidad?.let { " $it" } ?: ""),
-                style = MaterialTheme.typography.bodySmall,
-                color = MaterialTheme.colorScheme.onSurfaceVariant,
-            )
+            Row(verticalAlignment = Alignment.CenterVertically) {
+                Text(
+                    "Ejecutado ${cifra(item.ejecutado ?: 0.0)} de ${cifra(item.meta ?: 0.0)}" +
+                        (item.unidad?.let { " $it" } ?: ""),
+                    style = MaterialTheme.typography.bodySmall,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                    modifier = Modifier.weight(1f),
+                )
+                // Las fotos por etapa, como en el PCI (Elvis, 22/10)
+                if (item.estaEnCurso || fases.isNotEmpty()) {
+                    pe.servicon.sigov.ui.parte.ContadorPorEtapa(fases, exigeLasTres = true)
+                }
+            }
+            if (item.estaEnCurso) {
+                Spacer(Modifier.height(4.dp))
+                Text(
+                    "Con su avance y una foto de antes, durante y después pasa sola a «Por validar».",
+                    style = MaterialTheme.typography.labelSmall,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                )
+            }
 
             // Lo que se puede hacer ahora, y solo eso: ofrecer «Finalizar»
             // sobre una partida que no se ha empezado invita a un error que

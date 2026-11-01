@@ -79,7 +79,6 @@ fun PantallaPci(
 ) {
     val estado by vm.estado.collectAsStateWithLifecycle()
     val avisos = remember { SnackbarHostState() }
-    var eligiendoFase by remember { mutableStateOf<ItemPci?>(null) }
     var fotoAbierta by remember { mutableStateOf<pe.servicon.sigov.datos.FotoDelItem?>(null) }
     var quitando by remember { mutableStateOf<pe.servicon.sigov.datos.FotoDelItem?>(null) }
 
@@ -127,17 +126,6 @@ fun PantallaPci(
             text = { Text("Se quita la foto del ${nombreDeFase(f.fase)}. Si la etapa queda sin foto, el ítem vuelve a ejecución.") },
             confirmButton = { TextButton(onClick = { vm.quitarFoto(f); quitando = null }) { Text("Quitar", color = Semaforo.Vencido) } },
             dismissButton = { TextButton(onClick = { quitando = null }) { Text("Cancelar") } },
-        )
-    }
-
-    eligiendoFase?.let { item ->
-        DialogoDeFase(
-            item = item,
-            alCerrar = { eligiendoFase = null },
-            alElegir = { fase ->
-                eligiendoFase = null
-                vm.tomarFoto(item, fase)
-            },
         )
     }
 
@@ -191,7 +179,17 @@ fun PantallaPci(
                 else -> ListaDeItems(
                     estado = estado,
                     vm = vm,
-                    alRegistrarFotos = { eligiendoFase = it },
+                    // A la cámara de frente, en la primera etapa sin foto (Elvis, 22/10)
+                    alRegistrarFotos = { item ->
+                        vm.tomarFoto(
+                            item,
+                            when {
+                                item.fotosAntes == 0 -> Fase.ANTES
+                                item.fotosDurante == 0 -> Fase.DURANTE
+                                else -> Fase.DESPUES
+                            },
+                        )
+                    },
                 )
             }
         }
@@ -500,35 +498,6 @@ private fun ContadorDeFotos(item: ItemPci) {
             )
         }
     }
-}
-
-// ─── Registrar fotos: elegir la etapa ─────────────────────────────────────
-
-@Composable
-private fun DialogoDeFase(item: ItemPci, alCerrar: () -> Unit, alElegir: (Fase) -> Unit) {
-    AlertDialog(
-        onDismissRequest = alCerrar,
-        title = { Text("Registrar fotos") },
-        text = {
-            Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
-                Text(
-                    listOfNotNull(item.numero?.let { "Ítem $it" }, item.tituloCorto).joinToString(" · "),
-                    style = MaterialTheme.typography.bodyMedium,
-                    fontWeight = FontWeight.SemiBold,
-                )
-                Text("¿De qué etapa es la foto?", style = MaterialTheme.typography.bodySmall)
-                listOf(
-                    Fase.ANTES to item.fotosAntes,
-                    Fase.DURANTE to item.fotosDurante,
-                    Fase.DESPUES to item.fotosDespues,
-                ).forEach { (fase, n) ->
-                    BotonDeFoto(fase, n, false, Modifier.fillMaxWidth()) { alElegir(fase) }
-                }
-            }
-        },
-        confirmButton = {},
-        dismissButton = { TextButton(onClick = alCerrar) { Text("Cancelar") } },
-    )
 }
 
 // ─── La ficha del ítem ────────────────────────────────────────────────────

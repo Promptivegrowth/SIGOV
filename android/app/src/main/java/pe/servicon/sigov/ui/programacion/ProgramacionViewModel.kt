@@ -21,6 +21,8 @@ data class EstadoProgramacion(
     val cargando: Boolean = true,
     val fecha: LocalDate = Peru.hoy(),
     val items: List<ItemProgramado> = emptyList(),
+    /** Fotos por etapa de cada partida (A · D · DP), como en el PCI. */
+    val fases: Map<String, Map<String, Int>> = emptyMap(),
     /** El enlace de la foto referencial abierta. */
     val referencia: String? = null,
     /** Ir a la cámara: el registro y la etapa. Se consume una vez. */
@@ -51,6 +53,7 @@ class ProgramacionViewModel @Inject constructor(
     private val sesion: SesionRepositorio,
     private val partes: ParteDao,
     private val documentos: pe.servicon.sigov.datos.DocumentosRepositorio,
+    private val colaEnvio: pe.servicon.sigov.datos.sync.ColaRepositorio,
 ) : ViewModel() {
 
     private val _estado = MutableStateFlow(EstadoProgramacion())
@@ -62,6 +65,9 @@ class ProgramacionViewModel @Inject constructor(
     }
 
     fun moverDia(dias: Long) = cargar(_estado.value.fecha.plusDays(dias))
+
+    /** Al volver a la pantalla se relee, sin el indicador de carga. */
+    fun alVolver() = cargar(_estado.value.fecha, silencioso = true)
 
     fun volverAHoy() = cargar(Peru.hoy())
 
@@ -81,6 +87,18 @@ class ProgramacionViewModel @Inject constructor(
     }
 
     fun cerrarReferencia() = _estado.update { it.copy(referencia = null) }
+
+    /**
+     * «Tomar fotos» abre la cámara de frente (Elvis, 22/10): sin preguntar la
+     * etapa, porque la cámara ya trae Antes, Durante y Después. Empieza en la
+     * primera que todavía no tiene foto.
+     */
+    fun tomarFotos(item: ItemProgramado) {
+        val tiene = _estado.value.fases[item.id].orEmpty()
+        val fase = listOf(pe.servicon.sigov.datos.Fase.ANTES, pe.servicon.sigov.datos.Fase.DURANTE, pe.servicon.sigov.datos.Fase.DESPUES)
+            .firstOrNull { (tiene[it.valor] ?: 0) == 0 } ?: pe.servicon.sigov.datos.Fase.DESPUES
+        tomarFoto(item, fase)
+    }
 
     /** La foto de una etapa de la partida: sobre su registro del reporte de hoy. */
     fun tomarFoto(item: ItemProgramado, fase: pe.servicon.sigov.datos.Fase) {
@@ -114,9 +132,22 @@ class ProgramacionViewModel @Inject constructor(
             val enElEquipo = runCatching { partes.registrosDePartida(item.id) }.getOrDefault(0) > 0
             when {
                 !enLaNube && !enElEquipo -> _estado.update { it.copy(sinAvance = item) }
-                // Lo anotó sin señal: el servidor todavía no lo conoce
-                !enLaNube -> _estado.update {
-                    it.copy(aviso = "Tu avance todavía no se envía. Cuando se sincronice, vuelve a finalizar la actividad.")
+                // Lo anotó sin señal: el cierre sale detrás de su avance, sin
+                // que el capataz tenga que volver a finalizar (Elvis, 22/10)
+                !enLaNube -> {
+                    val registro = partes.ultimoRegistroDePartida(item.id)
+                    val enCola = registro?.let { colaEnvio.envio(it.clientId) }
+                    colaEnvio.encolar(
+                        tabla = "rpc:partida_finalizar",
+                        etiqueta = "Cerrar partida · " + (item.actividad ?: "partida"),
+                        cuerpo = kotlinx.serialization.json.buildJsonObject {
+                            put("p_item", kotlinx.serialization.json.JsonPrimitive(item.id))
+                        },
+                        dependeDe = enCola?.takeIf { it.estado != pe.servicon.sigov.datos.local.EstadoEnvio.ENVIADO }?.clientId,
+                    )
+                    _estado.update {
+                        it.copy(aviso = "Listo: la partida se cierra sola en cuanto se envíe su avance.")
+                    }
                 }
                 else -> accion(item, "Partida cerrada. Queda esperando el visto bueno del supervisor.") {
                     campo.finalizarPartida(item.id)
@@ -156,15 +187,18 @@ class ProgramacionViewModel @Inject constructor(
 
     fun avisoVisto() = _estado.update { it.copy(aviso = null, error = null) }
 
-    private fun cargar(fecha: LocalDate) {
-        _estado.update { it.copy(cargando = true, fecha = fecha, error = null) }
+    private fun cargar(fecha: LocalDate, silencioso: Boolean = false) {
+        _estado.update { it.copy(cargando = !silencioso || it.items.isEmpty(), fecha = fecha, error = null) }
         viewModelScope.launch {
             runCatching {
                 val cuadrilla = sesion.cuadrilla()
                     ?: error("Tu usuario no dirige ninguna cuadrilla. Avisa al coordinador.")
                 val items = campo.programacionDelDia(cuadrilla.servicioId, cuadrilla.id, fecha)
+                val fases = runCatching { partes.fasesDePartidas(items.map { i -> i.id }) }.getOrDefault(emptyList())
+                    .groupBy { c -> c.registroClientId }
+                    .mapValues { (_, cs) -> cs.associate { c -> c.fase to c.cuantas } }
                 _estado.update {
-                    it.copy(cargando = false, items = items, cuadrilla = cuadrilla.name)
+                    it.copy(cargando = false, items = items, fases = fases, cuadrilla = cuadrilla.name)
                 }
             }.onFailure { fallo ->
                 _estado.update { it.copy(cargando = false, error = fallo.enCristiano()) }

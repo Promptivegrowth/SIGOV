@@ -105,6 +105,14 @@ interface ColaDao {
      * al campamento con wifi, o el supervisor puede haber corregido en
      * oficina lo que hacía fallar el registro.
      */
+    /**
+     * Lo que quedó «Enviando…» porque Android cerró la app a mitad del envío
+     * (video de Elvis del 22/10: el parte del 18/10 se quedó así una hora y
+     * arrastró lo que dependía de él). Vuelve a la cola para reintentarse.
+     */
+    @Query("UPDATE cola SET estado = 'PENDIENTE', proximoIntento = :ahora WHERE estado = 'ENVIANDO'")
+    suspend fun revivirEnvios(ahora: Long)
+
     @Query("UPDATE cola SET intentos = 0, proximoIntento = :ahora WHERE estado = 'ERROR'")
     suspend fun revivirFallidos(ahora: Long)
 }
@@ -264,6 +272,22 @@ interface ParteDao {
 
     @Query("SELECT * FROM evidencias WHERE clientId = :id")
     suspend fun evidencia(id: String): EvidenciaLocal?
+
+    /** Fotos por etapa de cada partida, en este teléfono (A · D · DP en la tarjeta). */
+    @Query(
+        """
+        SELECT r.planItemId AS registroClientId, e.fase AS fase, COUNT(*) AS cuantas
+        FROM evidencias e
+        JOIN registros r ON r.clientId = e.registroClientId
+        WHERE r.planItemId IN (:planItemIds)
+        GROUP BY r.planItemId, e.fase
+        """
+    )
+    suspend fun fasesDePartidas(planItemIds: List<String>): List<ConteoPorFase>
+
+    /** El último registro de una partida, de cualquier día. */
+    @Query("SELECT * FROM registros WHERE planItemId = :planItemId ORDER BY creadoEn DESC LIMIT 1")
+    suspend fun ultimoRegistroDePartida(planItemId: String): RegistroLocal?
 }
 
 @Dao

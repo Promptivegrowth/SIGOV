@@ -135,7 +135,22 @@ class RecursoRepositorio @Inject constructor(
     }
 
     /** Quita uno anotado por error, si todavía no salió del teléfono. */
-    suspend fun descartar(clientId: String) = cola.descartar(clientId)
+    /**
+     * Quita lo anotado por error. Si no salió del teléfono, se descarta; si
+     * ya está en la nube, se le pide a la nube que lo dé de baja (Elvis, 22/10).
+     */
+    suspend fun descartar(clientId: String) {
+        val envio = colaDao.porId(clientId)
+        if (envio != null && envio.estado != pe.servicon.sigov.datos.local.EstadoEnvio.ENVIADO) cola.descartar(clientId)
+        else cola.encolar(
+            tabla = "rpc:quitar_del_parte",
+            etiqueta = "Quitado del parte",
+            cuerpo = buildJsonObject {
+                put("p_tabla", "parte_recursos")
+                put("p_client_id", clientId)
+            },
+        )
+    }
 
     private fun deFila(clientId: String, o: JsonObject, enviado: Boolean, registroClientId: String? = null) = RecursoDelDia(
         clientId = clientId,

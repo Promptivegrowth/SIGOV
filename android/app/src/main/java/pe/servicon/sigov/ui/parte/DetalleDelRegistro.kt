@@ -111,7 +111,7 @@ fun DetalleDelRegistro(
                 } else null,
                 enabled = editable,
                 singleLine = true,
-                keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Decimal),
+                keyboardOptions = KeyboardOptions(keyboardType = if (registro.unidad == "und") KeyboardType.Number else KeyboardType.Decimal),
                 modifier = Modifier.fillMaxWidth(),
             )
 
@@ -123,7 +123,7 @@ fun DetalleDelRegistro(
                     c.nombre,
                     Numeros.tres(c.cantidad) + (c.unidad?.let { " $it" } ?: ""),
                     porEnviar = !c.enviado,
-                    alQuitar = if (editable && !c.enviado) ({ alQuitarConsumo(c) }) else null,
+                    alQuitar = if (editable) ({ alQuitarConsumo(c) }) else null,
                 )
             }
 
@@ -135,7 +135,7 @@ fun DetalleDelRegistro(
                     listOfNotNull(r.codigo, r.descripcion).joinToString(" · "),
                     r.cantidad?.let { Numeros.tres(it) + (r.unidad?.let { u -> " $u" } ?: "") } ?: "",
                     porEnviar = !r.enviado,
-                    alQuitar = if (editable && !r.enviado) ({ alQuitarRecurso(r) }) else null,
+                    alQuitar = if (editable) ({ alQuitarRecurso(r) }) else null,
                 )
             }
 

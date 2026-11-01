@@ -46,12 +46,12 @@ data class EstadoCamara(
     val error: String? = null,
 ) {
     /**
-     * Las fases que se ofrecen. Dentro de un ítem PCI no hay «General»: la
-     * foto ya es de ese ítem y COVINCA solo pide antes, durante y después
-     * (lo pidió Elvis en la reunión del 05-10).
+     * Las fases que se ofrecen. En un ítem PCI o en una partida programada
+     * no hay «General»: COVINCA pide antes, durante y después (Elvis, 05-10
+     * para el PCI y 22/10 para la programación).
      */
     val fases: List<Fase>
-        get() = if (registro?.pciItemId != null) listOf(Fase.ANTES, Fase.DURANTE, Fase.DESPUES)
+        get() = if (registro?.pciItemId != null || registro?.planItemId != null) listOf(Fase.ANTES, Fase.DURANTE, Fase.DESPUES)
                 else Fase.entries
 }
 

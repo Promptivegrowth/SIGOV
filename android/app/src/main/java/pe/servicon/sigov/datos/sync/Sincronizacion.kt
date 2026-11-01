@@ -133,6 +133,7 @@ class ColaRepositorio @Inject constructor(
         // Lo que se había rendido vuelve a la cola: pulsar el botón es una
         // decisión de la persona, no el reintento automático que se frenó.
         cola.revivirFallidos(System.currentTimeMillis())
+        cola.revivirEnvios(System.currentTimeMillis())
         pedirSincronizacion(contexto)
     }
 
@@ -199,6 +200,9 @@ class TrabajadorSincronizacion @AssistedInject constructor(
 
     override suspend fun doWork(): Result {
         val ahora = System.currentTimeMillis()
+        // Solo corre un trabajador a la vez: lo que esté «Enviando…» al
+        // empezar quedó a medias de una corrida que Android cortó
+        cola.revivirEnvios(ahora)
         val porEnviar = cola.porEnviar(ahora, MAX_INTENTOS)
         if (porEnviar.isEmpty()) return Result.success()
 

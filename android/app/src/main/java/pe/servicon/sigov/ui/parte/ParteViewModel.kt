@@ -43,6 +43,8 @@ data class EstadoParte(
     val tramoPorDefecto: Tramo? = null,
     /** Llegó desde una partida con «Registrar avance»: se abre ya elegida. */
     val partidaInicial: ItemProgramado? = null,
+    /** La partida ya tenía avance hoy: se abre su registro para corregirlo. */
+    val corregir: String? = null,
     val parte: ParteLocal? = null,
     val registros: List<RegistroLocal> = emptyList(),
     val actividades: List<Actividad> = emptyList(),
@@ -88,6 +90,12 @@ data class EstadoParte(
     fun codigoDe(r: RegistroLocal): String? =
         actividades.firstOrNull { a -> a.id == r.actividadId }?.code
             ?: r.pciItemId?.let { itemsPciDelDia[it]?.actividadCodigo }
+
+    /** Partida o ítem PCI → su registro de hoy que ya tiene avance. */
+    val conAvance: Map<String, String>
+        get() = registros.filter { it.cantidad > 0 }
+            .flatMap { r -> listOfNotNull(r.planItemId, r.pciItemId).map { id -> id to r.clientId } }
+            .toMap()
 
     /** «Ítem 7» de un registro de PCI. */
     fun itemDe(r: RegistroLocal): Int? = r.pciItemId?.let { itemsPciDelDia[it]?.numero }
@@ -214,11 +222,15 @@ class ParteViewModel @Inject constructor(
                     val partida = pedida?.let { id ->
                         programadas.firstOrNull { p -> p.id == id } ?: campo.itemProgramado(id)
                     }
+                    val yaConAvance = partida?.let { p -> partes.registroDePartida(parte.clientId, p.id) }
+                        ?.takeIf { r -> r.cantidad > 0 }
                     _estado.update {
                         it.copy(
                             programadas = programadas,
                             pcis = pcis,
-                            partidaInicial = partida,
+                            partidaInicial = partida.takeIf { yaConAvance == null },
+                            corregir = yaConAvance?.clientId,
+                            aviso = if (yaConAvance != null) "Esta partida ya tiene avance hoy: corrígelo aquí, sin registrarla otra vez." else it.aviso,
                         )
                     }
                 }
@@ -291,7 +303,7 @@ class ParteViewModel @Inject constructor(
                 val existente = when (origen) {
                     is OrigenDelTrabajo.Pci -> _estado.value.registros.firstOrNull { r -> r.pciItemId == origen.item.id }
                     is OrigenDelTrabajo.Programado -> _estado.value.registros
-                        .firstOrNull { r -> r.planItemId == origen.item.id && r.cantidad == 0.0 }
+                        .firstOrNull { r -> r.planItemId == origen.item.id }
                     else -> null
                 }
                 val registro = if (existente != null) {
@@ -371,6 +383,8 @@ class ParteViewModel @Inject constructor(
                 .onFailure { f -> _estado.update { it.copy(error = f.enCristiano()) } }
         }
     }
+
+    fun correccionAbierta() = _estado.update { it.copy(corregir = null) }
 
     private fun refrescarOrigenes() {
         viewModelScope.launch {
