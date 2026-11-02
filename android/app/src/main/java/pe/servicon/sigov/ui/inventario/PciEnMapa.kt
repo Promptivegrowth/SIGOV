@@ -345,17 +345,23 @@ fun PantallaPciEnMapa(
                         vm.recordarCamara(control.mapa?.cameraPosition); alVerFicha(it)
                     }
                     // Qué significa cada color (REV3-OBS-30)
-                    Row(
-                        Modifier.align(Alignment.BottomStart).padding(8.dp)
-                            .background(Color.White.copy(alpha = 0.88f), RoundedCornerShape(8.dp)).padding(horizontal = 8.dp, vertical = 4.dp),
-                        horizontalArrangement = Arrangement.spacedBy(6.dp),
+                    // Arriba a la derecha, para no tapar los puntos de la costa
+                    Column(
+                        Modifier.align(Alignment.TopEnd).padding(8.dp)
+                            .background(Color.White.copy(alpha = 0.9f), RoundedCornerShape(8.dp)).padding(horizontal = 8.dp, vertical = 4.dp),
+                        verticalArrangement = Arrangement.spacedBy(2.dp),
                     ) {
-                        listOf(AvancePci.ATENDIDO.color to "Atendido", PlazoEnMapa.VENCIDO.color to "Vencido",
-                            PlazoEnMapa.POR_VENCER.color to "Por vencer", AvancePci.EN_EJECUCION.color to "En ejecución",
-                            AvancePci.OBSERVADO.color to "Observado", AvancePci.POR_ATENDER.color to "Por atender").forEach { (c, t) ->
-                            Row(verticalAlignment = Alignment.CenterVertically) {
-                                Box(Modifier.size(8.dp).clip(CircleShape).background(c))
-                                Text(" $t", fontSize = 9.5.sp, color = Color(0xFF334155))
+                        listOf(
+                            listOf(AvancePci.ATENDIDO.color to "Atendido", PlazoEnMapa.VENCIDO.color to "Vencido", PlazoEnMapa.POR_VENCER.color to "Por vencer"),
+                            listOf(AvancePci.EN_EJECUCION.color to "En ejecución", AvancePci.OBSERVADO.color to "Observado", AvancePci.POR_ATENDER.color to "Por atender"),
+                        ).forEach { fila ->
+                            Row(horizontalArrangement = Arrangement.spacedBy(6.dp)) {
+                                fila.forEach { (c, t) ->
+                                    Row(verticalAlignment = Alignment.CenterVertically) {
+                                        Box(Modifier.size(8.dp).clip(CircleShape).background(c))
+                                        Text(" $t", fontSize = 9.5.sp, color = Color(0xFF334155))
+                                    }
+                                }
                             }
                         }
                     }
@@ -476,18 +482,13 @@ private fun MapaDePci(
                         org.maplibre.android.style.sources.GeoJsonOptions().withCluster(true).withClusterMaxZoom(11).withClusterRadius(42)))
                     estilo.addLayer(CircleLayer("capa-pci-grupos", "src-pci").withProperties(
                         PropertyFactory.circleColor("#072D70"),
-                        PropertyFactory.circleOpacity(0.85f),
-                        PropertyFactory.circleRadius(Expression.step(Expression.get("point_count"), Expression.literal(14f),
-                            Expression.stop(10, 18f), Expression.stop(50, 24f))),
+                        PropertyFactory.circleOpacity(0.8f),
+                        PropertyFactory.circleRadius(Expression.step(Expression.get("point_count"), Expression.literal(12f),
+                            Expression.stop(5, 16f), Expression.stop(20, 21f), Expression.stop(60, 27f))),
                         PropertyFactory.circleStrokeWidth(2f),
                         PropertyFactory.circleStrokeColor("#FFFFFF"),
                     ).withFilter(Expression.has("point_count")))
-                    estilo.addLayer(org.maplibre.android.style.layers.SymbolLayer("capa-pci-cuenta", "src-pci").withProperties(
-                        PropertyFactory.textField(Expression.toString(Expression.get("point_count"))),
-                        PropertyFactory.textSize(12f),
-                        PropertyFactory.textColor("#FFFFFF"),
-                        PropertyFactory.textAllowOverlap(true),
-                    ).withFilter(Expression.has("point_count")))
+                    // Sin texto: el mapa base no trae fuentes; el tamaño del grupo dice cuántos son
                     estilo.addLayer(CircleLayer("capa-pci", "src-pci").withFilter(Expression.not(Expression.has("point_count"))).withProperties(
                         PropertyFactory.circleColor(Expression.toColor(Expression.get("color"))),
                         PropertyFactory.circleRadius(Expression.interpolate(Expression.linear(), Expression.zoom(),

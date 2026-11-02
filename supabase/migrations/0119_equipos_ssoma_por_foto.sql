@@ -12,6 +12,7 @@
 
 alter table public.safety_equipment_checks
   alter column conforme drop not null,
+  alter column conforme drop default,
   add column if not exists revision_estado text not null default 'pendiente'
     check (revision_estado in ('pendiente', 'conforme', 'observado', 'vencido', 'requiere_correccion')),
   add column if not exists revisado_por uuid references public.profiles(id),

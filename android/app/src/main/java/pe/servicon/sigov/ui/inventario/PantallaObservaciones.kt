@@ -1256,10 +1256,11 @@ private fun MapaDeObservaciones(
                     ).withFilter(Expression.eq(Expression.get("sel"), Expression.literal(true))))
                     estilo.addLayer(CircleLayer("capa-obs", "src-obs").withProperties(
                         PropertyFactory.circleColor(Expression.toColor(Expression.get("color"))),
-                        PropertyFactory.circleRadius(Expression.sum(
-                            Expression.interpolate(Expression.linear(), Expression.zoom(),
-                                Expression.stop(6, 5f), Expression.stop(12, 9f), Expression.stop(16, 13f)),
-                            Expression.product(Expression.literal(2f), Expression.subtract(Expression.get("n"), Expression.literal(1f))))),
+                        // El zoom va arriba (regla de MapLibre); cada actividad más agranda el punto
+                        PropertyFactory.circleRadius(Expression.interpolate(Expression.linear(), Expression.zoom(),
+                            Expression.stop(6, Expression.sum(Expression.literal(5f), Expression.product(Expression.literal(2f), Expression.subtract(Expression.get("n"), Expression.literal(1f))))),
+                            Expression.stop(12, Expression.sum(Expression.literal(9f), Expression.product(Expression.literal(2f), Expression.subtract(Expression.get("n"), Expression.literal(1f))))),
+                            Expression.stop(16, Expression.sum(Expression.literal(13f), Expression.product(Expression.literal(2f), Expression.subtract(Expression.get("n"), Expression.literal(1f))))))),
                         PropertyFactory.circleStrokeWidth(2f),
                         PropertyFactory.circleStrokeColor("#FFFFFF"),
                     ))

@@ -111,6 +111,10 @@ class ObservacionesRepositorio @Inject constructor(
     private val json = Json { ignoreUnknownKeys = true; encodeDefaults = true }
 
     suspend fun lista(servicioId: String): List<ObservacionDeCampo> = withContext(Dispatchers.IO) {
+        // La cola se lee antes que la nube: si un envío sale justo entre las
+        // dos lecturas, igual aparece (y si sale dos veces, se descarta por
+        // su client_id). Al revés, la observación desaparecía hasta recargar.
+        val enCola = colaDao.sinConfirmarDe(TABLA)
         val remotas = runCatching {
             val filas = supabase.postgrest.from("v_observaciones_campo")
                 .select {
@@ -133,7 +137,7 @@ class ObservacionesRepositorio @Inject constructor(
         val fotosQuitadas = parametrosPendientes("rpc:dar_de_baja_evidencia")
         val subidas = remotas.mapNotNull { it.clientId }.toSet()
         // Las que aún esperan señal también se ven
-        val locales = colaDao.sinConfirmarDe(TABLA).mapNotNull { envio ->
+        val locales = enCola.mapNotNull { envio ->
             if (envio.clientId in subidas) return@mapNotNull null
             val o = runCatching { json.parseToJsonElement(envio.cuerpo) as JsonObject }.getOrNull() ?: return@mapNotNull null
             fun texto(k: String) = o[k]?.jsonPrimitive?.contentOrNull

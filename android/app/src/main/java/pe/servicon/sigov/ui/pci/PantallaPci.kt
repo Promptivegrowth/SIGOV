@@ -42,6 +42,7 @@ import androidx.compose.ui.text.input.KeyboardType
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
+import androidx.compose.ui.unit.sp
 import androidx.hilt.navigation.compose.hiltViewModel
 import androidx.lifecycle.Lifecycle
 import androidx.lifecycle.LifecycleEventObserver
@@ -357,11 +358,14 @@ private fun Contador(e: Estado, n: Int, elegido: Boolean, modifier: Modifier, al
         horizontalAlignment = Alignment.CenterHorizontally,
     ) {
         Text("$n", style = MaterialTheme.typography.titleLarge, fontWeight = FontWeight.Bold, color = color)
+        // Cinco contadores en una fila: el rótulo baja de línea entre
+        // palabras, nunca a mitad de una («Observado/s»)
         Text(
-            e.etiqueta,
-            style = MaterialTheme.typography.labelSmall,
+            e.etiqueta.replace(' ', '\n'),
+            style = MaterialTheme.typography.labelSmall.copy(fontSize = 10.5.sp),
             textAlign = TextAlign.Center,
             maxLines = 2,
+            softWrap = false,
             color = MaterialTheme.colorScheme.onSurface,
         )
     }
