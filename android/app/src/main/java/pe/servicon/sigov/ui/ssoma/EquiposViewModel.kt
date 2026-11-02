@@ -66,6 +66,7 @@ class EquiposViewModel @Inject constructor(
     private val ssoma: SsomaRepositorio,
     private val sesion: SesionRepositorio,
     private val ubicacion: Ubicacion,
+    @dagger.hilt.android.qualifiers.ApplicationContext private val contexto: android.content.Context,
 ) : ViewModel() {
 
     private val _estado = MutableStateFlow(EstadoEquipos())
@@ -123,6 +124,26 @@ class EquiposViewModel @Inject constructor(
             }
         }
     }
+
+    /** La foto del formato de inspección, para la revisión SSOMA (REV3-OBS-45). */
+    fun inspeccionarConFoto(equipo: EquipoDeSeguridad, foto: java.io.File, nota: String?, alTerminar: () -> Unit) {
+        _estado.update { it.copy(guardando = true) }
+        viewModelScope.launch {
+            runCatching {
+                val punto = runCatching { ubicacion.actual() }.getOrNull()
+                ssoma.inspeccionarConFoto(equipo, foto, nota, punto)
+            }.onSuccess {
+                _estado.update { it.copy(guardando = false, aviso = "Formato enviado: queda pendiente de revisión SSOMA.") }
+                alTerminar()
+                cargar()
+            }.onFailure { fallo ->
+                _estado.update { it.copy(guardando = false, error = fallo.enCristiano()) }
+            }
+        }
+    }
+
+    fun archivoTemporal(): java.io.File =
+        java.io.File(contexto.cacheDir, "formato-" + System.currentTimeMillis() + ".jpg")
 
     fun avisoVisto() = _estado.update { it.copy(aviso = null, error = null) }
 }

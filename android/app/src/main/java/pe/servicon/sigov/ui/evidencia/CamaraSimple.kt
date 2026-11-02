@@ -37,6 +37,8 @@ fun CamaraSimple(
     destino: () -> File,
     alTomar: (File) -> Unit,
     alCerrar: () -> Unit,
+    /** Un formato en papel se fotografía en vertical (REV3-OBS-45). */
+    soloHorizontal: Boolean = true,
 ) {
     val contexto = LocalContext.current
     val permiso = rememberPermissionState(android.Manifest.permission.CAMERA)
@@ -45,7 +47,7 @@ fun CamaraSimple(
     var tomando by remember { mutableStateOf(false) }
     var error by remember { mutableStateOf<String?>(null) }
     val giro by rememberGiroDelEquipo()
-    val horizontal = giro == android.view.Surface.ROTATION_90 || giro == android.view.Surface.ROTATION_270
+    val horizontal = !soloHorizontal || giro == android.view.Surface.ROTATION_90 || giro == android.view.Surface.ROTATION_270
 
     // La toma sale en la orientación en que se sostiene el celular
     LaunchedEffect(giro, disparo) { disparo?.targetRotation = giro }
@@ -55,6 +57,7 @@ fun CamaraSimple(
         Box(Modifier.fillMaxSize().background(Color.Black)) {
             if (permiso.status.isGranted) {
                 VisorDeCamara(onListo = { disparo = it })
+                BotonDeFlash(disparo, Modifier.align(Alignment.TopEnd).statusBarsPadding().padding(top = 60.dp, end = 12.dp))
                 if (!horizontal) AvisoDeGirar(Modifier.align(Alignment.Center))
                 Disparador(
                     habilitado = disparo != null && !tomando && horizontal,

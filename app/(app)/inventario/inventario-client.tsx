@@ -348,7 +348,7 @@ export function InventarioClient() {
                   ['Tramo', detail.section_name],
                   ['Progresiva', detail.progresiva_txt],
                   ['Lado', etiquetaDeLado(detail.side)],
-                  ['Estado', ASSET_CONDITION[detail.condition as keyof typeof ASSET_CONDITION].label],
+                  ['Condición base del inventario', ASSET_CONDITION[detail.condition as keyof typeof ASSET_CONDITION]?.label ?? '—'],
                   ['Año de instalación', detail.install_year],
                   ['Última inspección', detail.last_inspected_on ? fmtDate(detail.last_inspected_on) : '—'],
                   ['Próxima inspección', detail.next_inspection_on ? fmtDate(detail.next_inspection_on) : '—'],

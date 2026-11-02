@@ -150,10 +150,10 @@ fun PantallaVehiculos(
             guardando = estado.guardando,
             error = estado.error,
             alCerrar = { reemplazando = null; nuevoTemporal = false; vm.avisoVisto() },
-            alGuardar = { placa, tipo, marca, modelo, motivo, km, obs, desde ->
+            alGuardar = { placa, tipo, marca, modelo, motivo, km, obs, desde, documentos ->
                 val titular = reemplazando
                 val cerrar = { reemplazando = null; nuevoTemporal = false }
-                if (titular != null) vm.registrarReemplazo(titular, placa, tipo, marca, modelo, motivo, km, obs, desde, cerrar)
+                if (titular != null) vm.registrarReemplazo(titular, placa, tipo, marca, modelo, motivo, km, obs, desde, documentos, cerrar)
                 else vm.altaTemporal(placa, tipo, marca, modelo, km, obs, cerrar)
             },
         )
@@ -203,10 +203,21 @@ private fun FilaVehiculo(
                                 vehiculo.tipo,
                                 listOfNotNull(vehiculo.brand, vehiculo.model, vehiculo.anio?.toString()).joinToString(" ")
                                     .ifBlank { null },
-                                vehiculo.estadoLegible,
                             ).joinToString(" · "),
                             style = MaterialTheme.typography.bodySmall,
                             color = MaterialTheme.colorScheme.onSurfaceVariant,
+                        )
+                        // Dos cosas distintas, dichas aparte (REV3-OBS-41)
+                        Text(
+                            "Estado mecánico: ${vehiculo.estadoLegible}",
+                            style = MaterialTheme.typography.bodySmall,
+                            color = if (vehiculo.status == "operativo") MaterialTheme.colorScheme.onSurface else Semaforo.PorVencer,
+                        )
+                        Text(
+                            "Habilitación documental: ${vehiculo.habilitacion}",
+                            style = MaterialTheme.typography.bodySmall,
+                            fontWeight = FontWeight.SemiBold,
+                            color = if (vehiculo.documentosEnRegla) Marca.VerdeBandera else Semaforo.Vencido,
                         )
                         // De dónde viene: titular, reemplazo de otro o temporal (OBS-70 a 72)
                         Text(
@@ -256,6 +267,21 @@ private fun FilaVehiculo(
                             if (v.size == 1) "No apto para circular: venció ${v[0]}. Renuévalo o avisa al supervisor."
                             else "No apto para circular: vencieron ${v.dropLast(1).joinToString(", ")} y ${v.last()}. Renuévalos o avisa al supervisor."
                         },
+                        style = MaterialTheme.typography.bodySmall,
+                        fontWeight = FontWeight.SemiBold,
+                        color = Semaforo.Vencido,
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .background(Semaforo.Vencido.copy(alpha = 0.10f), RoundedCornerShape(8.dp))
+                            .padding(10.dp),
+                    )
+                }
+                if (vehiculo.documentosVencidos.isEmpty() && vehiculo.documentosFaltantes.isNotEmpty()) {
+                    Spacer(Modifier.height(8.dp))
+                    Text(
+                        "No habilitado: falta registrar " + vehiculo.documentosFaltantes.let { f ->
+                            if (f.size == 1) f[0] else f.dropLast(1).joinToString(", ") + " y " + f.last()
+                        } + ". Pide al supervisor que los registre antes de salir.",
                         style = MaterialTheme.typography.bodySmall,
                         fontWeight = FontWeight.SemiBold,
                         color = Semaforo.Vencido,
@@ -348,10 +374,20 @@ private fun Preoperacional(
     alCerrar: () -> Unit,
     alRegistrar: (puntos: Map<String, Boolean>, km: Int?, hallazgo: String?) -> Unit,
 ) {
+    // Lo que SIGOV ya sabe de los papeles no se marca a mano (REV3-OBS-43)
+    val papelesBloqueados = !vehiculo.documentosEnRegla
+    val notaDePapeles = listOfNotNull(
+        vehiculo.documentosVencidos.takeIf { it.isNotEmpty() }?.let { "vencido: " + it.joinToString(", ") },
+        vehiculo.documentosFaltantes.takeIf { it.isNotEmpty() }?.let { "sin registrar: " + it.joinToString(", ") },
+    ).joinToString("; ")
     val puntos = remember {
         mutableStateMapOf<String, Boolean>().apply {
-            PUNTOS_PREOPERACIONAL.forEach { (clave, _) -> put(clave, true) }
+            PUNTOS_PREOPERACIONAL.forEach { (clave, _) -> put(clave, !(clave == "documentos" && papelesBloqueados)) }
         }
+    }
+    // Un hallazgo por cada punto No conforme (REV3-OBS-44)
+    val hallazgos = remember {
+        mutableStateMapOf<String, String>().apply { if (papelesBloqueados) put("documentos", "Según SIGOV, $notaDePapeles") }
     }
     // Vacío a propósito: si se prellenaba con el último, el capataz lo dejaba
     // como estaba y el kilometraje del día nunca se anotaba (OBS-68).
@@ -422,22 +458,25 @@ private fun Preoperacional(
                                 color = if (conforme) MaterialTheme.colorScheme.onSurface
                                 else Semaforo.Urgente,
                             )
-                            ConformeONo(conforme = conforme, alCambiar = { puntos[clave] = it })
+                            if (clave == "documentos" && papelesBloqueados) {
+                                Text("No conforme · lo sabe SIGOV ($notaDePapeles). No se puede marcar conforme.",
+                                    style = MaterialTheme.typography.bodySmall, fontWeight = FontWeight.SemiBold, color = Semaforo.Vencido)
+                            } else {
+                                ConformeONo(conforme = conforme, alCambiar = { puntos[clave] = it })
+                            }
+                            if (!conforme && !(clave == "documentos" && papelesBloqueados)) {
+                                OutlinedTextField(
+                                    value = hallazgos[clave].orEmpty(),
+                                    onValueChange = { hallazgos[clave] = it.take(200) },
+                                    label = { Text("Qué encontraste en este punto") },
+                                    singleLine = false, minLines = 1,
+                                    shape = RoundedCornerShape(10.dp),
+                                    modifier = Modifier.fillMaxWidth(),
+                                )
+                            }
                         }
                     }
 
-                    if (observados > 0) {
-                        Spacer(Modifier.height(8.dp))
-                        OutlinedTextField(
-                            value = hallazgo,
-                            onValueChange = { hallazgo = it },
-                            label = { Text("Qué encontraste") },
-                            placeholder = { Text("Llanta posterior derecha con poco labrado…") },
-                            minLines = 2,
-                            shape = RoundedCornerShape(12.dp),
-                            modifier = Modifier.fillMaxWidth(),
-                        )
-                    }
 
                     error?.let {
                         Text(
@@ -465,15 +504,18 @@ private fun Preoperacional(
                                 kilometraje.isBlank() -> "Anota el kilometraje del tablero."
                                 vehiculo.kilometraje != null && (kilometraje.toIntOrNull() ?: 0) < vehiculo.kilometraje ->
                                     "El kilometraje no puede ser menor que el último registrado (%,d km).".format(vehiculo.kilometraje)
-                                observados > 0 && hallazgo.isBlank() ->
-                                    "Di qué encontraste en los $observados puntos observados."
+                                puntos.any { (k, ok) -> !ok && hallazgos[k].isNullOrBlank() } ->
+                                    "Escribe qué encontraste en cada punto No conforme."
                                 else -> null
                             }
                             if (error == null) {
+                                // Cada hallazgo con su punto: «Llantas y aro de repuesto: poco labrado»
+                                val texto = PUNTOS_PREOPERACIONAL.filter { (k, _) -> puntos[k] == false }
+                                    .joinToString("\n") { (k, etiqueta) -> "$etiqueta: ${hallazgos[k].orEmpty().trim()}" }
                                 alRegistrar(
                                     puntos.toMap(),
                                     kilometraje.toIntOrNull(),
-                                    hallazgo.ifBlank { null },
+                                    texto.ifBlank { null },
                                 )
                             }
                         },
@@ -541,6 +583,14 @@ private fun HistorialDeReemplazos(historial: List<pe.servicon.sigov.datos.Reempl
                         style = MaterialTheme.typography.bodySmall,
                         color = MaterialTheme.colorScheme.onSurfaceVariant,
                     )
+                    // El kilometraje del reemplazo: inicial → final (REV3-REC-03)
+                    h.kmInicial?.let { ini ->
+                        Text(
+                            "%,d km".format(ini) + (h.kmFinal?.let { fin -> " → %,d km · recorrió %,d km".format(fin, fin - ini) } ?: " → en uso"),
+                            style = MaterialTheme.typography.bodySmall,
+                            fontWeight = FontWeight.SemiBold,
+                        )
+                    }
                 }
             }
         }

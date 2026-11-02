@@ -220,6 +220,12 @@ class PciViewModel @Inject constructor(
     /** El ítem que se pidió abrir al llegar; se abre cuando los ítems cargan. */
     private var itemPedido: String? = null
 
+    /**
+     * Se llegó a un ítem desde PCI en mapa (o un aviso): al cerrar su ficha
+     * se vuelve allá, no al listado general (REV3-OBS-32 y 49).
+     */
+    val volverAlCerrar: Boolean = ruta.get<String>("item") != null
+
     init {
         // Desde Mi Avance: la cifra tocada llega ya filtrada, también dentro
         // del PCI abierto (que filtra con su propio estado)

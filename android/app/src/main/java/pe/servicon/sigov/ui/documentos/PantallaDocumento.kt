@@ -190,6 +190,7 @@ fun PantallaDocumento(
             Box(Modifier.fillMaxSize().padding(relleno).background(Color.Black)) {
                 var disparo by remember { mutableStateOf<ImageCapture?>(null) }
                 VisorDeCamara(onListo = { disparo = it })
+                pe.servicon.sigov.ui.evidencia.BotonDeFlash(disparo, Modifier.align(Alignment.TopEnd).padding(top = 56.dp, end = 12.dp))
                 Text(
                     "Encuadra la hoja completa, sin sombras",
                     color = Color.White,

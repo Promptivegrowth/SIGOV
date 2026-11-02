@@ -218,7 +218,7 @@ fun PantallaJornada(
             val verde = Marca.VerdeBandera
             val apartados = listOf(
                 Apartado(Icons.Outlined.Assignment, "Programación", "Lo asignado a tu cuadrilla", azul, estado.programadas, alAbrirProgramacion),
-                Apartado(Icons.AutoMirrored.Outlined.ListAlt, "PCIs", "Ítems por atender", verde, estado.pci, alAbrirPci),
+                Apartado(Icons.AutoMirrored.Outlined.ListAlt, "Ítems PCI", "Por atender", verde, estado.pci, alAbrirPci),
                 Apartado(Icons.Outlined.EditNote, "Reporte Diario", "Registrar lo ejecutado", azul, 0, alAbrirParte),
                 Apartado(Icons.Outlined.PhotoCamera, "Fotos / Evidencias", "Fotos con GPS y sello", verde, 0, alAbrirEvidencias),
                 Apartado(Icons.Outlined.Map, "Inventario vial", "Qué hay en tu tramo", azul, 0, alAbrirInventario),

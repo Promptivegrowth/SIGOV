@@ -33,13 +33,14 @@ export async function GET(req: NextRequest) {
   }
 
   // 2. Enviar push por las notificaciones recién creadas
-  const since = new Date(Date.now() - 10 * 60_000).toISOString()
+  // Los avisos vivos aún sin enviar: los nuevos y los que empeoraron (el
+  // cálculo los vuelve a dejar sin enviar; ya no se repiten, REV3-OBS-46)
   const { data: pending } = await admin
     .from('notifications')
-    .select('id, profile_id, title, body, url, severity, service_id, type')
-    .in('type', ['pci_por_vencer', 'pci_vencido'])
+    .select('id, profile_id, title, body, url, severity, service_id, type, data')
+    .in('type', ['pci_por_vencer', 'pci_vence_hoy', 'pci_fuera_de_plazo', 'pci_vencido'])
     .is('pushed_at', null)
-    .gte('created_at', since)
+    .is('resuelta_at', null)
     .limit(500)
 
   let pushed = 0
@@ -54,8 +55,10 @@ export async function GET(req: NextRequest) {
     }
 
     for (const [profileId, items] of byUser) {
-      const vencidos = items.filter((i) => i.type === 'pci_vencido').length
-      const porVencer = items.length - vencidos
+      // Se cuentan ítems, no avisos: cada aviso agrupa los ítems de un PCI (REV3-OBS-24)
+      const itemsDe = (n: any) => Number(n.data?.items ?? 1)
+      const vencidos = items.filter((i) => i.type === 'pci_vencido' || i.type === 'pci_fuera_de_plazo').reduce((s, n) => s + itemsDe(n), 0)
+      const porVencer = items.filter((i) => i.type === 'pci_por_vencer' || i.type === 'pci_vence_hoy').reduce((s, n) => s + itemsDe(n), 0)
       const res = await fetch(`${base}/api/push/send`, {
         method: 'POST',
         headers: {
@@ -66,12 +69,12 @@ export async function GET(req: NextRequest) {
           profile_ids: [profileId],
           type: vencidos ? 'pci_vencido' : 'pci_por_vencer',
           title: vencidos
-            ? `${vencidos} ítem${vencidos === 1 ? '' : 's'} de PCI vencido${vencidos === 1 ? '' : 's'}`
-            : `${porVencer} ítem${porVencer === 1 ? '' : 's'} de PCI por vencer`,
+            ? `${vencidos} ítem${vencidos === 1 ? '' : 's'} PCI fuera de plazo`
+            : `${porVencer} ítem${porVencer === 1 ? '' : 's'} PCI por vencer`,
           body: vencidos
             ? 'Requieren levantamiento inmediato con evidencia fotográfica.'
             : 'Vencen en las próximas 48 horas. Revisa tus asignaciones.',
-          url: '/pci',
+          url: items.length === 1 ? items[0].url ?? '/pci' : '/pci',
           severity: vencidos ? 'danger' : 'warning',
           service_id: items[0].service_id,
         }),

@@ -147,9 +147,10 @@ class VehiculosViewModel @Inject constructor(
 
     fun registrarReemplazo(
         titular: Vehiculo, placa: String, tipo: String, marca: String?, modelo: String?,
-        motivo: String, km: Int, observacion: String?, desde: java.time.LocalDate, alTerminar: () -> Unit,
+        motivo: String, km: Int, observacion: String?, desde: java.time.LocalDate,
+        documentos: pe.servicon.sigov.datos.DocumentosDelVehiculo, alTerminar: () -> Unit,
     ) = accion("Reemplazo registrado. Fotografía su checklist antes de salir.", { c ->
-        ssoma.registrarReemplazo(c, titular, placa, tipo, marca, modelo, motivo, km, observacion, desde)
+        ssoma.registrarReemplazo(c, titular, placa, tipo, marca, modelo, motivo, km, observacion, desde, documentos)
     }, alTerminar)
 
     fun devolverTitular(reemplazo: Vehiculo, km: Int?, alTerminar: () -> Unit) =

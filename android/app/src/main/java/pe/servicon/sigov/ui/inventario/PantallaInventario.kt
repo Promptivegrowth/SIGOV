@@ -587,8 +587,10 @@ private fun FichaDelElemento(
             DatoFicha("Lado", pe.servicon.sigov.datos.Lados.etiqueta(elemento.side) ?: "—", Modifier.weight(1f))
         }
         DatoFicha("Tramo", listOfNotNull(elemento.tramoCorto, elemento.tramo).joinToString(" · ").ifBlank { "—" }, Modifier.fillMaxWidth())
+        // Es la del inventario base, no el estado de hoy (REV3-OBS-28): un
+        // elemento puede estar «Observado» y haberse inventariado «Bueno»
         Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-            DatoFicha("Conservación", elemento.condition ?: "—", Modifier.weight(1f))
+            DatoFicha("Condición base del inventario", elemento.condition?.replaceFirstChar { it.uppercase() } ?: "—", Modifier.weight(1f))
             DatoFicha("Visitas", "${elemento.visitas}", Modifier.weight(1f))
         }
 

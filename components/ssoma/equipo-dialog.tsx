@@ -1,7 +1,7 @@
 'use client'
 
 import * as React from 'react'
-import { useQuery } from '@tanstack/react-query'
+import { useQuery, useQueryClient } from '@tanstack/react-query'
 import { Trash2, Check, X } from 'lucide-react'
 import { createClient } from '@/lib/supabase/client'
 import { useSession } from '@/lib/hooks/use-session'
@@ -229,22 +229,50 @@ export function EquipoDialog({
   )
 }
 
-/** Las inspecciones de un equipo, la más reciente primero. */
+const DICTAMEN: Record<string, { label: string; variant: 'success' | 'destructive' | 'warning' | 'outline' }> = {
+  pendiente: { label: 'Pendiente de revisión SSOMA', variant: 'outline' },
+  conforme: { label: 'Conforme', variant: 'success' },
+  observado: { label: 'Observado', variant: 'destructive' },
+  vencido: { label: 'Vencido', variant: 'destructive' },
+  requiere_correccion: { label: 'Requiere corrección', variant: 'warning' },
+}
+
+/**
+ * Las inspecciones de un equipo, la más reciente primero. La cuadrilla
+ * envía la foto del formato físico y el Ingeniero SSOMA dictamina aquí
+ * (REV3-OBS-45): Conforme, Observado, Vencido o Requiere corrección.
+ */
 export function HistorialEquipoDialog({ equipo, onClose }: { equipo: any | null; onClose: () => void }) {
   const sb = React.useMemo(() => createClient(), [])
+  const qc = useQueryClient()
+  const { can, role } = useSession() as any
+  const puedeDictaminar = can?.manage || role === 'ssoma'
+  const [notas, setNotas] = React.useState<Record<string, string>>({})
+  const [grande, setGrande] = React.useState<string | null>(null)
   const revisiones = useQuery({
     queryKey: ['historial-equipo', equipo?.id],
     enabled: !!equipo,
     queryFn: async () => {
       const { data, error } = await sb.from('safety_equipment_checks')
-        .select('id, checked_on, conforme, findings, created_at')
+        .select('id, checked_on, conforme, findings, created_at, storage_path, revision_estado, revision_nota, revisado_at')
         .eq('equipment_id', equipo.id).is('deleted_at', null)
         .order('checked_on', { ascending: false }).order('created_at', { ascending: false })
         .limit(100)
       if (error) throw error
-      return data ?? []
+      const filas = (data ?? []) as any[]
+      const rutas = filas.map((r) => r.storage_path).filter(Boolean)
+      const { data: firmadas } = rutas.length ? await sb.storage.from('documentos').createSignedUrls(rutas, 3600) : { data: [] }
+      const url = new Map((firmadas ?? []).map((f: any) => [f.path, f.signedUrl]))
+      return filas.map((r) => ({ ...r, url: r.storage_path ? url.get(r.storage_path) ?? null : null }))
     },
   })
+  const dictaminar = async (r: any, estado: string) => {
+    const { error } = await sb.rpc('revisar_inspeccion_equipo' as any, { p_id: r.id, p_estado: estado, p_nota: notas[r.id] || null } as any)
+    if (error) { toast.error(mensajeAmigable(error)); return }
+    toast.success('Dictamen registrado: ' + DICTAMEN[estado].label)
+    qc.invalidateQueries({ queryKey: ['historial-equipo', equipo?.id] })
+    qc.invalidateQueries()
+  }
   if (!equipo) return null
   return (
     <Dialog open onOpenChange={(o) => !o && onClose()}>
@@ -260,19 +288,52 @@ export function HistorialEquipoDialog({ equipo, onClose }: { equipo: any | null;
           <p className="text-muted-foreground text-[13px]">Todavía no tiene inspecciones registradas.</p>
         )}
         <ul className="divide-y divide-border">
-          {revisiones.data?.map((r: any) => (
-            <li key={r.id} className="flex items-start gap-3 py-2.5">
-              {r.conforme
-                ? <Check className="text-success mt-0.5 size-4 shrink-0" />
-                : <X className="text-destructive mt-0.5 size-4 shrink-0" />}
-              <div className="min-w-0 flex-1">
-                <p className="text-[13px] font-medium">{fmtDate(r.checked_on)}</p>
-                {r.findings && <p className="text-muted-foreground text-[13px]">{r.findings}</p>}
-              </div>
-              <Badge variant={r.conforme ? 'success' : 'destructive'}>{r.conforme ? 'Conforme' : 'Observado'}</Badge>
-            </li>
-          ))}
+          {revisiones.data?.map((r: any) => {
+            const d = DICTAMEN[r.revision_estado] ?? DICTAMEN.pendiente
+            return (
+              <li key={r.id} className="space-y-2 py-3">
+                <div className="flex items-start gap-3">
+                  {r.revision_estado === 'conforme'
+                    ? <Check className="text-success mt-0.5 size-4 shrink-0" />
+                    : r.revision_estado === 'pendiente' ? <span className="bg-info mt-1.5 size-2.5 shrink-0 rounded-full" />
+                    : <X className="text-destructive mt-0.5 size-4 shrink-0" />}
+                  <div className="min-w-0 flex-1">
+                    <p className="text-[13px] font-medium">{fmtDate(r.checked_on)}</p>
+                    {r.findings && <p className="text-muted-foreground text-[13px]">{r.findings}</p>}
+                    {r.revision_nota && <p className="text-[12.5px]"><b>SSOMA:</b> {r.revision_nota}</p>}
+                  </div>
+                  <Badge variant={d.variant as any}>{d.label}</Badge>
+                </div>
+                {r.url && (
+                  <button onClick={() => setGrande(r.url)} className="block overflow-hidden rounded-lg border border-border">
+                    {/* eslint-disable-next-line @next/next/no-img-element */}
+                    <img src={r.url} alt="Formato de inspección" className="max-h-56 w-full object-contain" />
+                  </button>
+                )}
+                {puedeDictaminar && r.revision_estado === 'pendiente' && (
+                  <div className="space-y-2 rounded-lg bg-secondary/40 p-2.5">
+                    <Textarea rows={2} placeholder="Qué se observó (obligatorio si no es conforme)"
+                      value={notas[r.id] ?? ''} onChange={(e) => setNotas((n) => ({ ...n, [r.id]: e.target.value }))} />
+                    <div className="flex flex-wrap gap-2">
+                      <Button size="sm" onClick={() => dictaminar(r, 'conforme')}><Check className="size-3.5" />Conforme</Button>
+                      <Button size="sm" variant="outline" onClick={() => dictaminar(r, 'observado')}>Observado</Button>
+                      <Button size="sm" variant="outline" onClick={() => dictaminar(r, 'vencido')}>Vencido</Button>
+                      <Button size="sm" variant="outline" onClick={() => dictaminar(r, 'requiere_correccion')}>Requiere corrección</Button>
+                    </div>
+                  </div>
+                )}
+              </li>
+            )
+          })}
         </ul>
+        {grande && (
+          <Dialog open onOpenChange={(o) => !o && setGrande(null)}>
+            <DialogContent className="sm:max-w-3xl">
+              {/* eslint-disable-next-line @next/next/no-img-element */}
+              <img src={grande} alt="Formato de inspección" className="max-h-[80vh] w-full object-contain" />
+            </DialogContent>
+          </Dialog>
+        )}
       </DialogContent>
     </Dialog>
   )

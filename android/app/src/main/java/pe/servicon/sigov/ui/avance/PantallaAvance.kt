@@ -93,13 +93,28 @@ fun PantallaAvance(
                     .padding(16.dp),
                 verticalArrangement = Arrangement.spacedBy(14.dp),
             ) {
+                // REV3-OBS-22: lo de hoy, aparte de la semana que se consulte
+                TituloDeBloque("Resumen de hoy", pe.servicon.sigov.datos.Peru.hoy().let { "%02d/%02d/%d".format(it.dayOfMonth, it.monthValue, it.year) })
                 Cumplimiento(estado)
                 Contadores(estado, alAbrirParte, abrirEvidencias) {
                     // El acceso rápido: lo vencido primero, si no lo que vence ya
                     alAbrirPci(null, if (estado.pciPanel.any { it.vencidos > 0 }) "VENCIDO" else "UN_DIA", null)
                 }
+                if (estado.partidas.isNotEmpty()) {
+                    Text(
+                        "Partidas de hoy",
+                        style = MaterialTheme.typography.titleSmall,
+                        fontWeight = FontWeight.SemiBold,
+                        modifier = Modifier.padding(top = 4.dp),
+                    )
+                    estado.partidas.forEach { Partida(it) }
+                }
+
+                // REV3-OBS-23: el PCI es el estado de hoy, no cambia con la semana
+                BloquePci(estado.pciPanel, alAbrirPci)
 
                 // ─── OBS-49: el resumen de la semana ───────────────────
+                TituloDeBloque("Resumen de la semana seleccionada", "Elige la semana: estas cifras son de esos siete días")
                 SelectorDeSemana(estado, vm::moverSemana)
                 when {
                     estado.cargandoSemana && estado.resumen == null -> Box(
@@ -110,20 +125,9 @@ fun PantallaAvance(
                     else -> {
                         val r = estado.resumen!!
                         BloqueProgramacion(r) { alAbrirProgramacion(desdeSemana.toString()) }
-                        BloquePci(estado.pciPanel, alAbrirPci)
                         BloqueEvidencias(r, abrirEvidencias)
                         BloqueOtros(r, estado.porSincronizar, estado.conError, alAbrirCaja, alAbrirMateriales, alAbrirSincronizacion)
                     }
-                }
-
-                if (estado.partidas.isNotEmpty()) {
-                    Text(
-                        "Partidas de hoy",
-                        style = MaterialTheme.typography.titleSmall,
-                        fontWeight = FontWeight.SemiBold,
-                        modifier = Modifier.padding(top = 4.dp),
-                    )
-                    estado.partidas.forEach { Partida(it) }
                 }
 
                 if (estado.sinFoto > 0) {
@@ -452,7 +456,7 @@ private fun BloqueProgramacion(r: ResumenAvance, alTocar: () -> Unit) {
     ) {
         if (s.asignadas == 0) {
             Text(
-                "No tienes partidas programadas esta semana.",
+                "No tienes partidas programadas en la semana seleccionada.",
                 style = MaterialTheme.typography.bodySmall,
                 color = MaterialTheme.colorScheme.onSurfaceVariant,
             )
@@ -528,7 +532,7 @@ private fun DiasDeLaSemana(dias: List<AvanceDia>) {
 private fun BloquePci(panel: List<PanelDePci>, alAbrir: (estado: String?, plazo: String?, pci: String?) -> Unit) {
     val vencidos = panel.sumOf { it.vencidos }
     Bloque(
-        "PCI activos",
+        "Estado actual de PCI activos",
         destacado = if (vencidos > 0) "$vencidos ${if (vencidos == 1) "ítem vencido" else "ítems vencidos"}" else null,
         colorDestacado = Semaforo.Vencido,
         alTocar = { alAbrir(null, null, null) },
@@ -697,5 +701,15 @@ private fun FilaOtro(titulo: String, valor: String, detalle: String, color: Colo
             Text(valor, style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.SemiBold, color = color)
             Icon(Icons.Outlined.ChevronRight, contentDescription = null, tint = MaterialTheme.colorScheme.onSurfaceVariant)
         }
+    }
+}
+
+/** El título de cada bloque de Mi Avance: hoy, PCI y la semana elegida (REV3-OBS-22). */
+@Composable
+private fun TituloDeBloque(titulo: String, detalle: String) {
+    Column(Modifier.fillMaxWidth().padding(top = 6.dp)) {
+        Text(titulo, style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.Bold, color = Marca.Azul)
+        Text(detalle, style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
+        HorizontalDivider(Modifier.padding(top = 6.dp), color = Marca.Azul.copy(alpha = 0.25f))
     }
 }

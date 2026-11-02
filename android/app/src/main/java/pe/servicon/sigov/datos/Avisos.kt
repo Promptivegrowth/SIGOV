@@ -51,16 +51,46 @@ data class Aviso(
     val severity: String? = null,
     @SerialName("created_at") val creado: String,
     @SerialName("read_at") val leido: String? = null,
+    val url: String? = null,
+    val data: kotlinx.serialization.json.JsonObject? = null,
+    /** urgente / informativa (REV3-OBS-47) */
+    val prioridad: String = "informativa",
+    /** pci, programacion, ssoma, reportes u otros (REV3-OBS-48) */
+    val categoria: String = "otros",
+    /** Ya no hay nada que hacer: queda como historial (REV3-OBS-46). */
+    @SerialName("resuelta_at") val resuelta: String? = null,
+    @SerialName("actualizada_at") val actualizada: String? = null,
 ) {
-    /** A qué pantalla de la app lleva tocarlo. */
+    private fun dato(k: String) = (data?.get(k) as? kotlinx.serialization.json.JsonPrimitive)
+        ?.takeIf { it !is kotlinx.serialization.json.JsonNull }?.content
+
+    val esUrgente: Boolean get() = prioridad == "urgente"
+
+    /** Lo que se muestra como fecha: la última vez que cambió. */
+    val momento: String get() = actualizada ?: creado
+
+    /**
+     * A qué pantalla de la app lleva tocarlo: al registro exacto, no al
+     * listado general (REV3-OBS-49). «PCI 44 · Ítem 19 observado» abre el
+     * ítem 19.
+     */
     val destino: String?
-        get() = when {
-            type.startsWith("pci") -> "pci"
-            type.startsWith("parte") -> "parte"
-            type.startsWith("ssoma") -> "jornada"
-            type.startsWith("vehiculo") -> "vehiculos"
-            type.startsWith("deposito") -> "caja"
-            else -> null
+        get() {
+            val item = dato("pci_item_id") ?: url?.let { Regex("item=([0-9a-f-]{36})").find(it)?.groupValues?.get(1) }
+            val pci = dato("pci_id") ?: url?.let { Regex("/pci/([0-9a-f-]{36})").find(it)?.groupValues?.get(1) }
+            return when {
+                type == "error_sincronizacion" -> "sincronizacion"
+                item != null && pci != null -> "pci?pci=$pci&item=$item"
+                pci != null -> "pci?pci=$pci"
+                type.startsWith("pci") -> "pci"
+                type.startsWith("programacion") || type.startsWith("partida") ->
+                    dato("fecha")?.let { "programacion?fecha=$it" } ?: "programacion?fecha=${Peru.hoy()}"
+                type.startsWith("parte") -> dato("fecha")?.let { "parte?fecha=$it" } ?: "parte"
+                type.startsWith("ssoma") || type.startsWith("documento") -> "jornada"
+                type.startsWith("vehiculo") -> "vehiculos"
+                type.startsWith("deposito") -> "caja"
+                else -> null
+            }
         }
 }
 
@@ -85,14 +115,15 @@ class AvisosRepositorio @Inject constructor(
             .select {
                 filter { eq("profile_id", uid) }
                 order("created_at", Order.DESCENDING)
-                limit(60)
+                limit(120)
             }
             .decodeList<Aviso>()
-        _sinLeer.value = lista.count { it.leido == null }
+            .sortedByDescending { it.momento }
+        _sinLeer.value = lista.count { it.leido == null && it.resuelta == null }
         lista
     }
 
-    suspend fun contarSinLeer(): Int = runCatching { recientes().count { it.leido == null } }.getOrDefault(_sinLeer.value)
+    suspend fun contarSinLeer(): Int = runCatching { recientes().count { it.leido == null && it.resuelta == null } }.getOrDefault(_sinLeer.value)
 
     suspend fun marcarLeido(aviso: Aviso) = withContext(Dispatchers.IO) {
         if (aviso.leido != null) return@withContext
@@ -117,11 +148,11 @@ class AvisosRepositorio @Inject constructor(
     suspend fun notificarNuevos() {
         val guardado = contexto.getSharedPreferences("avisos", Context.MODE_PRIVATE)
         val ultimo = guardado.getString("ultimo_mostrado", null)
-        val nuevos = recientes().filter { it.leido == null && (ultimo == null || it.creado > ultimo) }
+        val nuevos = recientes().filter { it.leido == null && it.resuelta == null && (ultimo == null || it.momento > ultimo) }
         // La primera vez no se inunda el teléfono con lo viejo: solo lo de las últimas 24 h
         val corte = Instant.now().minusSeconds(24 * 3600).toString()
         nuevos.filter { ultimo != null || it.creado > corte }.take(5).forEach { mostrar(it) }
-        recientes().maxOfOrNull { it.creado }?.let { guardado.edit().putString("ultimo_mostrado", it).apply() }
+        recientes().maxOfOrNull { it.momento }?.let { guardado.edit().putString("ultimo_mostrado", it).apply() }
     }
 
     private fun mostrar(aviso: Aviso) {
@@ -132,14 +163,15 @@ class AvisosRepositorio @Inject constructor(
         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O && gestor.getNotificationChannel(CANAL) == null) {
             gestor.createNotificationChannel(
                 NotificationChannel(CANAL, "Avisos de SIGOV", NotificationManager.IMPORTANCE_HIGH).apply {
-                    description = "PCI por vencer o fuera de plazo, observaciones del supervisor, COVINCA y SSOMA"
+                    description = "Avisos importantes de tu cuadrilla: programación, PCI, reportes, SSOMA y pendientes"
                 },
             )
         }
         val abrir = PendingIntent.getActivity(
             contexto, aviso.id.hashCode(),
             Intent(contexto, MainActivity::class.java).addFlags(Intent.FLAG_ACTIVITY_NEW_TASK or Intent.FLAG_ACTIVITY_CLEAR_TOP)
-                .putExtra("destino", "avisos"),
+                // Abre el registro del aviso, no la lista (REV3-OBS-49)
+                .putExtra("destino", aviso.destino ?: "avisos"),
             PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_IMMUTABLE,
         )
         val nota = NotificationCompat.Builder(contexto, CANAL)

@@ -43,7 +43,20 @@ data class EquipoDeSeguridad(
     @SerialName("check_days_left") val diasParaRevision: Int? = null,
     @SerialName("check_semaforo") val semaforoRevision: String = "ok",
     @SerialName("observaciones_abiertas") val observaciones: Int = 0,
+    /** El dictamen de la última inspección: pendiente, conforme, observado… (REV3-OBS-45) */
+    @SerialName("ultima_revision_estado") val ultimaRevisionEstado: String? = null,
+    @SerialName("ultima_inspeccion_on") val ultimaInspeccion: String? = null,
 ) {
+    val revisionLegible: String?
+        get() = when (ultimaRevisionEstado) {
+            "pendiente" -> "Pendiente de revisión SSOMA"
+            "conforme" -> "Conforme SSOMA"
+            "observado" -> "Observado por SSOMA"
+            "vencido" -> "Vencido según SSOMA"
+            "requiere_correccion" -> "Requiere corrección"
+            else -> null
+        }
+
     /** Cómo se llama en castellano, que es como lo pide el supervisor. */
     val tipo: String
         get() = when (kind) {
@@ -95,13 +108,31 @@ data class Vehiculo(
     val esReemplazo: Boolean get() = asignacion == "reemplazo"
     val esTitular: Boolean get() = asignacion == "titular"
 
+    /** Solo lo mecánico (REV3-OBS-41): los papeles van en [habilitacion]. */
     val estadoLegible: String
         get() = when (status) {
-            "operativo" -> if (documentosVencidos.isNotEmpty()) "Operativo · documentos vencidos" else "Operativo"
+            "operativo" -> "Operativo"
             "taller" -> "En taller"
             "inoperativo" -> "Inoperativo"
             else -> status
         }
+
+    /** Los documentos que no están registrados (REV3-OBS-42). */
+    val documentosFaltantes: List<String>
+        get() = listOf("SOAT" to soat, "Revisión técnica" to revisionTecnica, "Póliza" to poliza)
+            .filter { (_, f) -> f.isNullOrBlank() }
+            .map { it.first }
+
+    /** La habilitación documental, aparte del estado mecánico (REV3-OBS-41). */
+    val habilitacion: String
+        get() = when {
+            documentosVencidos.isNotEmpty() -> "No apto para circular"
+            documentosFaltantes.isNotEmpty() -> "No habilitado · documentos sin registrar"
+            else -> "Apto para circular"
+        }
+
+    /** Lo que SIGOV ya sabe de los papeles: va al checklist (REV3-OBS-43). */
+    val documentosEnRegla: Boolean get() = documentosVencidos.isEmpty() && documentosFaltantes.isEmpty()
 
     /**
      * Lo documental, aparte de lo mecánico (SEG-V2-OBS-06): un vehículo con el
@@ -116,7 +147,7 @@ data class Vehiculo(
                 .map { it.first }
         }
 
-    val aptoParaCircular: Boolean get() = status == "operativo" && documentosVencidos.isEmpty()
+    val aptoParaCircular: Boolean get() = status == "operativo" && documentosEnRegla
 
     val tipo: String
         get() = when (kind) {
@@ -209,6 +240,53 @@ class SsomaRepositorio @Inject constructor(
      * que el manómetro está en verde— pero cuando hay hallazgo se vuelve el
      * sustento de que se avisó a tiempo.
      */
+    /**
+     * La inspección por foto del formato físico (REV3-OBS-45): el jefe no
+     * evalúa Conforme / No conforme; la foto queda «Pendiente de revisión
+     * SSOMA» y el Ingeniero SSOMA dictamina.
+     */
+    suspend fun inspeccionarConFoto(
+        equipo: EquipoDeSeguridad,
+        foto: java.io.File,
+        nota: String?,
+        punto: Punto?,
+    ): String = withContext(Dispatchers.IO) {
+        val clientId = UUID.randomUUID().toString()
+        // La foto, achicada a 2000 px y en webp, como las páginas de los documentos
+        val medidas = android.graphics.BitmapFactory.Options().apply { inJustDecodeBounds = true }
+        android.graphics.BitmapFactory.decodeFile(foto.absolutePath, medidas)
+        var muestra = 1
+        while (maxOf(medidas.outWidth, medidas.outHeight) / (muestra * 2) >= 2000) muestra *= 2
+        val mapa = android.graphics.BitmapFactory.decodeFile(foto.absolutePath, android.graphics.BitmapFactory.Options().apply { inSampleSize = muestra })
+            ?: error("No se pudo leer la foto.")
+        val destino = java.io.File(foto.parentFile, "$clientId.webp")
+        destino.outputStream().use { mapa.compress(android.graphics.Bitmap.CompressFormat.WEBP, 82, it) }
+        mapa.recycle()
+        foto.delete()
+        val hoy = Peru.hoy()
+        val ruta = equipo.servicioId + "/ssoma/" + hoy.year + "/" + "%02d".format(hoy.monthValue) + "/equipo-" + clientId + ".webp"
+        cola.encolar(
+            tabla = "safety_equipment_checks",
+            clientId = clientId,
+            etiqueta = "Inspección · ${equipo.tipo} ${equipo.code} · foto del formato",
+            cuerpo = buildJsonObject {
+                put("service_id", equipo.servicioId)
+                put("equipment_id", equipo.id)
+                put("checked_on", hoy.toString())
+                put("storage_path", ruta)
+                put("revision_estado", "pendiente")
+                nota?.takeIf { it.isNotBlank() }?.let { put("findings", it) }
+                punto?.let {
+                    put("lat", it.latitud)
+                    put("lng", it.longitud)
+                }
+                supabase.usuarioActual()?.let { put("created_by", it) }
+            },
+        )
+        cola.adjuntar(clientId = clientId, bucket = "documentos", rutaDestino = ruta, archivoLocal = destino)
+        clientId
+    }
+
     suspend fun inspeccionar(
         equipo: EquipoDeSeguridad,
         conforme: Boolean,
@@ -282,6 +360,9 @@ class SsomaRepositorio @Inject constructor(
                         desde = campo(o, "start_on") ?: "",
                         hasta = campo(o, "end_on"),
                         motivo = campo(o, "reason"),
+                        // El sistema ya captura los km: se muestran (REV3-REC-03)
+                        kmInicial = campo(o, "odometer_start")?.toDoubleOrNull()?.toInt(),
+                        kmFinal = campo(o, "odometer_end")?.toDoubleOrNull()?.toInt(),
                     )
                 }.sortedByDescending { it.desde }
             }.getOrDefault(emptyList())
@@ -290,6 +371,7 @@ class SsomaRepositorio @Inject constructor(
     suspend fun registrarReemplazo(
         cuadrillaId: String, titular: Vehiculo, placa: String, tipo: String, marca: String?, modelo: String?,
         motivo: String, km: Int, observacion: String?, desde: java.time.LocalDate = Peru.hoy(),
+        documentos: DocumentosDelVehiculo = DocumentosDelVehiculo(),
     ) = withContext(Dispatchers.IO) {
         supabase.postgrest.rpc("registrar_reemplazo", buildJsonObject {
             put("p_crew", cuadrillaId)
@@ -302,6 +384,9 @@ class SsomaRepositorio @Inject constructor(
             put("p_motivo", motivo)
             put("p_km", km)
             observacion?.let { put("p_obs", it) }
+            documentos.soat?.let { put("p_soat", it.toString()) }
+            documentos.revision?.let { put("p_revision", it.toString()) }
+            documentos.poliza?.let { put("p_poliza", it.toString()) }
         })
         Unit
     }
@@ -386,12 +471,21 @@ class SsomaRepositorio @Inject constructor(
 }
 
 /** Un reemplazo de la cuadrilla, para su historial. */
+/** Los vencimientos que se anotan al registrar un reemplazo (REV3-OBS-42). */
+data class DocumentosDelVehiculo(
+    val soat: java.time.LocalDate? = null,
+    val revision: java.time.LocalDate? = null,
+    val poliza: java.time.LocalDate? = null,
+)
+
 data class ReemplazoDeVehiculo(
     val placa: String,
     val titular: String?,
     val desde: String,
     val hasta: String?,
     val motivo: String?,
+    val kmInicial: Int? = null,
+    val kmFinal: Int? = null,
 ) {
     val motivoLegible: String?
         get() = when (motivo) {

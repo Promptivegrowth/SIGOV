@@ -69,19 +69,23 @@ fun FormularioGasto(
     var destino by remember { mutableStateOf<File?>(null) }
     var foto by remember { mutableStateOf<File?>(null) }
 
-    val camara = rememberLauncherForActivityResult(ActivityResultContracts.TakePicture()) { salioBien ->
-        foto = destino?.takeIf { salioBien && it.exists() && it.length() > 0 }
-        if (foto != null) error = null
+    // La cámara de SIGOV, como en todo lo demás (REV3-OBS-25): con flash y
+    // en vertical, que es como se fotografía una boleta
+    var camaraAbierta by remember { mutableStateOf(false) }
+    if (camaraAbierta) {
+        pe.servicon.sigov.ui.evidencia.CamaraSimple(
+            titulo = "Foto del comprobante",
+            destino = {
+                File(File(contexto.filesDir, "comprobantes").apply { mkdirs() }, "boleta-${System.currentTimeMillis()}.jpg")
+                    .also { destino = it }
+            },
+            alTomar = { f -> foto = f.takeIf { it.exists() && it.length() > 0 }; if (foto != null) error = null; camaraAbierta = false },
+            alCerrar = { camaraAbierta = false },
+            soloHorizontal = false,
+        )
     }
 
-    fun tomarFoto() {
-        val archivo = File(
-            File(contexto.filesDir, "comprobantes").apply { mkdirs() },
-            "boleta-${System.currentTimeMillis()}.jpg",
-        )
-        destino = archivo
-        camara.launch(uriDe(contexto, archivo))
-    }
+    fun tomarFoto() { camaraAbierta = true }
 
     Dialog(
         onDismissRequest = alCerrar,

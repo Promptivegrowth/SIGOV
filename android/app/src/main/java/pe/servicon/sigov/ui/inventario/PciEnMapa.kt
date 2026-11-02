@@ -72,10 +72,11 @@ import pe.servicon.sigov.ui.theme.Marca
  */
 enum class AvancePci(val etiqueta: String, val singular: String, val color: Color) {
     // Los que no tienen ni una foto (Elvis, 26/10: «un filtro de pendientes»)
-    POR_ATENDER("Pendientes", "Pendiente · sin fotos", Color(0xFF64748B)),
+    POR_ATENDER("Por atender", "Por atender · sin fotos", Color(0xFF64748B)),
     EN_EJECUCION("En ejecución", "En ejecución", Color(0xFF2563EB)),
     ATENDIDO("Atendidos / Por validar", "Por validar", Color(0xFF16A34A)),
-    OBSERVADO("Observados", "Observado", Color(0xFFB91C1C)),
+    // Morado, para no confundirlo con el rojo de lo vencido (REV3-OBS-30)
+    OBSERVADO("Observados", "Observado", Color(0xFF7C3AED)),
 }
 
 fun avanceDe(item: ItemPci): AvancePci = when (estadoDe(item)) {
@@ -83,6 +84,21 @@ fun avanceDe(item: ItemPci): AvancePci = when (estadoDe(item)) {
     Estado.EN_EJECUCION -> AvancePci.EN_EJECUCION
     Estado.OBSERVADOS -> AvancePci.OBSERVADO
     else -> AvancePci.POR_ATENDER
+}
+
+/**
+ * El color de cada punto (REV3-OBS-30): el de su situación real, sin que
+ * importe qué filtros estén marcados. Verde atendido, rojo vencido,
+ * amarillo por vencer, azul en ejecución, morado observado y gris por atender.
+ */
+fun colorEnMapa(item: ItemPci): Color {
+    val a = avanceDe(item)
+    return when {
+        a == AvancePci.ATENDIDO -> AvancePci.ATENDIDO.color
+        plazoDe(item) == PlazoEnMapa.VENCIDO -> PlazoEnMapa.VENCIDO.color
+        plazoDe(item) == PlazoEnMapa.POR_VENCER -> PlazoEnMapa.POR_VENCER.color
+        else -> a.color
+    }
 }
 
 /** El plazo de lo que falta atender: aparte del estado, para no mezclarlos. */
@@ -118,6 +134,10 @@ data class EstadoPciEnMapa(
     val trabajando: String? = null,
     val irACamara: Pair<String, Fase>? = null,
     val error: String? = null,
+    /** Dónde quedó el mapa al ir a un ítem: se vuelve ahí (REV3-OBS-32). */
+    val camara: org.maplibre.android.camera.CameraPosition? = null,
+    /** El enlace de la foto referencial abierta (REV3-OBS-06). */
+    val referencia: String? = null,
 ) {
     private val delosPci: List<ItemPci> get() = items.filter { it.pciId in elegidos }
     val visibles: List<ItemPci>
@@ -138,6 +158,8 @@ class PciEnMapaViewModel @javax.inject.Inject constructor(
     private val inventario: InventarioRepositorio,
     private val sesion: SesionRepositorio,
     private val ubicacion: pe.servicon.sigov.datos.Ubicacion,
+    private val documentos: pe.servicon.sigov.datos.DocumentosRepositorio,
+    private val partes: pe.servicon.sigov.datos.local.ParteDao,
 ) : ViewModel() {
     private val _estado = MutableStateFlow(EstadoPciEnMapa())
     val estado: StateFlow<EstadoPciEnMapa> = _estado.asStateFlow()
@@ -150,7 +172,18 @@ class PciEnMapaViewModel @javax.inject.Inject constructor(
             runCatching {
                 val c = sesion.cuadrilla() ?: error("Tu usuario no dirige ninguna cuadrilla.")
                 val pcis = campo.pciDeLaCuadrilla(c.servicioId, c.id).filter { it.activo && !it.completado }
+                // Las fotos que siguen en el teléfono cuentan igual, como en el
+                // módulo PCI: las cifras A·D·DP son las mismas (REV3-OBS-05)
+                val locales = runCatching { partes.fotosPciPorEnviar() }.getOrDefault(emptyList())
+                fun local(id: String, fase: String) = locales.filter { it.pciItemId == id && it.fase == fase }.sumOf { it.cuantas }
                 val items = campo.itemsPciDeLaCuadrilla(c.servicioId, c.id).filter { it.activoParaCuadrilla }
+                    .map { i ->
+                        i.copy(
+                            fotosAntes = i.fotosAntes + local(i.id, "antes"),
+                            fotosDurante = i.fotosDurante + local(i.id, "durante"),
+                            fotosDespues = i.fotosDespues + local(i.id, "despues"),
+                        )
+                    }
                 val pos = inventario.posicionesPci(c.servicioId)
                 val tramos = inventario.tramosPci(c.servicioId)
                 cargoUnaVez = true
@@ -168,6 +201,17 @@ class PciEnMapaViewModel @javax.inject.Inject constructor(
     fun alternarPci(id: String) = _estado.update { it.copy(elegidos = if (id in it.elegidos) it.elegidos - id else it.elegidos + id) }
     fun alternarAvance(a: AvancePci) = _estado.update { it.copy(avances = if (a in it.avances) it.avances - a else it.avances + a) }
     fun alternarPlazo(p: PlazoEnMapa) = _estado.update { it.copy(plazos = if (p in it.plazos) it.plazos - p else it.plazos + p) }
+    fun cualquierPlazo() = _estado.update { it.copy(plazos = emptySet()) }
+    fun recordarCamara(c: org.maplibre.android.camera.CameraPosition?) = _estado.update { it.copy(camara = c) }
+
+    fun verReferencia(item: ItemPci) {
+        val ruta = item.fotoReferencia ?: return
+        viewModelScope.launch {
+            val url = documentos.enlace(ruta)
+            _estado.update { if (url == null) it.copy(error = "No se pudo abrir la foto referencial. Revisa la señal.") else it.copy(referencia = url) }
+        }
+    }
+    fun cerrarReferencia() = _estado.update { it.copy(referencia = null) }
 
     fun buscarMiUbicacion(alEncontrar: (Double, Double) -> Unit) {
         _estado.update { it.copy(buscandoUbicacion = true) }
@@ -216,6 +260,9 @@ fun PantallaPciEnMapa(
     alTomarFoto: (registroId: String, fase: Fase) -> Unit,
 ) {
     val estado by vm.estado.collectAsStateWithLifecycle()
+    estado.referencia?.let { url ->
+        pe.servicon.sigov.ui.componentes.VisorConZoom(modelo = url, descripcion = "Foto referencial", alCerrar = vm::cerrarReferencia)
+    }
     val avisos = remember { SnackbarHostState() }
     val control = remember { pe.servicon.sigov.ui.componentes.ControlDeMapa() }
 
@@ -273,9 +320,15 @@ fun PantallaPciEnMapa(
                     Cifra(estado.cuantos(a), a.etiqueta, a.color, a in estado.avances) { vm.alternarAvance(a) }
                 }
             }
-            Row(Modifier.fillMaxWidth().padding(horizontal = 12.dp, vertical = 2.dp), verticalAlignment = Alignment.CenterVertically,
-                horizontalArrangement = Arrangement.spacedBy(6.dp)) {
+            Row(Modifier.fillMaxWidth().horizontalScroll(rememberScrollState()).padding(horizontal = 12.dp, vertical = 2.dp),
+                verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(6.dp)) {
                 Text("Plazo", fontSize = 11.sp, color = MaterialTheme.colorScheme.onSurfaceVariant)
+                // Estado y plazo se combinan: «Por atender + Vencidos» (REV3-OBS-29)
+                FilterChip(
+                    selected = estado.plazos.isEmpty(),
+                    onClick = { vm.cualquierPlazo() },
+                    label = { Text("Cualquier plazo", fontSize = 12.sp) },
+                )
                 PlazoEnMapa.entries.forEach { p ->
                     FilterChip(
                         selected = p in estado.plazos,
@@ -288,7 +341,24 @@ fun PantallaPciEnMapa(
 
             if (estado.enMapa) {
                 Box(Modifier.fillMaxWidth().weight(1f)) {
-                    MapaDePci(estado.visibles, estado.posiciones, estado.tramos, Modifier.fillMaxSize(), control) { alVerFicha(it) }
+                    MapaDePci(estado.visibles, estado.posiciones, estado.tramos, Modifier.fillMaxSize(), control, estado.camara) {
+                        vm.recordarCamara(control.mapa?.cameraPosition); alVerFicha(it)
+                    }
+                    // Qué significa cada color (REV3-OBS-30)
+                    Row(
+                        Modifier.align(Alignment.BottomStart).padding(8.dp)
+                            .background(Color.White.copy(alpha = 0.88f), RoundedCornerShape(8.dp)).padding(horizontal = 8.dp, vertical = 4.dp),
+                        horizontalArrangement = Arrangement.spacedBy(6.dp),
+                    ) {
+                        listOf(AvancePci.ATENDIDO.color to "Atendido", PlazoEnMapa.VENCIDO.color to "Vencido",
+                            PlazoEnMapa.POR_VENCER.color to "Por vencer", AvancePci.EN_EJECUCION.color to "En ejecución",
+                            AvancePci.OBSERVADO.color to "Observado", AvancePci.POR_ATENDER.color to "Por atender").forEach { (c, t) ->
+                            Row(verticalAlignment = Alignment.CenterVertically) {
+                                Box(Modifier.size(8.dp).clip(CircleShape).background(c))
+                                Text(" $t", fontSize = 9.5.sp, color = Color(0xFF334155))
+                            }
+                        }
+                    }
                     pe.servicon.sigov.ui.componentes.ControlesDeMapa(
                         buscando = estado.buscandoUbicacion,
                         alMiUbicacion = { vm.buscarMiUbicacion { lat, lng -> control.miUbicacion(lat, lng) } },
@@ -299,7 +369,7 @@ fun PantallaPciEnMapa(
             }
             Row(Modifier.padding(horizontal = 14.dp, vertical = 6.dp), verticalAlignment = Alignment.CenterVertically) {
                 // Un PCI es el conjunto; lo que se ve son sus ítems (Elvis, 24/10)
-                Text("Ítems PCI en el mapa", fontWeight = FontWeight.Bold, fontSize = 14.sp)
+                Text("Ítems PCI mostrados", fontWeight = FontWeight.Bold, fontSize = 14.sp)
                 Spacer(Modifier.width(6.dp))
                 Text("${estado.visibles.size}", fontWeight = FontWeight.Bold, color = Marca.Azul, fontSize = 14.sp)
             }
@@ -310,7 +380,9 @@ fun PantallaPciEnMapa(
                         item, estado.trabajando == item.id,
                         // Tocar el ítem lleva el mapa a su lugar (Elvis, 26/10)
                         alUbicar = { estado.posiciones[item.id]?.let { (lat, lng) -> control.irA(lat, lng) } },
-                        alVerFicha = { alVerFicha(item) },
+                        alVerFicha = { vm.recordarCamara(control.mapa?.cameraPosition); alVerFicha(item) },
+                        // La foto referencial, a un toque desde el mapa (REV3-OBS-06)
+                        alReferencia = { vm.verReferencia(item) },
                         alFotos = { vm.tomarFotos(item) },
                     )
                 }
@@ -320,7 +392,8 @@ fun PantallaPciEnMapa(
 }
 
 @Composable
-private fun TarjetaPciEnMapa(item: ItemPci, ocupado: Boolean, alUbicar: () -> Unit, alVerFicha: () -> Unit, alFotos: () -> Unit) {
+private fun TarjetaPciEnMapa(item: ItemPci, ocupado: Boolean, alUbicar: () -> Unit, alVerFicha: () -> Unit, alFotos: () -> Unit,
+                             alReferencia: () -> Unit = {}) {
     val a = avanceDe(item)
     val fases = listOf(item.fotosAntes, item.fotosDurante, item.fotosDespues).count { it > 0 }
     Column(Modifier.fillMaxWidth().clickable(onClick = alUbicar).padding(horizontal = 14.dp, vertical = 9.dp)) {
@@ -346,8 +419,13 @@ private fun TarjetaPciEnMapa(item: ItemPci, ocupado: Boolean, alUbicar: () -> Un
             }
         }
         Row(horizontalArrangement = Arrangement.spacedBy(8.dp), modifier = Modifier.padding(top = 6.dp)) {
+            // Abre el ítem en el módulo PCI y al cerrarlo vuelve aquí (REV3-OBS-32)
             OutlinedButton(onClick = alVerFicha, modifier = Modifier.weight(1f).height(40.dp), shape = RoundedCornerShape(10.dp)) {
-                Text("Ver ficha"); Icon(Icons.Outlined.ChevronRight, null, Modifier.size(16.dp))
+                Text("Gestionar ítem"); Icon(Icons.Outlined.ChevronRight, null, Modifier.size(16.dp))
+            }
+            if (item.fotoReferencia != null) {
+                OutlinedButton(onClick = alReferencia, modifier = Modifier.height(40.dp), shape = RoundedCornerShape(10.dp),
+                    contentPadding = PaddingValues(horizontal = 10.dp)) { Text("Ref.") }
             }
             OutlinedButton(onClick = alFotos, enabled = !ocupado, modifier = Modifier.weight(1f).height(40.dp), shape = RoundedCornerShape(10.dp)) {
                 Icon(Icons.Outlined.PhotoCamera, null, Modifier.size(16.dp)); Spacer(Modifier.width(4.dp)); Text("Tomar fotos")
@@ -364,8 +442,10 @@ private fun MapaDePci(
     tramos: Map<String, List<Pair<Double, Double>>>,
     modifier: Modifier,
     control: pe.servicon.sigov.ui.componentes.ControlDeMapa,
+    camaraGuardada: org.maplibre.android.camera.CameraPosition? = null,
     alTocar: (ItemPci) -> Unit,
 ) {
+    var encuadrado by remember { mutableStateOf(false) }
     val contexto = LocalContext.current
     val porId by rememberUpdatedState(remember(items) { items.associateBy { it.id } })
     val tocar by rememberUpdatedState(alTocar)
@@ -391,8 +471,24 @@ private fun MapaDePci(
                         PropertyFactory.lineCap(org.maplibre.android.style.layers.Property.LINE_CAP_ROUND),
                         PropertyFactory.lineOpacity(0.85f),
                     ))
-                    estilo.addSource(GeoJsonSource("src-pci", FeatureCollection.fromFeatures(emptyList())))
-                    estilo.addLayer(CircleLayer("capa-pci", "src-pci").withProperties(
+                    // Lejos, los puntos se agrupan con su cantidad (REV3-REC-01)
+                    estilo.addSource(GeoJsonSource("src-pci", FeatureCollection.fromFeatures(emptyList()),
+                        org.maplibre.android.style.sources.GeoJsonOptions().withCluster(true).withClusterMaxZoom(11).withClusterRadius(42)))
+                    estilo.addLayer(CircleLayer("capa-pci-grupos", "src-pci").withProperties(
+                        PropertyFactory.circleColor("#072D70"),
+                        PropertyFactory.circleOpacity(0.85f),
+                        PropertyFactory.circleRadius(Expression.step(Expression.get("point_count"), Expression.literal(14f),
+                            Expression.stop(10, 18f), Expression.stop(50, 24f))),
+                        PropertyFactory.circleStrokeWidth(2f),
+                        PropertyFactory.circleStrokeColor("#FFFFFF"),
+                    ).withFilter(Expression.has("point_count")))
+                    estilo.addLayer(org.maplibre.android.style.layers.SymbolLayer("capa-pci-cuenta", "src-pci").withProperties(
+                        PropertyFactory.textField(Expression.toString(Expression.get("point_count"))),
+                        PropertyFactory.textSize(12f),
+                        PropertyFactory.textColor("#FFFFFF"),
+                        PropertyFactory.textAllowOverlap(true),
+                    ).withFilter(Expression.has("point_count")))
+                    estilo.addLayer(CircleLayer("capa-pci", "src-pci").withFilter(Expression.not(Expression.has("point_count"))).withProperties(
                         PropertyFactory.circleColor(Expression.toColor(Expression.get("color"))),
                         PropertyFactory.circleRadius(Expression.interpolate(Expression.linear(), Expression.zoom(),
                             Expression.stop(6, 4f), Expression.stop(12, 8f), Expression.stop(16, 13f))),
@@ -405,6 +501,11 @@ private fun MapaDePci(
                 m.addOnMapClickListener { punto ->
                     val p = m.projection.toScreenLocation(punto)
                     val r = 26f
+                    // Un grupo se abre acercándose
+                    if (m.queryRenderedFeatures(android.graphics.RectF(p.x - r, p.y - r, p.x + r, p.y + r), "capa-pci-grupos").isNotEmpty()) {
+                        m.animateCamera(CameraUpdateFactory.newLatLngZoom(punto, m.cameraPosition.zoom + 2), 500)
+                        return@addOnMapClickListener true
+                    }
                     val f = m.queryRenderedFeatures(android.graphics.RectF(p.x - r, p.y - r, p.x + r, p.y + r), "capa-pci", "capa-pci-tramos")
                     f.firstOrNull()?.getStringProperty("id")?.let { id -> porId[id]?.let(tocar) }
                     f.isNotEmpty()
@@ -419,15 +520,15 @@ private fun MapaDePci(
         val rasgos = puntos.map { (i, lat, lng) ->
             Feature.fromGeometry(Point.fromLngLat(lng, lat)).apply {
                 addStringProperty("id", i.id)
-                addStringProperty("color", hex(avanceDe(i).color))
-                addStringProperty("borde", if (plazoDe(i) == PlazoEnMapa.VENCIDO) "#DC2626" else "#FFFFFF")
+                addStringProperty("color", hex(colorEnMapa(i)))
+                addStringProperty("borde", "#FFFFFF")
             }
         }
         val lineas = items.mapNotNull { i ->
             tramos[i.id]?.let { t ->
                 Feature.fromGeometry(org.maplibre.geojson.LineString.fromLngLats(t.map { (lat, lng) -> Point.fromLngLat(lng, lat) })).apply {
                     addStringProperty("id", i.id)
-                    addStringProperty("color", hex(avanceDe(i).color))
+                    addStringProperty("color", hex(colorEnMapa(i)))
                 }
             }
         }
@@ -440,7 +541,10 @@ private fun MapaDePci(
             puntos.forEach { (_, lat, lng) -> b.include(LatLng(lat, lng)) }
             if (puntos.size == 1) b.include(LatLng(puntos[0].second + 0.01, puntos[0].third + 0.01))
             control.limites = b.build()
-            runCatching { m.animateCamera(CameraUpdateFactory.newLatLngBounds(b.build(), 60), 700) }
+            // Al volver de un ítem, el mapa queda donde estaba (REV3-OBS-32)
+            if (!encuadrado && camaraGuardada != null) runCatching { m.moveCamera(CameraUpdateFactory.newCameraPosition(camaraGuardada)) }
+            else runCatching { m.animateCamera(CameraUpdateFactory.newLatLngBounds(b.build(), 60), 700) }
+            encuadrado = true
         }
     }
 }

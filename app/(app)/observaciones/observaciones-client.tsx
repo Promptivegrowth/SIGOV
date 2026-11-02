@@ -65,6 +65,12 @@ export function ObservacionesClient() {
   const [estado, setEstado] = React.useState<Estado | 'todas'>('pendiente')
   const [tramo, setTramo] = React.useState('todos')
   const [categoria, setCategoria] = React.useState('todas')
+  // Filtros combinables (REV3-OBS-39)
+  const [sector, setSector] = React.useState('todos')
+  const [actividad, setActividad] = React.useState('todas')
+  const [autor, setAutor] = React.useState('todos')
+  const [desde, setDesde] = React.useState('')
+  const [hasta, setHasta] = React.useState('')
   const [q, setQ] = React.useState('')
   const [abierta, setAbierta] = React.useState<any | null>(null)
   const [elegida, setElegida] = React.useState<string | null>(null)
@@ -95,17 +101,28 @@ export function ObservacionesClient() {
     return [...m.entries()].sort((a, b) => (a[0] === SIN_TIPO ? 1 : b[0] === SIN_TIPO ? -1 : a[0].localeCompare(b[0])))
   }, [enEstado])
 
+  const opciones = React.useMemo(() => ({
+    sectores: [...new Set(todas.map((o) => o.sector_code).filter(Boolean))].sort() as string[],
+    actividades: [...new Map(todas.filter((o) => o.activity_code).map((o) => [o.activity_code, `${o.activity_code} · ${o.activity_name}`])).entries()].sort(),
+    autores: [...new Set(todas.map((o) => o.created_by_name).filter(Boolean))].sort() as string[],
+  }), [todas])
+
   const visibles = React.useMemo(() => {
     const t = q.trim().toLowerCase()
     return enEstado
       .filter((o) =>
         (tramo === 'todos' || o.section_id === tramo) &&
         (categoria === 'todas' || categoriaDe(o) === categoria) &&
+        (sector === 'todos' || o.sector_code === sector) &&
+        (actividad === 'todas' || o.activity_code === actividad) &&
+        (autor === 'todos' || o.created_by_name === autor) &&
+        (!desde || (o.observado_on ?? '') >= desde) &&
+        (!hasta || (o.observado_on ?? '') <= hasta) &&
         (!t || [o.descripcion, o.section_name, o.progresiva_txt, o.crew_name, o.created_by_name, o.activity_name, o.activity_code, o.sector_code]
           .filter(Boolean).some((v: string) => v.toLowerCase().includes(t))))
       // Por tramo y kilómetro, como se recorre la vía
       .sort((a, b) => (a.section_code ?? '~').localeCompare(b.section_code ?? '~') || (a.progresiva_m ?? 1e12) - (b.progresiva_m ?? 1e12))
-  }, [enEstado, tramo, categoria, q])
+  }, [enEstado, tramo, categoria, sector, actividad, autor, desde, hasta, q])
 
   const cuantas = (e: Estado | 'todas') => todas.filter((o) => e === 'todas' || o.estado === e).length
 
@@ -114,11 +131,18 @@ export function ObservacionesClient() {
     if (!mapa) return
     const fc = {
       type: 'FeatureCollection',
-      features: visibles.filter((o) => o.lat != null && o.lng != null).map((o) => ({
-        type: 'Feature',
-        geometry: { type: 'Point', coordinates: [o.lng, o.lat] },
-        properties: { id: o.id, color: ESTADOS[o.estado as Estado]?.color ?? '#64748b' },
-      })),
+      // Un marcador por punto aunque tenga varias actividades (REV3-OBS-34):
+      // el color de la más atrasada y más grande cuantas más tenga
+      features: [...visibles.filter((o) => o.lat != null && o.lng != null)
+        .reduce((m, o) => m.set(o.punto_id ?? o.id, [...(m.get(o.punto_id ?? o.id) ?? []), o]), new Map<string, any[]>()).values()]
+        .map((grupo) => {
+          const o = grupo.find((x: any) => x.estado === 'pendiente') ?? grupo.find((x: any) => x.estado === 'programada') ?? grupo[0]
+          return {
+            type: 'Feature',
+            geometry: { type: 'Point', coordinates: [o.lng, o.lat] },
+            properties: { id: o.id, n: grupo.length, ids: grupo.map((x: any) => x.id).join(','), color: ESTADOS[o.estado as Estado]?.color ?? '#64748b' },
+          }
+        }),
     }
     if (!mapa.getSource('src-obs')) {
       mapa.addSource('src-obs', { type: 'geojson', data: fc as any })
@@ -131,7 +155,7 @@ export function ObservacionesClient() {
         id: 'l-obs', type: 'circle', source: 'src-obs',
         paint: {
           'circle-color': ['get', 'color'],
-          'circle-radius': ['interpolate', ['linear'], ['zoom'], 7, 5, 12, 9, 16, 13],
+          'circle-radius': ['+', ['interpolate', ['linear'], ['zoom'], 7, 5, 12, 9, 16, 13], ['*', 2, ['-', ['get', 'n'], 1]]],
           'circle-stroke-width': 2, 'circle-stroke-color': '#ffffff',
         },
       })
@@ -153,7 +177,7 @@ export function ObservacionesClient() {
   }, [mapa, visibles, qc, service.id])
 
   React.useEffect(() => {
-    if (mapa?.getLayer('l-obs-sel')) mapa.setFilter('l-obs-sel', ['==', ['get', 'id'], elegida ?? ''])
+    if (mapa?.getLayer('l-obs-sel')) mapa.setFilter('l-obs-sel', ['in', elegida ?? '-', ['get', 'ids']])
   }, [mapa, elegida, visibles])
 
   // Tocar una de la lista lleva el mapa a ese punto (Elvis, 26/10)
@@ -203,13 +227,14 @@ export function ObservacionesClient() {
 
   const filas = () => visibles.map((o, i) => ({
     n: i + 1,
+    codigo: o.codigo ?? '-',
     sector: o.sector_code ?? '-',
     tramo: tramoDe(o),
     prog_ini: o.progresiva_txt ?? '-',
     prog_fin: o.progresiva_fin_txt && o.progresiva_fin_m !== o.progresiva_m ? o.progresiva_fin_txt : '-',
     lado: o.side ? etiquetaDeLado(o.side) : '-',
     tipo: o.activity_category ?? '-',
-    codigo: o.activity_code ?? '-',
+    cod_act: o.activity_code ?? '-',
     actividad: o.activity_name ?? '-',
     actividad_cod: [o.activity_code, o.activity_name].filter(Boolean).join(' · ') || '-',
     observacion: o.descripcion,
@@ -227,22 +252,24 @@ export function ObservacionesClient() {
     try {
       await descargarExcel('SIGOV_OBSERVACIONES_' + toISODate(new Date()), meta(), [{
         name: 'Observaciones',
+        // El orden del consolidado (REV3-OBS-40); varias actividades de un
+        // punto salen en filas propias, con la misma ubicación
         columns: [
-          { header: 'N.º', key: 'n', width: 6 },
-          { header: 'Sector', key: 'sector', width: 9 },
+          { header: 'ID', key: 'codigo', width: 11 },
+          { header: 'Fecha de registro', key: 'fecha', width: 12 },
           { header: 'Tramo', key: 'tramo', width: 10 },
+          { header: 'Sector', key: 'sector', width: 9 },
+          { header: 'Tipo de actividad', key: 'tipo', width: 22 },
+          { header: 'Código', key: 'cod_act', width: 13 },
+          { header: 'Actividad', key: 'actividad', width: 34 },
           { header: 'Progresiva inicial', key: 'prog_ini', width: 15 },
           { header: 'Progresiva final', key: 'prog_fin', width: 15 },
           { header: 'Lado', key: 'lado', width: 12 },
-          { header: 'Tipo de actividad', key: 'tipo', width: 22 },
-          { header: 'Código', key: 'codigo', width: 13 },
-          { header: 'Actividad', key: 'actividad', width: 34 },
-          { header: 'Observación', key: 'observacion', width: 42 },
           { header: 'Metrado', key: 'metrado', width: 10 },
           { header: 'Unidad', key: 'unidad', width: 8 },
+          { header: 'Observación', key: 'observacion', width: 42 },
           { header: 'Estado', key: 'estado', width: 12 },
-          { header: 'Fecha', key: 'fecha', width: 12 },
-          { header: 'Registró', key: 'registro', width: 24 },
+          { header: 'Registrado por', key: 'registro', width: 24 },
           { header: 'Fotografía de referencia', key: 'foto', width: 23 },
         ],
         rows: filas(),
@@ -259,7 +286,7 @@ export function ObservacionesClient() {
     setExportando('pdf')
     try {
       await descargarPdf('SIGOV_OBSERVACIONES_' + toISODate(new Date()), meta(), [
-        { header: 'N.º', key: 'n', width: 8, align: 'center' as const },
+        { header: 'ID', key: 'codigo', width: 17 },
         { header: 'Sector', key: 'sector', width: 13 },
         { header: 'Tramo', key: 'tramo', width: 15 },
         { header: 'Prog. inicial', key: 'prog_ini', width: 18 },
@@ -269,7 +296,7 @@ export function ObservacionesClient() {
         { header: 'Actividad', key: 'actividad_cod', width: 40 },
         // La observación se lleva el ancho que sobra de la hoja horizontal
         { header: 'Observación', key: 'observacion' },
-        { header: 'Metrado', key: 'metrado_txt', width: 17 },
+        { header: 'Metrado', key: 'metrado_txt', width: 15 },
         { header: 'Estado', key: 'estado', width: 18 },
         { header: 'Foto', key: 'foto', width: 34 },
       ], filas(), {
@@ -290,7 +317,7 @@ export function ObservacionesClient() {
   }
 
   /** El mapa con los puntos del filtro, como imagen (Elvis: «exportar mapa»). */
-  const exportarMapa = () => {
+  const exportarMapa = (comoPdf = false) => {
     if (!mapa) return
     setExportando('mapa')
     // El lienzo del mapa solo se puede leer en el cuadro que se acaba de pintar
@@ -336,10 +363,22 @@ export function ObservacionesClient() {
         ctx.fillStyle = '#6b7280'
         ctx.font = '13px system-ui, sans-serif'
         ctx.fillText(encajar(`${filtroLegible} · ${fmtDate(new Date())} · SIGOV`, c.width - 40), 20, y + 22)
-        const a = document.createElement('a')
-        a.href = c.toDataURL('image/png')
-        a.download = `SIGOV_MAPA_OBSERVACIONES_${toISODate(new Date())}.png`
-        a.click()
+        const png = c.toDataURL('image/png')
+        if (comoPdf) {
+          // En PDF para presentaciones: la misma imagen, con filtros, leyenda y fecha (REV3-REC-02)
+          void import('jspdf').then(({ jsPDF }) => {
+            const doc = new jsPDF({ orientation: c.width >= c.height ? 'landscape' : 'portrait', unit: 'pt', format: 'a4' })
+            const W = doc.internal.pageSize.getWidth(); const H = doc.internal.pageSize.getHeight()
+            const k = Math.min((W - 40) / c.width, (H - 40) / c.height)
+            doc.addImage(png, 'PNG', (W - c.width * k) / 2, (H - c.height * k) / 2, c.width * k, c.height * k)
+            doc.save(`SIGOV_MAPA_OBSERVACIONES_${toISODate(new Date())}.pdf`)
+          })
+        } else {
+          const a = document.createElement('a')
+          a.href = png
+          a.download = `SIGOV_MAPA_OBSERVACIONES_${toISODate(new Date())}.png`
+          a.click()
+        }
       } catch (e) {
         toast.error(mensajeAmigable(e, 'No se pudo exportar el mapa'))
       } finally {
@@ -357,8 +396,11 @@ export function ObservacionesClient() {
         description="Lo que la cuadrilla o el supervisor encuentran en la vía y no está en el inventario: con su tipo de actividad, progresiva, metrado y fotos, para programarlo."
         actions={
           <>
-            <Button variant="outline" onClick={exportarMapa} loading={exportando === 'mapa'} disabled={!mapa || !!exportando}>
-              <ImageDown className="size-4" /> Imagen del mapa
+            <Button variant="outline" onClick={() => exportarMapa(false)} loading={exportando === 'mapa'} disabled={!mapa || !!exportando}>
+              <ImageDown className="size-4" /> Mapa PNG
+            </Button>
+            <Button variant="outline" onClick={() => exportarMapa(true)} disabled={!mapa || !!exportando}>
+              <ImageDown className="size-4" /> Mapa PDF
             </Button>
             <Button variant="outline" onClick={exportarExcel} loading={exportando === 'excel'} disabled={!visibles.length || !!exportando}>
               <FileSpreadsheet className="size-4" /> Excel
@@ -394,6 +436,29 @@ export function ObservacionesClient() {
               {tramos.map(([id, t]) => <SelectItem key={id} value={id}>{t}</SelectItem>)}
             </SelectContent>
           </Select>
+          <Select value={sector} onValueChange={setSector}>
+            <SelectTrigger className="w-36"><SelectValue /></SelectTrigger>
+            <SelectContent>
+              <SelectItem value="todos">Todos los sectores</SelectItem>
+              {opciones.sectores.map((x) => <SelectItem key={x} value={x}>Sector {x}</SelectItem>)}
+            </SelectContent>
+          </Select>
+          <Select value={actividad} onValueChange={setActividad}>
+            <SelectTrigger className="w-56"><SelectValue /></SelectTrigger>
+            <SelectContent>
+              <SelectItem value="todas">Todos los códigos</SelectItem>
+              {opciones.actividades.map(([k, t]) => <SelectItem key={k} value={k}>{t}</SelectItem>)}
+            </SelectContent>
+          </Select>
+          <Select value={autor} onValueChange={setAutor}>
+            <SelectTrigger className="w-44"><SelectValue /></SelectTrigger>
+            <SelectContent>
+              <SelectItem value="todos">Registrado por: todos</SelectItem>
+              {opciones.autores.map((x) => <SelectItem key={x} value={x}>{x}</SelectItem>)}
+            </SelectContent>
+          </Select>
+          <Input type="date" value={desde} onChange={(e) => setDesde(e.target.value)} className="w-36" aria-label="Desde" />
+          <Input type="date" value={hasta} onChange={(e) => setHasta(e.target.value)} className="w-36" aria-label="Hasta" />
           <div className="relative min-w-52 flex-1 sm:max-w-xs">
             <Search className="text-muted-foreground absolute top-1/2 left-3 size-3.5 -translate-y-1/2" />
             <Input placeholder="Buscar observación, actividad, km…" value={q} onChange={(e) => setQ(e.target.value)} className="pl-9" />
@@ -441,6 +506,8 @@ export function ObservacionesClient() {
       {abierta && (
         <Ficha
           o={abierta}
+          delPunto={todas.filter((x) => (x.punto_id ?? x.id) === (abierta.punto_id ?? abierta.id) && x.id !== abierta.id)}
+          alAbrirOtra={(x) => { setElegida(x.id); setAbierta(x) }}
           puedeGestionar={can.manage}
           puedeEditar={can.manage || (abierta.created_by === profile.id && abierta.estado === 'pendiente')}
           alCerrar={() => setAbierta(null)}
@@ -456,8 +523,11 @@ export function ObservacionesClient() {
   )
 }
 
-function Ficha({ o, puedeGestionar, puedeEditar, alCerrar, alCambiar, alActualizar }: {
+function Ficha({ o, delPunto = [], alAbrirOtra, puedeGestionar, puedeEditar, alCerrar, alCambiar, alActualizar }: {
   o: any
+  /** Las otras actividades del mismo punto (REV3-OBS-34). */
+  delPunto?: any[]
+  alAbrirOtra?: (o: any) => void
   puedeGestionar: boolean
   puedeEditar: boolean
   alCerrar: () => void
@@ -501,8 +571,16 @@ function Ficha({ o, puedeGestionar, puedeEditar, alCerrar, alCambiar, alActualiz
     <Dialog open onOpenChange={(v) => !v && alCerrar()}>
       <SheetContent side="right" className="w-full max-w-lg gap-0 overflow-y-auto p-0">
         <div className="space-y-4 p-5">
-          <Badge className={ESTADOS[o.estado as Estado]?.className}>{ESTADOS[o.estado as Estado]?.label}</Badge>
+          <div className="flex items-center gap-2">
+            <Badge className={ESTADOS[o.estado as Estado]?.className}>{ESTADOS[o.estado as Estado]?.label}</Badge>
+            {o.codigo && <span className="text-muted-foreground font-mono text-[12px]">{o.codigo}</span>}
+          </div>
           <h2 className="text-[16px] font-semibold leading-snug">{o.descripcion}</h2>
+          {o.gps_distancia_m > 2000 && (
+            <p className="text-destructive text-[12.5px] font-medium">
+              La ubicación GPS quedó a {(o.gps_distancia_m / 1000).toFixed(1)} km de la progresiva registrada. Verifique el dato.
+            </p>
+          )}
           <dl className="grid grid-cols-2 gap-3 text-[12.5px]">
             {dato('Tipo de actividad', o.activity_category)}
             {dato('Actividad', [o.activity_code, o.activity_name].filter(Boolean).join(' · '))}
@@ -517,6 +595,21 @@ function Ficha({ o, puedeGestionar, puedeEditar, alCerrar, alCambiar, alActualiz
             {o.programada_on && dato('Programada para', fmtDate(o.programada_on))}
             {o.atendida_at && dato('Atendida', fmtDate(o.atendida_at))}
           </dl>
+          {delPunto.length > 0 && (
+            <div>
+              <p className="text-muted-foreground mb-1 text-[11px]">También en este punto</p>
+              <ul className="space-y-1">
+                {delPunto.map((x) => (
+                  <li key={x.id}>
+                    <button onClick={() => alAbrirOtra?.(x)} className="text-primary flex items-center gap-2 text-left text-[12.5px] hover:underline">
+                      <span className="size-2 rounded-full" style={{ background: ESTADOS[x.estado as Estado]?.color }} />
+                      {[x.activity_code, x.activity_name, metradoDe(x)].filter(Boolean).join(' · ') || x.descripcion}
+                    </button>
+                  </li>
+                ))}
+              </ul>
+            </div>
+          )}
           <div>
             <p className="text-muted-foreground mb-2 text-[11px]">Fotos ({(o.fotos ?? []).length})</p>
             <div className="flex flex-wrap gap-2">

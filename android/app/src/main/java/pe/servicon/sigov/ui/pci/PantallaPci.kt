@@ -131,7 +131,7 @@ fun PantallaPci(
 
     estado.itemEnFicha?.let { item ->
         ModalBottomSheet(
-            onDismissRequest = vm::cerrarFicha,
+            onDismissRequest = { vm.cerrarFicha(); if (vm.volverAlCerrar) alVolver() },
             sheetState = rememberModalBottomSheetState(skipPartiallyExpanded = true),
         ) {
             FichaDelItem(

@@ -35,8 +35,15 @@ fun DialogoVehiculoNuevo(
     error: String? = null,
     flota: List<Vehiculo> = emptyList(),
     alCerrar: () -> Unit,
-    alGuardar: (placa: String, tipo: String, marca: String?, modelo: String?, motivo: String, km: Int, obs: String?, desde: java.time.LocalDate) -> Unit,
+    alGuardar: (placa: String, tipo: String, marca: String?, modelo: String?, motivo: String, km: Int, obs: String?,
+                desde: java.time.LocalDate, documentos: pe.servicon.sigov.datos.DocumentosDelVehiculo) -> Unit,
 ) {
+    // Los vencimientos de sus documentos: sin ellos el reemplazo no queda
+    // habilitado (REV3-OBS-42). Los que la flota ya conoce se completan solos.
+    var soat by remember { mutableStateOf<java.time.LocalDate?>(null) }
+    var revision by remember { mutableStateOf<java.time.LocalDate?>(null) }
+    var poliza by remember { mutableStateOf<java.time.LocalDate?>(null) }
+    var eligiendoDoc by remember { mutableStateOf<String?>(null) }
     var placa by remember { mutableStateOf("") }
     var tipo by remember { mutableStateOf("camioneta") }
     var marca by remember { mutableStateOf("") }
@@ -67,7 +74,26 @@ fun DialogoVehiculoNuevo(
             marca = v.brand.orEmpty()
             modelo = v.model.orEmpty()
             v.kilometraje?.takeIf { km.isBlank() }?.let { km = it.toString() }
+            fun f(t: String?) = t?.take(10)?.let { runCatching { java.time.LocalDate.parse(it) }.getOrNull() }
+            if (soat == null) soat = f(v.soat)
+            if (revision == null) revision = f(v.revisionTecnica)
+            if (poliza == null) poliza = f(v.poliza)
         }
+    }
+    eligiendoDoc?.let { cual ->
+        val inicial = when (cual) { "soat" -> soat; "revision" -> revision; else -> poliza }
+        val estadoDoc = rememberDatePickerState(initialSelectedDateMillis = inicial?.atStartOfDay()?.toInstant(java.time.ZoneOffset.UTC)?.toEpochMilli())
+        DatePickerDialog(
+            onDismissRequest = { eligiendoDoc = null },
+            confirmButton = {
+                TextButton(onClick = {
+                    val d = estadoDoc.selectedDateMillis?.let { java.time.Instant.ofEpochMilli(it).atZone(java.time.ZoneOffset.UTC).toLocalDate() }
+                    when (cual) { "soat" -> soat = d; "revision" -> revision = d; else -> poliza = d }
+                    eligiendoDoc = null
+                }) { Text("Aceptar") }
+            },
+            dismissButton = { TextButton(onClick = { eligiendoDoc = null }) { Text("Cancelar") } },
+        ) { DatePicker(state = estadoDoc) }
     }
 
     if (calendario) {
@@ -139,6 +165,20 @@ fun DialogoVehiculoNuevo(
                     keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Number),
                     modifier = Modifier.fillMaxWidth(),
                 )
+                if (titular != null) {
+                    Text("Vencimiento de sus documentos", style = MaterialTheme.typography.labelLarge)
+                    val dia = java.time.format.DateTimeFormatter.ofPattern("dd/MM/yyyy")
+                    listOf(Triple("soat", "SOAT", soat), Triple("revision", "Revisión técnica", revision), Triple("poliza", "Póliza", poliza))
+                        .forEach { (k, nombre, fecha) ->
+                            OutlinedButton(onClick = { eligiendoDoc = k }, modifier = Modifier.fillMaxWidth()) {
+                                Text(if (fecha != null) "$nombre · vence ${fecha.format(dia)}" else "$nombre · sin registrar")
+                            }
+                        }
+                    if (listOf(soat, revision, poliza).any { it == null }) {
+                        Text("Sin los tres documentos el reemplazo queda «No habilitado» hasta registrarlos.",
+                            color = MaterialTheme.colorScheme.error, style = MaterialTheme.typography.bodySmall)
+                    }
+                }
                 OutlinedTextField(obs, { obs = it }, label = { Text("Observación (opcional)") }, minLines = 2, modifier = Modifier.fillMaxWidth())
                 if (titular != null && motivo == null) {
                     Text("Elige el motivo del reemplazo.", color = MaterialTheme.colorScheme.error, style = MaterialTheme.typography.bodySmall)
@@ -153,7 +193,8 @@ fun DialogoVehiculoNuevo(
                     obs.trim().ifBlank { null },
                 ).joinToString(" · ").ifBlank { null }
                 alGuardar(placa.trim(), tipo, marca.trim().ifBlank { null }, modelo.trim().ifBlank { null },
-                    motivo ?: "mantenimiento", km.toInt(), nota, desde)
+                    motivo ?: "mantenimiento", km.toInt(), nota, desde,
+                    pe.servicon.sigov.datos.DocumentosDelVehiculo(soat, revision, poliza))
             }) { Text(if (guardando) "Guardando…" else "Registrar") }
         },
         dismissButton = { TextButton(onClick = alCerrar) { Text("Cancelar") } },

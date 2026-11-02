@@ -9,6 +9,7 @@ import androidx.compose.runtime.SideEffect
 import androidx.compose.ui.platform.LocalView
 import androidx.core.view.WindowCompat
 import androidx.activity.enableEdgeToEdge
+import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.hilt.navigation.compose.hiltViewModel
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
@@ -51,6 +52,14 @@ import pe.servicon.sigov.ui.theme.SigovTheme
 
 @AndroidEntryPoint
 class MainActivity : ComponentActivity() {
+    /** A dónde pidió ir una notificación del teléfono. */
+    private val destinoPedido = androidx.compose.runtime.mutableStateOf<String?>(null)
+
+    override fun onNewIntent(intent: android.content.Intent) {
+        super.onNewIntent(intent)
+        intent.getStringExtra("destino")?.let { destinoPedido.value = it }
+    }
+
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
         // La cabecera de marca es blanca: los iconos del sistema tienen que
@@ -61,6 +70,7 @@ class MainActivity : ComponentActivity() {
                 android.graphics.Color.TRANSPARENT,
             ),
         )
+        destinoPedido.value = intent?.getStringExtra("destino")
         setContent {
             SigovTheme {
                 // Se reafirma dentro de la composición: el tema de Compose
@@ -75,6 +85,16 @@ class MainActivity : ComponentActivity() {
                 val nav = rememberNavController()
                 val pila by nav.currentBackStackEntryAsState()
                 val ruta = pila?.destination?.route
+                // La notificación del teléfono abre el registro exacto
+                // (REV3-OBS-49), una vez que la sesión ya entró
+                val pedido by destinoPedido
+                LaunchedEffect(pedido, ruta) {
+                    val d = pedido ?: return@LaunchedEffect
+                    if (ruta != null && ruta != "arranque" && ruta != "acceso") {
+                        destinoPedido.value = null
+                        runCatching { nav.navigate(d) }
+                    }
+                }
                 val barra: BarraViewModel = hiltViewModel()
                 val pendientes by barra.pendientes.collectAsStateWithLifecycle(0)
 

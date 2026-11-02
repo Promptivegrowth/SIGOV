@@ -20,6 +20,9 @@ import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.outlined.FlashAuto
+import androidx.compose.material.icons.outlined.FlashOff
+import androidx.compose.material.icons.outlined.FlashOn
 import androidx.compose.material.icons.automirrored.outlined.ArrowBack
 import androidx.compose.material.icons.outlined.BrandingWatermark
 import androidx.compose.material.icons.outlined.GpsFixed
@@ -142,6 +145,7 @@ fun PantallaCamara(
                 if (hayCamara) {
                     var disparo by remember { mutableStateOf<ImageCapture?>(null) }
                     VisorDeCamara(onListo = { disparo = it })
+                    BotonDeFlash(disparo, Modifier.align(Alignment.TopEnd).padding(top = 56.dp, end = 12.dp))
                     // Solo fotos horizontales (Elvis, P9; COVINCA observa las
                     // verticales). La pantalla está fija en vertical, así que el
                     // giro del celular se lee del sensor y se le pasa a la cámara.
@@ -278,6 +282,7 @@ fun PantallaCamara(
 /** El visor. Se ata al ciclo de vida para que la cámara se suelte al salir. */
 @Composable
 internal fun VisorDeCamara(onListo: (ImageCapture) -> Unit) {
+    val flash by modoDeFlash
     val contexto = LocalContext.current
     val dueno = LocalLifecycleOwner.current
 
@@ -315,6 +320,8 @@ internal fun VisorDeCamara(onListo: (ImageCapture) -> Unit) {
                             .build()
                     )
                     .setJpegQuality(95)
+                    // El flash que eligió el capataz (REV3-OBS-02)
+                    .setFlashMode(flash)
                     .build()
                 runCatching {
                     proveedor.unbindAll()
@@ -706,3 +713,45 @@ private fun paraElVisor(foto: EvidenciaLocal, registro: RegistroLocal?) = Eviden
     precision = foto.precision.toDouble().takeIf { it > 0 },
     watermarked = foto.conMarcaDeAgua,
 ).also { it.rutaLocal = foto.rutaLocal }
+
+
+/**
+ * El flash de las cámaras de SIGOV (REV3-OBS-02): automático, encendido o
+ * apagado, para documentos y evidencias en sombra, de noche o bajo techo. Se
+ * recuerda mientras la app esté abierta; por omisión, automático, que lo
+ * enciende solo cuando hay poca luz.
+ */
+internal val modoDeFlash = androidx.compose.runtime.mutableIntStateOf(ImageCapture.FLASH_MODE_AUTO)
+
+@Composable
+internal fun BotonDeFlash(disparo: ImageCapture?, modifier: Modifier = Modifier) {
+    var modo by modoDeFlash
+    val (icono, texto) = when (modo) {
+        ImageCapture.FLASH_MODE_ON -> androidx.compose.material.icons.Icons.Outlined.FlashOn to "Flash encendido"
+        ImageCapture.FLASH_MODE_OFF -> androidx.compose.material.icons.Icons.Outlined.FlashOff to "Flash apagado"
+        else -> androidx.compose.material.icons.Icons.Outlined.FlashAuto to "Flash automático"
+    }
+    androidx.compose.material3.Surface(
+        onClick = {
+            modo = when (modo) {
+                ImageCapture.FLASH_MODE_AUTO -> ImageCapture.FLASH_MODE_ON
+                ImageCapture.FLASH_MODE_ON -> ImageCapture.FLASH_MODE_OFF
+                else -> ImageCapture.FLASH_MODE_AUTO
+            }
+            disparo?.flashMode = modo
+        },
+        shape = androidx.compose.foundation.shape.RoundedCornerShape(20.dp),
+        color = Color.Black.copy(alpha = 0.55f),
+        contentColor = Color.White,
+        modifier = modifier,
+    ) {
+        androidx.compose.foundation.layout.Row(
+            Modifier.padding(horizontal = 12.dp, vertical = 8.dp),
+            verticalAlignment = Alignment.CenterVertically,
+            horizontalArrangement = androidx.compose.foundation.layout.Arrangement.spacedBy(6.dp),
+        ) {
+            androidx.compose.material3.Icon(icono, contentDescription = null)
+            androidx.compose.material3.Text(texto, style = androidx.compose.material3.MaterialTheme.typography.labelMedium)
+        }
+    }
+}

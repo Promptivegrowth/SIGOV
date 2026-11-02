@@ -504,7 +504,7 @@ export function MapaDeInventario() {
                   <Dato etiqueta="Lado" valor={etiquetaDeLado(elegido.side)} />
                   <Dato etiqueta="Tramo" valor={elegido.section ?? '—'} ancho />
                   <Dato
-                    etiqueta="Conservación"
+                    etiqueta="Condición base del inventario"
                     valor={ASSET_CONDITION[elegido.condition as keyof typeof ASSET_CONDITION]?.label ?? elegido.condition ?? '—'}
                   />
                   <Dato etiqueta="Intervenciones" valor={String(elegido.intervenciones ?? 0)} />

@@ -143,8 +143,9 @@ fun PantallaEquipos(
             equipo = equipo,
             guardando = estado.guardando,
             alCerrar = { inspeccionando = null },
-            alRegistrar = { conforme, hallazgo ->
-                vm.inspeccionar(equipo, conforme, hallazgo) { inspeccionando = null }
+            nuevoArchivo = vm::archivoTemporal,
+            alRegistrar = { foto, nota ->
+                vm.inspeccionarConFoto(equipo, foto, nota) { inspeccionando = null }
             },
         )
     }
@@ -209,6 +210,25 @@ private fun FilaEquipo(equipo: EquipoDeSeguridad, alInspeccionar: () -> Unit) {
                     }
                 }
 
+                // El dictamen de la última inspección (REV3-OBS-45)
+                equipo.revisionLegible?.let { r ->
+                    Spacer(Modifier.height(8.dp))
+                    val color = when (equipo.ultimaRevisionEstado) {
+                        "conforme" -> Marca.VerdeBandera
+                        "pendiente" -> Marca.Azul
+                        else -> Semaforo.Vencido
+                    }
+                    Text(
+                        r + (equipo.ultimaInspeccion?.let { " · inspección del ${it.take(10).split("-").reversed().joinToString("/")}" } ?: ""),
+                        style = MaterialTheme.typography.bodySmall,
+                        fontWeight = FontWeight.SemiBold,
+                        color = color,
+                        modifier = Modifier
+                            .background(color.copy(alpha = 0.10f), RoundedCornerShape(8.dp))
+                            .padding(horizontal = 10.dp, vertical = 5.dp),
+                    )
+                }
+
                 if (equipo.status == "observado" || equipo.observaciones > 0) {
                     Spacer(Modifier.height(8.dp))
                     Text(
@@ -227,26 +247,41 @@ private fun FilaEquipo(equipo: EquipoDeSeguridad, alInspeccionar: () -> Unit) {
                     onClick = alInspeccionar,
                     modifier = Modifier.fillMaxWidth().height(46.dp),
                     shape = RoundedCornerShape(10.dp),
-                ) { Text("Registrar revisión") }
+                ) { Text("Fotografiar formato de inspección") }
             }
         }
     }
 }
 
+/**
+ * La inspección del equipo: la foto del formato físico ya llenado
+ * (REV3-OBS-45). El jefe no vuelve a marcar Conforme / No conforme: eso lo
+ * dictamina el Ingeniero SSOMA al revisar la foto.
+ */
 @Composable
 private fun DialogoInspeccion(
     equipo: EquipoDeSeguridad,
     guardando: Boolean,
+    nuevoArchivo: () -> java.io.File,
     alCerrar: () -> Unit,
-    alRegistrar: (conforme: Boolean, hallazgo: String?) -> Unit,
+    alRegistrar: (foto: java.io.File, nota: String?) -> Unit,
 ) {
-    var conforme by remember { mutableStateOf(true) }
-    var hallazgo by remember { mutableStateOf("") }
-    var error by remember { mutableStateOf<String?>(null) }
+    var foto by remember { mutableStateOf<java.io.File?>(null) }
+    var nota by remember { mutableStateOf("") }
+    var camara by remember { mutableStateOf(false) }
+    if (camara) {
+        pe.servicon.sigov.ui.evidencia.CamaraSimple(
+            titulo = "Formato de inspección · ${equipo.code}",
+            destino = nuevoArchivo,
+            alTomar = { f -> foto = f; camara = false },
+            alCerrar = { camara = false },
+            soloHorizontal = false,
+        )
+    }
 
     AlertDialog(
         onDismissRequest = alCerrar,
-        title = { Text("Revisar ${equipo.tipo} ${equipo.code}") },
+        title = { Text("Inspección de ${equipo.tipo} ${equipo.code}") },
         text = {
             Column(verticalArrangement = Arrangement.spacedBy(12.dp)) {
                 Text(
@@ -254,47 +289,37 @@ private fun DialogoInspeccion(
                     style = MaterialTheme.typography.bodySmall,
                     color = MaterialTheme.colorScheme.onSurfaceVariant,
                 )
-
-                // El texto arriba y las fichas debajo, para que no se parta (SEG-V2-OBS-08)
-                Column {
-                    Column {
-                        Text("¿Está conforme?", style = MaterialTheme.typography.bodyMedium)
-                        Text(
-                            if (conforme) "Sin novedad" else "Hay algo que corregir",
-                            style = MaterialTheme.typography.bodySmall,
-                            color = if (conforme) Marca.VerdeBandera else Semaforo.Urgente,
-                        )
-                    }
-                    ConformeONo(conforme = conforme, alCambiar = { conforme = it })
-                }
-
-                if (!conforme) {
-                    OutlinedTextField(
-                        value = hallazgo,
-                        onValueChange = { hallazgo = it },
-                        label = { Text("Qué encontraste") },
-                        placeholder = { Text("Manómetro en rojo, precinto roto…") },
-                        minLines = 2,
-                        shape = RoundedCornerShape(12.dp),
-                        modifier = Modifier.fillMaxWidth(),
+                Text(
+                    "Fotografía el formato de inspección ya llenado. El Ingeniero SSOMA lo revisa y dictamina: " +
+                        "conforme, observado, vencido o requiere corrección.",
+                    style = MaterialTheme.typography.bodySmall,
+                )
+                foto?.let { f ->
+                    coil.compose.AsyncImage(
+                        model = f, contentDescription = null,
+                        contentScale = androidx.compose.ui.layout.ContentScale.Fit,
+                        modifier = Modifier.fillMaxWidth().height(220.dp).background(Color(0xFFE9EDF3), RoundedCornerShape(10.dp)),
                     )
                 }
-
-                error?.let {
-                    Text(it, style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.error)
+                OutlinedButton(onClick = { camara = true }, modifier = Modifier.fillMaxWidth()) {
+                    Text(if (foto == null) "Fotografiar formato" else "Volver a fotografiar")
                 }
+                OutlinedTextField(
+                    value = nota,
+                    onValueChange = { nota = it.take(300) },
+                    label = { Text("Nota (opcional)") },
+                    placeholder = { Text("Si algo llama la atención: manómetro en rojo…") },
+                    minLines = 2,
+                    shape = RoundedCornerShape(12.dp),
+                    modifier = Modifier.fillMaxWidth(),
+                )
             }
         },
         confirmButton = {
             Button(
-                enabled = !guardando,
-                onClick = {
-                    error = if (!conforme && hallazgo.isBlank()) {
-                        "Di qué encontraste: el supervisor necesita saber qué corregir."
-                    } else null
-                    if (error == null) alRegistrar(conforme, hallazgo.ifBlank { null })
-                },
-            ) { Text("Registrar") }
+                enabled = !guardando && foto != null,
+                onClick = { foto?.let { alRegistrar(it, nota.ifBlank { null }) } },
+            ) { Text(if (guardando) "Enviando…" else "Enviar a revisión SSOMA") }
         },
         dismissButton = { TextButton(onClick = alCerrar) { Text("Cancelar") } },
     )

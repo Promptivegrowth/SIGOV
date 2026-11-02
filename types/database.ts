@@ -2444,13 +2444,17 @@ export type Database = {
       }
       notifications: {
         Row: {
+          actualizada_at: string | null
           body: string | null
+          categoria: string | null
           created_at: string
           data: Json
           id: string
+          prioridad: string | null
           profile_id: string
           pushed_at: string | null
           read_at: string | null
+          resuelta_at: string | null
           service_id: string | null
           severity: string
           title: string
@@ -2458,13 +2462,17 @@ export type Database = {
           url: string | null
         }
         Insert: {
+          actualizada_at?: string | null
           body?: string | null
+          categoria?: string | null
           created_at?: string
           data?: Json
           id?: string
+          prioridad?: string | null
           profile_id: string
           pushed_at?: string | null
           read_at?: string | null
+          resuelta_at?: string | null
           service_id?: string | null
           severity?: string
           title: string
@@ -2472,13 +2480,17 @@ export type Database = {
           url?: string | null
         }
         Update: {
+          actualizada_at?: string | null
           body?: string | null
+          categoria?: string | null
           created_at?: string
           data?: Json
           id?: string
+          prioridad?: string | null
           profile_id?: string
           pushed_at?: string | null
           read_at?: string | null
+          resuelta_at?: string | null
           service_id?: string | null
           severity?: string
           title?: string
@@ -2514,16 +2526,21 @@ export type Database = {
           deleted_at: string | null
           descripcion: string
           estado: string
+          gps_lat: number | null
+          gps_lng: number | null
+          gps_precision_m: number | null
           id: string
           lat: number | null
           lng: number | null
           metrado: number | null
           nota_atencion: string | null
+          numero: number
           observado_on: string
           plan_item_id: string | null
           programada_on: string | null
           progresiva_fin_m: number | null
           progresiva_m: number | null
+          punto_id: string | null
           section_id: string | null
           service_id: string
           side: string | null
@@ -2540,16 +2557,21 @@ export type Database = {
           deleted_at?: string | null
           descripcion: string
           estado?: string
+          gps_lat?: number | null
+          gps_lng?: number | null
+          gps_precision_m?: number | null
           id?: string
           lat?: number | null
           lng?: number | null
           metrado?: number | null
           nota_atencion?: string | null
+          numero?: number
           observado_on?: string
           plan_item_id?: string | null
           programada_on?: string | null
           progresiva_fin_m?: number | null
           progresiva_m?: number | null
+          punto_id?: string | null
           section_id?: string | null
           service_id: string
           side?: string | null
@@ -2566,16 +2588,21 @@ export type Database = {
           deleted_at?: string | null
           descripcion?: string
           estado?: string
+          gps_lat?: number | null
+          gps_lng?: number | null
+          gps_precision_m?: number | null
           id?: string
           lat?: number | null
           lng?: number | null
           metrado?: number | null
           nota_atencion?: string | null
+          numero?: number
           observado_on?: string
           plan_item_id?: string | null
           programada_on?: string | null
           progresiva_fin_m?: number | null
           progresiva_m?: number | null
+          punto_id?: string | null
           section_id?: string | null
           service_id?: string
           side?: string | null
@@ -4078,7 +4105,7 @@ export type Database = {
         Row: {
           checked_on: string
           client_id: string
-          conforme: boolean
+          conforme: boolean | null
           created_at: string
           created_by: string | null
           deleted_at: string | null
@@ -4087,13 +4114,17 @@ export type Database = {
           id: string
           lat: number | null
           lng: number | null
+          revisado_at: string | null
+          revisado_por: string | null
+          revision_estado: string
+          revision_nota: string | null
           service_id: string
           storage_path: string | null
         }
         Insert: {
           checked_on?: string
           client_id?: string
-          conforme?: boolean
+          conforme?: boolean | null
           created_at?: string
           created_by?: string | null
           deleted_at?: string | null
@@ -4102,13 +4133,17 @@ export type Database = {
           id?: string
           lat?: number | null
           lng?: number | null
+          revisado_at?: string | null
+          revisado_por?: string | null
+          revision_estado?: string
+          revision_nota?: string | null
           service_id: string
           storage_path?: string | null
         }
         Update: {
           checked_on?: string
           client_id?: string
-          conforme?: boolean
+          conforme?: boolean | null
           created_at?: string
           created_by?: string | null
           deleted_at?: string | null
@@ -4117,6 +4152,10 @@ export type Database = {
           id?: string
           lat?: number | null
           lng?: number | null
+          revisado_at?: string | null
+          revisado_por?: string | null
+          revision_estado?: string
+          revision_nota?: string | null
           service_id?: string
           storage_path?: string | null
         }
@@ -4140,6 +4179,13 @@ export type Database = {
             columns: ["equipment_id"]
             isOneToOne: false
             referencedRelation: "v_safety_equipment"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "safety_equipment_checks_revisado_por_fkey"
+            columns: ["revisado_por"]
+            isOneToOne: false
+            referencedRelation: "profiles"
             referencedColumns: ["id"]
           },
           {
@@ -5428,6 +5474,7 @@ export type Database = {
           created_at: string
           created_by: string | null
           deleted_at: string | null
+          duplicado_de: string | null
           espesor_m: number | null
           finished_at: string | null
           geom: unknown
@@ -5461,6 +5508,7 @@ export type Database = {
           created_at?: string
           created_by?: string | null
           deleted_at?: string | null
+          duplicado_de?: string | null
           espesor_m?: number | null
           finished_at?: string | null
           geom?: unknown
@@ -5494,6 +5542,7 @@ export type Database = {
           created_at?: string
           created_by?: string | null
           deleted_at?: string | null
+          duplicado_de?: string | null
           espesor_m?: number | null
           finished_at?: string | null
           geom?: unknown
@@ -5532,6 +5581,20 @@ export type Database = {
             columns: ["created_by"]
             isOneToOne: false
             referencedRelation: "profiles"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "work_entries_duplicado_de_fkey"
+            columns: ["duplicado_de"]
+            isOneToOne: false
+            referencedRelation: "v_work_entries"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "work_entries_duplicado_de_fkey"
+            columns: ["duplicado_de"]
+            isOneToOne: false
+            referencedRelation: "work_entries"
             referencedColumns: ["id"]
           },
           {
@@ -6330,6 +6393,7 @@ export type Database = {
           activity_name: string | null
           atendida_at: string | null
           client_id: string | null
+          codigo: string | null
           created_at: string | null
           created_by: string | null
           created_by_name: string | null
@@ -6339,6 +6403,10 @@ export type Database = {
           estado: string | null
           fotos: string[] | null
           fotos_ids: string[] | null
+          gps_distancia_m: number | null
+          gps_lat: number | null
+          gps_lng: number | null
+          gps_precision_m: number | null
           id: string | null
           lat: number | null
           lng: number | null
@@ -6351,6 +6419,7 @@ export type Database = {
           progresiva_fin_txt: string | null
           progresiva_m: number | null
           progresiva_txt: string | null
+          punto_id: string | null
           section_code: string | null
           section_id: string | null
           section_name: string | null
@@ -6613,6 +6682,10 @@ export type Database = {
           finished_at: string | null
           finished_by_name: string | null
           foto_referencia_path: string | null
+          fotos_antes: number | null
+          fotos_despues: number | null
+          fotos_durante: number | null
+          fotos_general: number | null
           id: string | null
           impedimento: string | null
           impedimento_at: string | null
@@ -6861,6 +6934,8 @@ export type Database = {
           serial_number: string | null
           service_id: string | null
           status: Database["public"]["Enums"]["safety_equipment_status"] | null
+          ultima_inspeccion_on: string | null
+          ultima_revision_estado: string | null
         }
         Relationships: [
           {
@@ -7829,6 +7904,9 @@ export type Database = {
           p_motivo?: string
           p_obs?: string
           p_placa: string
+          p_poliza?: string
+          p_revision?: string
+          p_soat?: string
           p_tipo?: string
           p_titular: string
         }
@@ -7856,6 +7934,10 @@ export type Database = {
       }
       revisar_foto: {
         Args: { p_conforme: boolean; p_evidencia: string; p_nota?: string }
+        Returns: Json
+      }
+      revisar_inspeccion_equipo: {
+        Args: { p_estado: string; p_id: string; p_nota?: string }
         Returns: Json
       }
       revisar_parte: {
