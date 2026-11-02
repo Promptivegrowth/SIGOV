@@ -65,6 +65,24 @@ export function ParteDetailClient({ orderId }: { orderId: string }) {
       setBajandoFor001(false)
     }
   }
+  /** El mismo FOR:001 en Excel, con las columnas de la plantilla (REV3-OBS-19). */
+  const descargarFor001Excel = async () => {
+    setBajandoFor001(true)
+    try {
+      const { datosFor001, for001Excel } = await import('@/lib/formato-for001')
+      const { rutas } = await import('@/lib/covinca')
+      const datos = await datosFor001(sb, orderId)
+      const nombre = rutas.documento({
+        fecha: datos.parte.work_date, cuadrilla: datos.cuadrilla?.numero ?? 0, sede: datos.cuadrilla?.sede ?? '',
+        tipo: 'reporte_diario', extension: '.xlsx',
+      }).archivo
+      await for001Excel(datos, nombre)
+    } catch (e) {
+      toast.error('No se pudo armar el FOR:001 en Excel', { description: mensajeAmigable(e) })
+    } finally {
+      setBajandoFor001(false)
+    }
+  }
   const [editEntry, setEditEntry] = React.useState<any>(null)
   const [confirm, setConfirm] = React.useState<any>(null)
 
@@ -164,7 +182,11 @@ export function ParteDetailClient({ orderId }: { orderId: string }) {
             </Button>
             <Button variant="outline" loading={bajandoFor001} onClick={descargarFor001}>
               <FileDown className="size-4" />
-              FOR:001
+              FOR:001 PDF
+            </Button>
+            <Button variant="outline" disabled={bajandoFor001} onClick={descargarFor001Excel}>
+              <FileDown className="size-4" />
+              FOR:001 Excel
             </Button>
             {editable && isOwner && (
               <Button variant="accent" onClick={submit} disabled={!entries.data?.length}>

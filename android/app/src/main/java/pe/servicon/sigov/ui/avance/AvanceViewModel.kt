@@ -142,19 +142,20 @@ class AvanceViewModel @Inject constructor(
                 val items = campo.itemsPciDeLaCuadrilla(cuadrilla.servicioId, cuadrilla.id).filter { i -> i.activoParaCuadrilla }
                 val panel = resumenes.map { r ->
                     val delPci = items.filter { i -> i.pciId == r.pciId }
-                    val abiertos = delPci.filter { i -> pe.servicon.sigov.ui.pci.estadoDe(i) != pe.servicon.sigov.ui.pci.Estado.CONFORMES }
+                    val abiertos = delPci.filter { i -> !pe.servicon.sigov.ui.pci.yaAtendido(i) }
                     PanelDePci(
                         pciId = r.pciId,
                         codigo = pe.servicon.sigov.datos.codigoCortoDePci(r.code) ?: r.code,
                         porAtender = delPci.count { i -> pe.servicon.sigov.ui.pci.estadoDe(i) == pe.servicon.sigov.ui.pci.Estado.POR_ATENDER },
                         enEjecucion = delPci.count { i -> pe.servicon.sigov.ui.pci.estadoDe(i) == pe.servicon.sigov.ui.pci.Estado.EN_EJECUCION },
                         conformes = delPci.count { i -> pe.servicon.sigov.ui.pci.estadoDe(i) == pe.servicon.sigov.ui.pci.Estado.CONFORMES },
+                        validados = delPci.count { i -> pe.servicon.sigov.ui.pci.estadoDe(i) == pe.servicon.sigov.ui.pci.Estado.VALIDADOS },
                         observados = delPci.count { i -> pe.servicon.sigov.ui.pci.estadoDe(i) == pe.servicon.sigov.ui.pci.Estado.OBSERVADOS },
                         vencidos = abiertos.count { i -> (pe.servicon.sigov.ui.pci.diasQueLeQuedan(i) ?: 0) < 0 },
                     )
-                }.filter { p -> p.porAtender + p.enEjecucion + p.conformes + p.observados > 0 }
+                }.filter { p -> p.porAtender + p.enEjecucion + p.conformes + p.validados + p.observados > 0 }
                 val urgentes = items.count { i ->
-                    pe.servicon.sigov.ui.pci.estadoDe(i) != pe.servicon.sigov.ui.pci.Estado.CONFORMES &&
+                    !pe.servicon.sigov.ui.pci.yaAtendido(i) &&
                         (pe.servicon.sigov.ui.pci.diasQueLeQuedan(i) ?: 99) <= 1
                 }
 
@@ -205,7 +206,10 @@ data class PanelDePci(
     val codigo: String,
     val porAtender: Int,
     val enEjecucion: Int,
+    /** Por validar: con sus tres fotos, esperando a COVINCA. */
     val conformes: Int,
+    /** Conformes: ya validados por COVINCA. */
+    val validados: Int = 0,
     val observados: Int,
     val vencidos: Int,
 )

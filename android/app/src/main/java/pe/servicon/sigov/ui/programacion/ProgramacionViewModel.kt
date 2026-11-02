@@ -33,6 +33,8 @@ data class EstadoProgramacion(
     val error: String? = null,
     /** La partida que se quiso finalizar sin avance: abre el aviso (OBS-04). */
     val sinAvance: ItemProgramado? = null,
+    /** Las partidas cuyo cierre espera señal (REV3-OBS-13). */
+    val cierresEnCola: Set<String> = emptySet(),
 ) {
     val esHoy: Boolean get() = fecha == Peru.hoy()
     val metaTotal: Double get() = items.sumOf { it.meta ?: 0.0 }
@@ -139,14 +141,16 @@ class ProgramacionViewModel @Inject constructor(
                     val enCola = registro?.let { colaEnvio.envio(it.clientId) }
                     colaEnvio.encolar(
                         tabla = "rpc:partida_finalizar",
-                        etiqueta = "Cerrar partida · " + (item.actividad ?: "partida"),
+                        etiqueta = listOfNotNull("Cierre de partida", item.actividad, "Programación",
+                            pe.servicon.sigov.datos.Progresiva.rango(item.progresivaInicio, item.progresivaFin)?.let { "km $it" }).joinToString(" · "),
                         cuerpo = kotlinx.serialization.json.buildJsonObject {
                             put("p_item", kotlinx.serialization.json.JsonPrimitive(item.id))
                         },
                         dependeDe = enCola?.takeIf { it.estado != pe.servicon.sigov.datos.local.EstadoEnvio.ENVIADO }?.clientId,
                     )
                     _estado.update {
-                        it.copy(aviso = "Listo: la partida se cierra sola en cuanto se envíe su avance.")
+                        it.copy(aviso = "Listo: la partida se cierra sola en cuanto se envíe su avance.",
+                            cierresEnCola = it.cierresEnCola + item.id)
                     }
                 }
                 else -> accion(item, "Partida cerrada. Queda esperando el visto bueno del supervisor.") {
@@ -194,11 +198,30 @@ class ProgramacionViewModel @Inject constructor(
                 val cuadrilla = sesion.cuadrilla()
                     ?: error("Tu usuario no dirige ninguna cuadrilla. Avisa al coordinador.")
                 val items = campo.programacionDelDia(cuadrilla.servicioId, cuadrilla.id, fecha)
-                val fases = runCatching { partes.fasesDePartidas(items.map { i -> i.id }) }.getOrDefault(emptyList())
+                val locales = runCatching { partes.fasesDePartidas(items.map { i -> i.id }) }.getOrDefault(emptyList())
                     .groupBy { c -> c.registroClientId }
                     .mapValues { (_, cs) -> cs.associate { c -> c.fase to c.cuantas } }
+                // Lo de la nube (de cualquier teléfono) y lo que sigue en este:
+                // el mayor de los dos, para no contar dos veces lo ya subido
+                val fases = items.associate { i ->
+                    val aqui = locales[i.id].orEmpty()
+                    i.id to mapOf(
+                        "antes" to maxOf(i.fotosAntes, aqui["antes"] ?: 0),
+                        "durante" to maxOf(i.fotosDurante, aqui["durante"] ?: 0),
+                        "despues" to maxOf(i.fotosDespues, aqui["despues"] ?: 0),
+                        "general" to maxOf(i.fotosGeneral, aqui.filterKeys { it !in setOf("antes", "durante", "despues") }.values.sum()),
+                    ).filterValues { it > 0 }
+                }
+                // Finalizadas sin señal: se cierran solas al sincronizar (REV3-OBS-13)
+                val cierres = runCatching { colaEnvio.sinConfirmar("rpc:partida_finalizar") }.getOrDefault(emptyList())
+                    .mapNotNull { e ->
+                        runCatching { kotlinx.serialization.json.Json.parseToJsonElement(e.cuerpo) }.getOrNull()
+                            ?.let { it as? kotlinx.serialization.json.JsonObject }
+                            ?.get("p_item")?.let { (it as? kotlinx.serialization.json.JsonPrimitive)?.content }
+                    }
+                    .toSet()
                 _estado.update {
-                    it.copy(cargando = false, items = items, fases = fases, cuadrilla = cuadrilla.name)
+                    it.copy(cargando = false, items = items, fases = fases, cuadrilla = cuadrilla.name, cierresEnCola = cierres)
                 }
             }.onFailure { fallo ->
                 _estado.update { it.copy(cargando = false, error = fallo.enCristiano()) }

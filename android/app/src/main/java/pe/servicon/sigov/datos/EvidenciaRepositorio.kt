@@ -243,7 +243,11 @@ class EvidenciaRepositorio @Inject constructor(
                 activo != null -> null
                 else -> registro.clientId
             },
-            etiqueta = "Foto · " + registro.actividadNombre,
+            etiqueta = pe.servicon.sigov.datos.local.etiquetaDeRegistro(
+                registro.copy(cantidad = 0.0),
+                registro.parteClientId.takeIf { it.isNotBlank() }?.let { partes.parteDe(it)?.fecha },
+                tipo = "Foto " + fase.etiqueta.lowercase(),
+            ),
             cuerpo = buildJsonObject {
                 put("service_id", registro.servicioId)
                 put("phase", fase.valor)
@@ -509,9 +513,12 @@ class EvidenciaRepositorio @Inject constructor(
                         // Dos filtros sobre la misma columna: la librería solo
                         // mandaba uno y llegaban fotos de fuera del rango (Elvis,
                         // 24/10). El rango va en un solo «and».
+                        // REV3-OBS-21: el rango es el de la fecha real de captura
+                        // (hora de Lima), no la del parte: una foto del 22/10 en un
+                        // parte fechado 21/09 aparecía al pedir 21/09–27/09
                         and {
-                            gte("work_date", desde)
-                            lte("work_date", hasta)
+                            gte("taken_at", desde + "T00:00:00-05:00")
+                            lt("taken_at", java.time.LocalDate.parse(hasta).plusDays(1).toString() + "T00:00:00-05:00")
                         }
                         fase?.let { eq("phase", it) }
                         // Las de la programación y las de sus PCI (no las del inventario)
@@ -524,14 +531,14 @@ class EvidenciaRepositorio @Inject constructor(
             espejarGaleria(servicioId, filas)
             filas.map { json.decodeFromString<EvidenciaEnGaleria>(it.toString()) }
                 // Y por si acaso, el rango se vuelve a cumplir aquí
-                .filter { (it.fecha ?: diaDeLima(it.tomadaEn)).let { d -> d != null && d >= desde && d <= hasta } }
+                .filter { (diaDeLima(it.tomadaEn) ?: it.fecha).let { d -> d != null && d >= desde && d <= hasta } }
         }.getOrElse {
             catalogo.de("evidencias_galeria", servicioId)
                 .mapNotNull {
                     runCatching { json.decodeFromString<EvidenciaEnGaleria>(it.datos) }.getOrNull()
                 }
-                // Sin la fecha del parte vale el día en que se tomó: nada fuera del rango
-                .filter { (it.fecha ?: diaDeLima(it.tomadaEn)).let { d -> d != null && d >= desde && d <= hasta } }
+                // Vale el día en que se tomó la foto: nada fuera del rango
+                .filter { (diaDeLima(it.tomadaEn) ?: it.fecha).let { d -> d != null && d >= desde && d <= hasta } }
                 .filter { cuadrillaId == null || it.cuadrillaId == cuadrillaId }
                 .filter { fase == null || it.phase == fase }
                 .sortedByDescending { it.tomadaEn }
@@ -552,7 +559,7 @@ class EvidenciaRepositorio @Inject constructor(
         val yaListadas = fotos.mapNotNull { it.clientId }.toSet()
         val enCola = partes.evidenciasEnElEquipo(servicioId)
             .filter { it.clientId !in yaListadas }
-            .filter { (it.fecha ?: Instant.ofEpochMilli(it.tomadaEn).atZone(Peru.zona).toLocalDate().toString()).let { d -> d >= desde && d <= hasta } }
+            .filter { Instant.ofEpochMilli(it.tomadaEn).atZone(Peru.zona).toLocalDate().toString().let { d -> d >= desde && d <= hasta } }
             .filter { fase == null || it.fase == fase }
             .map { local ->
                 EvidenciaEnGaleria(
@@ -596,7 +603,8 @@ class EvidenciaRepositorio @Inject constructor(
 
     /** «2026-10-22T14:30:00Z» → el día en Lima, «2026-10-22». */
     private fun diaDeLima(momento: String?): String? =
-        momento?.let { runCatching { Instant.parse(it).atZone(Peru.zona).toLocalDate().toString() }.getOrNull() }
+        momento?.let { runCatching { java.time.OffsetDateTime.parse(it).atZoneSameInstant(Peru.zona).toLocalDate().toString() }.getOrNull() }
+            ?: momento?.let { runCatching { Instant.parse(it).atZone(Peru.zona).toLocalDate().toString() }.getOrNull() }
             ?: momento?.take(10)
 
     /**

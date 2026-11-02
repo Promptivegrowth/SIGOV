@@ -226,12 +226,13 @@ export function PciItemSheet({
               </h3>
               <p className="text-muted-foreground mt-0.5 text-[11.5px]">
                 Antes {item.fotos_antes ?? 0} · durante {item.fotos_durante ?? 0} · después {item.fotos_despues ?? 0}
-                {item.requires_evidence && ' — con las tres el ítem pasa solo a conforme y a revisión de COVINCA.'}
+                {item.requires_evidence && ' — con las tres el ítem pasa solo a «Por validar», a la revisión de COVINCA.'}
               </p>
               <EvidenceGrid
                 pciItemId={item.id}
                 count={item.evidence_count ?? 0}
-                canAdd={can.write && !isClosed}
+                // Hasta que COVINCA valida se pueden agregar o cambiar fotos (REV3-OBS-04)
+                canAdd={can.write && item.status !== 'validado'}
                 onAdd={() => setCamera(true)}
                 label={`el ítem ${item.item_number} del ${item.pci_code}`}
                 context={{

@@ -192,6 +192,7 @@ fun PantallaProgramacion(
                             alVerReferencia = { vm.verReferencia(item) },
                             fases = estado.fases[item.id].orEmpty(),
                             alTomarFotos = { vm.tomarFotos(item) },
+                            cierreEnCola = item.id in estado.cierresEnCola,
                         )
                     }
                 }
@@ -319,6 +320,7 @@ private fun Partida(
     alVerReferencia: () -> Unit = {},
     fases: Map<String, Int> = emptyMap(),
     alTomarFotos: () -> Unit = {},
+    cierreEnCola: Boolean = false,
 ) {
     val avance = ((item.avance ?: 0.0) / 100.0).coerceIn(0.0, 1.0).toFloat()
 
@@ -362,10 +364,15 @@ private fun Partida(
                         style = MaterialTheme.typography.bodySmall,
                         fontWeight = FontWeight.Medium,
                     )
-                    item.supervisor?.let {
-                        Text("Programó: $it", style = MaterialTheme.typography.labelSmall,
-                            color = MaterialTheme.colorScheme.onSurfaceVariant)
-                    }
+                    // La fecha de la partida en la tarjeta (REV3-OBS-07)
+                    Text(
+                        listOfNotNull(
+                            "Programada para el " + item.fecha.take(10).split("-").reversed().joinToString("/"),
+                            item.supervisor?.let { "por $it" },
+                        ).joinToString(" "),
+                        style = MaterialTheme.typography.labelSmall,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant,
+                    )
                 }
                 Column(horizontalAlignment = Alignment.End) {
                     Text(
@@ -469,7 +476,14 @@ private fun Partida(
                                 Boton("Tomar fotos", Icons.Outlined.PhotoCamera, Marca.Azul,
                                     ocupada, Modifier.weight(1f), alTomarFotos)
                             }
-                            Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                            if (cierreEnCola) {
+                                Text(
+                                    "Finalizada · pendiente de sincronización: se cierra sola al enviarse.",
+                                    style = MaterialTheme.typography.bodySmall,
+                                    fontWeight = FontWeight.SemiBold,
+                                    color = Marca.Naranja,
+                                )
+                            } else Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
                                 Boton("Finalizar", Icons.Outlined.CheckCircle, Marca.VerdeBandera,
                                     ocupada, Modifier.weight(1f), alFinalizar)
                                 Boton("No ejecutado", Icons.Outlined.ReportProblem, Marca.Naranja,
@@ -477,16 +491,19 @@ private fun Partida(
                             }
                         }
 
+                        // REV3-OBS-11: lo No ejecutado no se retoma desde el
+                        // celular; el supervisor la reprograma y la causal queda
+                        item.estaObservada -> Text(
+                            "Pendiente de reprogramación: el supervisor le pondrá una nueva fecha.",
+                            style = MaterialTheme.typography.bodySmall,
+                            color = Marca.Naranja,
+                        )
+
                         else -> {
-                            Boton(
-                                if (item.estaObservada) "Retomar" else "Iniciar",
-                                Icons.Outlined.PlayArrow, Marca.Azul,
-                                ocupada, Modifier.weight(1f), alIniciar,
-                            )
-                            if (!item.estaObservada) {
-                                Boton("No ejecutado", Icons.Outlined.ReportProblem, Marca.Naranja,
-                                    ocupada, Modifier.weight(1f), alReportar)
-                            }
+                            Boton("Iniciar", Icons.Outlined.PlayArrow, Marca.Azul,
+                                ocupada, Modifier.weight(1f), alIniciar)
+                            Boton("No ejecutado", Icons.Outlined.ReportProblem, Marca.Naranja,
+                                ocupada, Modifier.weight(1f), alReportar)
                         }
                     }
                 }
@@ -530,7 +547,7 @@ private fun EtiquetaDeEstado(status: String) {
         "en_curso" -> "En ejecución" to Marca.Verde
         "por_validar" -> "Por validar" to Marca.Naranja
         "ejecutado" -> "Culminada" to Marca.VerdeBandera
-        "suspendido" -> "No ejecutada" to Marca.Naranja
+        "suspendido" -> "No ejecutada · por reprogramar" to Marca.Naranja
         "reprogramado" -> "Reprogramada" to Marca.Naranja
         else -> "Anulada" to Color.Gray
     }

@@ -46,12 +46,12 @@ data class EstadoCamara(
     val error: String? = null,
 ) {
     /**
-     * Las fases que se ofrecen. En un ítem PCI o en una partida programada
-     * no hay «General»: COVINCA pide antes, durante y después (Elvis, 05-10
-     * para el PCI y 22/10 para la programación).
+     * Las fases que se ofrecen. En un ítem PCI no hay «General»: COVINCA
+     * pide antes, durante y después. En una partida programada sí, como
+     * evidencia complementaria (REV3-OBS-08: Antes | Durante | Después | General).
      */
     val fases: List<Fase>
-        get() = if (registro?.pciItemId != null || registro?.planItemId != null) listOf(Fase.ANTES, Fase.DURANTE, Fase.DESPUES)
+        get() = if (registro?.pciItemId != null) listOf(Fase.ANTES, Fase.DURANTE, Fase.DESPUES)
                 else Fase.entries
 }
 

@@ -10,6 +10,7 @@ import io.github.jan.supabase.SupabaseClient
 import io.github.jan.supabase.postgrest.postgrest
 import io.github.jan.supabase.postgrest.rpc
 import io.github.jan.supabase.storage.storage
+import kotlinx.coroutines.sync.withLock
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.combine
 import kotlinx.coroutines.flow.map
@@ -97,6 +98,9 @@ class ColaRepositorio @Inject constructor(
     /** Lo que se encoló con ese id, si el equipo todavía lo guarda. */
     suspend fun envio(clientId: String): EnvioPendiente? = cola.porId(clientId)
 
+    /** Lo de una tabla (o acción «rpc:…») que todavía no llega a la nube. */
+    suspend fun sinConfirmar(tabla: String): List<EnvioPendiente> = cola.sinConfirmarDe(tabla)
+
     /** Descarta lo que todavía no salió del teléfono: el registro y su archivo. */
     suspend fun descartar(clientId: String) {
         cola.borrar(clientId)
@@ -133,7 +137,8 @@ class ColaRepositorio @Inject constructor(
         // Lo que se había rendido vuelve a la cola: pulsar el botón es una
         // decisión de la persona, no el reintento automático que se frenó.
         cola.revivirFallidos(System.currentTimeMillis())
-        cola.revivirEnvios(System.currentTimeMillis())
+        // Lo «Enviando…» lo revive el trabajador al empezar, ya con el candado:
+        // revivirlo aquí podía mandar dos veces un envío que estaba en camino
         pedirSincronizacion(contexto, ahora = true)
     }
 
@@ -188,6 +193,9 @@ class ColaRepositorio @Inject constructor(
  * El trabajo de subir la cola, que Android ejecuta cuando hay red —aunque la
  * aplicación esté cerrada.
  */
+/** El candado del trabajador: una sola sincronización a la vez en el proceso. */
+private val candado = kotlinx.coroutines.sync.Mutex()
+
 @HiltWorker
 class TrabajadorSincronizacion @AssistedInject constructor(
     @Assisted contexto: Context,
@@ -198,7 +206,26 @@ class TrabajadorSincronizacion @AssistedInject constructor(
     private val configuracion: Configuracion,
 ) : CoroutineWorker(contexto, parametros) {
 
-    override suspend fun doWork(): Result {
+    // Un solo trabajador a la vez, aunque Android lance el inmediato, el
+    // reintento y el periódico juntos: dos corridas podían mandar el mismo
+    // envío dos veces (REV3-OBS-12)
+    override suspend fun doWork(): Result = candado.withLock { trabajar() }
+
+    /**
+     * Lo enviado se marca sobre la fila de ahora, no sobre la que se leyó al
+     * empezar: si el capataz corrigió el metrado mientras el envío iba en
+     * camino, la corrección queda en cola y sube detrás, en vez de perderse.
+     */
+    private suspend fun marcar(envio: EnvioPendiente, cambio: (EnvioPendiente) -> EnvioPendiente, alEnviar: Boolean = false) {
+        val ahora = cola.porId(envio.clientId) ?: return
+        val corregido = ahora.cuerpo != envio.cuerpo
+        cola.actualizar(
+            if (alEnviar && corregido) cambio(ahora).copy(estado = EstadoEnvio.PENDIENTE, proximoIntento = 0)
+            else cambio(ahora)
+        )
+    }
+
+    private suspend fun trabajar(): Result {
         val ahora = System.currentTimeMillis()
         // Solo corre un trabajador a la vez: lo que esté «Enviando…» al
         // empezar quedó a medias de una corrida que Android cortó
@@ -222,7 +249,7 @@ class TrabajadorSincronizacion @AssistedInject constructor(
             if (envio.dependeDe != null && envio.dependeDe !in yaSubidos) continue
             if (envio.tabla == TABLA_ORIGINAL && !subirOriginales) continue
 
-            cola.actualizar(envio.copy(estado = EstadoEnvio.ENVIANDO))
+            marcar(envio, { it.copy(estado = EstadoEnvio.ENVIANDO) })
 
             runCatching {
                 // Las llaves con «_» son solo para mostrar en el teléfono
@@ -265,12 +292,12 @@ class TrabajadorSincronizacion @AssistedInject constructor(
                     if (envio.tabla == TABLA_ORIGINAL) {
                         archivos.porId(envio.clientId)?.let { runCatching { File(it.rutaLocal).delete() } }
                     }
-                    cola.actualizar(
-                        envio.copy(
+                    marcar(
+                        envio, { it.copy(
                             estado = EstadoEnvio.ENVIADO,
                             enviadoEn = System.currentTimeMillis(),
                             ultimoError = null,
-                        )
+                        ) }, alEnviar = true,
                     )
                     yaSubidos += envio.clientId
                     return@runCatching
@@ -301,13 +328,13 @@ class TrabajadorSincronizacion @AssistedInject constructor(
 
                 val idServidor = respuesta["id"]?.jsonPrimitive?.content
 
-                cola.actualizar(
-                    envio.copy(
+                marcar(
+                    envio, { it.copy(
                         estado = EstadoEnvio.ENVIADO,
                         idEnServidor = idServidor,
                         enviadoEn = System.currentTimeMillis(),
                         ultimoError = null,
-                    )
+                    ) }, alEnviar = true,
                 )
                 yaSubidos += envio.clientId
 
@@ -323,13 +350,13 @@ class TrabajadorSincronizacion @AssistedInject constructor(
             }.onFailure { fallo ->
                 fallaron++
                 val intentos = envio.intentos + 1
-                cola.actualizar(
-                    envio.copy(
+                marcar(
+                    envio, { it.copy(
                         estado = EstadoEnvio.ERROR,
                         intentos = intentos,
                         proximoIntento = System.currentTimeMillis() + espera(intentos),
                         ultimoError = fallo.enCristiano(),
-                    )
+                    ) },
                 )
             }
         }

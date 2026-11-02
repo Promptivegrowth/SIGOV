@@ -57,11 +57,19 @@ data class ObservacionDeCampo(
     val metrado: Double? = null,
     @SerialName("sector_code") val sector: String? = null,
     @SerialName("programada_on") val programadaPara: String? = null,
+    /** Las actividades del mismo sitio comparten punto (REV3-OBS-34). */
+    @SerialName("punto_id") val puntoId: String? = null,
+    /** El ID único legible: OBS-00001 (REV3-OBS-40). */
+    val codigo: String? = null,
+    /** A cuántos metros quedó el GPS del teléfono de la progresiva (REV3-OBS-37). */
+    @SerialName("gps_distancia_m") val gpsDistancia: Int? = null,
     /** Guardada en el equipo y todavía sin subir. */
     val porEnviar: Boolean = false,
     /** Las fotos que siguen en este teléfono, por llave: no gastan datos. */
     val fotosLocales: Map<String, String> = emptyMap(),
 ) {
+    val punto: String get() = puntoId ?: id
+
     val estadoLegible: String
         get() = when (estado) {
             "programada" -> "Programada"
@@ -141,8 +149,9 @@ class ObservacionesRepositorio @Inject constructor(
                 side = texto("side"),
                 descripcion = texto("descripcion") ?: "",
                 fecha = texto("observado_on"),
-                lat = texto("lat")?.toDoubleOrNull() ?: texto("_lat")?.toDoubleOrNull(),
-                lng = texto("lng")?.toDoubleOrNull() ?: texto("_lng")?.toDoubleOrNull(),
+                lat = texto("lat")?.toDoubleOrNull() ?: texto("_lat")?.toDoubleOrNull() ?: texto("gps_lat")?.toDoubleOrNull(),
+                lng = texto("lng")?.toDoubleOrNull() ?: texto("_lng")?.toDoubleOrNull() ?: texto("gps_lng")?.toDoubleOrNull(),
+                puntoId = texto("punto_id"),
                 actividadId = texto("activity_id"),
                 actividadCodigo = texto("_actividad_codigo"),
                 actividad = texto("_actividad"),
@@ -156,21 +165,24 @@ class ObservacionesRepositorio @Inject constructor(
                 porEnviar = true,
             )
         }
-        (locales + remotas)
+        val todas = (locales + remotas)
             .filter { o -> o.id !in quitadas && (o.clientId == null || o.clientId !in quitadas) }
-            .map { o ->
-                if (o.porEnviar) return@map o
-                // Las fotos tomadas en este teléfono se muestran desde aquí
-                val conservadas = o.fotos.indices.filter { i -> o.fotosIds.getOrNull(i) !in fotosQuitadas }
-                val ids = conservadas.mapNotNull { o.fotosIds.getOrNull(it) }
-                // Y las que todavía suben: la observación llegó antes que sus fotos
-                val subiendo = o.clientId?.let { fotosEnCola(it) }.orEmpty().filter { (id, _) -> id !in ids && id !in fotosQuitadas }
-                o.copy(
-                    fotos = conservadas.map { o.fotos[it] } + subiendo.map { it.first },
-                    fotosIds = ids + subiendo.map { it.first },
-                    fotosLocales = ids.mapNotNull { id -> evidencias.archivoLocal(id)?.let { id to it } }.toMap() + subiendo.toMap(),
-                )
-            }
+        // Las fotos que todavía suben, por punto: las comparten las actividades
+        // del mismo sitio, y la observación puede llegar antes que sus fotos
+        val enColaPorPunto = todas.groupBy { it.punto }.mapValues { (_, delPunto) ->
+            delPunto.flatMap { o -> fotosEnCola(o.clientId ?: o.id) }.distinctBy { it.first }
+        }
+        todas.map { o ->
+            val conservadas = o.fotos.indices.filter { i -> o.fotosIds.getOrNull(i) !in fotosQuitadas }
+            val ids = conservadas.mapNotNull { o.fotosIds.getOrNull(it) }
+            val subiendo = enColaPorPunto[o.punto].orEmpty().filter { (id, _) -> id !in ids && id !in fotosQuitadas }
+            o.copy(
+                fotos = conservadas.map { o.fotos[it] } + subiendo.map { it.first },
+                fotosIds = ids + subiendo.map { it.first },
+                // Las tomadas en este teléfono se muestran desde aquí
+                fotosLocales = ids.mapNotNull { id -> (o.fotosLocales[id] ?: evidencias.archivoLocal(id))?.let { id to it } }.toMap() + subiendo.toMap(),
+            )
+        }
     }
 
     /** Las fotos de una observación que todavía no sale: (llave, archivo). */
@@ -186,71 +198,85 @@ class ObservacionesRepositorio @Inject constructor(
             listOfNotNull(o?.get("p_client_id")?.jsonPrimitive?.contentOrNull, o?.get("p_id")?.jsonPrimitive?.contentOrNull)
         }.toSet()
 
+    /** Una actividad del punto: la partida, su unidad y su metrado. */
+    data class ActividadDelPunto(val actividad: Actividad, val unidad: String?, val metrado: Double?, val lineal: Boolean)
+
     /**
-     * Registra la observación y sus fotos (una a tres). Las fotos esperan a
-     * que la observación exista en la nube; ahí se les pega su id.
+     * Registra lo observado en un punto: una observación por actividad
+     * (REV3-OBS-34: limpieza de señal, pintado y reparación en el mismo km),
+     * todas con el mismo punto, y las fotos (una a tres) colgadas de la
+     * primera. Las fotos esperan a que la observación exista en la nube.
+     * El GPS real del teléfono se guarda siempre (REV3-OBS-37).
      */
     suspend fun registrar(
         servicioId: String,
         cuadrillaId: String?,
         cuadrilla: String?,
         tramo: Tramo?,
-        actividad: Actividad?,
-        unidad: String?,
+        actividades: List<ActividadDelPunto>,
         progresiva: Double?,
         progresivaFin: Double?,
-        metrado: Double?,
         lado: String,
         descripcion: String,
         fotos: List<File>,
         sello: Sello,
         punto: Punto?,
-    ) = withContext(Dispatchers.IO) {
-        val clientId = UUID.randomUUID().toString()
-        cola.encolar(
-            tabla = TABLA,
-            clientId = clientId,
-            etiqueta = "Observación · " + descripcion.take(40),
-            cuerpo = buildJsonObject {
-                put("service_id", servicioId)
-                cuadrillaId?.let { put("crew_id", it) }
-                tramo?.let { put("section_id", it.id); put("_tramo", it.name); it.numero?.let { n -> put("_tramo_numero", n) } }
-                actividad?.let {
-                    put("activity_id", it.id)
-                    put("_actividad", it.name)
-                    put("_actividad_codigo", it.code)
-                    it.category?.let { c -> put("_categoria", c) }
-                }
-                unidad?.let { put("_unidad", it) }
-                progresiva?.let { put("progresiva_m", it) }
-                progresivaFin?.let { put("progresiva_fin_m", it) }
-                metrado?.let { put("metrado", it) }
-                put("side", lado)
-                put("descripcion", descripcion)
-                put("observado_on", Peru.hoy().toString())
-                // Sin progresiva, el punto del GPS; con ella lo ubica la nube,
-                // pero mientras no sale se muestra donde está el teléfono
-                if (punto != null) {
-                    if (progresiva == null) { put("lat", punto.latitud); put("lng", punto.longitud) }
-                    else { put("_lat", punto.latitud); put("_lng", punto.longitud) }
-                }
-                supabase.usuarioActual()?.let { put("created_by", it) }
-            },
-        )
+        puntoId: String? = null,
+    ): String = withContext(Dispatchers.IO) {
+        val elPunto = puntoId ?: UUID.randomUUID().toString()
+        val ids = actividades.map { a ->
+            val clientId = UUID.randomUUID().toString()
+            // Lo puntual no lleva progresiva final (REV3-OBS-35)
+            val fin = progresivaFin?.takeIf { a.lineal }
+            cola.encolar(
+                tabla = TABLA,
+                clientId = clientId,
+                // En Sincronización se reconoce qué es (REV3-OBS-14)
+                etiqueta = listOfNotNull("Observación", a.actividad.code, progresiva?.let { "km " + Progresiva.rango(it, fin) },
+                    a.metrado?.let { Numeros.tres(it) + (a.unidad?.let { u -> " $u" } ?: "") }).joinToString(" · "),
+                cuerpo = buildJsonObject {
+                    put("service_id", servicioId)
+                    put("punto_id", elPunto)
+                    cuadrillaId?.let { put("crew_id", it) }
+                    tramo?.let { put("section_id", it.id); put("_tramo", it.name); it.numero?.let { n -> put("_tramo_numero", n) } }
+                    put("activity_id", a.actividad.id)
+                    put("_actividad", a.actividad.name)
+                    put("_actividad_codigo", a.actividad.code)
+                    a.actividad.category?.let { c -> put("_categoria", c) }
+                    a.unidad?.let { put("_unidad", it) }
+                    progresiva?.let { put("progresiva_m", it) }
+                    fin?.let { put("progresiva_fin_m", it) }
+                    a.metrado?.let { put("metrado", it) }
+                    put("side", lado)
+                    put("descripcion", descripcion)
+                    put("observado_on", Peru.hoy().toString())
+                    // Sin progresiva, el punto es el del GPS; con ella lo ubica la nube
+                    if (punto != null) {
+                        if (progresiva == null) { put("lat", punto.latitud); put("lng", punto.longitud) }
+                        put("gps_lat", punto.latitud)
+                        put("gps_lng", punto.longitud)
+                        put("gps_precision_m", punto.precision.toDouble())
+                    }
+                    supabase.usuarioActual()?.let { put("created_by", it) }
+                },
+            )
+            clientId
+        }
+        val primera = actividades.first()
         // Un registro de mentira, solo para el sello: no se guarda ni se envía
         val registro = RegistroLocal(
-            clientId = clientId,
+            clientId = ids.first(),
             parteClientId = "",
             servicioId = servicioId,
-            actividadId = actividad?.id ?: "",
-            actividadNombre = "Observación: " + (actividad?.name ?: descripcion).take(60),
+            actividadId = primera.actividad.id,
+            actividadNombre = "Observación: " + actividades.joinToString(" + ") { it.actividad.name }.take(60),
             tramoId = tramo?.id,
             tramoNombre = tramo?.name,
             progresivaInicio = progresiva,
-            progresivaFin = progresivaFin,
+            progresivaFin = progresivaFin?.takeIf { primera.lineal },
             lado = lado,
-            cantidad = metrado ?: 0.0,
-            unidad = unidad,
+            cantidad = primera.metrado ?: 0.0,
+            unidad = primera.unidad,
             origen = "observacion",
         )
         fotos.forEach { f ->
@@ -262,10 +288,10 @@ class ObservacionesRepositorio @Inject constructor(
                 conMarcaDeAgua = true,
                 sello = sello,
                 cuadrilla = cuadrilla,
-                observacion = clientId,
+                observacion = ids.first(),
             )
         }
-        clientId
+        ids.first()
     }
 
     /**

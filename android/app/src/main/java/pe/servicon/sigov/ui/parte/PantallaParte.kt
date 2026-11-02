@@ -245,6 +245,8 @@ fun PantallaParte(
                             equipos = estado.recursos.count { r -> r.registroClientId == registro.clientId },
                             editable = estado.parte?.editable == true,
                             porEnviar = registro.clientId in estado.porEnviar,
+                            programadaEl = registro.planItemId?.let { estado.fechasProgramadas[it] }
+                                ?.takeIf { it != estado.parte?.fecha },
                             alAbrir = { abierto = registro.clientId },
                             alTomarEvidencia = { alTomarEvidencia(registro.clientId) },
                         )
@@ -307,6 +309,8 @@ fun PantallaParte(
                 codigo = estado.codigoDe(r),
                 item = estado.itemDe(r),
                 fases = estado.fotosPorFase[r.clientId].orEmpty(),
+                meta = r.planItemId?.let { id -> estado.programadas.firstOrNull { it.id == id }?.meta },
+                fotos = vm.fotosDe(r.clientId).collectAsState(initial = emptyList()).value,
                 consumos = estado.consumos.filter { c -> c.registroClientId == r.clientId },
                 recursos = estado.recursos.filter { x -> x.registroClientId == r.clientId },
                 editable = estado.parte?.editable == true,
@@ -352,6 +356,7 @@ fun PantallaParte(
             // Desde una actividad, el material queda en ella
             registros = materialDe?.let { listOf(it) } ?: estado.registros,
             rendimientos = estado.rendimientos,
+            yaAnotados = estado.consumos,
             alCerrar = { anotandoMaterial = false; materialDe = null },
             alGuardar = { id, nombre, unidad, cantidad, registro ->
                 vm.registrarConsumo(id, nombre, unidad, cantidad, registro)
@@ -385,8 +390,8 @@ fun PantallaParte(
             conAvance = estado.conAvance,
             alCorregir = { id -> formularioAbierto = false; vm.partidaInicialAtendida(); abierto = id },
             alCerrar = { formularioAbierto = false; vm.partidaInicialAtendida() },
-            alGuardar = { actividad, tramo, ini, fin, lado, cantidad, obs, origen, detalle, materiales ->
-                vm.registrar(actividad, tramo, ini, fin, lado, cantidad, obs, origen, detalle, materiales) {
+            alGuardar = { actividad, tramo, ini, fin, lado, cantidad, obs, origen, detalle, materiales, equipos ->
+                vm.registrar(actividad, tramo, ini, fin, lado, cantidad, obs, origen, detalle, materiales, equipos) {
                     // Desde una partida se vuelve a ella; si no, a la lista del paso 2
                     if (desdePartida != null) { formularioAbierto = false; vm.partidaInicialAtendida() }
                     else guardados++
@@ -511,6 +516,8 @@ private fun Registro(
     equipos: Int,
     editable: Boolean,
     porEnviar: Boolean = false,
+    /** La fecha programada, cuando no es la de la ejecución (REV3-OBS-20). */
+    programadaEl: String? = null,
     alAbrir: () -> Unit,
     alTomarEvidencia: () -> Unit,
 ) {
@@ -554,6 +561,13 @@ private fun Registro(
                         style = MaterialTheme.typography.bodySmall,
                         color = MaterialTheme.colorScheme.onSurfaceVariant,
                     )
+                    programadaEl?.let { f ->
+                        Text(
+                            "Programado ${f.split("-").reversed().joinToString("/")} · ejecutado en este reporte",
+                            style = MaterialTheme.typography.labelSmall,
+                            color = Marca.Naranja,
+                        )
+                    }
                 }
                 Column(horizontalAlignment = Alignment.End) {
                     Text(
@@ -605,7 +619,7 @@ private fun Registro(
                         if (fases.values.sum() == 0 && registro.origen != "pci") {
                             Text("Tomar evidencia fotográfica", style = MaterialTheme.typography.bodySmall, color = Marca.Naranja)
                         } else {
-                            ContadorPorEtapa(fases, exigeLasTres = registro.origen == "pci")
+                            ContadorPorEtapa(fases, exigeLasTres = registro.origen == "pci" || registro.planItemId != null)
                         }
                     }
                 }

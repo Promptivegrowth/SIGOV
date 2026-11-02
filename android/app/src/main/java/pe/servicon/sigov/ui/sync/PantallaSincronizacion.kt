@@ -482,6 +482,10 @@ private fun enCastellano(tabla: String): String = when (tabla) {
     "rpc:dar_de_baja_evidencia" -> "Eliminar fotografía"
     "rpc:corregir_solicitud_deposito" -> "Corrección de depósito"
     "rpc:fijar_original_evidencia" -> "Original JPG para COVINCA"
+    "rpc:partida_finalizar" -> "Cierre de partida"
+    "rpc:quitar_del_parte" -> "Quitar del parte"
+    "rpc:quitar_observacion" -> "Quitar observación"
+    "observaciones_campo" -> "Observación de campo"
     else -> tabla.removePrefix("rpc:")
 }
 

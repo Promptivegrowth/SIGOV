@@ -200,8 +200,11 @@ interface ParteDao {
     @Query("SELECT * FROM registros WHERE parteClientId = :parteId AND planItemId = :planItemId ORDER BY creadoEn LIMIT 1")
     suspend fun registroDePartida(parteId: String, planItemId: String): RegistroLocal?
 
-    /** Avance anotado en el equipo para una partida, haya subido o no. */
-    @Query("SELECT COUNT(*) FROM registros WHERE planItemId = :planItemId")
+    /**
+     * Avance anotado en el equipo para una partida, haya subido o no. Solo
+     * cuenta lo que tiene metrado: una partida con solo fotos no se cierra.
+     */
+    @Query("SELECT COUNT(*) FROM registros WHERE planItemId = :planItemId AND cantidad > 0")
     suspend fun registrosDePartida(planItemId: String): Int
 
     @Query("DELETE FROM evidencias WHERE clientId = :id")

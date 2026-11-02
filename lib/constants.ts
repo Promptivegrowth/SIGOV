@@ -174,7 +174,8 @@ export const PCI_ABIERTO: readonly string[] = ['abierto', 'en_atencion', 'vencid
 export const PCI_ITEM_STATUS = {
   pendiente:   { label: 'Por atender',            className: 'bg-muted text-muted-foreground' },
   en_atencion: { label: 'En ejecución',           className: 'bg-info/15 text-info' },
-  levantado:   { label: 'Atendido · por validar', className: 'bg-warning/20 text-warning' },
+  // REV3-OBS-03: con sus tres fotos queda «Por validar»; «Conforme» es lo que aprobó COVINCA
+  levantado:   { label: 'Por validar',            className: 'bg-warning/20 text-warning' },
   observado:   { label: 'Observado',              className: 'bg-destructive/15 text-destructive' },
   subsanado:   { label: 'Subsanado · por validar', className: 'bg-warning/20 text-warning' },
   validado:    { label: 'Conforme',               className: 'bg-success/20 text-success' },
@@ -195,7 +196,8 @@ export const PLAN_ITEM_STATUS = {
   en_curso:     { label: 'En ejecución', className: 'bg-info/15 text-info' },
   por_validar:  { label: 'Por validar',  className: 'bg-warning/20 text-warning' },
   ejecutado:    { label: 'Culminada',    className: 'bg-success/15 text-success' },
-  suspendido:   { label: 'No ejecutada', className: 'bg-destructive/15 text-destructive' },
+  // REV3-OBS-11: la reprograma el supervisor (al cambiarle la fecha vuelve a programada)
+  suspendido:   { label: 'No ejecutada · por reprogramar', className: 'bg-destructive/15 text-destructive' },
   reprogramado: { label: 'Reprogramada', className: 'bg-warning/20 text-warning' },
   cancelado:    { label: 'Anulada',      className: 'bg-muted text-muted-foreground line-through' },
 } as const

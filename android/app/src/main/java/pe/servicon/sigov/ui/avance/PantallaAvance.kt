@@ -547,7 +547,8 @@ private fun BloquePci(panel: List<PanelDePci>, alAbrir: (estado: String?, plazo:
             Row(horizontalArrangement = Arrangement.spacedBy(6.dp)) {
                 CifraPci("Por atender", p.porAtender, Color(0xFF616161), Modifier.weight(1f)) { alAbrir("POR_ATENDER", null, p.pciId) }
                 CifraPci("En ejecución", p.enEjecucion, Semaforo.PorVencer, Modifier.weight(1f)) { alAbrir("EN_EJECUCION", null, p.pciId) }
-                CifraPci("Atendidos", p.conformes, Semaforo.Levantado, Modifier.weight(1f)) { alAbrir("CONFORMES", null, p.pciId) }
+                CifraPci("Por validar", p.conformes, Semaforo.Levantado, Modifier.weight(1f)) { alAbrir("CONFORMES", null, p.pciId) }
+                CifraPci("Conformes", p.validados, Color(0xFF166534), Modifier.weight(1f)) { alAbrir("VALIDADOS", null, p.pciId) }
                 CifraPci("Observados", p.observados, Semaforo.Vencido, Modifier.weight(1f)) { alAbrir("OBSERVADOS", null, p.pciId) }
             }
             if (p.vencidos > 0) {

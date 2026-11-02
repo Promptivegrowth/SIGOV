@@ -34,6 +34,8 @@ data class Tramo(
     @SerialName("prog_end_m") val progresivaFin: Double,
     /** Tramo 1 a 4, como lo nombra el contrato. */
     val numero: Int? = null,
+    /** El trazado oficial (GeoJSON LineString): ubica una progresiva sin señal. */
+    val geom: kotlinx.serialization.json.JsonElement? = null,
 )
 
 @Serializable
@@ -78,6 +80,11 @@ data class ItemProgramado(
     @SerialName("supervisor_name") val supervisor: String? = null,
     /** La foto de la ubicación que cargó el supervisor al programar. */
     @SerialName("foto_referencia_path") val fotoReferencia: String? = null,
+    /** Las fotos por fase que ya están en la nube, de cualquier teléfono. */
+    @SerialName("fotos_antes") val fotosAntes: Int = 0,
+    @SerialName("fotos_durante") val fotosDurante: Int = 0,
+    @SerialName("fotos_despues") val fotosDespues: Int = 0,
+    @SerialName("fotos_general") val fotosGeneral: Int = 0,
     @SerialName("sector_code") val sector: String? = null,
     @SerialName("prog_start_txt") val progresivaInicioTexto: String? = null,
     @SerialName("prog_end_txt") val progresivaFinTexto: String? = null,

@@ -3,6 +3,7 @@ package pe.servicon.sigov.datos
 import io.github.jan.supabase.SupabaseClient
 import io.github.jan.supabase.gotrue.auth
 import io.github.jan.supabase.postgrest.postgrest
+import io.github.jan.supabase.postgrest.query.Columns
 import io.github.jan.supabase.postgrest.query.Order
 import io.github.jan.supabase.postgrest.rpc
 import kotlinx.coroutines.Dispatchers
@@ -10,6 +11,8 @@ import kotlinx.coroutines.withContext
 import kotlinx.serialization.json.Json
 import kotlinx.serialization.json.JsonObject
 import kotlinx.serialization.json.buildJsonObject
+import kotlinx.serialization.json.contentOrNull
+import kotlinx.serialization.json.jsonPrimitive
 import kotlinx.serialization.json.put
 import pe.servicon.sigov.datos.local.CatalogoDao
 import pe.servicon.sigov.datos.local.FilaCatalogo
@@ -235,6 +238,29 @@ class CampoRepositorio @Inject constructor(
      * Una partida programada por su id, de cualquier día: al registrar el
      * avance de una partida atrasada, el formulario la trae ya elegida.
      */
+    /**
+     * Las horas, el personal y las medidas de cada actividad para el FOR:001.
+     * Viajan en el envío de la actividad: se leen de la cola mientras siga
+     * en el teléfono y, si ya se limpió, de la nube.
+     */
+    suspend fun detallesFor001(registros: List<RegistroLocal>): Map<String, JsonObject> = withContext(Dispatchers.IO) {
+        val enCola = registros.mapNotNull { r ->
+            cola.envio(r.clientId)?.let { e -> runCatching { json.parseToJsonElement(e.cuerpo) as JsonObject }.getOrNull() }
+                ?.let { r.clientId to it }
+        }.toMap()
+        val faltan = registros.map { it.clientId }.filter { it !in enCola }
+        val deLaNube = if (faltan.isEmpty()) emptyMap() else runCatching {
+            supabase.postgrest.from("work_entries")
+                .select(Columns.list("client_id", "hora_inicio", "hora_fin", "personas", "longitud_m", "ancho_m", "espesor_m")) {
+                    filter { isIn("client_id", faltan) }
+                }
+                .decodeList<JsonObject>()
+                .mapNotNull { o -> o["client_id"]?.jsonPrimitive?.contentOrNull?.let { it to o } }
+                .toMap()
+        }.getOrDefault(emptyMap())
+        enCola + deLaNube
+    }
+
     suspend fun itemProgramado(id: String): ItemProgramado? = withContext(Dispatchers.IO) {
         runCatching {
             supabase.postgrest.from("v_plan_items")
@@ -414,7 +440,7 @@ class CampoRepositorio @Inject constructor(
             tabla = "work_entries",
             clientId = registro.clientId,
             dependeDe = registro.parteClientId,
-            etiqueta = registro.actividadNombre + " · " + cantidad,
+            etiqueta = pe.servicon.sigov.datos.local.etiquetaDeRegistro(nuevo, partes.parteDe(registro.parteClientId)?.fecha),
             cuerpo = buildJsonObject {
                 anterior?.forEach { (k, v) -> if (k != "client_id" && k != "work_order_id") put(k, v) }
                 if (anterior == null) {
@@ -458,7 +484,7 @@ class CampoRepositorio @Inject constructor(
             tabla = "work_entries",
             clientId = registro.clientId,
             dependeDe = registro.parteClientId,
-            etiqueta = registro.actividadNombre + " · " + cantidad,
+            etiqueta = pe.servicon.sigov.datos.local.etiquetaDeRegistro(nuevo, partes.parteDe(registro.parteClientId)?.fecha),
             cuerpo = buildJsonObject {
                 if (anterior != null) {
                     anterior.forEach { (k, v) -> if (k != "client_id" && k != "work_order_id") put(k, v) }
@@ -759,7 +785,7 @@ class CampoRepositorio @Inject constructor(
             clientId = clientId,
             // El registro espera a que su parte exista en la nube
             dependeDe = parte.clientId,
-            etiqueta = "${actividad.name} · ${cantidad}",
+            etiqueta = pe.servicon.sigov.datos.local.etiquetaDeRegistro(registro, parte.fecha),
             cuerpo = buildJsonObject {
                 put("service_id", parte.servicioId)
                 put("activity_id", actividad.id)

@@ -135,6 +135,7 @@ fun FormularioActividad(
         origen: OrigenDelTrabajo,
         detalle: DetalleFor001,
         materiales: List<MaterialDelRegistro>,
+        equipos: List<EquipoDelRegistro>,
     ) -> Unit,
 ) {
     // Lo ya culminado no se ofrece: volver a registrar contra una partida
@@ -153,6 +154,10 @@ fun FormularioActividad(
     var lado by remember { mutableStateOf("derecho") }
     var metrado by remember { mutableStateOf("") }
     var observacion by remember { mutableStateOf("") }
+    // El metrado sobre la meta: se pregunta y se guarda el porqué (REV3-OBS-10)
+    var preguntarExceso by remember { mutableStateOf(false) }
+    var excesoJustificado by remember { mutableStateOf<String?>(null) }
+    LaunchedEffect(metrado) { excesoJustificado = null }
     // FOR:001: horas, personas y medidas de lo ejecutado
     var horaIni by remember { mutableStateOf("") }
     var horaFin by remember { mutableStateOf("") }
@@ -167,6 +172,9 @@ fun FormularioActividad(
     val cantidades = remember { mutableStateMapOf<String, String>() }
     val otros = remember { mutableStateListOf<String>() }
     var eligiendoMaterial by remember { mutableStateOf(false) }
+    // Los equipos de la actividad, en el mismo paso que el metrado (REV3-OBS-07)
+    val equipos = remember { mutableStateListOf<EquipoDelRegistro>() }
+    var anotandoEquipo by remember { mutableStateOf(false) }
 
     // Al elegir de dónde sale el trabajo, el formulario se rellena solo
     fun adoptar(nuevo: OrigenDelTrabajo) {
@@ -478,6 +486,24 @@ fun FormularioActividad(
                                 alQuitarOtro = { id -> otros.remove(id); cantidades.remove(id) },
                             )
 
+                            // Equipos de esta actividad (REV3-OBS-07: ítem → metrado →
+                            // materiales → equipos → observación, como en el PCI)
+                            Column(verticalArrangement = Arrangement.spacedBy(4.dp)) {
+                                Text("Equipos", style = MaterialTheme.typography.labelLarge, fontWeight = FontWeight.SemiBold)
+                                equipos.forEachIndexed { i, q ->
+                                    Row(verticalAlignment = Alignment.CenterVertically) {
+                                        Text(
+                                            listOfNotNull(q.codigo, q.descripcion).joinToString(" · ") +
+                                                (q.cantidad?.let { " · ${cifra(it)} ${q.unidad.orEmpty()}" } ?: ""),
+                                            style = MaterialTheme.typography.bodyMedium,
+                                            modifier = Modifier.weight(1f),
+                                        )
+                                        TextButton(onClick = { equipos.removeAt(i) }) { Text("Quitar") }
+                                    }
+                                }
+                                TextButton(onClick = { anotandoEquipo = true }) { Text("+ Agregar equipo") }
+                            }
+
                             // Lo que pide el FOR:001 de cada actividad: opcional y plegado,
                             // para no retrasar el registro (boceto, nota 5)
                             if (itemPci == null) {
@@ -531,6 +557,18 @@ fun FormularioActividad(
                             onClick = {
                                 error = validar(actividad, tramo, progIni, progFin, metrado, origen, observacion)
                                     ?: validarFor001(horaIni, horaFin, personas, longitud, ancho, espesor)
+                                // REV3-OBS-10: pasar la meta no se bloquea (puede haber
+                                // sobre-ejecución real), pero se advierte y se justifica
+                                val meta = partida?.meta
+                                val hecho = metrado.replace(",", ".").toDoubleOrNull()
+                                if (error == null && meta != null && meta > 0 && hecho != null && hecho > meta + 1e-9 && excesoJustificado == null) {
+                                    preguntarExceso = true
+                                    return@Button
+                                }
+                                val obs = listOfNotNull(
+                                    observacion.ifBlank { null },
+                                    excesoJustificado?.let { j -> "Sobre la meta (${cifra(hecho ?: 0.0)} de ${cifra(meta ?: 0.0)} ${partida?.unidad.orEmpty()}): $j" },
+                                ).joinToString(" · ").ifBlank { null }
                                 if (error == null) {
                                     alGuardar(
                                         actividad!!,
@@ -539,7 +577,7 @@ fun FormularioActividad(
                                         Progresiva.aMetros(progFin),
                                         lado,
                                         metrado.replace(",", ".").toDouble(),
-                                        observacion.ifBlank { null },
+                                        obs,
                                         origen,
                                         DetalleFor001(
                                             horaInicio = DetalleFor001.hora(horaIni),
@@ -554,6 +592,7 @@ fun FormularioActividad(
                                             val ins = insumos.firstOrNull { it.id == id } ?: return@mapNotNull null
                                             MaterialDelRegistro(id, ins.name, ins.unidad, q)
                                         },
+                                        equipos.toList(),
                                     )
                                 }
                             },
@@ -587,6 +626,43 @@ fun FormularioActividad(
             actividades = actividades,
             alElegir = { actividad = it; buscando = false },
             alCerrar = { buscando = false },
+        )
+    }
+
+    if (anotandoEquipo) {
+        DialogoRecurso(
+            alCerrar = { anotandoEquipo = false },
+            alGuardar = { tipo, codigo, descripcion, unidad, cantidad, observacion ->
+                equipos += EquipoDelRegistro(tipo, codigo, descripcion, unidad, cantidad, observacion)
+                anotandoEquipo = false
+            },
+        )
+    }
+
+    if (preguntarExceso) {
+        var motivo by remember { mutableStateOf("") }
+        val p = partida
+        AlertDialog(
+            onDismissRequest = { preguntarExceso = false },
+            title = { Text("El metrado supera la meta") },
+            text = {
+                Column(verticalArrangement = Arrangement.spacedBy(10.dp)) {
+                    Text("El metrado ejecutado (${metrado.trim()} ${p?.unidad.orEmpty()}) supera la meta programada " +
+                        "(${p?.meta?.let { cifra(it) } ?: "—"} ${p?.unidad.orEmpty()}). ¿Desea continuar?")
+                    OutlinedTextField(
+                        value = motivo, onValueChange = { motivo = it.take(300) },
+                        label = { Text("¿Por qué? (queda registrado)") },
+                        placeholder = { Text("Se encontró más área deteriorada que la programada…") },
+                        minLines = 2, modifier = Modifier.fillMaxWidth(),
+                    )
+                }
+            },
+            confirmButton = {
+                TextButton(onClick = { excesoJustificado = motivo.trim(); preguntarExceso = false }, enabled = motivo.isNotBlank()) {
+                    Text("Continuar")
+                }
+            },
+            dismissButton = { TextButton(onClick = { preguntarExceso = false }) { Text("Revisar el metrado") } },
         )
     }
 }

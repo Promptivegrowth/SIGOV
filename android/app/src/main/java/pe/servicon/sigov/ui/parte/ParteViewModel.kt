@@ -8,6 +8,7 @@ import pe.servicon.sigov.datos.Celda
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import dagger.hilt.android.lifecycle.HiltViewModel
+import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
@@ -34,6 +35,11 @@ import javax.inject.Inject
 
 /** Un material anotado dentro del registro de una actividad. */
 data class MaterialDelRegistro(val insumoId: String, val nombre: String, val unidad: String?, val cantidad: Double)
+
+/** Un equipo u otro recurso anotado al registrar el avance (REV3-OBS-07). */
+data class EquipoDelRegistro(
+    val tipo: String, val codigo: String?, val descripcion: String, val unidad: String?, val cantidad: Double?, val observacion: String?,
+)
 
 data class EstadoParte(
     val cargando: Boolean = true,
@@ -73,6 +79,8 @@ data class EstadoParte(
     val rendimientos: List<pe.servicon.sigov.datos.Rendimiento> = emptyList(),
     /** Lo que observó el supervisor al devolver el parte. */
     val observacion: String? = null,
+    /** La fecha en que se programó cada partida del parte, si es otra (REV3-OBS-20). */
+    val fechasProgramadas: Map<String, String> = emptyMap(),
     val guardando: Boolean = false,
     /** Los clientId que siguen en la cola; «envio:<parte>» si el envío espera señal. */
     val porEnviar: Set<String> = emptySet(),
@@ -114,6 +122,7 @@ class ParteViewModel @Inject constructor(
     private val sesion: SesionRepositorio,
     private val partes: ParteDao,
     private val formatos: FormatosPdf,
+    private val for001: pe.servicon.sigov.datos.FormatoFor001,
     private val consumoRepo: pe.servicon.sigov.datos.ConsumoRepositorio,
     private val recursoRepo: pe.servicon.sigov.datos.RecursoRepositorio,
     private val materialRepo: pe.servicon.sigov.datos.MaterialRepositorio,
@@ -224,8 +233,16 @@ class ParteViewModel @Inject constructor(
                     }
                     val yaConAvance = partida?.let { p -> partes.registroDePartida(parte.clientId, p.id) }
                         ?.takeIf { r -> r.cantidad > 0 }
+                    // De qué día era cada partida del parte: la programada se
+                    // muestra como antecedente cuando no es la fecha real (REV3-OBS-20)
+                    val fechasProgramadas = partes.registrosDe(parte.clientId).first().mapNotNull { r -> r.planItemId }.distinct()
+                        .mapNotNull { id ->
+                            (programadas.firstOrNull { p -> p.id == id } ?: runCatching { campo.itemProgramado(id) }.getOrNull())
+                                ?.fecha?.take(10)?.let { id to it }
+                        }.toMap()
                     _estado.update {
                         it.copy(
+                            fechasProgramadas = fechasProgramadas,
                             programadas = programadas,
                             pcis = pcis,
                             partidaInicial = partida.takeIf { yaConAvance == null },
@@ -291,6 +308,7 @@ class ParteViewModel @Inject constructor(
         origen: OrigenDelTrabajo,
         detalle: pe.servicon.sigov.datos.DetalleFor001,
         materiales: List<MaterialDelRegistro> = emptyList(),
+        equipos: List<EquipoDelRegistro> = emptyList(),
         alTerminar: () -> Unit,
     ) {
         val parte = _estado.value.parte ?: return
@@ -330,8 +348,13 @@ class ParteViewModel @Inject constructor(
                         registro, parte.clientId,
                     )
                 }
+                // Y sus equipos, como en el PCI: el ítem lleva todo lo suyo (REV3-OBS-07)
+                equipos.forEach { q ->
+                    recursoRepo.registrar(parte, q.tipo, q.codigo, q.descripcion, q.unidad, q.cantidad, q.observacion, registro)
+                }
             }.onSuccess {
                 if (materiales.any { m -> m.cantidad > 0 }) cargarMateriales()
+                if (equipos.isNotEmpty()) cargarRecursos()
                 _estado.update {
                     it.copy(
                         guardando = false,
@@ -401,75 +424,110 @@ class ParteViewModel @Inject constructor(
     }
 
     /**
-     * El parte del día como PDF, armado en el equipo.
-     *
-     * El formato SIG-OP-F01 sale igual que el del panel, pero sin depender de
-     * que haya señal: al capataz le pueden pedir el parte en el frente de
-     * trabajo y aquí lo manda por donde quiera.
+     * Lo que lleva el FOR:001 del día, de lo guardado en el teléfono
+     * (REV3-OBS-19: la plantilla entregada, sin columnas ajenas). Lo que la
+     * plantilla no tiene —la fecha programada cuando difiere de la real
+     * (REV3-OBS-20)— va en la observación de la actividad.
      */
+    private suspend fun datosFor001(): pe.servicon.sigov.datos.DatosFor001 {
+        val e = _estado.value
+        val parte = e.parte ?: error("No hay parte abierto.")
+        val servicio = campo.contrato(parte.servicioId)
+        val fecha = LocalDate.parse(parte.fecha)
+        val detalles = campo.detallesFor001(e.registros)
+        fun txt(o: kotlinx.serialization.json.JsonObject?, k: String) =
+            (o?.get(k) as? kotlinx.serialization.json.JsonPrimitive)?.takeIf { !it.toString().equals("null") }?.content
+        fun num(v: String?, dec: Int = 2) = v?.toDoubleOrNull()?.let { pe.servicon.sigov.datos.Numeros.tres(it) } ?: ""
+        val partidas = e.registros.mapNotNull { it.planItemId }.distinct().associateWith { id ->
+            e.programadas.firstOrNull { it.id == id } ?: runCatching { campo.itemProgramado(id) }.getOrNull()
+        }
+        val diaCorto = { f: String -> f.take(10).split("-").let { (a, m, d) -> "$d/$m/$a" } }
+        val filas = e.registros.mapIndexed { i, r ->
+            val d = detalles[r.clientId]
+            val hi = txt(d, "hora_inicio")?.take(5)
+            val hf = txt(d, "hora_fin")?.take(5)
+            val dur = if (hi != null && hf != null) runCatching {
+                val m = java.time.Duration.between(java.time.LocalTime.parse(hi), java.time.LocalTime.parse(hf)).toMinutes()
+                if (m > 0) "%d:%02d".format(m / 60, m % 60) else ""
+            }.getOrDefault("") else ""
+            val act = e.actividades.firstOrNull { it.id == r.actividadId }
+            val programada = r.planItemId?.let { partidas[it] }?.fecha
+            val obs = listOfNotNull(
+                r.observacion?.takeIf { it.isNotBlank() },
+                programada?.takeIf { it.take(10) != parte.fecha }?.let { "Programado ${diaCorto(it)} · ejecutado ${diaCorto(parte.fecha)}" },
+            ).joinToString(" · ")
+            pe.servicon.sigov.datos.FilaFor001(
+                codigo = e.codigoDe(r) ?: "",
+                numero = (act?.numeroCovinca ?: (i + 1)).toString(),
+                pci = r.pciCodigo?.let { pe.servicon.sigov.datos.codigoCortoDePci(it) ?: it } ?: "",
+                item = e.itemDe(r)?.toString() ?: "",
+                unidad = r.unidad ?: "",
+                actividad = r.actividadNombre,
+                horaInicio = hi ?: "", horaFin = hf ?: "", duracion = dur,
+                personas = txt(d, "personas") ?: "",
+                progInicial = r.progresivaInicio?.let { progresiva(it) } ?: "",
+                progFinal = r.progresivaFin?.let { progresiva(it) } ?: "",
+                lado = pe.servicon.sigov.datos.Lados.codigo(r.lado) ?: "",
+                longitud = num(txt(d, "longitud_m")), ancho = num(txt(d, "ancho_m")), espesor = num(txt(d, "espesor_m")),
+                metrado = pe.servicon.sigov.datos.Numeros.tres(r.cantidad),
+                observacion = obs,
+            )
+        }
+        val porId = e.registros.associateBy { it.clientId }
+        val materiales = e.consumos.map { c ->
+            val r = c.registroClientId?.let { porId[it] }
+            val act = r?.let { x -> e.actividades.firstOrNull { it.id == x.actividadId } }
+            listOf(r?.let { e.codigoDe(it) } ?: "", act?.numeroCovinca?.toString() ?: "", r?.actividadNombre ?: c.actividad ?: "",
+                c.nombre, pe.servicon.sigov.datos.Numeros.tres(c.cantidad), c.unidad ?: "")
+        }
+        val equipos = e.recursos.filter { it.tipo == "equipo" }.mapIndexed { i, x ->
+            listOf(x.codigo ?: "", "${i + 1}", x.descripcion, x.unidad ?: "", x.cantidad?.let { pe.servicon.sigov.datos.Numeros.tres(it) } ?: "")
+        }
+        val otros = e.recursos.filter { it.tipo != "equipo" }.map { x ->
+            listOf(x.descripcion, x.unidad ?: "", x.cantidad?.let { pe.servicon.sigov.datos.Numeros.tres(it) } ?: "", x.observacion ?: "")
+        }
+        val procesos = e.registros.map { r ->
+            when (r.origen) { "programacion" -> "MR"; "pci" -> "PCI"; "emergencia" -> "AT. EMERG."; else -> "OTROS" }
+        }.toSet()
+        return pe.servicon.sigov.datos.DatosFor001(
+            fecha = fecha,
+            procesos = procesos,
+            subtramo = e.tramoPorDefecto?.let { t -> "SUBTRAMO " + (t.numero?.toString() ?: t.code) } ?: "",
+            cliente = servicio?.cliente ?: "COVINCA",
+            componente = e.registros.mapNotNull { r -> e.actividades.firstOrNull { it.id == r.actividadId }?.category }.distinct().joinToString(", "),
+            supervisor = e.supervisor ?: "",
+            cuadrilla = e.cuadrilla,
+            capataz = sesion.perfil()?.nombre ?: "",
+            sector = partidas.values.mapNotNull { it?.sector }.distinct().joinToString(", "),
+            filas = filas,
+            materiales = materiales,
+            equipos = equipos,
+            otros = otros,
+            observaciones = listOfNotNull(
+                parte.notas?.takeIf { it.isNotBlank() },
+                listOfNotNull(parte.horaInicio, parte.horaFin).takeIf { it.isNotEmpty() }?.let { "Jornada: " + it.joinToString(" a ") },
+                (parte.personal ?: e.personalSugerido)?.let { "Personal: $it" },
+                e.vehiculosDelDia.takeIf { it.isNotEmpty() }?.let { "Vehículo: " + it.joinToString(", ") },
+            ).joinToString(" · "),
+            validador = null,
+        )
+    }
+
+    /**
+     * El FOR:001 en PDF, igual al del panel, armado en el teléfono: al capataz
+     * le pueden pedir el parte en el frente de trabajo, sin señal.
+     */
+    /** Las fotos de una actividad que siguen en el teléfono, con su etapa. */
+    fun fotosDe(registroId: String) = partes.evidenciasDe(registroId)
+
     fun imprimirParte(compartir: Boolean) {
         val e = _estado.value
         val parte = e.parte ?: return
         _estado.update { it.copy(imprimiendo = true) }
-
         viewModelScope.launch {
             runCatching {
-                val servicio = campo.contrato(parte.servicioId)
-                val quien = sesion.perfil()?.nombre ?: "SIGOV"
-                val fecha = LocalDate.parse(parte.fecha)
-
-                val archivo = formatos.armar(
-                    formato = FormatoOficial.PARTE,
-                    cab = CabeceraPdf(
-                        servicio = servicio?.name ?: "",
-                        cliente = servicio?.cliente,
-                        contrato = servicio?.contrato,
-                        cuadrilla = e.cuadrilla,
-                        fecha = fecha,
-                        lugar = e.registros.firstNotNullOfOrNull { it.tramoNombre },
-                        emitidoPor = quien,
-                    ),
-                    // De dónde nace cada actividad, sus dos progresivas y la
-                    // observación que escribió la cuadrilla: antes el PDF solo
-                    // traía la nota del parte, y lo anotado en cada registro
-                    // —«PRUEBA OFFLINE» en la prueba— no salía (OBS-28/30/31).
-                    // Con el código de partida COVINCA (OBS-29)
-                    // Elvis (21/10): la descripción completa (en dos líneas si
-                    // hace falta), el ítem del PCI, el lado entero, el código
-                    // COVINCA; sin fotos (van aparte, digitales), sin clima y
-                    // sin «metrado total», que no suma partidas de unidades distintas
-                    columnas = listOf("Código", "Actividad", "Origen", "Ítem", "Prog. inicio", "Prog. fin", "Lado",
-                        "Cantidad", "Observación"),
-                    anchos = listOf(60f, 124f, 40f, 26f, 44f, 44f, 40f, 44f, 105f),
-                    filas = e.registros.map { r ->
-                        listOf(
-                            e.codigoDe(r) ?: "—",
-                            r.actividadNombre,
-                            origenDe(r),
-                            e.itemDe(r)?.toString() ?: "—",
-                            r.progresivaInicio?.let { progresiva(it) } ?: "—",
-                            r.progresivaFin?.takeIf { it != r.progresivaInicio }?.let { progresiva(it) } ?: "—",
-                            pe.servicon.sigov.datos.Lados.etiqueta(r.lado) ?: r.lado,
-                            pe.servicon.sigov.datos.Numeros.tres(r.cantidad) + (r.unidad?.let { " $it" } ?: ""),
-                            r.observacion?.takeIf { it.isNotBlank() } ?: "—",
-                        )
-                    },
-                    contextoExtra = listOf(
-                        // Lo que el sistema ya sabe se completa solo (como en el FOR:001 de la web)
-                        "Personal" to ((parte.personal ?: e.personalSugerido)?.toString() ?: "—"),
-                        "Vehículo" to e.vehiculosDelDia.joinToString(", ").ifBlank { "—" },
-                        "Supervisor" to (e.supervisor ?: "—"),
-                        "Jornada" to listOfNotNull(parte.horaInicio, parte.horaFin)
-                            .joinToString(" a ").ifBlank { "—" },
-                    ),
-                    nota = parte.notas,
-                    firmas = listOf(
-                        FirmaPdf(quien, "Jefe de cuadrilla"),
-                        FirmaPdf("", "Supervisor de obra"),
-                    ),
-                    nombreArchivo = "PARTE_${parte.fecha}_${e.cuadrilla.filter { it.isLetterOrDigit() }}",
-                )
-                if (compartir) formatos.compartir(archivo, "Parte diario ${parte.fecha}")
+                val archivo = for001.armar(datosFor001(), "FOR001_${parte.fecha}_${e.cuadrilla.filter { it.isLetterOrDigit() }}")
+                if (compartir) formatos.compartir(archivo, "Reporte diario ${parte.fecha}")
                 else formatos.abrir(archivo)
             }.onFailure { fallo ->
                 _estado.update { it.copy(error = fallo.enCristiano()) }
@@ -479,11 +537,9 @@ class ParteViewModel @Inject constructor(
     }
 
     /**
-     * El mismo parte como hoja de cálculo.
-     *
-     * Dos salidas distintas y con su nombre (OBS-35 a 38): «Excel» genera un
-     * .xlsx de verdad, con números y fechas que Excel reconoce y filtros; los
-     * datos en CSV quedan aparte, para cargarlos en otro sistema.
+     * El mismo FOR:001 como hoja de cálculo: las columnas de la plantilla en
+     * «Ejecución», y materiales, equipos y otros recursos en sus hojas
+     * (REV3-OBS-17 y 19). El CSV queda para cargarlo en otro sistema.
      */
     fun exportar(comoExcel: Boolean) {
         val e = _estado.value
@@ -492,69 +548,67 @@ class ParteViewModel @Inject constructor(
 
         viewModelScope.launch {
             runCatching {
-                val servicio = campo.contrato(parte.servicioId)
-                val fecha = LocalDate.parse(parte.fecha)
-                val columnas = listOf("Fecha", "Cuadrilla", "Código", "Actividad", "Origen", "Ítem", "Tramo",
-                    "Progresiva inicio", "Progresiva fin", "Lado", "Cantidad", "Unidad",
-                    "Observación")
-                val nombre = "PARTE_${parte.fecha}_${e.cuadrilla.filter { it.isLetterOrDigit() }}"
+                val d = datosFor001()
+                val nombre = "FOR001_${parte.fecha}_${e.cuadrilla.filter { it.isLetterOrDigit() }}"
+                val columnas = listOf("COD. PARTIDA", "N°", "N° PCI", "ÍTEM", "UND", "ACTIVIDAD", "HORA INICIO", "HORA FIN",
+                    "DURACIÓN", "CANT. PERS.", "PROG. INICIAL", "PROG. FINAL", "LD/LI/EJE", "LONGITUD (m)", "ANCHO (m)",
+                    "ESPESOR (m)", "METRADO", "UND", "OBSERVACIONES")
                 val archivo = if (comoExcel) {
+                    fun t(v: String) = celdaTexto(v)
+                    fun n(v: String) = v.replace(",", "").toDoubleOrNull()?.let { Celda.Numero(it) } ?: celdaTexto(v)
+                    val dia = "%02d/%02d/%d".format(d.fecha.dayOfMonth, d.fecha.monthValue, d.fecha.year)
+                    val ficha = listOf(
+                        "Formato" to "FOR:001 · Reporte diario de ejecución - Mantenimiento rutinario",
+                        "Fecha" to dia,
+                        "Proceso" to listOf("MR", "PCI", "AT. EMERG.", "OTROS").filter { it in d.procesos }.joinToString(", "),
+                        "Cliente" to d.cliente,
+                        "Componente" to d.componente,
+                        "Ing. supervisor" to d.supervisor,
+                        "Cuadrilla" to d.cuadrilla,
+                        "Capataz" to d.capataz,
+                        "Sub tramo" to d.subtramo,
+                        "Sector" to d.sector,
+                    )
                     formatos.armarXlsx(
                         nombreArchivo = nombre,
-                        hojas = listOf(HojaXlsx(
-                            nombre = "Parte ${parte.fecha}",
-                            ficha = listOf(
-                                "Contrato" to (servicio?.name ?: ""),
-                                "Cliente" to (servicio?.cliente ?: ""),
-                                "Cuadrilla" to e.cuadrilla,
-                                "Fecha" to "%02d/%02d/%d".format(fecha.dayOfMonth, fecha.monthValue, fecha.year),
+                        hojas = listOf(
+                            HojaXlsx(
+                                nombre = "II Ejecución", ficha = ficha, columnas = columnas,
+                                anchos = listOf(13.0, 5.0, 9.0, 6.0, 6.0, 36.0, 9.0, 9.0, 9.0, 8.0, 11.0, 11.0, 9.0, 10.0, 9.0, 9.0, 10.0, 6.0, 40.0),
+                                filas = d.filas.map { f ->
+                                    listOf(t(f.codigo), n(f.numero), t(f.pci), n(f.item), t(f.unidad), t(f.actividad), t(f.horaInicio), t(f.horaFin),
+                                        t(f.duracion), n(f.personas), t(f.progInicial), t(f.progFinal), t(f.lado), n(f.longitud), n(f.ancho),
+                                        n(f.espesor), n(f.metrado), t(f.unidad), t(f.observacion))
+                                },
                             ),
-                            columnas = columnas,
-                            anchos = listOf(11.0, 22.0, 13.0, 40.0, 16.0, 7.0, 26.0, 14.0, 14.0, 9.0, 11.0, 8.0, 40.0),
-                            filas = e.registros.map { r ->
-                                listOf(
-                                    Celda.Fecha(fecha),
-                                    celdaTexto(e.cuadrilla),
-                                    celdaTexto(e.codigoDe(r)),
-                                    celdaTexto(r.actividadNombre),
-                                    celdaTexto(origenDe(r)),
-                                    e.itemDe(r)?.let { Celda.Numero(it.toDouble()) } ?: celdaTexto(null),
-                                    celdaTexto(r.tramoNombre),
-                                    celdaTexto(r.progresivaInicio?.let { progresiva(it) }),
-                                    celdaTexto(r.progresivaFin?.let { progresiva(it) }),
-                                    celdaTexto(r.lado),
-                                    Celda.Numero(r.cantidad),
-                                    celdaTexto(r.unidad),
-                                    celdaTexto(r.observacion),
-                                )
-                            },
-                        )),
+                            HojaXlsx(
+                                nombre = "III Materiales", ficha = listOf("Fecha" to dia, "Cuadrilla" to d.cuadrilla),
+                                columnas = listOf("COD. PARTIDA", "N°", "ACTIVIDAD", "MATERIALES", "CANT", "UND"),
+                                anchos = listOf(13.0, 5.0, 34.0, 30.0, 9.0, 7.0),
+                                filas = d.materiales.map { r -> listOf(t(r[0]), n(r[1]), t(r[2]), t(r[3]), n(r[4]), t(r[5])) },
+                            ),
+                            HojaXlsx(
+                                nombre = "IV Equipos", ficha = listOf("Fecha" to dia, "Cuadrilla" to d.cuadrilla),
+                                columnas = listOf("CÓDIGO", "N°", "DESCRIPCIÓN EQUIPO", "UND", "CANT"),
+                                anchos = listOf(12.0, 5.0, 34.0, 7.0, 9.0),
+                                filas = d.equipos.map { r -> listOf(t(r[0]), n(r[1]), t(r[2]), t(r[3]), n(r[4])) },
+                            ),
+                            HojaXlsx(
+                                nombre = "V Otros recursos", ficha = listOf("Fecha" to dia, "Cuadrilla" to d.cuadrilla),
+                                columnas = listOf("DESCRIPCIÓN", "UND", "CANT", "OBSERVACIONES"),
+                                anchos = listOf(34.0, 7.0, 9.0, 34.0),
+                                filas = d.otros.map { r -> listOf(t(r[0]), t(r[1]), n(r[2]), t(r[3])) },
+                            ),
+                        ),
                     )
                 } else {
                     formatos.armarCsv(
                         nombreArchivo = nombre,
                         columnas = columnas,
-                        filas = e.registros.map { r ->
-                            listOf(
-                                parte.fecha,
-                                e.cuadrilla,
-                                e.codigoDe(r) ?: "",
-                                r.actividadNombre,
-                                origenDe(r),
-                                e.itemDe(r)?.toString() ?: "",
-                                r.tramoNombre ?: "",
-                                r.progresivaInicio?.let { progresiva(it) } ?: "",
-                                r.progresivaFin?.let { progresiva(it) } ?: "",
-                                r.lado,
-                                // Punto decimal siempre, sea cual sea el idioma del teléfono
-                                "%.2f".format(java.util.Locale.US, r.cantidad),
-                                r.unidad ?: "",
-                                r.observacion ?: "",
-                            )
-                        },
+                        filas = d.filas.map { f -> f.celdas() },
                     )
                 }
-                formatos.compartir(archivo, "Parte diario ${parte.fecha}")
+                formatos.compartir(archivo, "Reporte diario ${parte.fecha}")
             }.onFailure { fallo ->
                 _estado.update { it.copy(error = fallo.enCristiano()) }
             }
@@ -562,7 +616,6 @@ class ParteViewModel @Inject constructor(
         }
     }
 
-    /** De dónde nace la actividad, como se lee en el formato. */
     private fun origenDe(r: RegistroLocal): String = when (r.origen) {
         "programacion" -> "Programación"
         "pci" -> r.pciCodigo?.let { pe.servicon.sigov.datos.codigoCortoDePci(it) } ?: "PCI"

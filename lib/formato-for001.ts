@@ -380,3 +380,91 @@ export async function for001Pdf(datos: Datos, logo?: ArrayBuffer | null) {
   pie(2)
   return doc
 }
+
+/**
+ * El FOR:001 en Excel, con las columnas de la plantilla (REV3-OBS-19): la
+ * ejecución en su hoja y materiales, equipos y otros recursos en las suyas.
+ * No se agregan columnas ajenas al formato oficial.
+ */
+export async function for001Excel(datos: Datos, nombre: string) {
+  const ExcelJS = (await import('exceljs')).default ?? (await import('exceljs'))
+  const wb = new (ExcelJS as any).Workbook()
+  wb.creator = 'SIGOV'
+  const { parte, cuadrilla, registros } = datos
+  const azul = 'FF072D70'
+  const celeste = 'FFDDEBF7'
+
+  const hoja = (titulo: string, columnas: [string, number][], filas: (string | number)[][], ficha: [string, string][]) => {
+    const ws = wb.addWorksheet(titulo)
+    ws.columns = columnas.map(([, w]) => ({ width: w }))
+    const t = ws.addRow(['REPORTE DIARIO DE EJECUCIÓN - MANTENIMIENTO RUTINARIO · FOR:001'])
+    t.getCell(1).font = { bold: true, size: 12, color: { argb: azul } }
+    for (const [k, v] of ficha) {
+      const r = ws.addRow([k, v])
+      r.getCell(1).font = { bold: true, size: 9, color: { argb: 'FF555555' } }
+      r.getCell(2).font = { size: 9 }
+    }
+    ws.addRow([])
+    const cab = ws.addRow(columnas.map(([c]) => c))
+    cab.eachCell((c: any) => {
+      c.font = { bold: true, size: 8, color: { argb: azul } }
+      c.fill = { type: 'pattern', pattern: 'solid', fgColor: { argb: celeste } }
+      c.alignment = { horizontal: 'center', vertical: 'middle', wrapText: true }
+      c.border = { top: { style: 'thin' }, bottom: { style: 'thin' }, left: { style: 'thin' }, right: { style: 'thin' } }
+    })
+    cab.height = 28
+    for (const f of filas) {
+      const r = ws.addRow(f)
+      r.eachCell({ includeEmpty: true }, (c: any) => {
+        c.font = { size: 9 }
+        c.border = { top: { style: 'hair' }, bottom: { style: 'hair' }, left: { style: 'hair' }, right: { style: 'hair' } }
+      })
+    }
+    ws.views = [{ state: 'frozen', ySplit: ficha.length + 3 }]
+  }
+
+  const origenes = new Set(registros.map((r) => r.origen))
+  const ficha: [string, string][] = [
+    ['FECHA', fecha(parte.work_date)],
+    ['PROCESO', ([['MR', 'programacion'], ['PCI', 'pci'], ['AT. EMERG.', 'emergencia'], ['OTROS', 'no_programado']] as const)
+      .filter(([, k]) => origenes.has(k)).map(([n]) => n).join(', ')],
+    ['CLIENTE', datos.cliente ?? 'COVINCA'],
+    ['COMPONENTE', [...new Set(registros.map((r) => r.activity_category).filter(Boolean))].join(', ')],
+    ['ING. SUPERVISOR', datos.supervisor ?? ''],
+    ['CUADRILLA', cuadrilla ? `${cuadrilla.code} · ${cuadrilla.name}` : ''],
+    ['CAPATAZ', datos.jefe ?? ''],
+    ['SUB TRAMO', cuadrilla?.subtramo ? `SUBTRAMO ${cuadrilla.subtramo}` : ''],
+    ['SECTOR', [...new Set(registros.map((r) => r.sector_code).filter(Boolean))].join(', ')],
+  ]
+  hoja('II Ejecución', [
+    ['COD. PARTIDA', 13], ['N°', 5], ['N° PCI', 9], ['ÍTEM', 6], ['UND', 6], ['ACTIVIDAD', 36], ['HORA INICIO', 9], ['HORA FIN', 9],
+    ['DURACIÓN', 9], ['CANT. PERS.', 8], ['PROG. INICIAL', 11], ['PROG. FINAL', 11], ['LD/LI/EJE', 9], ['LONGITUD (m)', 10],
+    ['ANCHO (m)', 9], ['ESPESOR (m)', 9], ['METRADO', 10], ['UND', 6], ['OBSERVACIONES', 40],
+  ], registros.map((r, i) => [
+    r.activity_code ?? '', r.activity_numero ?? i + 1, r.pci_code ?? '', r.pci_item_number ?? '', r.unit_symbol ?? '',
+    r.activity_name ?? '', hora(r.hora_inicio), hora(r.hora_fin), duracion(r.hora_inicio, r.hora_fin), r.personas ?? '',
+    r.prog_start_m != null ? fmtProgresiva(r.prog_start_m) : '', r.prog_end_m != null ? fmtProgresiva(r.prog_end_m) : '',
+    r.side ? codigoDeLado(r.side) : '', r.longitud_m ?? '', r.ancho_m ?? '', r.espesor_m ?? '', r.quantity ?? '',
+    r.unit_symbol ?? '', r.observation ?? '',
+  ]), ficha)
+  const porId = new Map(registros.map((r) => [r.id, r]))
+  hoja('III Materiales', [['COD. PARTIDA', 13], ['N°', 5], ['ACTIVIDAD', 34], ['MATERIALES', 30], ['CANT', 9], ['UND', 7]],
+    datos.materiales.map((m) => {
+      const r = m.registro ? porId.get(m.registro) : null
+      return [r?.activity_code ?? '', r?.activity_numero ?? '', r?.activity_name ?? '', m.nombre, m.cantidad, m.unidad]
+    }), [['FECHA', fecha(parte.work_date)]])
+  hoja('IV Equipos', [['CÓDIGO', 12], ['N°', 5], ['DESCRIPCIÓN EQUIPO', 34], ['UND', 7], ['CANT', 9]],
+    datos.recursos.filter((x) => x.tipo === 'equipo').map((x, i) => [x.codigo ?? '', i + 1, x.descripcion, x.unidad ?? '', x.cantidad ?? '']),
+    [['FECHA', fecha(parte.work_date)]])
+  hoja('V Otros recursos', [['DESCRIPCIÓN', 34], ['UND', 7], ['CANT', 9], ['OBSERVACIONES', 34]],
+    datos.recursos.filter((x) => x.tipo === 'otro').map((x) => [x.descripcion, x.unidad ?? '', x.cantidad ?? '', x.observacion ?? '']),
+    [['FECHA', fecha(parte.work_date)]])
+
+  const buf = await wb.xlsx.writeBuffer()
+  const url = URL.createObjectURL(new Blob([buf], { type: 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet' }))
+  const a = document.createElement('a')
+  a.href = url
+  a.download = nombre
+  a.click()
+  URL.revokeObjectURL(url)
+}

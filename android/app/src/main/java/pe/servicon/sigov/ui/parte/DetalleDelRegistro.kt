@@ -14,6 +14,8 @@ import androidx.compose.material.icons.outlined.Construction
 import androidx.compose.material.icons.outlined.Inventory2
 import androidx.compose.material.icons.outlined.PhotoCamera
 import androidx.compose.material.icons.outlined.Straighten
+import androidx.compose.foundation.clickable
+import androidx.compose.ui.draw.clip
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
@@ -44,6 +46,10 @@ fun DetalleDelRegistro(
     codigo: String?,
     item: Int?,
     fases: Map<String, Int>,
+    /** La meta de la partida, si viene de la programación (REV3-OBS-10). */
+    meta: Double? = null,
+    /** Las fotos de la actividad que siguen en el teléfono, para verlas por fase (REV3-OBS-16). */
+    fotos: List<pe.servicon.sigov.datos.local.EvidenciaLocal> = emptyList(),
     consumos: List<Consumo>,
     recursos: List<RecursoDelDia>,
     editable: Boolean,
@@ -55,6 +61,32 @@ fun DetalleDelRegistro(
     alTomarFoto: () -> Unit,
     alCerrar: () -> Unit,
 ) {
+    var galeria by remember { mutableStateOf<String?>(null) }
+    var ampliada by remember { mutableStateOf<java.io.File?>(null) }
+    galeria?.let { fase ->
+        val deLaFase = fotos.filter { f ->
+            if (fase in setOf("antes", "durante", "despues")) f.fase == fase else f.fase !in setOf("antes", "durante", "despues")
+        }
+        AlertDialog(
+            onDismissRequest = { galeria = null },
+            title = { Text(when (fase) { "antes" -> "Antes"; "durante" -> "Durante"; "despues" -> "Después"; else -> "General" } + " · ${deLaFase.size}") },
+            text = {
+                if (deLaFase.isEmpty()) Text("Las fotos de esta etapa ya subieron desde otro teléfono o se ven en «Fotos».")
+                else androidx.compose.foundation.lazy.LazyRow(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                    items(deLaFase.size) { k ->
+                        val f = java.io.File(deLaFase[k].rutaLocal)
+                        coil.compose.AsyncImage(
+                            model = f, contentDescription = null,
+                            contentScale = androidx.compose.ui.layout.ContentScale.Crop,
+                            modifier = Modifier.size(140.dp, 105.dp).clip(RoundedCornerShape(10.dp)).clickable { ampliada = f },
+                        )
+                    }
+                }
+            },
+            confirmButton = { TextButton(onClick = { galeria = null }) { Text("Cerrar") } },
+        )
+    }
+    ampliada?.let { pe.servicon.sigov.ui.componentes.VisorConZoom(modelo = it, descripcion = null, alCerrar = { ampliada = null }) }
     var metrado by remember(registro.clientId) {
         mutableStateOf(if (registro.cantidad > 0) Numeros.tres(registro.cantidad) else "")
     }
@@ -89,7 +121,9 @@ fun DetalleDelRegistro(
 
             // Fotos por etapa, como en el módulo PCI
             Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                ContadorPorEtapa(fases, exigeLasTres = registro.origen == "pci")
+                // Cada etapa abre sus fotos (REV3-OBS-16: «con acceso a cada galería»)
+                ContadorPorEtapa(fases, exigeLasTres = registro.origen == "pci" || registro.planItemId != null,
+                    alTocar = { f -> galeria = f })
                 Spacer(Modifier.weight(1f))
                 TextButton(onClick = alTomarFoto) {
                     Icon(Icons.Outlined.PhotoCamera, contentDescription = null, modifier = Modifier.size(18.dp))
@@ -106,9 +140,15 @@ fun DetalleDelRegistro(
                 label = { Text("Metrado ejecutado") },
                 suffix = registro.unidad?.let { u -> { Text(u) } },
                 isError = editable && (cantidad == null || cantidad <= 0.0),
-                supportingText = if (editable && (cantidad == null || cantidad <= 0.0)) {
-                    { Text("Falta el metrado: sin él la actividad no se valoriza.") }
-                } else null,
+                supportingText = when {
+                    editable && (cantidad == null || cantidad <= 0.0) -> { { Text("Falta el metrado: sin él la actividad no se valoriza.") } }
+                    // Pasar la meta no se bloquea, pero se advierte y se explica (REV3-OBS-10)
+                    editable && meta != null && cantidad != null && cantidad > meta + 1e-9 -> {
+                        { Text("Supera la meta programada (${Numeros.tres(meta)} ${registro.unidad.orEmpty()}). Anota el porqué en la observación.",
+                            color = Semaforo.PorVencer) }
+                    }
+                    else -> null
+                },
                 enabled = editable,
                 singleLine = true,
                 keyboardOptions = KeyboardOptions(keyboardType = if (registro.unidad == "und") KeyboardType.Number else KeyboardType.Decimal),
@@ -162,7 +202,7 @@ fun DetalleDelRegistro(
 
 /** A · D · DP con cuántas fotos lleva cada etapa; lo que falta, en rojo. */
 @Composable
-fun ContadorPorEtapa(fases: Map<String, Int>, exigeLasTres: Boolean) {
+fun ContadorPorEtapa(fases: Map<String, Int>, exigeLasTres: Boolean, alTocar: ((String) -> Unit)? = null) {
     val etapas = listOf("antes" to "A", "durante" to "D", "despues" to "DP")
         .filter { (f, _) -> exigeLasTres || (fases[f] ?: 0) > 0 }
     val generales = fases.filterKeys { it !in setOf("antes", "durante", "despues") }.values.sum()
@@ -176,13 +216,14 @@ fun ContadorPorEtapa(fases: Map<String, Int>, exigeLasTres: Boolean) {
                 fontWeight = FontWeight.SemiBold,
                 color = color,
                 modifier = Modifier
+                    .then(if (alTocar != null && n > 0) Modifier.clickable { alTocar(f) } else Modifier)
                     .background(color.copy(alpha = 0.10f), RoundedCornerShape(6.dp))
                     .padding(horizontal = 6.dp, vertical = 2.dp),
             )
         }
         if (generales > 0) {
             Text(
-                "Fotos $generales",
+                "General $generales",
                 style = MaterialTheme.typography.labelSmall,
                 fontWeight = FontWeight.SemiBold,
                 color = Marca.Azul,

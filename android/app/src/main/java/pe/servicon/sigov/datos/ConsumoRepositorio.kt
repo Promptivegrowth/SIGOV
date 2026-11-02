@@ -166,7 +166,8 @@ class ConsumoRepositorio @Inject constructor(
             tabla = TABLA,
             clientId = clientId,
             dependeDe = if (padreEnCola) padre else null,
-            etiqueta = "Material usado · $nombre · ${Numeros.tres(cantidad)}",
+            etiqueta = listOfNotNull("Material", nombre, Numeros.tres(cantidad) + (unidad?.let { " $it" } ?: ""),
+                registro?.actividadNombre?.let { "para $it" }, "${"%02d/%02d".format(fecha.dayOfMonth, fecha.monthValue)}").joinToString(" · "),
             cuerpo = buildJsonObject {
                 put("service_id", servicioId)
                 put("crew_id", cuadrillaId)

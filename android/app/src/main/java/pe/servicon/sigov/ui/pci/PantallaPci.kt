@@ -229,7 +229,7 @@ private fun ListaDeItems(estado: EstadoPci, vm: PciViewModel, alRegistrarFotos: 
                     Modifier.fillMaxWidth().padding(start = 12.dp, end = 12.dp, top = 12.dp),
                     horizontalArrangement = Arrangement.spacedBy(8.dp),
                 ) {
-                    listOf(Estado.POR_ATENDER, Estado.EN_EJECUCION, Estado.CONFORMES, Estado.OBSERVADOS).forEach { e ->
+                    listOf(Estado.POR_ATENDER, Estado.EN_EJECUCION, Estado.CONFORMES, Estado.VALIDADOS, Estado.OBSERVADOS).forEach { e ->
                         Contador(e, estado.cuantos(e), estado.estado == e, Modifier.weight(1f)) { vm.elegirContador(e) }
                     }
                 }
@@ -335,7 +335,7 @@ private fun ListaDeItems(estado: EstadoPci, vm: PciViewModel, alRegistrarFotos: 
         if (!general) {
             item {
                 Text(
-                    "A = Antes · D = Durante · DP = Después, con cuántas fotos lleva cada etapa. Con las tres el ítem pasa solo a Atendidos y a la validación de COVINCA.",
+                    "A = Antes · D = Durante · DP = Después, con cuántas fotos lleva cada etapa. Con las tres el ítem pasa solo a «Por validar», a la revisión de COVINCA.",
                     style = MaterialTheme.typography.labelSmall,
                     color = MaterialTheme.colorScheme.onSurfaceVariant,
                     modifier = Modifier.padding(horizontal = 16.dp, vertical = 6.dp),
@@ -524,7 +524,7 @@ private fun ContadorDeFotos(item: ItemPci) {
 /**
  * El ítem completo: la descripción entera, dónde, la foto referencial, las
  * tres fotos y, si se quiere, el metrado. No hay que «levantarlo»: con las
- * tres fotos pasa solo a Conformes.
+ * tres fotos pasa solo a «Por validar».
  */
 @Composable
 private fun FichaDelItem(
@@ -652,7 +652,7 @@ private fun FichaDelItem(
             when {
                 faltan.isNotEmpty() && item.exigeEvidencia ->
                     "Falta la foto del " + (if (faltan.size == 1) faltan[0] else faltan.dropLast(1).joinToString(", ") + " y " + faltan.last()) +
-                        ". Con las tres pasa solo a Atendidos."
+                        ". Con las tres pasa solo a «Por validar»."
                 fotosPorEnviar > 0 ->
                     "Ya tiene las tres fotos. ${if (fotosPorEnviar == 1) "1 foto sigue" else "$fotosPorEnviar fotos siguen"} en el teléfono: se envían solas al haber señal y entonces pasa a revisión de COVINCA."
                 else -> "Ya tiene las tres fotos: pasa a revisión de COVINCA."
@@ -775,10 +775,11 @@ private fun ubicacion(item: ItemPci): String =
 /** El estado dicho como en la propuesta, con el matiz que hace falta. */
 private fun etiquetaDe(item: ItemPci): String = when (estadoDe(item)) {
     Estado.CONFORMES -> when {
-        item.esConforme -> "Conforme COVINCA"
-        item.estaLevantado -> "Atendido · por revisar"
-        else -> "Atendido · por enviar"
+        item.status == "subsanado" -> "Subsanado · por validar"
+        item.estaLevantado -> "Por validar"
+        else -> "Por validar · por enviar"
     }
+    Estado.VALIDADOS -> "Conforme COVINCA"
     Estado.OBSERVADOS -> "Observado"
     Estado.EN_EJECUCION -> "En ejecución"
     else -> "Por atender"
@@ -786,7 +787,7 @@ private fun etiquetaDe(item: ItemPci): String = when (estadoDe(item)) {
 
 /** El plazo dicho como lo diría un capataz, no como una fecha. */
 private fun textoDelPlazo(item: ItemPci): String {
-    if (estadoDe(item) == Estado.CONFORMES) return ""
+    if (yaAtendido(item)) return ""
     return when (val dias = diasQueLeQuedan(item)) {
         null -> "Sin plazo"
         0 -> "Vence hoy"
@@ -805,7 +806,7 @@ private fun colorDe(p: Plazo): Color = when (p) {
 }
 
 private fun colorDelPlazo(item: ItemPci): Color {
-    if (estadoDe(item) == Estado.CONFORMES) return Semaforo.Levantado
+    if (yaAtendido(item)) return Semaforo.Levantado
     val d = diasQueLeQuedan(item) ?: return Semaforo.EnPlazo
     return when {
         d < 0 -> Semaforo.Vencido
@@ -820,6 +821,7 @@ private fun colorDe(e: Estado): Color = when (e) {
     Estado.POR_ATENDER -> Color(0xFF616161)
     Estado.EN_EJECUCION -> Semaforo.PorVencer
     Estado.CONFORMES -> Semaforo.Levantado
+    Estado.VALIDADOS -> Color(0xFF166534)
     Estado.OBSERVADOS -> Semaforo.Vencido
     Estado.PENDIENTES, Estado.TODOS -> Marca.Azul
 }

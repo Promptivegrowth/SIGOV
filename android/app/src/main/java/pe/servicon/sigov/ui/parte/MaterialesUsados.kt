@@ -105,6 +105,8 @@ fun DialogoMaterialUsado(
     insumos: List<Insumo>,
     registros: List<RegistroLocal>,
     rendimientos: List<pe.servicon.sigov.datos.Rendimiento> = emptyList(),
+    /** Lo ya anotado: no se vuelve a sugerir (REV3-OBS-18). */
+    yaAnotados: List<pe.servicon.sigov.datos.Consumo> = emptyList(),
     alCerrar: () -> Unit,
     alGuardar: (insumoId: String, nombre: String, unidad: String?, cantidad: Double, registro: RegistroLocal?) -> Unit,
 ) {
@@ -114,9 +116,12 @@ fun DialogoMaterialUsado(
     // actividades… y solo colocar la cantidad»). La cantidad estimada es la
     // que sale del metrado; se escribe la real.
     data class Sugerido(val opcion: Opcion, val estimado: Double, val registro: RegistroLocal)
-    val sugeridos = remember(rendimientos, registros, stock, insumos) {
+    val sugeridos = remember(rendimientos, registros, stock, insumos, yaAnotados) {
+        // El material que ya se anotó en una actividad no se vuelve a ofrecer
+        // para ella: así un mismo consumo no se suma dos veces (REV3-OBS-18)
+        val anotado = yaAnotados.mapNotNull { c -> c.registroClientId?.let { it to c.insumoId } }.toSet()
         registros.flatMap { r ->
-            rendimientos.filter { it.actividadId == r.actividadId }.mapNotNull { rend ->
+            rendimientos.filter { it.actividadId == r.actividadId && (r.clientId to it.insumoId) !in anotado }.mapNotNull { rend ->
                 val insumo = insumos.firstOrNull { it.id == rend.insumoId }
                 val propio = stock.firstOrNull { it.insumoId == rend.insumoId }
                 val nombre = insumo?.name ?: propio?.nombre ?: return@mapNotNull null

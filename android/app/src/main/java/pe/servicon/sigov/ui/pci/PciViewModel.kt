@@ -56,7 +56,10 @@ enum class Estado(val etiqueta: String) {
     POR_ATENDER("Por atender"),
     EN_EJECUCION("En ejecución"),
     OBSERVADOS("Observados"),
-    CONFORMES("Atendidos"),
+    // REV3-OBS-03: con sus tres fotos el ítem queda «Por validar»; «Conforme»
+    // es solo lo que COVINCA aprobó
+    CONFORMES("Por validar"),
+    VALIDADOS("Conformes"),
     TODOS("Todos"),
 }
 
@@ -77,15 +80,18 @@ fun estadoDe(item: ItemPci): Estado = when {
     item.estaObservado -> Estado.OBSERVADOS
     // Atendido es con sus tres fotos (Elvis, 26/10: un «atendido» sin la del
     // durante se contradice); lo que COVINCA ya validó queda como está
-    item.esConforme -> Estado.CONFORMES
+    item.esConforme -> Estado.VALIDADOS
     item.estaLevantado && (!item.exigeEvidencia || item.fotosCompletas) -> Estado.CONFORMES
     item.fotosCompletas -> Estado.CONFORMES
     item.estaEnAtencion || item.estaLevantado || item.fotosAntes + item.fotosDurante + item.fotosDespues > 0 -> Estado.EN_EJECUCION
     else -> Estado.POR_ATENDER
 }
 
+/** Ya salió de la cuadrilla: por validar o conforme. Ninguno corre plazo. */
+fun yaAtendido(item: ItemPci): Boolean = estadoDe(item).let { it == Estado.CONFORMES || it == Estado.VALIDADOS }
+
 fun cumple(item: ItemPci, estado: Estado): Boolean = when (estado) {
-    Estado.PENDIENTES -> estadoDe(item) != Estado.CONFORMES
+    Estado.PENDIENTES -> !yaAtendido(item)
     Estado.TODOS -> true
     else -> estadoDe(item) == estado
 }
@@ -93,7 +99,7 @@ fun cumple(item: ItemPci, estado: Estado): Boolean = when (estado) {
 /** Lo conforme ya no corre plazo. */
 fun cumple(item: ItemPci, plazo: Plazo?): Boolean {
     if (plazo == null) return true
-    if (estadoDe(item) == Estado.CONFORMES) return false
+    if (yaAtendido(item)) return false
     val d = diasQueLeQuedan(item) ?: return false
     return if (plazo == Plazo.VENCIDO) d < 0 else d in 0..plazo.dias
 }

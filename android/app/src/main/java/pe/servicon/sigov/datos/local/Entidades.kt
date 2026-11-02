@@ -180,3 +180,27 @@ data class FotosPorEnviar(
     val fase: String,
     val cuantas: Int,
 )
+
+/**
+ * Lo que se lee en Sincronización por cada registro (REV3-OBS-14): qué
+ * actividad, de dónde sale, la fecha real del parte, la progresiva y el
+ * metrado con su unidad. Antes decía solo «Pintado · 10.0».
+ */
+fun etiquetaDeRegistro(r: RegistroLocal, fecha: String?, tipo: String = "Avance"): String {
+    val origen = when {
+        r.pciItemId != null -> listOfNotNull("PCI", r.pciCodigo?.let { pe.servicon.sigov.datos.codigoCortoDePci(it) ?: it }).joinToString(" ")
+        r.planItemId != null || r.origen == "programacion" -> "Programación"
+        r.origen == "emergencia" -> "Emergencia"
+        r.origen == "observacion" -> null
+        else -> "Otros"
+    }
+    val dia = fecha?.take(10)?.split("-")?.takeIf { it.size == 3 }?.let { (a, m, d) -> "$d/$m/$a" }
+    return listOfNotNull(
+        tipo,
+        r.actividadNombre.takeIf { it.isNotBlank() },
+        origen,
+        dia,
+        pe.servicon.sigov.datos.Progresiva.rango(r.progresivaInicio, r.progresivaFin?.takeIf { it != r.progresivaInicio })?.let { "km $it" },
+        r.cantidad.takeIf { it > 0 }?.let { pe.servicon.sigov.datos.Numeros.tres(it) + (r.unidad?.let { u -> " $u" } ?: "") },
+    ).joinToString(" · ")
+}

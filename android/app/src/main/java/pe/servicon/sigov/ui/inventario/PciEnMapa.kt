@@ -74,12 +74,12 @@ enum class AvancePci(val etiqueta: String, val singular: String, val color: Colo
     // Los que no tienen ni una foto (Elvis, 26/10: «un filtro de pendientes»)
     POR_ATENDER("Pendientes", "Pendiente · sin fotos", Color(0xFF64748B)),
     EN_EJECUCION("En ejecución", "En ejecución", Color(0xFF2563EB)),
-    ATENDIDO("Atendidos", "Atendido", Color(0xFF16A34A)),
+    ATENDIDO("Atendidos / Por validar", "Por validar", Color(0xFF16A34A)),
     OBSERVADO("Observados", "Observado", Color(0xFFB91C1C)),
 }
 
 fun avanceDe(item: ItemPci): AvancePci = when (estadoDe(item)) {
-    Estado.CONFORMES -> AvancePci.ATENDIDO
+    Estado.CONFORMES, Estado.VALIDADOS -> AvancePci.ATENDIDO
     Estado.EN_EJECUCION -> AvancePci.EN_EJECUCION
     Estado.OBSERVADOS -> AvancePci.OBSERVADO
     else -> AvancePci.POR_ATENDER
