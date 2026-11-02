@@ -165,6 +165,7 @@ class FormatosPdf @Inject constructor(
         val envio = Intent(Intent.ACTION_SEND).apply {
             type = when (archivo.extension) {
                 "csv" -> "text/csv"
+                "png" -> "image/png"
                 "xlsx" -> "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
                 else -> "application/pdf"
             }
@@ -175,6 +176,128 @@ class FormatosPdf @Inject constructor(
         contexto.startActivity(
             Intent.createChooser(envio, titulo).addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
         )
+    }
+
+    /**
+     * El registro de observaciones de campo en A4 horizontal, con las
+     * páginas que hagan falta y la foto de referencia en la última columna
+     * (Elvis, 26/10: sector, progresivas, tipo de actividad, actividad,
+     * observación, metrado y «en la última columna, la fotografía»).
+     */
+    suspend fun armarObservaciones(
+        cab: CabeceraPdf,
+        resumen: String,
+        columnas: List<String>,
+        anchos: List<Float>,
+        filas: List<List<String>>,
+        fotos: List<android.graphics.Bitmap?>,
+        nombreArchivo: String,
+    ): File = withContext(Dispatchers.IO) {
+        val an = 842f
+        val al = 595f
+        val doc = PdfDocument()
+        val cabezaP = pintura(7f, true, Color.WHITE)
+        val celdaP = pintura(7.2f)
+        val borde = Paint().apply { style = Paint.Style.STROKE; strokeWidth = 0.5f; color = Color.rgb(200, 205, 215); isAntiAlias = true }
+        val interlinea = 8.6f
+        val altoFoto = 58f
+
+        // Cada fila con sus líneas: la observación larga baja de línea
+        val lineas = filas.map { fila ->
+            fila.mapIndexed { i, celda ->
+                val ancho = anchos.getOrElse(i) { 50f } - 6
+                envolver(celda, celdaP, ancho).ifEmpty { listOf("") }.take(6).map { recortar(it, celdaP, ancho) }
+            }
+        }
+        val altos = lineas.mapIndexed { i, ls ->
+            maxOf(15f, 5.5f + interlinea * (ls.maxOfOrNull { it.size } ?: 1), if (fotos.getOrNull(i) != null) altoFoto + 6f else 0f)
+        }
+        // Las páginas: la primera lleva la cabecera completa
+        val paginas = mutableListOf<List<Int>>()
+        var actual = mutableListOf<Int>()
+        var y = 130f
+        altos.forEachIndexed { i, h ->
+            if (y + h > al - 40f && actual.isNotEmpty()) { paginas += actual; actual = mutableListOf(); y = 103f }
+            actual += i; y += h
+        }
+        paginas += actual
+
+        paginas.forEachIndexed { p, indices ->
+            val pagina = doc.startPage(PdfDocument.PageInfo.Builder(an.toInt(), al.toInt(), p + 1).create())
+            val c = pagina.canvas
+            // La cabecera de marca
+            val alto = 46f
+            c.drawRect(margen, margen, margen + 120f, margen + alto, Paint().apply { color = azul })
+            c.drawText("SERVICON", margen + 60f, margen + 24f, pintura(20f, true, Color.WHITE).apply { textAlign = Paint.Align.CENTER })
+            c.drawRect(margen + 22f, margen + 32f, margen + 98f, margen + 35f, Paint().apply { color = naranja })
+            c.drawRect(margen, margen, an - margen, margen + alto, Paint().apply { style = Paint.Style.STROKE; strokeWidth = 1.1f; color = azul })
+            c.drawText("REGISTRO DE OBSERVACIONES DE CAMPO", margen + 134f, margen + 20f, pintura(12f, true, azul))
+            c.drawText(recortar(listOfNotNull(cab.contrato, cab.servicio, cab.cliente).joinToString(" · "), pintura(8f), 430f),
+                margen + 134f, margen + 34f, pintura(8f, false, Color.rgb(70, 70, 70)))
+            val der = pintura(7.5f, false, Color.rgb(60, 60, 60)).apply { textAlign = Paint.Align.RIGHT }
+            c.drawText("Fecha: ${cab.fecha.format(dia)}", an - margen - 8f, margen + 16f, der)
+            c.drawText("Página ${p + 1} de ${paginas.size}", an - margen - 8f, margen + 29f, der)
+            c.drawText("Emitido por ${cab.emitidoPor}", an - margen - 8f, margen + 42f, der)
+            var yy = margen + alto + 8f
+            if (p == 0) {
+                c.drawRect(margen, yy, an - margen, yy + 18f, Paint().apply { color = gris })
+                c.drawText(recortar(resumen, pintura(8.5f, true, azul), an - margen * 2 - 12f), margen + 6f, yy + 12.5f, pintura(8.5f, true, azul))
+                yy += 26f
+            }
+            // Títulos
+            c.drawRect(margen, yy, an - margen, yy + 15f, Paint().apply { color = azul })
+            var x = margen
+            columnas.forEachIndexed { i, col ->
+                c.drawText(recortar(col.uppercase(), cabezaP, anchos[i] - 6), x + 3f, yy + 10.5f, cabezaP)
+                x += anchos[i]
+            }
+            yy += 15f
+            indices.forEachIndexed { k, i ->
+                val h = altos[i]
+                if (k % 2 == 1) c.drawRect(margen, yy, an - margen, yy + h, Paint().apply { color = gris })
+                x = margen
+                lineas[i].forEachIndexed { col, texto ->
+                    val ancho = anchos.getOrElse(col) { 50f }
+                    c.drawRect(x, yy, x + ancho, yy + h, borde)
+                    texto.forEachIndexed { n, linea -> c.drawText(linea, x + 3f, yy + 10f + n * interlinea, celdaP) }
+                    x += ancho
+                }
+                // La foto, encajada en su celda sin deformarse
+                fotos.getOrNull(i)?.let { bmp ->
+                    val ancho = anchos.last()
+                    c.drawRect(x, yy, x + ancho, yy + h, borde)
+                    val escala = minOf((ancho - 6f) / bmp.width, altoFoto / bmp.height)
+                    val w = bmp.width * escala
+                    val hh = bmp.height * escala
+                    val l = x + (ancho - w) / 2
+                    val t = yy + (h - hh) / 2
+                    c.drawBitmap(bmp, null, android.graphics.RectF(l, t, l + w, t + hh), Paint(Paint.FILTER_BITMAP_FLAG))
+                } ?: run {
+                    val ancho = anchos.last()
+                    c.drawRect(x, yy, x + ancho, yy + h, borde)
+                    c.drawText("Sin foto", x + 4f, yy + 10f, pintura(7f, false, Color.GRAY))
+                }
+                yy += h
+            }
+            if (filas.isEmpty()) c.drawText("Sin observaciones en este filtro", margen + 4f, yy + 12f, pintura(8f, false, Color.GRAY))
+            c.drawText("Emitido desde SIGOV · ${LocalDate.now().format(dia)}", margen, al - 18f, pintura(6.5f, false, Color.GRAY))
+            c.drawText("Grupo Servicon V&D EIRL", an - margen, al - 18f, pintura(6.5f, false, Color.GRAY).apply { textAlign = Paint.Align.RIGHT })
+            doc.finishPage(pagina)
+        }
+
+        val carpeta = File(contexto.filesDir, "formatos").apply { mkdirs() }
+        val archivo = File(carpeta, "$nombreArchivo.pdf")
+        archivo.outputStream().use { doc.writeTo(it) }
+        doc.close()
+        archivo
+    }
+
+    /** Una imagen (el mapa) lista para compartir. */
+    suspend fun guardarImagen(imagen: android.graphics.Bitmap, nombreArchivo: String): File = withContext(Dispatchers.IO) {
+        val carpeta = File(contexto.filesDir, "formatos").apply { mkdirs() }
+        File(carpeta, "$nombreArchivo.png").also { f ->
+            f.outputStream().use { imagen.compress(android.graphics.Bitmap.CompressFormat.PNG, 100, it) }
+        }
     }
 
     /** Abre el PDF con el visor que tenga el equipo. */

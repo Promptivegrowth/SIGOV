@@ -30,6 +30,7 @@ import { toast } from 'sonner'
 import { mensajeAmigable } from '@/lib/errores'
 import { LADOS, codigoDeLado } from '@/lib/lados'
 import { FotoReferencial } from '@/components/shared/foto-referencial'
+import { ObservacionesPorProgramar } from '@/components/observaciones/observaciones-por-programar'
 
 const DIAS = ['Lunes', 'Martes', 'Miércoles', 'Jueves', 'Viernes', 'Sábado', 'Domingo']
 
@@ -342,6 +343,7 @@ export function ProgramacionClient() {
         actions={
           can.manage && (
             <>
+              <ObservacionesPorProgramar lunes={toISODate(monday)} />
               <Button variant="outline" asChild>
                 <Link href="/importar?kind=programacion">
                   <Upload className="size-4" />

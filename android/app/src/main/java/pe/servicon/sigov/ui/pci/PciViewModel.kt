@@ -75,9 +75,12 @@ fun diasQueLeQuedan(item: ItemPci): Int? =
  */
 fun estadoDe(item: ItemPci): Estado = when {
     item.estaObservado -> Estado.OBSERVADOS
-    item.estaLevantado -> Estado.CONFORMES
+    // Atendido es con sus tres fotos (Elvis, 26/10: un «atendido» sin la del
+    // durante se contradice); lo que COVINCA ya validó queda como está
+    item.esConforme -> Estado.CONFORMES
+    item.estaLevantado && (!item.exigeEvidencia || item.fotosCompletas) -> Estado.CONFORMES
     item.fotosCompletas -> Estado.CONFORMES
-    item.estaEnAtencion || item.fotosAntes + item.fotosDurante + item.fotosDespues > 0 -> Estado.EN_EJECUCION
+    item.estaEnAtencion || item.estaLevantado || item.fotosAntes + item.fotosDurante + item.fotosDespues > 0 -> Estado.EN_EJECUCION
     else -> Estado.POR_ATENDER
 }
 

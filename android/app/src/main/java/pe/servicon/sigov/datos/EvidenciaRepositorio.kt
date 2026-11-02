@@ -469,6 +469,11 @@ class EvidenciaRepositorio @Inject constructor(
      * Quita una foto del ítem, esté o no en este teléfono. La base no deja
      * quitarla si COVINCA ya validó el ítem.
      */
+    /** El archivo de una foto si sigue en este teléfono: mostrarla no gasta datos. */
+    suspend fun archivoLocal(clientId: String): String? = withContext(Dispatchers.IO) {
+        partes.evidencia(clientId)?.rutaLocal?.takeIf { File(it).exists() }
+    }
+
     suspend fun eliminarPorClientId(clientId: String) = withContext(Dispatchers.IO) {
         val local = partes.evidencia(clientId)
         if (local != null) eliminar(local)

@@ -2504,6 +2504,7 @@ export type Database = {
       }
       observaciones_campo: {
         Row: {
+          activity_id: string | null
           atendida_at: string | null
           atendida_por: string | null
           client_id: string | null
@@ -2516,9 +2517,12 @@ export type Database = {
           id: string
           lat: number | null
           lng: number | null
+          metrado: number | null
           nota_atencion: string | null
           observado_on: string
+          plan_item_id: string | null
           programada_on: string | null
+          progresiva_fin_m: number | null
           progresiva_m: number | null
           section_id: string | null
           service_id: string
@@ -2526,6 +2530,7 @@ export type Database = {
           updated_at: string
         }
         Insert: {
+          activity_id?: string | null
           atendida_at?: string | null
           atendida_por?: string | null
           client_id?: string | null
@@ -2538,9 +2543,12 @@ export type Database = {
           id?: string
           lat?: number | null
           lng?: number | null
+          metrado?: number | null
           nota_atencion?: string | null
           observado_on?: string
+          plan_item_id?: string | null
           programada_on?: string | null
+          progresiva_fin_m?: number | null
           progresiva_m?: number | null
           section_id?: string | null
           service_id: string
@@ -2548,6 +2556,7 @@ export type Database = {
           updated_at?: string
         }
         Update: {
+          activity_id?: string | null
           atendida_at?: string | null
           atendida_por?: string | null
           client_id?: string | null
@@ -2560,9 +2569,12 @@ export type Database = {
           id?: string
           lat?: number | null
           lng?: number | null
+          metrado?: number | null
           nota_atencion?: string | null
           observado_on?: string
+          plan_item_id?: string | null
           programada_on?: string | null
+          progresiva_fin_m?: number | null
           progresiva_m?: number | null
           section_id?: string | null
           service_id?: string
@@ -2570,6 +2582,13 @@ export type Database = {
           updated_at?: string
         }
         Relationships: [
+          {
+            foreignKeyName: "observaciones_campo_activity_id_fkey"
+            columns: ["activity_id"]
+            isOneToOne: false
+            referencedRelation: "activities_catalog"
+            referencedColumns: ["id"]
+          },
           {
             foreignKeyName: "observaciones_campo_atendida_por_fkey"
             columns: ["atendida_por"]
@@ -2597,6 +2616,20 @@ export type Database = {
             isOneToOne: false
             referencedRelation: "v_hygiene_today"
             referencedColumns: ["crew_id"]
+          },
+          {
+            foreignKeyName: "observaciones_campo_plan_item_id_fkey"
+            columns: ["plan_item_id"]
+            isOneToOne: false
+            referencedRelation: "plan_items"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "observaciones_campo_plan_item_id_fkey"
+            columns: ["plan_item_id"]
+            isOneToOne: false
+            referencedRelation: "v_plan_items"
+            referencedColumns: ["id"]
           },
           {
             foreignKeyName: "observaciones_campo_section_id_fkey"
@@ -6291,6 +6324,10 @@ export type Database = {
       }
       v_observaciones_campo: {
         Row: {
+          activity_category: string | null
+          activity_code: string | null
+          activity_id: string | null
+          activity_name: string | null
           atendida_at: string | null
           client_id: string | null
           created_at: string | null
@@ -6301,22 +6338,36 @@ export type Database = {
           descripcion: string | null
           estado: string | null
           fotos: string[] | null
+          fotos_ids: string[] | null
           id: string | null
           lat: number | null
           lng: number | null
+          metrado: number | null
           nota_atencion: string | null
           observado_on: string | null
+          plan_item_id: string | null
           programada_on: string | null
+          progresiva_fin_m: number | null
+          progresiva_fin_txt: string | null
           progresiva_m: number | null
           progresiva_txt: string | null
           section_code: string | null
           section_id: string | null
           section_name: string | null
           section_numero: number | null
+          sector_code: string | null
           service_id: string | null
           side: string | null
+          unit_symbol: string | null
         }
         Relationships: [
+          {
+            foreignKeyName: "observaciones_campo_activity_id_fkey"
+            columns: ["activity_id"]
+            isOneToOne: false
+            referencedRelation: "activities_catalog"
+            referencedColumns: ["id"]
+          },
           {
             foreignKeyName: "observaciones_campo_created_by_fkey"
             columns: ["created_by"]
@@ -6337,6 +6388,20 @@ export type Database = {
             isOneToOne: false
             referencedRelation: "v_hygiene_today"
             referencedColumns: ["crew_id"]
+          },
+          {
+            foreignKeyName: "observaciones_campo_plan_item_id_fkey"
+            columns: ["plan_item_id"]
+            isOneToOne: false
+            referencedRelation: "plan_items"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "observaciones_campo_plan_item_id_fkey"
+            columns: ["plan_item_id"]
+            isOneToOne: false
+            referencedRelation: "v_plan_items"
+            referencedColumns: ["id"]
           },
           {
             foreignKeyName: "observaciones_campo_section_id_fkey"
@@ -7707,6 +7772,16 @@ export type Database = {
         Returns: boolean
       }
       preview_pci_suspension: { Args: { p_pci_id: string }; Returns: Json }
+      programar_observacion: {
+        Args: {
+          p_activity_id?: string
+          p_crew_id?: string
+          p_fecha: string
+          p_id: string
+          p_metrado?: number
+        }
+        Returns: string
+      }
       progresiva_con_distancia: {
         Args: { p_lat: number; p_lng: number; p_section_id: string }
         Returns: Json
@@ -7733,6 +7808,10 @@ export type Database = {
       }
       quitar_del_parte: {
         Args: { p_client_id: string; p_tabla: string }
+        Returns: undefined
+      }
+      quitar_observacion: {
+        Args: { p_client_id?: string; p_id?: string }
         Returns: undefined
       }
       quitar_pagina_documento: { Args: { p_client_id: string }; Returns: Json }

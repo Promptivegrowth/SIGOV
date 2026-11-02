@@ -8,7 +8,7 @@ import { useQuery, useQueryClient } from '@tanstack/react-query'
 import { useVirtualizer } from '@tanstack/react-virtual'
 import {
   ArrowLeft, TriangleAlert, Zap, Search, Camera, CircleCheck,
-  Download, Users, RotateCcw, ChevronDown, Send, Image as ImageIcon, ArrowUpDown,
+  Download, Users, RotateCcw, ChevronDown, Send, Image as ImageIcon, ArrowUpDown, Gauge,
 } from 'lucide-react'
 import { createClient, fetchAll } from '@/lib/supabase/client'
 import { useSession } from '@/lib/hooks/use-session'
@@ -254,6 +254,13 @@ export function PciDetailClient({ pciId }: { pciId: string }) {
               <Link href="/pci">
                 <ArrowLeft className="size-4" />
                 Volver
+              </Link>
+            </Button>
+            {/* La lámina de seguimiento que COVINCA arma para cada PCI (Elvis, 26/10) */}
+            <Button variant="outline" asChild>
+              <Link href={`/pci/${pciId}/estado`}>
+                <Gauge className="size-4" />
+                Estado situacional
               </Link>
             </Button>
             {can.manage && p && (

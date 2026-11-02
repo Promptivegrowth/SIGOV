@@ -413,6 +413,12 @@ export async function reportePdf(
     fotos?: FotoInforme[]
     /** Firmas que cierran el documento */
     firmas?: FirmaInforme[]
+    /**
+     * Una foto dentro de la tabla, en la columna `key` (la última, casi
+     * siempre): `urls[i]` es la de la fila i. Elvis (26/10): «en la última
+     * columna, la fotografía de referencia».
+     */
+    fotosEnTabla?: { key: string; urls: (string | null)[] }
   }
 ) {
   const { jsPDF, autoTable } = await jspdf()
@@ -451,10 +457,16 @@ export async function reportePdf(
     y += lines.length * 4.5 + 4
   }
 
+  const enTabla = options?.fotosEnTabla
+  const colFoto = enTabla ? columns.findIndex((c) => c.key === enTabla.key) : -1
+  const fotosFila = colFoto >= 0
+    ? await Promise.all(enTabla!.urls.map((u) => (u ? imagenParaPdf(u, 420) : Promise.resolve(null))))
+    : []
+
   autoTable(doc, {
     startY: y,
     head: [columns.map((c) => c.header)],
-    body: rows.map((r) => columns.map((c) => r[c.key] ?? '—')),
+    body: rows.map((r, i) => columns.map((c, k) => (k === colFoto ? (fotosFila[i] ? '' : 'Sin foto') : r[c.key] ?? '—'))),
     theme: 'grid',
     styles: { fontSize: 7.5, cellPadding: 2, lineColor: [224, 227, 235], lineWidth: 0.1 },
     headStyles: {
@@ -466,9 +478,26 @@ export async function reportePdf(
     },
     alternateRowStyles: { fillColor: [248, 249, 252] },
     columnStyles: Object.fromEntries(
-      columns.map((c, i) => [i, { halign: c.align ?? 'left', ...(c.width ? { cellWidth: c.width } : {}) }])
+      columns.map((c, i) => [i, {
+        halign: c.align ?? 'left',
+        ...(c.width ? { cellWidth: c.width } : {}),
+        ...(i === colFoto ? { minCellHeight: 24 } : {}),
+      }])
     ),
     margin: { left: 14, right: 14, bottom: 20 },
+    rowPageBreak: 'avoid',
+    // La foto, encajada en su celda sin deformarse
+    didDrawCell: (d: any) => {
+      if (d.section !== 'body' || d.column.index !== colFoto) return
+      const img = fotosFila[d.row.index]
+      if (!img) return
+      const maxW = d.cell.width - 2
+      const maxH = d.cell.height - 2
+      const k = Math.min(maxW / img.w, maxH / img.h)
+      const w = img.w * k
+      const h = img.h * k
+      doc.addImage(img.data, 'JPEG', d.cell.x + (d.cell.width - w) / 2, d.cell.y + (d.cell.height - h) / 2, w, h)
+    },
   })
 
   // Las firmas cierran el documento, justo debajo de la tabla
@@ -502,7 +531,13 @@ export async function descargarPdf(
 export async function descargarExcel(
   nombre: string,
   meta: ReportMeta,
-  sheets: { name: string; columns: { header: string; key: string; width?: number }[]; rows: any[] }[]
+  sheets: {
+    name: string
+    columns: { header: string; key: string; width?: number }[]
+    rows: any[]
+    /** Una foto por fila dentro de la columna `key` (la URL de la fila i). */
+    fotos?: { key: string; urls: (string | null)[] }
+  }[]
 ) {
   const ExcelJS = (await import('exceljs')).default ?? (await import('exceljs'))
   const wb = new (ExcelJS as any).Workbook()
@@ -594,6 +629,20 @@ export async function descargarExcel(
         if (i % 2 === 1) cell.fill = { type: 'pattern', pattern: 'solid', fgColor: { argb: 'FFF8F9FC' } }
       })
     })
+
+    // Las fotos dentro de su celda; la fila crece para mostrarlas
+    const col = s.fotos ? s.columns.findIndex((c) => c.key === s.fotos!.key) : -1
+    if (col >= 0) {
+      const imgs = await Promise.all(s.fotos!.urls.map((u) => (u ? imagenParaPdf(u, 420) : Promise.resolve(null))))
+      imgs.forEach((img, i) => {
+        const fila = ws.getRow(5 + i)
+        if (!img) { fila.getCell(col + 1).value = 'Sin foto'; return }
+        fila.height = 90
+        const k = Math.min(150 / img.w, 112 / img.h)
+        const id = wb.addImage({ base64: img.data, extension: 'jpeg' })
+        ws.addImage(id, { tl: { col: col + 0.05, row: 4 + i + 0.05 }, ext: { width: img.w * k, height: img.h * k }, editAs: 'oneCell' })
+      })
+    }
 
     ws.autoFilter = {
       from: { row: 4, column: 1 },

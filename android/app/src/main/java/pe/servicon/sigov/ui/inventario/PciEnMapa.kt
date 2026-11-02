@@ -71,7 +71,8 @@ import pe.servicon.sigov.ui.theme.Marca
  * «homogenizar con los anteriores»). Lo que no se ha tocado va en gris.
  */
 enum class AvancePci(val etiqueta: String, val singular: String, val color: Color) {
-    POR_ATENDER("Por atender", "Por atender", Color(0xFF64748B)),
+    // Los que no tienen ni una foto (Elvis, 26/10: «un filtro de pendientes»)
+    POR_ATENDER("Pendientes", "Pendiente · sin fotos", Color(0xFF64748B)),
     EN_EJECUCION("En ejecución", "En ejecución", Color(0xFF2563EB)),
     ATENDIDO("Atendidos", "Atendido", Color(0xFF16A34A)),
     OBSERVADO("Observados", "Observado", Color(0xFFB91C1C)),

@@ -5,7 +5,9 @@ import dynamic from 'next/dynamic'
 import Image from 'next/image'
 import { useQuery, useQueryClient } from '@tanstack/react-query'
 import type { Map as MLMap } from 'maplibre-gl'
-import { MessageSquareWarning, Download, Search, X, CalendarCheck, CircleCheck, Undo2 } from 'lucide-react'
+import {
+  MessageSquareWarning, Download, Search, X, CalendarPlus, CircleCheck, Undo2, FileSpreadsheet, ImageDown, Trash2,
+} from 'lucide-react'
 import { createClient } from '@/lib/supabase/client'
 import { useSession } from '@/lib/hooks/use-session'
 import { PageHeader, PageBody } from '@/components/shared/page-header'
@@ -18,8 +20,10 @@ import { Input, Textarea } from '@/components/ui/input'
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select'
 import { Dialog, SheetContent } from '@/components/ui/dialog'
 import { SkeletonTable } from '@/components/ui/skeleton'
-import { codigoDeLado } from '@/lib/lados'
-import { descargarPdf, type ReportMeta } from '@/lib/reports'
+import { ConfirmDialog } from '@/components/forms/form-dialog'
+import { ProgramarObservacion } from '@/components/observaciones/programar-observacion'
+import { codigoDeLado, etiquetaDeLado } from '@/lib/lados'
+import { descargarExcel, descargarPdf, type ReportMeta } from '@/lib/reports'
 import { cn, fmtDate, fmtNumber, toISODate } from '@/lib/utils'
 import type { MapCanvasHandle } from '@/components/mapa/map-canvas'
 import { toast } from 'sonner'
@@ -28,13 +32,14 @@ import { mensajeAmigable } from '@/lib/errores'
 const MapCanvas = dynamic(() => import('@/components/mapa/map-canvas').then((m) => m.MapCanvas), { ssr: false })
 
 /**
- * Observaciones de campo (video de Elvis del 14/10/2026).
+ * Observaciones de campo (videos de Elvis del 14/10 y 26/10).
  *
  * Lo que el jefe de cuadrilla o el supervisor registran en la vía y no está
- * en el inventario —un desmonte, basura, una señal caída— con su progresiva
- * y sus fotos. Aquí se ven en el mapa y en la lista, se marcan
- * «programada» al incluirlas en la programación y «atendida» cuando se
- * resuelven, y la lista de lo pendiente se exporta a PDF.
+ * en el inventario —un desmonte, basura, una señal caída— con su tipo de
+ * actividad, progresiva o intervalo, metrado y fotos. Aquí se ven en el mapa
+ * y en la lista (por kilómetro), se filtran por tipo de actividad, el
+ * supervisor las jala a la programación y se exportan a Excel y PDF con la
+ * foto de referencia, y el mapa como imagen.
  */
 
 const ESTADOS = {
@@ -44,6 +49,13 @@ const ESTADOS = {
 } as const
 type Estado = keyof typeof ESTADOS
 
+/** Las de antes del 26/10 no tienen tipo de actividad. */
+const SIN_TIPO = 'Sin tipo de actividad'
+const categoriaDe = (o: any): string => o.activity_category ?? SIN_TIPO
+const tramoDe = (o: any) => (o.section_numero ? `Tramo ${o.section_numero}` : (o.section_code ?? '-'))
+const kmDe = (o: any) => (o.progresiva_txt ? o.progresiva_txt + (o.progresiva_fin_txt && o.progresiva_fin_m !== o.progresiva_m ? ' → ' + o.progresiva_fin_txt : '') : null)
+const metradoDe = (o: any) => (o.metrado != null ? `${fmtNumber(Number(o.metrado))}${o.unit_symbol ? ' ' + o.unit_symbol : ''}` : null)
+
 export function ObservacionesClient() {
   const { service, can, profile } = useSession()
   const sb = React.useMemo(() => createClient(), [])
@@ -52,14 +64,16 @@ export function ObservacionesClient() {
   const [mapa, setMapa] = React.useState<MLMap | null>(null)
   const [estado, setEstado] = React.useState<Estado | 'todas'>('pendiente')
   const [tramo, setTramo] = React.useState('todos')
+  const [categoria, setCategoria] = React.useState('todas')
   const [q, setQ] = React.useState('')
   const [abierta, setAbierta] = React.useState<any | null>(null)
-  const [exportando, setExportando] = React.useState(false)
+  const [elegida, setElegida] = React.useState<string | null>(null)
+  const [exportando, setExportando] = React.useState<string | null>(null)
 
   const datos = useQuery({
     queryKey: ['observaciones-campo', service.id],
     queryFn: async () => {
-      const { data, error } = await sb.from('v_observaciones_campo' as any).select('*')
+      const { data, error } = await sb.from('v_observaciones_campo').select('*')
         .eq('service_id', service.id).order('created_at', { ascending: false }).limit(2000)
       if (error) throw error
       return (data ?? []) as any[]
@@ -69,18 +83,29 @@ export function ObservacionesClient() {
   const todas = datos.data ?? []
   const tramos = React.useMemo(() => {
     const m = new Map<string, string>()
-    for (const o of todas) if (o.section_id) m.set(o.section_id, o.section_numero ? `Tramo ${o.section_numero}` : (o.section_code ?? 'Tramo'))
+    for (const o of todas) if (o.section_id) m.set(o.section_id, tramoDe(o))
     return [...m.entries()].sort((a, b) => a[1].localeCompare(b[1]))
   }, [todas])
 
+  const enEstado = React.useMemo(() => todas.filter((o) => estado === 'todas' || o.estado === estado), [todas, estado])
+  // Por tipo de actividad: alcantarillas, muros, puentes, berma… (Elvis, 26/10)
+  const categorias = React.useMemo(() => {
+    const m = new Map<string, number>()
+    for (const o of enEstado) m.set(categoriaDe(o), (m.get(categoriaDe(o)) ?? 0) + 1)
+    return [...m.entries()].sort((a, b) => (a[0] === SIN_TIPO ? 1 : b[0] === SIN_TIPO ? -1 : a[0].localeCompare(b[0])))
+  }, [enEstado])
+
   const visibles = React.useMemo(() => {
     const t = q.trim().toLowerCase()
-    return todas.filter((o) =>
-      (estado === 'todas' || o.estado === estado) &&
-      (tramo === 'todos' || o.section_id === tramo) &&
-      (!t || [o.descripcion, o.section_name, o.progresiva_txt, o.crew_name, o.created_by_name]
-        .filter(Boolean).some((v: string) => v.toLowerCase().includes(t))))
-  }, [todas, estado, tramo, q])
+    return enEstado
+      .filter((o) =>
+        (tramo === 'todos' || o.section_id === tramo) &&
+        (categoria === 'todas' || categoriaDe(o) === categoria) &&
+        (!t || [o.descripcion, o.section_name, o.progresiva_txt, o.crew_name, o.created_by_name, o.activity_name, o.activity_code, o.sector_code]
+          .filter(Boolean).some((v: string) => v.toLowerCase().includes(t))))
+      // Por tramo y kilómetro, como se recorre la vía
+      .sort((a, b) => (a.section_code ?? '~').localeCompare(b.section_code ?? '~') || (a.progresiva_m ?? 1e12) - (b.progresiva_m ?? 1e12))
+  }, [enEstado, tramo, categoria, q])
 
   const cuantas = (e: Estado | 'todas') => todas.filter((o) => e === 'todas' || o.estado === e).length
 
@@ -97,6 +122,11 @@ export function ObservacionesClient() {
     }
     if (!mapa.getSource('src-obs')) {
       mapa.addSource('src-obs', { type: 'geojson', data: fc as any })
+      // El halo de la elegida en la lista
+      mapa.addLayer({
+        id: 'l-obs-sel', type: 'circle', source: 'src-obs', filter: ['==', ['get', 'id'], ''],
+        paint: { 'circle-color': '#f96414', 'circle-opacity': 0.35, 'circle-radius': 22 },
+      })
       mapa.addLayer({
         id: 'l-obs', type: 'circle', source: 'src-obs',
         paint: {
@@ -107,8 +137,8 @@ export function ObservacionesClient() {
       })
       mapa.on('click', 'l-obs', (e) => {
         const id = e.features?.[0]?.properties?.id
-        const o = (datos.data ?? []).find((x) => x.id === id)
-        if (o) setAbierta(o)
+        const o = (qc.getQueryData(['observaciones-campo', service.id]) as any[] | undefined)?.find((x) => x.id === id)
+        if (o) { setElegida(o.id); setAbierta(o) }
       })
       mapa.on('mouseenter', 'l-obs', () => { mapa.getCanvas().style.cursor = 'pointer' })
       mapa.on('mouseleave', 'l-obs', () => { mapa.getCanvas().style.cursor = '' })
@@ -120,68 +150,133 @@ export function ObservacionesClient() {
       const lngs = pts.map((c) => c[0]); const lats = pts.map((c) => c[1])
       mapaRef.current?.fitTo([Math.min(...lngs), Math.min(...lats), Math.max(...lngs), Math.max(...lats)], 70)
     }
-  }, [mapa, visibles, datos.data])
+  }, [mapa, visibles, qc, service.id])
+
+  React.useEffect(() => {
+    if (mapa?.getLayer('l-obs-sel')) mapa.setFilter('l-obs-sel', ['==', ['get', 'id'], elegida ?? ''])
+  }, [mapa, elegida, visibles])
+
+  // Tocar una de la lista lleva el mapa a ese punto (Elvis, 26/10)
+  const elegir = (o: any) => {
+    setElegida(o.id)
+    if (o.lat != null && o.lng != null) mapaRef.current?.flyTo(o.lng, o.lat, 15)
+    setAbierta(o)
+  }
+
+  const refrescar = () => qc.invalidateQueries({ queryKey: ['observaciones-campo'] })
 
   const cambiarEstado = async (o: any, nuevo: Estado, nota?: string) => {
-    const { error } = await sb.from('observaciones_campo' as any)
+    const { error } = await sb.from('observaciones_campo')
       .update({ estado: nuevo, ...(nota != null ? { nota_atencion: nota || null } : {}) } as any).eq('id', o.id)
     if (error) { toast.error(mensajeAmigable(error)); return }
     toast.success(nuevo === 'atendida' ? 'Observación atendida' : nuevo === 'programada' ? 'Observación programada' : 'Observación pendiente otra vez')
-    qc.invalidateQueries({ queryKey: ['observaciones-campo'] })
+    refrescar()
     setAbierta(null)
   }
 
-  const exportar = async () => {
-    setExportando(true)
+  // ── Exportar (Elvis, 26/10) ─────────────────────────────────────────
+  const filtroLegible = [
+    estado === 'todas' ? 'Todas' : ESTADOS[estado].label + 's',
+    categoria !== 'todas' && categoria,
+    tramo !== 'todos' && tramos.find(([id]) => id === tramo)?.[1],
+  ].filter(Boolean).join(' · ')
+
+  const meta = (): ReportMeta => ({
+    titulo: 'Observaciones de campo',
+    subtitulo: filtroLegible,
+    servicio: service.name,
+    cliente: (service as any).client_name,
+    contrato: (service as any).contract_code,
+    periodo: `Al ${fmtDate(new Date())}`,
+    generadoPor: profile.full_name ?? '',
+  })
+
+  /** La primera foto de cada una, firmada: va en la última columna. */
+  const fotosDeLaLista = async () => {
+    const rutas = visibles.map((o) => (o.fotos ?? [])[0] ?? null)
+    const conRuta = rutas.filter(Boolean) as string[]
+    if (!conRuta.length) return rutas.map(() => null)
+    const { data } = await sb.storage.from('evidencias').createSignedUrls(conRuta, 3600)
+    const porRuta = new Map((data ?? []).map((f) => [f.path, f.signedUrl]))
+    return rutas.map((r) => (r ? porRuta.get(r) ?? null : null))
+  }
+
+  const filas = () => visibles.map((o, i) => ({
+    n: i + 1,
+    sector: o.sector_code ?? '-',
+    tramo: tramoDe(o),
+    prog_ini: o.progresiva_txt ?? '-',
+    prog_fin: o.progresiva_fin_txt && o.progresiva_fin_m !== o.progresiva_m ? o.progresiva_fin_txt : '-',
+    lado: o.side ? etiquetaDeLado(o.side) : '-',
+    tipo: o.activity_category ?? '-',
+    codigo: o.activity_code ?? '-',
+    actividad: o.activity_name ?? '-',
+    actividad_cod: [o.activity_code, o.activity_name].filter(Boolean).join(' · ') || '-',
+    observacion: o.descripcion,
+    metrado: o.metrado != null ? Number(o.metrado) : '-',
+    unidad: o.unit_symbol ?? '-',
+    metrado_txt: metradoDe(o) ?? '-',
+    estado: ESTADOS[o.estado as Estado]?.label ?? o.estado,
+    fecha: fmtDate(o.observado_on),
+    registro: [o.created_by_name, o.crew_name].filter(Boolean).join(' · '),
+    foto: '',
+  }))
+
+  const exportarExcel = async () => {
+    setExportando('excel')
     try {
-      const meta: ReportMeta = {
-        titulo: 'Observaciones de campo',
-        subtitulo: estado === 'todas' ? 'Todas' : ESTADOS[estado].label + 's',
-        servicio: service.name,
-        cliente: (service as any).client_name,
-        contrato: (service as any).contract_code,
-        periodo: `Al ${fmtDate(new Date())}` + (tramo !== 'todos' ? ' · ' + (tramos.find(([id]) => id === tramo)?.[1] ?? '') : ''),
-        generadoPor: profile.full_name ?? '',
-      }
-      const rows = visibles.map((o) => ({
-        fecha: fmtDate(o.observado_on),
-        tramo: o.section_numero ? `Tramo ${o.section_numero}` : (o.section_code ?? '-'),
-        progresiva: o.progresiva_txt ?? '-',
-        lado: o.side ? codigoDeLado(o.side) : '-',
-        observacion: o.descripcion,
-        registro: [o.created_by_name, o.crew_name].filter(Boolean).join(' · '),
-        fotos: (o.fotos ?? []).length,
-        estado: ESTADOS[o.estado as Estado]?.label ?? o.estado,
-      }))
-      // Una foto por observación, para ubicarla al programar (hasta 24)
-      const conFoto = visibles.filter((o) => (o.fotos ?? []).length).slice(0, 24)
-      const { data: firmadas } = conFoto.length
-        ? await sb.storage.from('evidencias').createSignedUrls(conFoto.map((o) => o.fotos[0]), 3600)
-        : { data: [] }
-      const fotos = conFoto.flatMap((o, i) => {
-        const url = firmadas?.[i]?.signedUrl
-        if (!url) return []
-        return [{
-          url,
-          titulo: o.descripcion,
-          pie: [o.section_numero ? `Tramo ${o.section_numero}` : o.section_code, o.progresiva_txt && `km ${o.progresiva_txt}`,
-            o.side && `lado ${codigoDeLado(o.side)}`, fmtDate(o.observado_on)].filter(Boolean).join(' · '),
-        }]
-      })
-      await descargarPdf('SIGOV_OBSERVACIONES_' + toISODate(new Date()), meta, [
+      await descargarExcel('SIGOV_OBSERVACIONES_' + toISODate(new Date()), meta(), [{
+        name: 'Observaciones',
+        columns: [
+          { header: 'N.º', key: 'n', width: 6 },
+          { header: 'Sector', key: 'sector', width: 9 },
+          { header: 'Tramo', key: 'tramo', width: 10 },
+          { header: 'Progresiva inicial', key: 'prog_ini', width: 15 },
+          { header: 'Progresiva final', key: 'prog_fin', width: 15 },
+          { header: 'Lado', key: 'lado', width: 12 },
+          { header: 'Tipo de actividad', key: 'tipo', width: 22 },
+          { header: 'Código', key: 'codigo', width: 13 },
+          { header: 'Actividad', key: 'actividad', width: 34 },
+          { header: 'Observación', key: 'observacion', width: 42 },
+          { header: 'Metrado', key: 'metrado', width: 10 },
+          { header: 'Unidad', key: 'unidad', width: 8 },
+          { header: 'Estado', key: 'estado', width: 12 },
+          { header: 'Fecha', key: 'fecha', width: 12 },
+          { header: 'Registró', key: 'registro', width: 24 },
+          { header: 'Fotografía de referencia', key: 'foto', width: 23 },
+        ],
+        rows: filas(),
+        fotos: { key: 'foto', urls: await fotosDeLaLista() },
+      }])
+    } catch (e) {
+      toast.error(mensajeAmigable(e, 'No se pudo exportar'))
+    } finally {
+      setExportando(null)
+    }
+  }
+
+  const exportarPdf = async () => {
+    setExportando('pdf')
+    try {
+      await descargarPdf('SIGOV_OBSERVACIONES_' + toISODate(new Date()), meta(), [
+        { header: 'N.º', key: 'n', width: 8, align: 'center' as const },
+        { header: 'Sector', key: 'sector', width: 13 },
+        { header: 'Tramo', key: 'tramo', width: 15 },
+        { header: 'Prog. inicial', key: 'prog_ini', width: 18 },
+        { header: 'Prog. final', key: 'prog_fin', width: 18 },
+        { header: 'Lado', key: 'lado', width: 16 },
+        { header: 'Tipo de actividad', key: 'tipo', width: 25 },
+        { header: 'Actividad', key: 'actividad_cod', width: 40 },
         // La observación se lleva el ancho que sobra de la hoja horizontal
-        { header: 'Fecha', key: 'fecha', width: 20 },
-        { header: 'Tramo', key: 'tramo', width: 17 },
-        { header: 'Progresiva', key: 'progresiva', width: 21 },
-        { header: 'Lado', key: 'lado', width: 12 },
         { header: 'Observación', key: 'observacion' },
-        { header: 'Registró', key: 'registro', width: 52 },
-        { header: 'Fotos', key: 'fotos', align: 'center' as const, width: 13 },
-        { header: 'Estado', key: 'estado', width: 22 },
-      ], rows, {
+        { header: 'Metrado', key: 'metrado_txt', width: 17 },
+        { header: 'Estado', key: 'estado', width: 18 },
+        { header: 'Foto', key: 'foto', width: 34 },
+      ], filas(), {
         landscape: true,
-        fotos,
+        fotosEnTabla: { key: 'foto', urls: await fotosDeLaLista() },
         kpis: [
+          { label: 'En este reporte', value: fmtNumber(visibles.length) },
           { label: 'Pendientes', value: fmtNumber(cuantas('pendiente')) },
           { label: 'Programadas', value: fmtNumber(cuantas('programada')) },
           { label: 'Atendidas', value: fmtNumber(cuantas('atendida')) },
@@ -190,8 +285,68 @@ export function ObservacionesClient() {
     } catch (e) {
       toast.error(mensajeAmigable(e, 'No se pudo exportar'))
     } finally {
-      setExportando(false)
+      setExportando(null)
     }
+  }
+
+  /** El mapa con los puntos del filtro, como imagen (Elvis: «exportar mapa»). */
+  const exportarMapa = () => {
+    if (!mapa) return
+    setExportando('mapa')
+    // El lienzo del mapa solo se puede leer en el cuadro que se acaba de pintar
+    mapa.once('render', () => {
+      try {
+        const lienzo = mapa.getCanvas()
+        const banda = 56
+        const c = document.createElement('canvas')
+        c.width = lienzo.width
+        c.height = lienzo.height + banda * 2
+        const ctx = c.getContext('2d')!
+        ctx.fillStyle = '#072d70'
+        ctx.fillRect(0, 0, c.width, banda)
+        // El texto se recorta al ancho del mapa, que puede ser angosto
+        const encajar = (t: string, max: number) => {
+          let s = t
+          while (s.length > 1 && ctx.measureText(s).width > max) s = s.slice(0, -2) + '…'
+          return s
+        }
+        ctx.fillStyle = '#ffffff'
+        ctx.font = 'bold 20px system-ui, sans-serif'
+        ctx.fillText(encajar('Observaciones de campo', c.width - 40), 20, 25)
+        ctx.font = '13px system-ui, sans-serif'
+        ctx.fillText(encajar(service.name, c.width - 40), 20, 45)
+        ctx.drawImage(lienzo, 0, banda)
+        // La leyenda, abajo
+        ctx.fillStyle = '#ffffff'
+        ctx.fillRect(0, banda + lienzo.height, c.width, banda)
+        ctx.font = '15px system-ui, sans-serif'
+        let x = 20
+        const y = banda + lienzo.height + 24
+        for (const [k, v] of Object.entries(ESTADOS)) {
+          const n = visibles.filter((o) => o.estado === k).length
+          if (!n) continue
+          ctx.fillStyle = v.color
+          ctx.beginPath(); ctx.arc(x + 7, y - 5, 7, 0, Math.PI * 2); ctx.fill()
+          ctx.fillStyle = '#1c2238'
+          const t = `${v.label}s: ${n}`
+          ctx.fillText(t, x + 20, y)
+          x += ctx.measureText(t).width + 44
+        }
+        // El filtro y la fecha, en la segunda línea de la leyenda
+        ctx.fillStyle = '#6b7280'
+        ctx.font = '13px system-ui, sans-serif'
+        ctx.fillText(encajar(`${filtroLegible} · ${fmtDate(new Date())} · SIGOV`, c.width - 40), 20, y + 22)
+        const a = document.createElement('a')
+        a.href = c.toDataURL('image/png')
+        a.download = `SIGOV_MAPA_OBSERVACIONES_${toISODate(new Date())}.png`
+        a.click()
+      } catch (e) {
+        toast.error(mensajeAmigable(e, 'No se pudo exportar el mapa'))
+      } finally {
+        setExportando(null)
+      }
+    })
+    mapa.triggerRepaint()
   }
 
   return (
@@ -199,11 +354,19 @@ export function ObservacionesClient() {
       <PageHeader
         icon={MessageSquareWarning}
         title="Observaciones de campo"
-        description="Lo que la cuadrilla o el supervisor encuentran en la vía y no está en el inventario: desmonte, basura, señales caídas… con su progresiva y fotos, para programarlo."
+        description="Lo que la cuadrilla o el supervisor encuentran en la vía y no está en el inventario: con su tipo de actividad, progresiva, metrado y fotos, para programarlo."
         actions={
-          <Button variant="outline" onClick={exportar} loading={exportando} disabled={!visibles.length}>
-            <Download className="size-4" /> Exportar PDF
-          </Button>
+          <>
+            <Button variant="outline" onClick={exportarMapa} loading={exportando === 'mapa'} disabled={!mapa || !!exportando}>
+              <ImageDown className="size-4" /> Imagen del mapa
+            </Button>
+            <Button variant="outline" onClick={exportarExcel} loading={exportando === 'excel'} disabled={!visibles.length || !!exportando}>
+              <FileSpreadsheet className="size-4" /> Excel
+            </Button>
+            <Button variant="outline" onClick={exportarPdf} loading={exportando === 'pdf'} disabled={!visibles.length || !!exportando}>
+              <Download className="size-4" /> PDF
+            </Button>
+          </>
         }
       />
       <PageBody className="space-y-4">
@@ -217,8 +380,15 @@ export function ObservacionesClient() {
               <span className="font-bold tabular-nums">{cuantas(e)}</span>
             </button>
           ))}
+          <Select value={categoria} onValueChange={setCategoria}>
+            <SelectTrigger className="w-56"><SelectValue /></SelectTrigger>
+            <SelectContent>
+              <SelectItem value="todas">Todas las actividades</SelectItem>
+              {categorias.map(([c, n]) => <SelectItem key={c} value={c}>{c} · {n}</SelectItem>)}
+            </SelectContent>
+          </Select>
           <Select value={tramo} onValueChange={setTramo}>
-            <SelectTrigger className="w-44"><SelectValue /></SelectTrigger>
+            <SelectTrigger className="w-40"><SelectValue /></SelectTrigger>
             <SelectContent>
               <SelectItem value="todos">Todos los tramos</SelectItem>
               {tramos.map(([id, t]) => <SelectItem key={id} value={id}>{t}</SelectItem>)}
@@ -226,12 +396,12 @@ export function ObservacionesClient() {
           </Select>
           <div className="relative min-w-52 flex-1 sm:max-w-xs">
             <Search className="text-muted-foreground absolute top-1/2 left-3 size-3.5 -translate-y-1/2" />
-            <Input placeholder="Buscar observación, progresiva…" value={q} onChange={(e) => setQ(e.target.value)} className="pl-9" />
+            <Input placeholder="Buscar observación, actividad, km…" value={q} onChange={(e) => setQ(e.target.value)} className="pl-9" />
             {q && <button onClick={() => setQ('')} className="text-muted-foreground absolute top-1/2 right-3 -translate-y-1/2" aria-label="Limpiar"><X className="size-3.5" /></button>}
           </div>
         </div>
 
-        <div className="grid gap-4 xl:grid-cols-[1fr_460px]">
+        <div className="grid gap-4 xl:grid-cols-[1fr_480px]">
           <div className="relative h-[calc(100dvh-17rem)] min-h-[440px] overflow-hidden rounded-xl border border-border">
             <MapCanvas ref={mapaRef} onReady={setMapa} className="absolute inset-0" initialZoom={6} showFullscreen />
           </div>
@@ -244,13 +414,17 @@ export function ObservacionesClient() {
                 <ul className="divide-y divide-border">
                   {visibles.map((o) => (
                     <li key={o.id}>
-                      <button onClick={() => setAbierta(o)} className="hover:bg-secondary/40 flex w-full items-start gap-3 px-4 py-3 text-left">
+                      <button onClick={() => elegir(o)}
+                        className={cn('hover:bg-secondary/40 flex w-full items-start gap-3 px-4 py-3 text-left', elegida === o.id && 'bg-primary/6')}>
                         <span className="mt-1.5 size-2.5 shrink-0 rounded-full" style={{ background: ESTADOS[o.estado as Estado]?.color }} />
                         <span className="min-w-0 flex-1">
                           <span className="block text-[13px] font-semibold">{o.descripcion}</span>
+                          {(o.activity_name || o.activity_category) && (
+                            <span className="text-primary block truncate text-[11.5px]">{[o.activity_category, o.activity_name].filter(Boolean).join(' · ')}</span>
+                          )}
                           <span className="text-muted-foreground block text-[11.5px]">
-                            {[o.section_numero ? `Tramo ${o.section_numero}` : o.section_code, o.progresiva_txt && `km ${o.progresiva_txt}`,
-                              o.side && `lado ${codigoDeLado(o.side)}`, fmtDate(o.observado_on), o.created_by_name].filter(Boolean).join(' · ')}
+                            {[o.sector_code ? `Sector ${o.sector_code}` : tramoDe(o), kmDe(o) && `km ${kmDe(o)}`,
+                              o.side && `lado ${codigoDeLado(o.side)}`, metradoDe(o), fmtDate(o.observado_on), o.created_by_name].filter(Boolean).join(' · ')}
                           </span>
                         </span>
                         <Badge className={ESTADOS[o.estado as Estado]?.className}>{ESTADOS[o.estado as Estado]?.label}</Badge>
@@ -264,26 +438,65 @@ export function ObservacionesClient() {
         </div>
       </PageBody>
 
-      {abierta && <Ficha o={abierta} puedeCambiar={can.manage} alCerrar={() => setAbierta(null)} alCambiar={cambiarEstado} />}
+      {abierta && (
+        <Ficha
+          o={abierta}
+          puedeGestionar={can.manage}
+          puedeEditar={can.manage || (abierta.created_by === profile.id && abierta.estado === 'pendiente')}
+          alCerrar={() => setAbierta(null)}
+          alCambiar={cambiarEstado}
+          alActualizar={async () => {
+            await refrescar()
+            const nueva = (qc.getQueryData(['observaciones-campo', service.id]) as any[] | undefined)?.find((x) => x.id === abierta.id)
+            setAbierta(nueva ?? null)
+          }}
+        />
+      )}
     </>
   )
 }
 
-function Ficha({ o, puedeCambiar, alCerrar, alCambiar }: {
-  o: any; puedeCambiar: boolean; alCerrar: () => void; alCambiar: (o: any, e: Estado, nota?: string) => void
+function Ficha({ o, puedeGestionar, puedeEditar, alCerrar, alCambiar, alActualizar }: {
+  o: any
+  puedeGestionar: boolean
+  puedeEditar: boolean
+  alCerrar: () => void
+  alCambiar: (o: any, e: Estado, nota?: string) => void
+  alActualizar: () => Promise<void>
 }) {
   const sb = React.useMemo(() => createClient(), [])
   const [nota, setNota] = React.useState(o.nota_atencion ?? '')
   const [grande, setGrande] = React.useState<string | null>(null)
+  const [programando, setProgramando] = React.useState(false)
+  const [quitar, setQuitar] = React.useState<null | { tipo: 'obs' } | { tipo: 'foto'; llave: string }>(null)
   const urls = useQuery({
-    queryKey: ['observacion-fotos', o.id],
+    queryKey: ['observacion-fotos', o.id, (o.fotos ?? []).join('|')],
     queryFn: async () => {
       const rutas = (o.fotos ?? []) as string[]
       if (!rutas.length) return []
       const { data } = await sb.storage.from('evidencias').createSignedUrls(rutas, 3600)
-      return (data ?? []).map((f) => f.signedUrl).filter(Boolean) as string[]
+      return rutas.map((r, i) => ({ url: data?.[i]?.signedUrl ?? null, llave: (o.fotos_ids ?? [])[i] ?? null }))
     },
   })
+
+  const quitarFoto = async (llave: string) => {
+    const { error } = await sb.rpc('dar_de_baja_evidencia', { p_client_id: llave })
+    if (error) { toast.error(mensajeAmigable(error)); return }
+    toast.success('Foto quitada')
+    await alActualizar()
+  }
+  const quitarObservacion = async () => {
+    const { error } = await sb.rpc('quitar_observacion', { p_id: o.id } as any)
+    if (error) { toast.error(mensajeAmigable(error)); return }
+    toast.success('Observación quitada')
+    await alActualizar()
+    alCerrar()
+  }
+
+  const dato = (t: string, v: React.ReactNode, ancho?: boolean) => (
+    <div className={cn(ancho && 'col-span-2')}><dt className="text-muted-foreground text-[11px]">{t}</dt><dd>{v || '—'}</dd></div>
+  )
+
   return (
     <Dialog open onOpenChange={(v) => !v && alCerrar()}>
       <SheetContent side="right" className="w-full max-w-lg gap-0 overflow-y-auto p-0">
@@ -291,29 +504,57 @@ function Ficha({ o, puedeCambiar, alCerrar, alCambiar }: {
           <Badge className={ESTADOS[o.estado as Estado]?.className}>{ESTADOS[o.estado as Estado]?.label}</Badge>
           <h2 className="text-[16px] font-semibold leading-snug">{o.descripcion}</h2>
           <dl className="grid grid-cols-2 gap-3 text-[12.5px]">
-            <div><dt className="text-muted-foreground text-[11px]">Tramo</dt><dd>{o.section_numero ? `Tramo ${o.section_numero} · ` : ''}{o.section_name ?? '—'}</dd></div>
-            <div><dt className="text-muted-foreground text-[11px]">Progresiva</dt><dd>{o.progresiva_txt ?? '—'}</dd></div>
-            <div><dt className="text-muted-foreground text-[11px]">Lado</dt><dd>{o.side ? codigoDeLado(o.side) : '—'}</dd></div>
-            <div><dt className="text-muted-foreground text-[11px]">Fecha</dt><dd>{fmtDate(o.observado_on)}</dd></div>
-            <div className="col-span-2"><dt className="text-muted-foreground text-[11px]">Registró</dt><dd>{[o.created_by_name, o.crew_name].filter(Boolean).join(' · ') || '—'}</dd></div>
-            {o.programada_on && <div><dt className="text-muted-foreground text-[11px]">Programada</dt><dd>{fmtDate(o.programada_on)}</dd></div>}
-            {o.atendida_at && <div><dt className="text-muted-foreground text-[11px]">Atendida</dt><dd>{fmtDate(o.atendida_at)}</dd></div>}
+            {dato('Tipo de actividad', o.activity_category)}
+            {dato('Actividad', [o.activity_code, o.activity_name].filter(Boolean).join(' · '))}
+            {dato('Tramo', `${o.section_numero ? `Tramo ${o.section_numero} · ` : ''}${o.section_name ?? ''}`)}
+            {dato('Sector', o.sector_code)}
+            {dato('Progresiva inicial', o.progresiva_txt)}
+            {dato('Progresiva final', o.progresiva_fin_txt && o.progresiva_fin_m !== o.progresiva_m ? o.progresiva_fin_txt : null)}
+            {dato('Lado', o.side ? etiquetaDeLado(o.side) : null)}
+            {dato('Metrado', metradoDe(o))}
+            {dato('Fecha', fmtDate(o.observado_on))}
+            {dato('Registró', [o.created_by_name, o.crew_name].filter(Boolean).join(' · '))}
+            {o.programada_on && dato('Programada para', fmtDate(o.programada_on))}
+            {o.atendida_at && dato('Atendida', fmtDate(o.atendida_at))}
           </dl>
-          <div className="flex flex-wrap gap-2">
-            {(urls.data ?? []).map((u) => (
-              <button key={u} onClick={() => setGrande(u)} className="bg-secondary relative size-28 overflow-hidden rounded-lg border border-border">
-                <Image src={u} alt="" fill sizes="112px" className="object-cover" unoptimized />
-              </button>
-            ))}
+          <div>
+            <p className="text-muted-foreground mb-2 text-[11px]">Fotos ({(o.fotos ?? []).length})</p>
+            <div className="flex flex-wrap gap-2">
+              {(urls.data ?? []).map((f, i) => (
+                <div key={f.llave ?? i} className="relative">
+                  <button onClick={() => f.url && setGrande(f.url)} className="bg-secondary relative block size-28 overflow-hidden rounded-lg border border-border">
+                    {f.url && <Image src={f.url} alt="" fill sizes="112px" className="object-cover" unoptimized />}
+                  </button>
+                  {/* La que salió mal se quita; la observación lleva al menos una */}
+                  {puedeEditar && f.llave && (o.fotos ?? []).length > 1 && (
+                    <button onClick={() => setQuitar({ tipo: 'foto', llave: f.llave! })} aria-label="Quitar foto"
+                      className="absolute top-1 right-1 grid size-6 place-items-center rounded-full bg-black/60 text-white hover:bg-black/80">
+                      <X className="size-3.5" />
+                    </button>
+                  )}
+                </div>
+              ))}
+            </div>
           </div>
-          {puedeCambiar && (
+          {puedeGestionar && (
             <div className="space-y-2 border-t border-border pt-4">
-              <Textarea value={nota} onChange={(e) => setNota(e.target.value)} rows={2} placeholder="Nota: cuándo se programó, qué se hizo…" />
+              {o.estado === 'pendiente' && (
+                <Button className="w-full" onClick={() => setProgramando(true)}>
+                  <CalendarPlus className="size-4" />Programar (jalar a la programación)
+                </Button>
+              )}
+              <Textarea value={nota} onChange={(e) => setNota(e.target.value)} rows={2} placeholder="Nota: qué se hizo…" />
               <div className="flex flex-wrap gap-2">
-                {o.estado !== 'programada' && <Button variant="outline" onClick={() => alCambiar(o, 'programada', nota)}><CalendarCheck className="size-4" />Programada</Button>}
-                {o.estado !== 'atendida' && <Button onClick={() => alCambiar(o, 'atendida', nota)}><CircleCheck className="size-4" />Atendida</Button>}
-                {o.estado !== 'pendiente' && <Button variant="ghost" onClick={() => alCambiar(o, 'pendiente', nota)}><Undo2 className="size-4" />Volver a pendiente</Button>}
+                {o.estado !== 'atendida' && <Button variant="outline" onClick={() => alCambiar(o, 'atendida', nota)}><CircleCheck className="size-4" />Atendida</Button>}
+                {o.estado === 'atendida' && <Button variant="ghost" onClick={() => alCambiar(o, 'pendiente', nota)}><Undo2 className="size-4" />Volver a pendiente</Button>}
               </div>
+            </div>
+          )}
+          {puedeEditar && (
+            <div className="border-t border-border pt-4">
+              <Button variant="ghost" className="text-destructive hover:text-destructive" onClick={() => setQuitar({ tipo: 'obs' })}>
+                <Trash2 className="size-4" />Quitar observación
+              </Button>
             </div>
           )}
         </div>
@@ -325,6 +566,20 @@ function Ficha({ o, puedeCambiar, alCerrar, alCambiar }: {
           </SheetContent>
         </Dialog>
       )}
+      {programando && <ProgramarObservacion o={o} onClose={() => setProgramando(false)} onDone={() => { void alActualizar() }} />}
+      <ConfirmDialog
+        open={!!quitar}
+        onOpenChange={() => setQuitar(null)}
+        title={quitar?.tipo === 'foto' ? '¿Quitar esta foto?' : '¿Quitar la observación?'}
+        description={quitar?.tipo === 'foto'
+          ? 'Se quita de la observación; las demás fotos se quedan.'
+          : `«${o.descripcion}» se quita con sus fotos${o.plan_item_id ? ' y su partida programada (si aún no empezó)' : ''}. Úsalo si se registró por error.`}
+        confirmLabel="Sí, quitar"
+        onConfirm={async () => {
+          if (quitar?.tipo === 'foto') await quitarFoto(quitar.llave)
+          else await quitarObservacion()
+        }}
+      />
     </Dialog>
   )
 }

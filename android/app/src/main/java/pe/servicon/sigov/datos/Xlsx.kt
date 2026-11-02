@@ -38,6 +38,13 @@ class HojaXlsx(
     val filas: List<List<Celda>>,
     /** Ancho de cada columna, en caracteres. */
     val anchos: List<Double> = columnas.map { (it.length + 4).coerceIn(10, 40).toDouble() },
+    /**
+     * Fotos dentro de la tabla (JPEG), por índice de fila de [filas]: van en
+     * la columna [columnaDeImagen] y esa fila crece para mostrarla (Elvis,
+     * 26/10: «en la última columna, la fotografía de referencia»).
+     */
+    val imagenes: Map<Int, ByteArray> = emptyMap(),
+    val columnaDeImagen: Int = columnas.size - 1,
 )
 
 object Xlsx {
@@ -58,19 +65,66 @@ object Xlsx {
                 zip.write(xml.toByteArray(Charsets.UTF_8))
                 zip.closeEntry()
             }
-            parte("[Content_Types].xml", tiposDeContenido(hojas.size))
+            parte("[Content_Types].xml", tiposDeContenido(hojas.size, hojas.mapIndexedNotNull { i, h -> if (h.imagenes.isNotEmpty()) i + 1 else null }))
             parte("_rels/.rels", RELS_RAIZ)
             parte("xl/workbook.xml", libro(hojas))
             parte("xl/_rels/workbook.xml.rels", relacionesDelLibro(hojas.size))
             parte("xl/styles.xml", ESTILOS)
             hojas.forEachIndexed { i, h -> parte("xl/worksheets/sheet${i + 1}.xml", hoja(h)) }
+            // Las fotos: un dibujo por hoja que las tenga, cada foto en su celda
+            var medio = 0
+            hojas.forEachIndexed { i, h ->
+                if (h.imagenes.isEmpty()) return@forEachIndexed
+                val n = i + 1
+                parte("xl/worksheets/_rels/sheet$n.xml.rels", relacionDelDibujo(n))
+                val filaTitulos = h.ficha.size + (if (h.ficha.isEmpty()) 1 else 2)
+                val dibujo = StringBuilder(DIBUJO_INICIO)
+                val rels = StringBuilder(RELS_INICIO)
+                h.imagenes.entries.sortedBy { it.key }.forEachIndexed { k, (fila, bytes) ->
+                    medio++
+                    zip.putNextEntry(ZipEntry("xl/media/image$medio.jpeg"))
+                    zip.write(bytes)
+                    zip.closeEntry()
+                    rels.append(relacionDeImagen("rId${k + 1}", medio))
+                    // La fila (base 0) de la foto: los títulos van en filaTitulos
+                    dibujo.append(anclaDeImagen(h.columnaDeImagen, filaTitulos + fila, k + 1))
+                }
+                dibujo.append("</xdr:wsDr>")
+                rels.append("</Relationships>")
+                parte("xl/drawings/drawing$n.xml", dibujo.toString())
+                parte("xl/drawings/_rels/drawing$n.xml.rels", rels.toString())
+            }
         }
     }
+
+    // 4:3, unos 152 × 114 px, con un pequeño margen dentro de la celda
+    private fun anclaDeImagen(col: Int, fila: Int, n: Int) =
+        "<xdr:oneCellAnchor><xdr:from><xdr:col>$col</xdr:col><xdr:colOff>38100</xdr:colOff>" +
+            "<xdr:row>$fila</xdr:row><xdr:rowOff>38100</xdr:rowOff></xdr:from>" +
+            "<xdr:ext cx=\"1447800\" cy=\"1085850\"/><xdr:pic><xdr:nvPicPr><xdr:cNvPr id=\"${n + 1}\" name=\"Foto $n\"/>" +
+            "<xdr:cNvPicPr><a:picLocks noChangeAspect=\"1\"/></xdr:cNvPicPr></xdr:nvPicPr>" +
+            "<xdr:blipFill><a:blip r:embed=\"rId$n\"/><a:stretch><a:fillRect/></a:stretch></xdr:blipFill>" +
+            "<xdr:spPr><a:xfrm><a:off x=\"0\" y=\"0\"/><a:ext cx=\"1447800\" cy=\"1085850\"/></a:xfrm>" +
+            "<a:prstGeom prst=\"rect\"><a:avLst/></a:prstGeom></xdr:spPr></xdr:pic><xdr:clientData/></xdr:oneCellAnchor>"
+
+    private fun relacionDeImagen(id: String, medio: Int) =
+        "<Relationship Id=\"$id\" Type=\"http://schemas.openxmlformats.org/officeDocument/2006/relationships/image\" Target=\"../media/image$medio.jpeg\"/>"
+
+    private fun relacionDelDibujo(n: Int) =
+        "<?xml version=\"1.0\" encoding=\"UTF-8\" standalone=\"yes\"?><Relationships xmlns=\"http://schemas.openxmlformats.org/package/2006/relationships\">" +
+            "<Relationship Id=\"rId1\" Type=\"http://schemas.openxmlformats.org/officeDocument/2006/relationships/drawing\" Target=\"../drawings/drawing$n.xml\"/></Relationships>"
+
+    private const val DIBUJO_INICIO =
+        "<?xml version=\"1.0\" encoding=\"UTF-8\" standalone=\"yes\"?><xdr:wsDr xmlns:xdr=\"http://schemas.openxmlformats.org/drawingml/2006/spreadsheetDrawing\" " +
+            "xmlns:a=\"http://schemas.openxmlformats.org/drawingml/2006/main\" xmlns:r=\"http://schemas.openxmlformats.org/officeDocument/2006/relationships\">"
+
+    private const val RELS_INICIO =
+        "<?xml version=\"1.0\" encoding=\"UTF-8\" standalone=\"yes\"?><Relationships xmlns=\"http://schemas.openxmlformats.org/package/2006/relationships\">"
 
     private fun hoja(h: HojaXlsx): String {
         val sb = StringBuilder()
         sb.append("""<?xml version="1.0" encoding="UTF-8" standalone="yes"?>""")
-        sb.append("""<worksheet xmlns="http://schemas.openxmlformats.org/spreadsheetml/2006/main">""")
+        sb.append("""<worksheet xmlns="http://schemas.openxmlformats.org/spreadsheetml/2006/main" xmlns:r="http://schemas.openxmlformats.org/officeDocument/2006/relationships">""")
 
         val filaTitulos = h.ficha.size + (if (h.ficha.isEmpty()) 1 else 2)
         val ultimaFila = filaTitulos + h.filas.size
@@ -102,9 +156,11 @@ object Xlsx {
         h.columnas.forEachIndexed { i, t -> sb.append(celda("${columna(i)}$n", Celda.Texto(t), CABECERA)) }
         sb.append("</row>")
 
-        for (fila in h.filas) {
+        h.filas.forEachIndexed { indice, fila ->
             n++
-            sb.append("<row r=\"$n\">")
+            // Con foto, la fila crece para mostrarla (90 pt ≈ 120 px)
+            if (indice in h.imagenes) sb.append("<row r=\"$n\" ht=\"90\" customHeight=\"1\">")
+            else sb.append("<row r=\"$n\">")
             fila.forEachIndexed { i, c ->
                 val estilo = when (c) {
                     is Celda.Numero -> NUMERO
@@ -119,6 +175,7 @@ object Xlsx {
         if (h.filas.isNotEmpty()) sb.append("<autoFilter ref=\"A$filaTitulos:$ultimaCol$ultimaFila\"/>")
         sb.append("<pageMargins left=\"0.5\" right=\"0.5\" top=\"0.6\" bottom=\"0.6\" header=\"0.3\" footer=\"0.3\"/>")
         sb.append("<pageSetup orientation=\"landscape\" paperSize=\"9\" fitToWidth=\"1\" fitToHeight=\"0\"/>")
+        if (h.imagenes.isNotEmpty()) sb.append("<drawing r:id=\"rId1\"/>")
         sb.append("</worksheet>")
         return sb.toString()
     }
@@ -158,11 +215,15 @@ object Xlsx {
         }
     }
 
-    private fun tiposDeContenido(hojas: Int) = buildString {
+    private fun tiposDeContenido(hojas: Int, conDibujo: List<Int> = emptyList()) = buildString {
         append("""<?xml version="1.0" encoding="UTF-8" standalone="yes"?>""")
         append("""<Types xmlns="http://schemas.openxmlformats.org/package/2006/content-types">""")
         append("""<Default Extension="rels" ContentType="application/vnd.openxmlformats-package.relationships+xml"/>""")
         append("""<Default Extension="xml" ContentType="application/xml"/>""")
+        append("""<Default Extension="jpeg" ContentType="image/jpeg"/>""")
+        for (i in conDibujo) {
+            append("""<Override PartName="/xl/drawings/drawing$i.xml" ContentType="application/vnd.openxmlformats-officedocument.drawing+xml"/>""")
+        }
         append("""<Override PartName="/xl/workbook.xml" ContentType="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet.main+xml"/>""")
         append("""<Override PartName="/xl/styles.xml" ContentType="application/vnd.openxmlformats-officedocument.spreadsheetml.styles+xml"/>""")
         for (i in 1..hojas) {
