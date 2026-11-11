@@ -74,6 +74,17 @@ class Configuracion @Inject constructor(
     @Volatile
     var subirOriginalesUnaVez: Boolean = false
 
+    /**
+     * Esta instalación de la app. El jefe y el subjefe usan la misma cuenta
+     * desde dos celulares (Elvis, 11/11): la nube solo toma como copia un
+     * segundo avance de la misma partida si viene del mismo celular.
+     */
+    val idDeInstalacion: String by lazy {
+        guardado.getString(CLAVE_INSTALACION, null) ?: java.util.UUID.randomUUID().toString().also {
+            guardado.edit().putString(CLAVE_INSTALACION, it).apply()
+        }
+    }
+
     fun volverAlContrato() {
         guardado.edit().remove(CLAVE_SELLO).apply()
         _sello.value = null
@@ -117,6 +128,7 @@ class Configuracion @Inject constructor(
         const val CLAVE_ORIGINALES = "originales_con_datos"
         const val CLAVE_MODO_ORIGINALES = "modo_originales"
         const val CLAVE_ORDEN_PCI = "orden_pci"
+        const val CLAVE_INSTALACION = "id_instalacion"
     }
 }
 

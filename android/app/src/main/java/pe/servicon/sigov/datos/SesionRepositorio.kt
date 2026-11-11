@@ -4,6 +4,7 @@ import android.content.Context
 import dagger.hilt.android.qualifiers.ApplicationContext
 import io.github.jan.supabase.SupabaseClient
 import io.github.jan.supabase.gotrue.SessionStatus
+import io.github.jan.supabase.gotrue.SignOutScope
 import io.github.jan.supabase.gotrue.auth
 import io.github.jan.supabase.gotrue.providers.builtin.Email
 import io.github.jan.supabase.postgrest.postgrest
@@ -169,7 +170,7 @@ class SesionRepositorio @Inject constructor(
 
     suspend fun entrar(correo: String, contrasena: String) {
         supabase.auth.signInWith(Email) {
-            this.email = correo.trim()
+            this.email = Usuario.correo(correo)
             this.password = contrasena
         }
         supabase.auth.currentUserOrNull()?.id?.let { usuarioRecordado = it }
@@ -178,7 +179,8 @@ class SesionRepositorio @Inject constructor(
 
     suspend fun salir() {
         olvidar()
-        supabase.auth.signOut()
+        // Solo este celular: el jefe y el subjefe comparten la cuenta
+        supabase.auth.signOut(SignOutScope.LOCAL)
     }
 
     /**

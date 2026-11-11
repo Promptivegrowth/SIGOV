@@ -36,6 +36,8 @@ data class Tramo(
     val numero: Int? = null,
     /** El trazado oficial (GeoJSON LineString): ubica una progresiva sin señal. */
     val geom: kotlinx.serialization.json.JsonElement? = null,
+    /** Puntos [progresiva, fracción del trazo] de los hitos kilométricos (0122). */
+    val calibracion: kotlinx.serialization.json.JsonElement? = null,
 )
 
 @Serializable

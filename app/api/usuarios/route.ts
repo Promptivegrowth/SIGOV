@@ -82,7 +82,7 @@ export async function POST(req: NextRequest) {
   const body = await req.json().catch(() => null)
   if (!body?.email || !body?.full_name || !body?.role || !body?.service_id) {
     return NextResponse.json(
-      { error: 'Faltan datos: correo, nombre, rol y servicio son obligatorios' },
+      { error: 'Faltan datos: usuario, nombre, rol y servicio son obligatorios' },
       { status: 400 }
     )
   }
@@ -95,6 +95,9 @@ export async function POST(req: NextRequest) {
     return prohibido('Solo un administrador de la plataforma puede crear administradores')
   }
 
+  if (body.password && String(body.password).length < 8) {
+    return NextResponse.json({ error: 'La contraseña debe tener al menos 8 caracteres' }, { status: 400 })
+  }
   const password: string = body.password || `Sigov${Math.random().toString(36).slice(2, 8)}!`
 
   // 1. Cuenta en Auth
@@ -107,7 +110,7 @@ export async function POST(req: NextRequest) {
 
   if (authErr) {
     const msg = authErr.message.includes('already been registered')
-      ? 'Ya existe un usuario con ese correo'
+      ? 'Ya existe una cuenta con ese usuario o correo'
       : authErr.message
     return NextResponse.json({ error: msg }, { status: 400 })
   }

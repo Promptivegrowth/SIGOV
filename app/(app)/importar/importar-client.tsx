@@ -65,7 +65,7 @@ export function ImportarClient() {
       const [acts, secs, crews, units, types, sectores] = await Promise.all([
         sb.from('activities_catalog').select('id, code, name').eq('service_id', service.id).is('deleted_at', null),
         sb.from('road_sections').select('id, code, name').eq('service_id', service.id).is('deleted_at', null),
-        sb.from('crews').select('id, code, name, jefe_nombre').eq('service_id', service.id).is('deleted_at', null),
+        sb.from('crews').select('id, code, name, jefe_nombre, subjefe_nombre').eq('service_id', service.id).is('deleted_at', null),
         sb.from('units').select('id, code, symbol'),
         sb.from('asset_types').select('id, code, name'),
         // El control del PCI nombra el sector (2.1, 2.2…): su tramo
@@ -83,12 +83,13 @@ export function ImportarClient() {
             .map((x: any) => [normKey(String(x.code)), x.section_id] as [string, string]),
           ...toMap(secs.data ?? [], ['code', 'name']),
         ]),
-        // La cuadrilla por código, nombre o el nombre de su jefe (ENCARGADO del PCI)
+        // La cuadrilla por código, nombre o el nombre de su jefe o subjefe
+        // (ENCARGADO del PCI: Augusto es el subjefe de la de José Ramos)
         crew: new Map([
-          ...(crews.data ?? []).filter((c: any) => c.jefe_nombre).flatMap((c: any) => [
-            [normKey(c.jefe_nombre), c.id] as [string, string],
-            [normKey(String(c.jefe_nombre).trim().split(/\s+/)[0]), c.id] as [string, string],
-          ]),
+          ...(crews.data ?? []).flatMap((c: any) => [c.jefe_nombre, c.subjefe_nombre].filter(Boolean).flatMap((nombre: string) => [
+            [normKey(nombre), c.id] as [string, string],
+            [normKey(String(nombre).trim().split(/\s+/)[0]), c.id] as [string, string],
+          ])),
           ...toMap(crews.data ?? [], ['code', 'name']),
         ]),
         unit: toMap(units.data ?? [], ['code', 'symbol']),

@@ -2,7 +2,7 @@
 
 import * as React from 'react'
 import { useQuery, useQueryClient } from '@tanstack/react-query'
-import { Camera, BellRing, Save } from 'lucide-react'
+import { Camera, BellRing, MapPin, Save } from 'lucide-react'
 import { toast } from 'sonner'
 import { createClient } from '@/lib/supabase/client'
 import { useSession } from '@/lib/hooks/use-session'
@@ -206,6 +206,44 @@ export function AjustesDelServicio() {
                 disabled={!can.manage}
               />
             </label>
+          </CardContent>
+        </Card>
+
+        {/* Elvis (respuesta 7, 11/11): la mayor precisión posible. La
+            progresiva se ubica con los hitos kilométricos (0122), así que
+            estas distancias pueden ser de decenas de metros. */}
+        <Card>
+          <CardHeader className="pb-3">
+            <CardTitle className="flex items-center gap-2 text-[15px]">
+              <MapPin className="size-4" />
+              Precisión de la ubicación
+            </CardTitle>
+            <CardDescription className="text-[12px]">
+              La progresiva se ubica sobre la vía con los hitos kilométricos del inventario. El
+              GPS del celular suele tener entre 3 y 10 m de error, y el registro queda además al
+              costado de la vía: por debajo de 20 m el aviso saltaría casi siempre.
+            </CardDescription>
+          </CardHeader>
+          <CardContent className="grid grid-cols-1 gap-3 sm:grid-cols-3">
+            {([
+              ['aviso_gps_m', 'Aviso de GPS (m)', 30, 'Observación lejos de su progresiva'],
+              ['reubicar_activo_m', 'Inventario a la vía (m)', 50, 'Más lejos, va a su progresiva'],
+              ['reubicar_avance_m', 'Avance a la vía (m)', 50, 'Más lejos, va a su progresiva'],
+            ] as const).map(([clave, label, omision, detalle]) => (
+              <label key={clave} className="block">
+                <span className="text-muted-foreground mb-1.5 block text-[11.5px] font-medium uppercase tracking-wide">
+                  {label}
+                </span>
+                <Input
+                  type="number"
+                  min={5}
+                  value={actual?.ubicacion?.[clave] ?? omision}
+                  onChange={(e) => cambiar('ubicacion', clave, Math.max(5, Number(e.target.value)))}
+                  disabled={!can.manage}
+                />
+                <span className="text-muted-foreground mt-1 block text-[11px]">{detalle}</span>
+              </label>
+            ))}
           </CardContent>
         </Card>
       </div>

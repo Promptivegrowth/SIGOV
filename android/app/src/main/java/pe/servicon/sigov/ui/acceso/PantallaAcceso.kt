@@ -87,7 +87,7 @@ fun PantallaAcceso(
             OutlinedTextField(
                 value = estado.correo,
                 onValueChange = vm::correoCambio,
-                label = { Text("Correo") },
+                label = { Text("Usuario o correo") },
                 leadingIcon = { Icon(Icons.Outlined.Mail, contentDescription = null) },
                 singleLine = true,
                 enabled = !estado.cargando,

@@ -549,6 +549,15 @@ function Ficha({ o, delPunto = [], alAbrirOtra, puedeGestionar, puedeEditar, alC
     },
   })
 
+  // Desde cuántos metros avisar: es un ajuste del contrato (0122)
+  const { service } = useSession()
+  const ajustes = useQuery({
+    queryKey: ['ajustes', service.id],
+    queryFn: async () => (await sb.rpc('ajustes_del_servicio', { p_service_id: service.id })).data as any,
+    staleTime: 10 * 60_000,
+  })
+  const avisoGps = Number(ajustes.data?.ubicacion?.aviso_gps_m ?? 30)
+
   const quitarFoto = async (llave: string) => {
     const { error } = await sb.rpc('dar_de_baja_evidencia', { p_client_id: llave })
     if (error) { toast.error(mensajeAmigable(error)); return }
@@ -576,9 +585,10 @@ function Ficha({ o, delPunto = [], alAbrirOtra, puedeGestionar, puedeEditar, alC
             {o.codigo && <span className="text-muted-foreground font-mono text-[12px]">{o.codigo}</span>}
           </div>
           <h2 className="text-[16px] font-semibold leading-snug">{o.descripcion}</h2>
-          {o.gps_distancia_m > 2000 && (
+          {o.gps_distancia_m > avisoGps && (
             <p className="text-destructive text-[12.5px] font-medium">
-              La ubicación GPS quedó a {(o.gps_distancia_m / 1000).toFixed(1)} km de la progresiva registrada. Verifique el dato.
+              La ubicación GPS quedó a {o.gps_distancia_m >= 1000 ? `${(o.gps_distancia_m / 1000).toFixed(1)} km` : `${Math.round(o.gps_distancia_m)} m`} de
+              la progresiva registrada. Verifique el dato.
             </p>
           )}
           <dl className="grid grid-cols-2 gap-3 text-[12.5px]">

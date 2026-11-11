@@ -27,6 +27,7 @@ import { pushSupported, pushPermission, enablePush, isStandalone, isIOS } from '
 import { toast } from 'sonner'
 import { mensajeAmigable } from '@/lib/errores'
 import { RendimientosForm } from '@/components/config/rendimientos-form'
+import { correoDeUsuario, usuarioDeCorreo, usuarioValido } from '@/lib/usuario'
 
 export function ConfiguracionClient() {
   const { service, services, can, profile, switchService } = useSession()
@@ -119,7 +120,11 @@ export function ConfiguracionClient() {
 
   const userFields: FormField[] = [
     { name: 'full_name', label: 'Nombre completo', type: 'text', required: true, span: 2, placeholder: 'Marco Quispe Ramos' },
-    { name: 'email', label: 'Correo electrónico', type: 'email', required: true, placeholder: 'capataz@gruposervicon.pe' },
+    // Sin correo: SERVICON define usuario y contraseña (Elvis, 11/11)
+    { name: 'email', label: 'Usuario o correo', type: 'text', required: true, placeholder: 'jramos',
+      hint: 'Un usuario (jramos) o un correo completo', showIf: () => !userForm.row },
+    { name: 'password', label: 'Contraseña', type: 'text', placeholder: 'Se genera si la dejas vacía',
+      hint: 'Mínimo 8 caracteres', showIf: () => !userForm.row },
     { name: 'role', label: 'Rol en el servicio', type: 'select', required: true, options: roleOptions },
     { name: 'dni', label: 'DNI', type: 'text', placeholder: '43128907' },
     { name: 'phone', label: 'Teléfono', type: 'tel', placeholder: '+51 987 654 321' },
@@ -142,6 +147,11 @@ export function ConfiguracionClient() {
         .filter((m: any) => m.role === 'jefe_cuadrilla')
         .map((m: any) => ({ value: m.profiles.id, label: m.profiles.full_name })),
     },
+    // Como figuran en el control del PCI (ENCARGADO): así el importador
+    // reconoce la cuadrilla. El subjefe entra con la cuenta del jefe.
+    { name: 'jefe_nombre', label: 'Jefe en el control PCI', type: 'text', placeholder: 'José Ramos' },
+    { name: 'subjefe_nombre', label: 'Subjefe', type: 'text', placeholder: 'Augusto',
+      hint: 'Usa la misma cuenta del jefe' },
     { name: 'color', label: 'Color en el mapa', type: 'color', defaultValue: '#0EA5E9' },
     { name: 'vehicle', label: 'Vehículo', type: 'text', placeholder: 'Camioneta Toyota Hilux 4x4' },
     { name: 'plate', label: 'Placa', type: 'text', placeholder: 'B7K-842' },
@@ -195,14 +205,26 @@ export function ConfiguracionClient() {
   // ─── Acciones ───────────────────────────────────────────────────────────
   const saveUser = async (v: any) => {
     const isEdit = !!userForm.row
+    if (!isEdit && !usuarioValido(v.email ?? '')) {
+      toast.error('Usuario no válido', { description: 'Usa letras, números, punto o guion (3 a 40), o un correo completo.' })
+      return
+    }
+    if (!isEdit && v.password && String(v.password).length < 8) {
+      toast.error('La contraseña debe tener al menos 8 caracteres')
+      return
+    }
     const res = await fetch('/api/usuarios', {
       method: isEdit ? 'PATCH' : 'POST',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ ...v, id: userForm.row?.profiles?.id, service_id: service.id }),
+      body: JSON.stringify({
+        ...v,
+        ...(isEdit ? {} : { email: correoDeUsuario(v.email), password: v.password || undefined }),
+        id: userForm.row?.profiles?.id, service_id: service.id,
+      }),
     })
     const json = await res.json()
     if (!res.ok) { toast.error(mensajeAmigable(json.error, 'No se pudo guardar el usuario')); return }
-    if (!isEdit && json.password) setNewCred({ email: json.email, password: json.password })
+    if (!isEdit && json.password) setNewCred({ email: usuarioDeCorreo(json.email), password: json.password })
     toast.success(isEdit ? 'Usuario actualizado' : 'Usuario creado')
     refresh()
   }
@@ -212,6 +234,8 @@ export function ConfiguracionClient() {
       service_id: service.id,
       code: v.code, name: v.name,
       leader_id: v.leader_id || null,
+      jefe_nombre: v.jefe_nombre?.trim() || null,
+      subjefe_nombre: v.subjefe_nombre?.trim() || null,
       color: v.color || '#0EA5E9',
       vehicle: v.vehicle || null, plate: v.plate || null,
       is_active: !!v.is_active,
@@ -369,7 +393,7 @@ export function ConfiguracionClient() {
                                 </Avatar>
                                 <div className="min-w-0">
                                   <p className="truncate font-medium">{p?.full_name}</p>
-                                  <p className="text-muted-foreground truncate text-[11px]">{p?.email}</p>
+                                  <p className="text-muted-foreground truncate text-[11px]">{usuarioDeCorreo(p?.email)}</p>
                                 </div>
                               </div>
                             </td>
@@ -508,6 +532,7 @@ export function ConfiguracionClient() {
                         <h3 className="text-[14.5px] font-semibold">{c.name}</h3>
                         <p className="text-muted-foreground text-[12px]">
                           {c.code} · Jefe: {c.profiles?.full_name ?? 'sin asignar'}
+                          {c.subjefe_nombre ? ` · Subjefe: ${c.subjefe_nombre}` : ''}
                           {c.vehicle ? ` · ${c.vehicle}` : ''}
                           {c.plate ? ` (${c.plate})` : ''}
                         </p>
@@ -890,7 +915,7 @@ export function ConfiguracionClient() {
         title={userForm.row ? 'Editar usuario' : 'Nuevo usuario'}
         description={userForm.row
           ? 'Actualiza los datos y el rol de la persona dentro de este servicio.'
-          : 'Se crea la cuenta y se le da acceso a este servicio. La contraseña inicial se genera automáticamente.'}
+          : 'Se crea la cuenta y se le da acceso a este servicio. Sin correo, basta un usuario; si no escribes la contraseña, se genera una.'}
         fields={userFields}
         initial={userForm.row ? { ...userForm.row.profiles, role: userForm.row.role } : undefined}
         submitLabel={userForm.row ? 'Guardar cambios' : 'Crear usuario'}
@@ -991,7 +1016,7 @@ export function ConfiguracionClient() {
         onOpenChange={() => setNewCred(null)}
         destructive={false}
         title="Usuario creado"
-        description={newCred ? `Entrega estas credenciales a ${newCred.email}. La contraseña no se vuelve a mostrar.` : ''}
+        description={newCred ? `Usuario: ${newCred.email} · Contraseña: ${newCred.password}. La contraseña no se vuelve a mostrar: cópiala y entrégala.` : ''}
         confirmLabel="Ya la copié"
         onConfirm={async () => {
           if (newCred) {

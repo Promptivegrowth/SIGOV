@@ -13,6 +13,7 @@ import { DEMO_USERS, DEMO_PASSWORD, ROLES, APP } from '@/lib/constants'
 import { cn, initials } from '@/lib/utils'
 import { toast } from 'sonner'
 import { mensajeAmigable } from '@/lib/errores'
+import { correoDeUsuario } from '@/lib/usuario'
 
 const DEMO_MODE = process.env.NEXT_PUBLIC_DEMO_MODE === 'true'
 
@@ -45,11 +46,11 @@ export function LoginClient() {
     async (mail: string, pass: string, tag = 'form') => {
       setLoading(tag)
       setError(null)
-      const { error } = await supabase.auth.signInWithPassword({ email: mail, password: pass })
+      const { error } = await supabase.auth.signInWithPassword({ email: correoDeUsuario(mail), password: pass })
       if (error) {
         setError(
           error.message === 'Invalid login credentials'
-            ? 'Credenciales incorrectas. Verifica el correo y la contraseña.'
+            ? 'Credenciales incorrectas. Verifica el usuario y la contraseña.'
             : mensajeAmigable(error, 'No se pudo iniciar sesión. Inténtalo de nuevo.')
         )
         setLoading(null)
@@ -119,13 +120,14 @@ export function LoginClient() {
           className="mt-6 space-y-4"
         >
           <div className="space-y-1.5">
-            <Label htmlFor="email">Correo electrónico</Label>
+            <Label htmlFor="email">Usuario o correo</Label>
             <Input
               id="email"
-              type="email"
+              type="text"
               autoComplete="username"
-              inputMode="email"
-              placeholder="usuario@gruposervicon.pe"
+              autoCapitalize="none"
+              spellCheck={false}
+              placeholder="jramos o usuario@gruposervicon.pe"
               value={email}
               onChange={(e) => setEmail(e.target.value)}
               required

@@ -59,8 +59,19 @@ data class AjustesDeAlertas(
  * Se bajan con los catálogos y se guardan en el equipo: sellar una foto en
  * la quebrada no puede depender de que haya señal para preguntar cómo.
  */
+/**
+ * Cuánto puede separarse un registro de su progresiva, en metros. La
+ * progresiva se ubica con los hitos kilométricos (Trazado), así que pueden
+ * ser decenas de metros (Elvis, respuesta 7, 11/11).
+ */
+@Serializable
+data class AjustesDeUbicacion(
+    @SerialName("aviso_gps_m") val avisoGpsM: Double = 30.0,
+)
+
 @Serializable
 data class AjustesDelServicio(
     val sello: Sello = Sello(),
     val alertas: AjustesDeAlertas = AjustesDeAlertas(),
+    val ubicacion: AjustesDeUbicacion = AjustesDeUbicacion(),
 )

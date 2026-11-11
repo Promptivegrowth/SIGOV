@@ -101,7 +101,9 @@ export function SessionProvider({
 
   const signOut = React.useCallback(async () => {
     const sb = createClient()
-    await sb.auth.signOut()
+    // Solo este equipo: la cuenta de una cuadrilla o del visor COVINCA la
+    // usan varias personas a la vez, y salir no debe sacar a las demás.
+    await sb.auth.signOut({ scope: 'local' })
     localStorage.removeItem(STORAGE_KEY)
     router.push('/login')
     router.refresh()

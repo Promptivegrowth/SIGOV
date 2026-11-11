@@ -1,5 +1,6 @@
 package pe.servicon.sigov.ui.inventario
 
+import kotlin.math.roundToInt
 import android.graphics.Bitmap
 import android.graphics.BitmapFactory
 import androidx.compose.foundation.BorderStroke
@@ -140,8 +141,9 @@ data class FiltrosObs(
 /** Lo que se mide a lo largo de la vía lleva progresiva final (REV3-OBS-35). */
 fun esLineal(unidad: String?) = unidad?.trim()?.lowercase() in setOf("m", "ml", "m²", "m2", "km")
 
-/** A partir de esta distancia entre el GPS y la progresiva se avisa (REV3-OBS-37). */
-private const val UMBRAL_GPS_M = 2000.0
+/** Metros o kilómetros, según cuánto sea. */
+private fun distanciaLegible(m: Double): String =
+    if (m >= 1000) "${"%.1f".format(m / 1000.0)} km" else "${m.roundToInt()} m"
 
 data class EstadoObservaciones(
     val cargando: Boolean = true,
@@ -168,6 +170,11 @@ data class EstadoObservaciones(
     val formularioBase: ObservacionDeCampo? = null,
     /** Metros entre el GPS y la progresiva, cuando hay que preguntar. */
     val avisoGps: Double? = null,
+    /**
+     * Desde cuántos metros se pregunta (REV3-OBS-37). Es un ajuste del
+     * contrato: Elvis pidió la mayor precisión posible (respuesta 7, 11/11).
+     */
+    val umbralGps: Double = 30.0,
     val aviso: String? = null,
     val error: String? = null,
 ) {
@@ -237,9 +244,11 @@ class ObservacionesViewModel @Inject constructor(
                 val unidades = campo.unidades().associate { it.id to it.symbol }
                 val perfil = runCatching { sesion.perfil() }.getOrNull()
                 val lista = repo.lista(c.servicioId)
+                val umbral = campo.ajustes(c.servicioId).ubicacion.avisoGpsM
                 _estado.update {
                     it.copy(
                         cargando = false, lista = lista, tramos = tramos, actividades = actividades, unidades = unidades,
+                        umbralGps = umbral,
                         tramoPorDefecto = tramos.firstOrNull { t -> t.id == c.tramoId },
                         usuarioId = perfil?.id,
                         esGestor = perfil?.role in setOf("admin", "supervisor", "residente"),
@@ -290,7 +299,7 @@ class ObservacionesViewModel @Inject constructor(
             if (!gpsConfirmado && puntoId == null && punto != null && tramo != null && progresiva != null) {
                 val sobreLaVia = Trazado.punto(tramo, progresiva)
                 val metros = sobreLaVia?.let { (lat, lng) -> Trazado.distancia(punto.latitud, punto.longitud, lat, lng) }
-                if (metros != null && metros > UMBRAL_GPS_M) {
+                if (metros != null && metros > _estado.value.umbralGps) {
                     _estado.update { it.copy(guardando = false, avisoGps = metros) }
                     return@launch
                 }
@@ -641,6 +650,7 @@ fun PantallaObservaciones(
         DetalleObservacion(
             o = actual,
             delPunto = estado.delMismoPunto(actual),
+            umbralGps = estado.umbralGps,
             puedeEditar = estado.puedeEditar(actual),
             vm = vm,
             alCambiar = { abierta = it },
@@ -753,6 +763,7 @@ private fun FilaObservacion(o: ObservacionDeCampo, seleccionada: Boolean, alToca
 private fun DetalleObservacion(
     o: ObservacionDeCampo,
     delPunto: List<ObservacionDeCampo>,
+    umbralGps: Double,
     puedeEditar: Boolean,
     vm: ObservacionesViewModel,
     alCambiar: (ObservacionDeCampo) -> Unit,
@@ -788,8 +799,8 @@ private fun DetalleObservacion(
                 o.programadaPara?.let { Text("Programada para el ${it.take(10).split("-").reversed().joinToString("/")}", style = MaterialTheme.typography.bodySmall, color = Marca.Naranja) }
                 o.notaAtencion?.let { Text("Atención: $it", style = MaterialTheme.typography.bodySmall) }
                 // El GPS del teléfono quedó lejos de la progresiva escrita (REV3-OBS-37)
-                o.gpsDistancia?.takeIf { it > UMBRAL_GPS_M }?.let { m ->
-                    Text("La ubicación GPS quedó a ${"%.1f".format(m / 1000.0)} km de la progresiva registrada. Verifique el dato.",
+                o.gpsDistancia?.takeIf { it > umbralGps }?.let { m ->
+                    Text("La ubicación GPS quedó a ${distanciaLegible(m.toDouble())} de la progresiva registrada. Verifique el dato.",
                         style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.error, fontWeight = FontWeight.SemiBold)
                 }
                 // Varias actividades en el mismo punto (REV3-OBS-34)
@@ -1200,7 +1211,7 @@ private fun FormularioObservacion(estado: EstadoObservaciones, vm: Observaciones
             onDismissRequest = vm::avisoGpsVisto,
             title = { Text("Revisa la progresiva") },
             text = {
-                Text("La ubicación GPS está alejada de la progresiva registrada (a ${"%.1f".format(metros / 1000.0)} km). " +
+                Text("La ubicación GPS está alejada de la progresiva registrada (a ${distanciaLegible(metros)}). " +
                     "Verifique el dato.\n\nSi estás registrando desde otro lugar, puedes guardar igual.")
             },
             confirmButton = { TextButton(onClick = { guardar(gpsConfirmado = true) }) { Text("Guardar igual") } },

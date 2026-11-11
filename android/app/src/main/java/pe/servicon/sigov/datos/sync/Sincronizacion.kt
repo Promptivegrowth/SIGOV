@@ -256,6 +256,15 @@ class TrabajadorSincronizacion @AssistedInject constructor(
                 var cuerpo = Json.decodeFromString(JsonObject.serializer(), envio.cuerpo)
                     .let { o -> JsonObject(o.filterKeys { !it.startsWith("_") }) }
 
+                // El avance lleva el celular que lo hizo: con la cuenta
+                // compartida, dos celulares no son una copia (0121)
+                if (envio.tabla == "work_entries" && "dispositivo" !in cuerpo) {
+                    cuerpo = buildJsonObject {
+                        cuerpo.forEach { (k, v) -> put(k, v) }
+                        put("dispositivo", configuracion.idDeInstalacion)
+                    }
+                }
+
                 // Si depende de un padre, se le pega el identificador real
                 envio.dependeDe?.let { padreId ->
                     val padre = cola.porId(padreId)

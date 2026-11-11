@@ -50,7 +50,7 @@ class AccesoViewModel @Inject constructor(
                     val mensaje = when {
                         fallo.message?.contains("Invalid login", true) == true ||
                         fallo.message?.contains("credentials", true) == true ->
-                            "El correo o la contraseña no coinciden."
+                            "El usuario o la contraseña no coinciden."
                         fallo.message?.contains("network", true) == true ||
                         fallo.message?.contains("resolve", true) == true ||
                         fallo.message?.contains("timeout", true) == true ->

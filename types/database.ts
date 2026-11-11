@@ -1283,6 +1283,7 @@ export type Database = {
           section_id: string | null
           sede: string | null
           service_id: string
+          subjefe_nombre: string | null
           subtramo: number | null
           supervisor_id: string | null
           updated_at: string
@@ -1304,6 +1305,7 @@ export type Database = {
           section_id?: string | null
           sede?: string | null
           service_id: string
+          subjefe_nombre?: string | null
           subtramo?: number | null
           supervisor_id?: string | null
           updated_at?: string
@@ -1325,6 +1327,7 @@ export type Database = {
           section_id?: string | null
           sede?: string | null
           service_id?: string
+          subjefe_nombre?: string | null
           subtramo?: number | null
           supervisor_id?: string | null
           updated_at?: string
@@ -3917,6 +3920,7 @@ export type Database = {
       }
       road_sections: {
         Row: {
+          calibracion: Json | null
           code: string
           color: string | null
           created_at: string
@@ -3937,6 +3941,7 @@ export type Database = {
           updated_at: string
         }
         Insert: {
+          calibracion?: Json | null
           code: string
           color?: string | null
           created_at?: string
@@ -3957,6 +3962,7 @@ export type Database = {
           updated_at?: string
         }
         Update: {
+          calibracion?: Json | null
           code?: string
           color?: string | null
           created_at?: string
@@ -5474,6 +5480,7 @@ export type Database = {
           created_at: string
           created_by: string | null
           deleted_at: string | null
+          dispositivo: string | null
           duplicado_de: string | null
           espesor_m: number | null
           finished_at: string | null
@@ -5508,6 +5515,7 @@ export type Database = {
           created_at?: string
           created_by?: string | null
           deleted_at?: string | null
+          dispositivo?: string | null
           duplicado_de?: string | null
           espesor_m?: number | null
           finished_at?: string | null
@@ -5542,6 +5550,7 @@ export type Database = {
           created_at?: string
           created_by?: string | null
           deleted_at?: string | null
+          dispositivo?: string | null
           duplicado_de?: string | null
           espesor_m?: number | null
           finished_at?: string | null
@@ -7441,6 +7450,10 @@ export type Database = {
         }
         Returns: string
       }
+      ajuste_de_ubicacion: {
+        Args: { p_clave: string; p_omision: number; p_service_id: string }
+        Returns: number
+      }
       ajustes_del_servicio: { Args: { p_service_id: string }; Returns: Json }
       alertas_operativas: {
         Args: { p_service_id: string }
@@ -7500,6 +7513,7 @@ export type Database = {
         Args: { p_limit?: number; p_q: string; p_service_id: string }
         Returns: Json
       }
+      calibrar_tramo: { Args: { p_section_id: string }; Returns: number }
       can_manage: { Args: { sid: string }; Returns: boolean }
       can_write: { Args: { sid: string }; Returns: boolean }
       cargar_pagina_documento: {
@@ -7689,6 +7703,10 @@ export type Database = {
         Returns: undefined
       }
       fmt_progresiva: { Args: { m: number }; Returns: string }
+      fraccion_calibrada: {
+        Args: { p_cal: Json; p_fin: number; p_ini: number; p_prog: number }
+        Returns: number
+      }
       hoy_peru: { Args: never; Returns: string }
       inventario_para_campo: { Args: { p_service_id: string }; Returns: Json }
       inventario_resumen: {
@@ -7856,6 +7874,10 @@ export type Database = {
           p_metrado?: number
         }
         Returns: string
+      }
+      progresiva_calibrada: {
+        Args: { p_cal: Json; p_fin: number; p_frac: number; p_ini: number }
+        Returns: number
       }
       progresiva_con_distancia: {
         Args: { p_lat: number; p_lng: number; p_section_id: string }

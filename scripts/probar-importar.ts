@@ -93,15 +93,18 @@ caso('Un valor que no está en el catálogo es un error, aunque el campo sea opc
 
 caso('PCI: el encargado asigna la cuadrilla; el desconocido entra sin asignar y con aviso', () => {
   const cuadrilla = campos.find((f) => f.key === 'crew_code')!
-  // El importador agrega el nombre del jefe y su nombre de pila
-  const crew = new Map([[normKey('CUA_04'), 'id-4'], [normKey('José Ramos'), 'id-4'], [normKey('José'), 'id-4'], [normKey('Huver'), 'id-5']])
+  // El importador agrega el nombre del jefe y del subjefe, y sus nombres de pila
+  const crew = new Map([[normKey('CUA_04'), 'id-4'], [normKey('José Ramos'), 'id-4'], [normKey('José'), 'id-4'],
+    [normKey('Augusto'), 'id-4'], [normKey('Huver'), 'id-5']])
   assert.equal(coerce('JOSE RAMOS ', cuadrilla, { crew }).value, 'id-4')
   assert.equal(coerce('HUVER ', cuadrilla, { crew }).value, 'id-5')
   assert.equal(coerce('Jose', cuadrilla, { crew }).value, 'id-4')
-  const augusto = coerce('AUGUSTO', cuadrilla, { crew })
-  assert.equal(augusto.value, null)
-  assert.equal(augusto.error, undefined)
-  assert.match(augusto.aviso ?? '', /sin asignar/)
+  // Augusto es el subjefe de la cuadrilla de José Ramos (Elvis, 11/11)
+  assert.equal(coerce('AUGUSTO', cuadrilla, { crew }).value, 'id-4')
+  const otro = coerce('PEDRO', cuadrilla, { crew })
+  assert.equal(otro.value, null)
+  assert.equal(otro.error, undefined)
+  assert.match(otro.aviso ?? '', /sin asignar/)
 })
 
 caso('PCI 55: encabezados en la segunda fila y columnas reconocidas', () => {
