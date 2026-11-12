@@ -293,6 +293,8 @@ export function ParteDetailClient({ orderId }: { orderId: string }) {
                           </span>
                           <Progresiva from={e.prog_start_m} to={e.prog_end_m} />
                           <span>{etiquetaDeLado(e.side)}</span>
+                          {/* Con la cuenta compartida, quién usaba el celular (0124) */}
+                          {e.ejecutado_por && <span>Ejecutó: {e.ejecutado_por}</span>}
                         </p>
                         {e.observation && (
                           <p className="text-muted-foreground mt-1.5 text-[12px] italic">&laquo;{e.observation}&raquo;</p>

@@ -57,6 +57,9 @@ data class Cuadrilla(
     /** Número y sede con que la nombra la estructura documental COVINCA. */
     val numero: Int? = null,
     val sede: String? = null,
+    /** El jefe y el subjefe, que comparten la cuenta de la cuadrilla. */
+    @SerialName("jefe_nombre") val jefeNombre: String? = null,
+    @SerialName("subjefe_nombre") val subjefeNombre: String? = null,
 )
 
 /**

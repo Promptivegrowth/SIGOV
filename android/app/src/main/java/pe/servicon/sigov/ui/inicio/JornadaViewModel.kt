@@ -43,6 +43,12 @@ data class EstadoJornada(
     val diaDocumentos: java.time.LocalDate = Peru.hoy(),
     /** Avisos sin leer: la campana de arriba. */
     val avisos: Int = 0,
+    /**
+     * El jefe y el subjefe, que comparten la cuenta de la cuadrilla; vacío si
+     * la cuadrilla no tiene subjefe. Y cuál de ellos usa este celular.
+     */
+    val personas: List<String> = emptyList(),
+    val quienUsa: String? = null,
     val error: String? = null,
     /** Mientras no se sepa la cuadrilla, no se afirma nada sobre ella */
     val cargando: Boolean = true,
@@ -57,6 +63,7 @@ class JornadaViewModel @Inject constructor(
     private val documentosRepo: DocumentosRepositorio,
     private val avisosRepo: pe.servicon.sigov.datos.AvisosRepositorio,
     private val materialRepo: pe.servicon.sigov.datos.MaterialRepositorio,
+    private val configuracion: pe.servicon.sigov.datos.Configuracion,
 ) : ViewModel() {
 
     private val _estado = MutableStateFlow(EstadoJornada())
@@ -99,6 +106,12 @@ class JornadaViewModel @Inject constructor(
         else -> "Buenas noches"
     }
 
+    /** Quién usa este celular: lo llevan los avances que registre (0124). */
+    fun fijarQuienUsa(nombre: String) {
+        configuracion.fijarQuienUsa(nombre)
+        _estado.update { it.copy(quienUsa = configuracion.quienUsa.value) }
+    }
+
     private fun cargar() {
         viewModelScope.launch {
             runCatching {
@@ -110,6 +123,11 @@ class JornadaViewModel @Inject constructor(
                         rol = perfil?.role ?: "jefe_cuadrilla",
                         cuadrilla = cuadrilla?.name.orEmpty(),
                         cuadrillaCodigo = cuadrilla?.code.orEmpty(),
+                        // Solo se pregunta quién usa el celular si hay a quién elegir
+                        personas = listOfNotNull(cuadrilla?.jefeNombre, cuadrilla?.subjefeNombre)
+                            .map { n -> n.trim() }.filter { n -> n.isNotEmpty() }.distinct()
+                            .takeIf { p -> p.size > 1 }.orEmpty(),
+                        quienUsa = configuracion.quienUsa.value,
                     )
                 }
 

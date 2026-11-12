@@ -659,6 +659,7 @@ function DialogoDeExportacion({ fotos, desde, hasta, origen, pcis, cuadrilla, se
   const [avance, setAvance] = React.useState<AvanceDeExportacion | null>(null)
   const raiz = nombreDeExportacion(desde, hasta)
   const rutas = React.useMemo(() => rutasDeExportacion(fotos, op), [fotos, op])
+  const cuantasFotos = React.useMemo(() => new Set(rutas.map((r) => r.foto.id)).size, [rutas])
   const arbol = React.useMemo(() => arbolDe(rutas, raiz), [rutas, raiz])
   const observadas = fotos.filter((f) => f.revision === 'observada').length
   const bytes = fotos.reduce((t, f) => t + Number(f.master_bytes ?? 1_800_000), 0)
@@ -681,7 +682,7 @@ function DialogoDeExportacion({ fotos, desde, hasta, origen, pcis, cuadrilla, se
       a.download = raiz + '.zip'
       a.click()
       setTimeout(() => URL.revokeObjectURL(url), 60_000)
-      toast.success('Exportación lista', { description: `${fmtNumber(rutas.length)} fotos en ${raiz}.zip` })
+      toast.success('Exportación lista', { description: `${fmtNumber(cuantasFotos)} fotos en ${raiz}.zip` })
       alCerrar()
     } catch (e) {
       toast.error(mensajeAmigable(e, 'No se pudo armar la exportación'))
@@ -705,7 +706,8 @@ function DialogoDeExportacion({ fotos, desde, hasta, origen, pcis, cuadrilla, se
           {cuadrilla && <p>Cuadrilla: <strong>{cuadrilla}</strong></p>}
           <p>Fases: <strong>Todas</strong></p>
           <p className="text-muted-foreground pt-1">
-            {fmtNumber(rutas.length)} fotos · unos {fmtNumber(bytes / 1_048_576)} MB
+            {fmtNumber(cuantasFotos)} fotos
+            {rutas.length > cuantasFotos && ` en ${fmtNumber(rutas.length)} ubicaciones`} · unos {fmtNumber(bytes / 1_048_576)} MB
             {observadas > 0 && ` · ${observadas} observadas por COVINCA no se incluyen`}
           </p>
         </section>
@@ -716,13 +718,13 @@ function DialogoDeExportacion({ fotos, desde, hasta, origen, pcis, cuadrilla, se
             marcada={op.estructura}
             alCambiar={(v) => setOp((o) => ({ ...o, estructura: v }))}
             texto="Incluir estructura de carpetas"
-            ayuda="MR por cuadrilla, fecha, subsector y actividad; PCI por plazo e ítem. Sin ella, todas las fotos en una sola carpeta."
+            ayuda="Panel diario por cuadrilla y fecha; PCI por plazo e ítem; niveles de servicio por sector y actividad. Sin ella, todas las fotos en una sola carpeta."
           />
           <Opcion
             marcada={op.oficial}
             alCambiar={(v) => setOp((o) => ({ ...o, oficial: v }))}
             texto="Mantener nomenclatura oficial"
-            ayuda="Los nombres de la entrega COVINCA: PCI_44 / 3_DIAS / ITEM_19 / ITEM_19(1).jpg. Sin ella: PCI-2026-044 / PLAZO_3_DIAS / ITEM_019."
+            ayuda="El criterio de guardado de SERVICON: cada foto en el panel diario de su cuadrilla, con su copia en PCI (PCI_44 / 3_DIAS / ITEM_19 / ITEM_19(1).jpg) y en niveles de servicio. Sin ella, los nombres del boceto, una copia por foto."
           />
           <Opcion
             marcada

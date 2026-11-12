@@ -10,7 +10,8 @@
  * comprueba contra los nombres del ZIP.
  */
 
-export const RAIZ = 'SERVICON_COVINCA_REVISION_ESTRUCTURA'
+/** La carpeta raíz, como se llama en el Drive de SERVICON (Elvis, 12/11). */
+export const RAIZ = 'SERVICON ESTRUCTURA GESTION DE INFORMACION'
 
 /** Sin tildes, sin Ñ, en mayúsculas, solo A-Z 0-9 y el separador dado. */
 export function aCovinca(texto: string, separador = '_'): string {
@@ -148,11 +149,14 @@ export const rutas = {
     }
   },
 
-  /** Foto de un ítem PCI. */
+  /**
+   * Foto de un ítem PCI: `ITEM_53(2).jpg`, sin ceros ni espacios (Elvis,
+   * 12/11: no «ITEM_053 (2)»).
+   */
   fotoPci(p: { pciCodigo: string; plazoDias: number; item: number; fase: string | null }) {
     return {
-      carpeta: `${RAIZ}/PCI/${carpetaPci(p.pciCodigo)}/${carpetaPlazo(p.plazoDias)}/ITEM_${p.item}`,
-      archivo: `ITEM_${p.item}(${numeroDeFasePci(p.fase)}).jpg`,
+      carpeta: `${RAIZ}/PCI/${carpetaPci(p.pciCodigo)}/${carpetaPlazo(p.plazoDias)}/ITEM_${Number(p.item)}`,
+      archivo: archivoPci(p.item, p.fase),
     }
   },
 
@@ -207,6 +211,88 @@ export const rutas = {
       archivo: `${p.mes}_SEGUIMIENTO-DIARIO-DE-MATERIALES_${p.cuadrillas}-CUADRILLAS.xlsx`,
     }
   },
+}
+
+/** `ITEM_53(2).jpg`: el ítem sin ceros y la etapa entre paréntesis, sin espacios. */
+export function archivoPci(item: number, phase: string | null | undefined): string {
+  return `ITEM_${Number(item)}(${numeroDeFasePci(phase)}).jpg`
+}
+
+/** Lo que hace falta de una foto para ubicarla en la estructura. */
+export type FotoEnEstructura = {
+  fecha: string
+  origen: string
+  crew_numero: number | null
+  crew_sede: string | null
+  crew_code: string | null
+  crew_name: string | null
+  activity_code: string | null
+  activity_carpeta_ns: string | null
+  sector_folder: string | null
+  progresiva_m: number | null
+  side: string | null
+  phase: string | null
+  pci_code: string | null
+  pci_item_number: number | null
+  pci_term_days: number | null
+}
+
+export type RamasDeEstructura = { rutinario: boolean; pci: boolean; niveles: boolean }
+export type DestinoDeFoto = { carpeta: string; archivo: string; rama: 'rutinario' | 'pci' | 'niveles' }
+
+/**
+ * Dónde va una foto: «una foto, tres ubicaciones» (Elvis, 12/11).
+ *
+ *   1. El original, en el panel diario de su cuadrilla y su fecha
+ *      (MANTENIMIENTO_RUTINARIO/2026-11/CUADRILLA_2_PEDREGAL/11).
+ *   2. Si atiende un ítem PCI, una copia en PCI/PCI_60/7_DIAS/ITEM_53.
+ *   3. Una copia en los niveles de servicio, por sector y actividad
+ *      (NIVELES_DE_SERVICIO_2026-11/SECTOR_1.4_…/LIMPIEZA_SENALES_VERTICALES).
+ *
+ * En el panel diario la foto de un ítem PCI lleva el nombre del ítem
+ * (ITEM_53(2).jpg), como ya se guarda en el Drive; la de una partida, su
+ * código (COV_SV_029_foto1.jpg, P6). `correlativos` lleva la cuenta de las
+ * fotoN por carpeta y código; los choques de nombre los resuelve
+ * `nombreLibre` (_A, _B…).
+ */
+export function destinosDeFoto(
+  f: FotoEnEstructura,
+  ramas: RamasDeEstructura,
+  correlativos: Map<string, number>,
+): DestinoDeFoto[] {
+  const lista: DestinoDeFoto[] = []
+  const esPci = f.pci_code != null && f.pci_item_number != null
+  const numero = f.crew_numero ?? Number(f.crew_code?.match(/\d+/)?.[0] ?? 0)
+  const sede = f.crew_sede ?? aCovinca(f.crew_name ?? 'SIN_SEDE').slice(0, 20)
+
+  if (ramas.rutinario && numero > 0 && f.fecha && (f.origen === 'parte' || esPci)) {
+    if (esPci) {
+      const base = rutas.fotoRutinaria({ fecha: f.fecha, cuadrilla: numero, sede, codigo: null, numero: 1 })
+      lista.push({ carpeta: base.carpeta, archivo: archivoPci(f.pci_item_number!, f.phase), rama: 'rutinario' })
+    } else {
+      const base = rutas.fotoRutinaria({ fecha: f.fecha, cuadrilla: numero, sede, codigo: f.activity_code, numero: 1 })
+      const clave = base.carpeta + '|' + (f.activity_code ?? '')
+      const n = (correlativos.get(clave) ?? 0) + 1
+      correlativos.set(clave, n)
+      lista.push({ ...rutas.fotoRutinaria({ fecha: f.fecha, cuadrilla: numero, sede, codigo: f.activity_code, numero: n }), rama: 'rutinario' })
+    }
+  }
+  if (ramas.pci && esPci) {
+    lista.push({
+      ...rutas.fotoPci({ pciCodigo: f.pci_code!, plazoDias: f.pci_term_days ?? 0, item: f.pci_item_number!, fase: f.phase }),
+      rama: 'pci',
+    })
+  }
+  if (ramas.niveles && f.fecha && f.sector_folder && f.activity_carpeta_ns && (esPci || f.origen === 'parte')) {
+    lista.push({
+      ...rutas.fotoNivelDeServicio({
+        fecha: f.fecha, sector: f.sector_folder, carpetaNs: f.activity_carpeta_ns,
+        progresivaM: f.progresiva_m, lado: f.side, fase: f.phase,
+      }),
+      rama: 'niveles',
+    })
+  }
+  return lista
 }
 
 /** `A`, `B`… `Z`, `AA`, `AB`…: la letra del correlativo de repetidas. */

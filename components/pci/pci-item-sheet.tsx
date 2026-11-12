@@ -181,6 +181,10 @@ export function PciItemSheet({
                 { icon: Calendar, k: 'Vence', v: fmtDate(item.due_date) },
                 { icon: Clock, k: 'Plazo', v: `${item.term_days} días` },
                 { icon: Users, k: 'Cuadrilla', v: item.crew_name ?? 'Sin asignar' },
+                // El ENCARGADO del control del PCI y quién lo registró desde el
+                // celular: jefe o subjefe con la misma cuenta (Elvis, 12/11)
+                ...(item.encargado ? [{ icon: Users, k: 'Encargado (control PCI)', v: item.encargado }] : []),
+                ...(item.ejecutado_por ? [{ icon: Users, k: 'Ejecutó', v: item.ejecutado_por }] : []),
                 { icon: Ruler, k: 'Actividad', v: item.activity_name ?? '—' },
                 {
                   icon: Ruler, k: 'Metrado',

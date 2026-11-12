@@ -179,6 +179,9 @@ export function ImportarClient() {
         if (aviso) advertencias.push({ row: filaExcel(i), field: f.label, message: aviso })
         out[f.key] = value
       }
+      // El ENCARGADO tal cual (Augusto, José Ramos…): la cuadrilla no dice
+      // si el ítem lo ejecutó el jefe o el subjefe (Elvis, 12/11)
+      if (schema.key === 'pci' && mapping.crew_code) out.encargado = String(raw[mapping.crew_code] ?? '').trim() || null
       // Sin columna de lado, el control del PCI lo escribe en la observación
       // («L.D. MENSAJE SUCIO», «Calzada / C.I.»)
       if (schema.key === 'pci' && !out.side) out.side = ladoDesdeTexto(out.notes)
@@ -938,6 +941,7 @@ function buildRow(
         quantity: v.quantity ?? null,
         notes: v.notes ?? null,
         assigned_crew_id: v.crew_code ?? null,
+        encargado: v.encargado ?? null,
         term_days: term,
         status: 'pendiente',
       }

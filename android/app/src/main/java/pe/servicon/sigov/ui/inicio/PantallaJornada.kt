@@ -75,6 +75,38 @@ fun PantallaJornada(
 
     val estado by vm.estado.collectAsStateWithLifecycle()
     var eligiendoDia by androidx.compose.runtime.remember { androidx.compose.runtime.mutableStateOf(false) }
+    // Con la cuenta compartida, quién usa este celular (Elvis, 12/11). Se
+    // pregunta una vez; después se cambia tocando la ficha.
+    var eligiendoPersona by remember { mutableStateOf(false) }
+    LaunchedEffect(estado.personas, estado.quienUsa) {
+        if (estado.personas.isNotEmpty() && estado.quienUsa == null) eligiendoPersona = true
+    }
+    if (eligiendoPersona && estado.personas.isNotEmpty()) {
+        AlertDialog(
+            onDismissRequest = { if (estado.quienUsa != null) eligiendoPersona = false },
+            title = { Text("¿Quién usa este celular?") },
+            text = {
+                Column(verticalArrangement = Arrangement.spacedBy(4.dp)) {
+                    Text(
+                        "La cuenta de la cuadrilla se usa en varios celulares. Lo que registres desde este quedará a nombre de quien elijas.",
+                        style = MaterialTheme.typography.bodySmall,
+                    )
+                    estado.personas.forEach { nombre ->
+                        Row(
+                            Modifier.fillMaxWidth().clickable { vm.fijarQuienUsa(nombre); eligiendoPersona = false }.padding(vertical = 6.dp),
+                            verticalAlignment = Alignment.CenterVertically,
+                        ) {
+                            RadioButton(selected = estado.quienUsa == nombre, onClick = { vm.fijarQuienUsa(nombre); eligiendoPersona = false })
+                            Text(nombre, style = MaterialTheme.typography.bodyLarge)
+                        }
+                    }
+                }
+            },
+            confirmButton = {
+                if (estado.quienUsa != null) TextButton(onClick = { eligiendoPersona = false }) { Text("Listo") }
+            },
+        )
+    }
 
     // Al volver de una pantalla (la charla recién fotografiada, por ejemplo)
     // los documentos se actualizan solos
@@ -140,6 +172,14 @@ fun PantallaJornada(
                     Icons.Outlined.Groups, "Cuadrilla",
                     estado.cuadrillaCodigo.ifBlank { if (estado.cargando) "…" else "—" },
                     Marca.VerdeBandera, Modifier.weight(1f),
+                )
+            }
+            if (estado.personas.isNotEmpty()) {
+                FichaDato(
+                    Icons.Outlined.PhoneAndroid, "Usa este celular",
+                    estado.quienUsa ?: "Elegir",
+                    Marca.Azul, Modifier.fillMaxWidth(),
+                    alTocar = { eligiendoPersona = true },
                 )
             }
             Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {

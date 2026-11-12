@@ -19,11 +19,11 @@ const TODAS = '__todas__'
 const RAMAS: { clave: keyof RamasCovinca; titulo: string; ruta: string }[] = [
   { clave: 'programacion', titulo: 'Programación semanal (formato PS-ST04)', ruta: '…/PROGRAMACION_SEMANAL_DE_ACTIVIDADES_Y_RECURSOS/CUADRILLA_n_SEDE/' },
   { clave: 'materiales', titulo: 'Seguimiento diario de materiales (Formato 8)', ruta: '…/SEGUIMIENTO_DIARIO_DE_MATERIALES/<mes>/' },
-  { clave: 'rutinario', titulo: 'Fotos del día por cuadrilla', ruta: 'MANTENIMIENTO_RUTINARIO/<mes>/CUADRILLA_n_SEDE/<DD>/' },
+  { clave: 'rutinario', titulo: 'Panel diario: todas las fotos del día por cuadrilla, también las de PCI', ruta: 'MANTENIMIENTO_RUTINARIO/<mes>/CUADRILLA_n_SEDE/<DD>/' },
   { clave: 'niveles', titulo: 'Niveles de servicio por sector y actividad', ruta: '…/NIVELES_DE_SERVICIO_<mes>/SECTOR_…/<CARPETA>/' },
   { clave: 'reportes', titulo: 'Reportes diarios en PDF', ruta: '…/REPORTES_DIARIOS_CHARLAS_ATS/…/REPORTE_DIARIO/' },
   { clave: 'documentos', titulo: 'ATS, charla y checklist vehicular (fotos)', ruta: '…/REPORTES_DIARIOS_CHARLAS_ATS/…/' },
-  { clave: 'pci', titulo: 'PCI por plazo e ítem (solo ítems con fotos)', ruta: 'PCI/PCI_n/<plazo>/ITEM_n/ITEM_n(k).jpg' },
+  { clave: 'pci', titulo: 'PCI por plazo e ítem: copia de la foto del panel diario', ruta: 'PCI/PCI_n/<plazo>/ITEM_n/ITEM_n(k).jpg' },
 ]
 
 /** Primer y último día de un mes AAAA-MM, o de una de sus quincenas. */

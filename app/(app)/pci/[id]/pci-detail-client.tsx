@@ -184,6 +184,8 @@ export function PciDetailClient({ pciId }: { pciId: string }) {
         semaforo: SEMAFORO[i.semaforo as Semaforo]?.label ?? i.semaforo,
         estado: PCI_ITEM_STATUS[i.status as keyof typeof PCI_ITEM_STATUS]?.label ?? i.status,
         cuadrilla: i.crew_name ?? '-',
+        // Como la columna ENCARGADO del control del PCI: quién lo ejecutó
+        encargado: i.ejecutado_por ?? i.encargado ?? '-',
         fotos: i.evidence_count,
       }))
       const cols = [
@@ -196,6 +198,7 @@ export function PciDetailClient({ pciId }: { pciId: string }) {
         { header: 'Semaforo', key: 'semaforo', width: 14 },
         { header: 'Estado', key: 'estado', width: 14 },
         { header: 'Cuadrilla', key: 'cuadrilla', width: 20 },
+        { header: 'Encargado', key: 'encargado', width: 18 },
         { header: 'Fotos', key: 'fotos', align: 'center' as const, width: 8 },
       ]
       const meta: ReportMeta = {

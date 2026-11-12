@@ -9,8 +9,9 @@ import assert from 'node:assert/strict'
 import {
   RAIZ, carpetaCuadrilla, codigoCuadrilla, progresiva, kmDeFoto, lado, fase,
   carpetaPlazo, carpetaPci, semanaDe, rutas, nombreLibre, aCovinca, letraDeRepetida, semanaDelContrato,
+  destinosDeFoto, archivoPci,
 } from '../lib/covinca'
-import { nombreDeExportacion, rutaDeExportacion, rutasDeExportacion, type FotoExportable } from '../lib/exportar-evidencias'
+import { nombreDeExportacion, rutasDeExportacion, type FotoExportable } from '../lib/exportar-evidencias'
 
 let ok = 0
 const caso = (nombre: string, fn: () => void) => {
@@ -141,36 +142,50 @@ const foto = (x: Partial<FotoExportable>): FotoExportable => ({
 
 caso('exportar evidencias: raíz', () => {
   assert.equal(nombreDeExportacion('2026-10-01', '2026-10-13'), 'EXPORTACION_01-10-2026_AL_13-10-2026')
+  assert.equal(RAIZ, 'SERVICON ESTRUCTURA GESTION DE INFORMACION')
 })
 
-caso('exportar evidencias: PCI oficial y del boceto', () => {
+caso('una foto, tres ubicaciones (Elvis, 12/11: PCI_60, 7_DIAS, ítem 53, km 940+000)', () => {
+  // La guía de Elvis: 11/11/2026, limpieza de señal vertical, etapa DURANTE
+  const f = foto({
+    work_date: '2026-11-11', taken_at: '2026-11-11T10:00:00Z', phase: 'durante', crew_numero: 2, crew_sede: 'PEDREGAL',
+    activity_code: 'COV-SV-004', activity_carpeta_ns: 'LIMPIEZA_SENALES_VERTICALES',
+    sector_folder: 'SECTOR_1.4_927+000_952+000', progresiva_m: 940000,
+    pci_code: 'PCI-2026-060', pci_item_number: 53, pci_term_days: 7,
+  })
+  const r = rutasDeExportacion([f], { estructura: true, oficial: true })
+  assert.deepEqual(r.map((x) => x.carpeta + '/' + x.archivo), [
+    'MANTENIMIENTO_RUTINARIO/2026-11/CUADRILLA_2_PEDREGAL/11/ITEM_53(2).jpg',
+    'PCI/PCI_60/7_DIAS/ITEM_53/ITEM_53(2).jpg',
+    'MANTENIMIENTO_RUTINARIO/2026-11/NIVELES_DE_SERVICIO_2026-11/SECTOR_1.4_927+000_952+000/LIMPIEZA_SENALES_VERTICALES/2026-11-11_KM-940+000_LD_DURANTE.jpg',
+  ])
+  // La entrega COVINCA usa la misma regla, con su raíz
+  const d = destinosDeFoto({ ...f, fecha: '2026-11-11' }, { rutinario: true, pci: true, niveles: true }, new Map())
+  assert.equal(d[1].carpeta, `${RAIZ}/PCI/PCI_60/7_DIAS/ITEM_53`)
+  // Sin ceros ni espacios: ITEM_53(2), no ITEM_053 (2)
+  assert.equal(archivoPci(53, 'durante'), 'ITEM_53(2).jpg')
+})
+
+caso('exportar evidencias: foto de una partida en el panel diario y en niveles de servicio', () => {
+  const r = rutasDeExportacion([foto({ activity_code: 'COV-SV-029' })], { estructura: true, oficial: true })
+  assert.deepEqual(r.map((x) => x.carpeta + '/' + x.archivo), [
+    'MANTENIMIENTO_RUTINARIO/2026-10/CUADRILLA_2_PEDREGAL/13/COV_SV_029_foto1.jpg',
+    'MANTENIMIENTO_RUTINARIO/2026-10/NIVELES_DE_SERVICIO_2026-10/SECTOR_1.1_852+335_877+000/MARCAS_EN_EL_PAVIMENTO/2026-10-13_KM-852+400_LD_ANTES.jpg',
+  ])
+})
+
+caso('exportar evidencias: nombres del boceto, sin ceros', () => {
   const f = foto({ pci_code: 'PCI-2026-044', pci_item_number: 19, pci_term_days: 3, phase: 'durante' })
-  assert.deepEqual(rutaDeExportacion(f, { estructura: true, oficial: true }),
-    { carpeta: '02_PCI/PCI_44/3_DIAS/ITEM_19', archivo: 'ITEM_19(2).jpg' })
-  assert.deepEqual(rutaDeExportacion(f, { estructura: true, oficial: false }),
-    { carpeta: '02_PCI/PCI-2026-044/PLAZO_3_DIAS/ITEM_019', archivo: 'ITEM_019(2).jpg' })
-  assert.equal(rutaDeExportacion(foto({ pci_code: 'PCI-2026-051', pci_item_number: 5, pci_term_days: 1, phase: 'despues' }),
-    { estructura: true, oficial: true }).carpeta, '02_PCI/PCI_51/1_DIA/ITEM_5')
-})
-
-caso('exportar evidencias: MR por subsector', () => {
-  assert.deepEqual(rutaDeExportacion(foto({}), { estructura: true, oficial: true }), {
-    carpeta: '01_MR/CUADRILLA_2_PEDREGAL/2026-10-13/SECTOR_1.1_852+335_877+000/MARCAS_EN_EL_PAVIMENTO/ANTES',
-    archivo: '2026-10-13_KM-852+400_LD_ANTES.jpg',
-  })
-  // Sin etapa no hay subcarpeta de etapa
-  assert.equal(rutaDeExportacion(foto({ phase: 'general' }), { estructura: true, oficial: true }).carpeta,
-    '01_MR/CUADRILLA_2_PEDREGAL/2026-10-13/SECTOR_1.1_852+335_877+000/MARCAS_EN_EL_PAVIMENTO')
-  assert.deepEqual(rutaDeExportacion(foto({}), { estructura: true, oficial: false }, 3), {
-    carpeta: '01_MR/Programacion/Cuadrilla_2/2026-10-13/Sector_1.1/Pintado_de_marcas_en_el_pavimento/ANTES',
-    archivo: 'foto003.jpg',
-  })
+  const [b] = rutasDeExportacion([f], { estructura: true, oficial: false })
+  assert.equal(b.carpeta + '/' + b.archivo, '02_PCI/PCI-2026-044/PLAZO_3_DIAS/ITEM_19/ITEM_19(2).jpg')
+  const [m] = rutasDeExportacion([foto({})], { estructura: true, oficial: false })
+  assert.equal(m.carpeta + '/' + m.archivo, '01_MR/Programacion/Cuadrilla_2/2026-10-13/Sector_1.1/Pintado_de_marcas_en_el_pavimento/ANTES/foto001.jpg')
 })
 
 caso('exportar evidencias: sin carpetas, correlativos y observadas', () => {
-  assert.deepEqual(
-    rutaDeExportacion(foto({ pci_code: 'PCI-2026-044', pci_item_number: 19, pci_term_days: 3 }), { estructura: false, oficial: true }),
-    { carpeta: '', archivo: '02_PCI_PCI_44_3_DIAS_ITEM_19_ITEM_19(1).jpg' })
+  const [s] = rutasDeExportacion([foto({ pci_code: 'PCI-2026-044', pci_item_number: 19, pci_term_days: 3, crew_numero: null, crew_code: null, sector_folder: null })],
+    { estructura: false, oficial: true })
+  assert.deepEqual({ carpeta: s.carpeta, archivo: s.archivo }, { carpeta: '', archivo: 'PCI_PCI_44_3_DIAS_ITEM_19_ITEM_19(1).jpg' })
   const r = rutasDeExportacion([
     foto({ id: 'b', taken_at: '2026-10-13T09:00:00Z' }),
     foto({ id: 'a', taken_at: '2026-10-13T08:00:00Z' }),
@@ -178,12 +193,13 @@ caso('exportar evidencias: sin carpetas, correlativos y observadas', () => {
     foto({ id: 'd', taken_at: '2026-10-13T10:00:00Z' }),
   ], { estructura: true, oficial: false })
   assert.deepEqual(r.map((x) => x.foto.id + ':' + x.archivo), ['a:foto001.jpg', 'b:foto002.jpg', 'd:foto003.jpg'])
-  // Dos fotos del antes del mismo ítem: la segunda lleva _A
+  // Dos fotos del antes del mismo ítem: la segunda lleva _A, también en el panel diario
   const p = rutasDeExportacion([
     foto({ id: '1', pci_code: 'PCI-2026-044', pci_item_number: 19, pci_term_days: 3 }),
     foto({ id: '2', pci_code: 'PCI-2026-044', pci_item_number: 19, pci_term_days: 3, taken_at: '2026-10-13T09:00:00Z' }),
   ], { estructura: true, oficial: true })
-  assert.deepEqual(p.map((x) => x.archivo), ['ITEM_19(1).jpg', 'ITEM_19(1)_A.jpg'])
+  assert.deepEqual(p.filter((x) => x.carpeta.startsWith('PCI/')).map((x) => x.archivo), ['ITEM_19(1).jpg', 'ITEM_19(1)_A.jpg'])
+  assert.deepEqual(p.filter((x) => x.carpeta.endsWith('/13')).map((x) => x.archivo), ['ITEM_19(1).jpg', 'ITEM_19(1)_A.jpg'])
 })
 
 console.log(`\n${ok} casos correctos`)

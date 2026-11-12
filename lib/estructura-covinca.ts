@@ -15,7 +15,7 @@
  */
 import type { SupabaseClient } from '@supabase/supabase-js'
 import { construirIndice, type FilaIndice } from './paquete'
-import { rutas, nombreLibre, aCovinca, semanaDe } from './covinca'
+import { rutas, nombreLibre, aCovinca, semanaDe, destinosDeFoto } from './covinca'
 import { programacionSemanalXlsx } from './formato-programacion'
 import { f7Xlsx } from './formato-f7'
 import { f8Xlsx } from './formato-f8'
@@ -231,32 +231,13 @@ export async function armarEstructuraCovinca(opciones: {
         })
         return []
       }
-      const reservar = (r: { carpeta: string; archivo: string }, tipo: string, extra = detalle): Destino =>
-        ({ carpeta: r.carpeta, archivo: nombreLibre(usados, r.carpeta, r.archivo), tipo, detalle: extra })
-      const lista: Destino[] = []
-      // Lo de un ítem PCI va a la rama PCI, aunque se haya tomado desde el
-      // parte, y no a la carpeta diaria de la cuadrilla (Elvis: «lo único que
-      // varía es dónde se guardan las fotos que no responden a PCI»)
       const esPci = f.pci_code != null && f.pci_item_number != null
-      if (esPci && ramas.pci) {
-        const r = rutas.fotoPci({ pciCodigo: f.pci_code!, plazoDias: f.pci_term_days ?? 0, item: f.pci_item_number!, fase: f.phase })
-        lista.push(reservar(r, 'Foto PCI', `${f.pci_code} · ítem ${f.pci_item_number} · ${detalle}`))
-      }
-      if (!esPci && f.origen === 'parte' && ramas.rutinario) {
-        const { numero, sede } = cuadrillaDe(f)
-        const base = rutas.fotoRutinaria({ fecha, cuadrilla: numero, sede, codigo: f.activity_code, numero: 1 })
-        const clave = base.carpeta + '|' + (f.activity_code ?? '')
-        const n = (correlativos.get(clave) ?? 0) + 1
-        correlativos.set(clave, n)
-        lista.push(reservar(rutas.fotoRutinaria({ fecha, cuadrilla: numero, sede, codigo: f.activity_code, numero: n }), 'Foto mantenimiento rutinario'))
-      }
-      // Niveles de servicio: las del parte y también las del PCI (Elvis, P20)
-      if ((esPci || f.origen === 'parte') && ramas.niveles && f.sector_folder && f.activity_carpeta_ns) {
-        const r = rutas.fotoNivelDeServicio({
-          fecha, sector: f.sector_folder, carpetaNs: f.activity_carpeta_ns, progresivaM: f.progresiva_m, lado: f.side, fase: f.phase,
-        })
-        lista.push(reservar(r, 'Foto nivel de servicio', esPci ? `${f.pci_code} · ítem ${f.pci_item_number} · ${detalle}` : detalle))
-      }
+      const etiqueta = esPci ? `${f.pci_code} · ítem ${f.pci_item_number} · ${detalle}` : detalle
+      const TIPO = { rutinario: 'Foto panel diario', pci: 'Foto PCI', niveles: 'Foto nivel de servicio' } as const
+      // Una foto, tres ubicaciones (Elvis, 12/11): ver destinosDeFoto
+      const lista: Destino[] = destinosDeFoto({ ...f, fecha }, ramas, correlativos).map((d) => ({
+        carpeta: d.carpeta, archivo: nombreLibre(usados, d.carpeta, d.archivo), tipo: TIPO[d.rama], detalle: etiqueta,
+      }))
       return lista
     })
 

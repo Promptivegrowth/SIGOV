@@ -86,6 +86,7 @@ class ColaRepositorio @Inject constructor(
     private val cola: ColaDao,
     private val archivos: ArchivoDao,
     @ApplicationContext private val contexto: Context,
+    private val configuracion: Configuracion,
 ) {
     val pendientes: Flow<Int> =
         combine(cola.cuantosPendientes(), archivos.cuantosSinSubir()) { registros, fotos ->
@@ -150,9 +151,13 @@ class ColaRepositorio @Inject constructor(
         clientId: String = UUID.randomUUID().toString(),
         dependeDe: String? = null,
     ): String {
+        // Con la cuenta compartida, el avance dice quién usaba el celular
+        // al registrarlo: el jefe o el subjefe (0124)
+        val quien = configuracion.quienUsa.value
         val conId = buildJsonObject {
             cuerpo.forEach { (k, v) -> put(k, v) }
             put("client_id", clientId)
+            if (tabla == "work_entries" && quien != null && "ejecutado_por" !in cuerpo) put("ejecutado_por", quien)
         }
         cola.encolar(
             EnvioPendiente(

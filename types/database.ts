@@ -2948,6 +2948,7 @@ export type Database = {
           deleted_at: string | null
           description: string
           due_date: string
+          encargado: string | null
           foto_referencia_path: string | null
           id: string
           item_number: number
@@ -2982,6 +2983,7 @@ export type Database = {
           deleted_at?: string | null
           description: string
           due_date: string
+          encargado?: string | null
           foto_referencia_path?: string | null
           id?: string
           item_number: number
@@ -3016,6 +3018,7 @@ export type Database = {
           deleted_at?: string | null
           description?: string
           due_date?: string
+          encargado?: string | null
           foto_referencia_path?: string | null
           id?: string
           item_number?: number
@@ -5482,6 +5485,7 @@ export type Database = {
           deleted_at: string | null
           dispositivo: string | null
           duplicado_de: string | null
+          ejecutado_por: string | null
           espesor_m: number | null
           finished_at: string | null
           geom: unknown
@@ -5517,6 +5521,7 @@ export type Database = {
           deleted_at?: string | null
           dispositivo?: string | null
           duplicado_de?: string | null
+          ejecutado_por?: string | null
           espesor_m?: number | null
           finished_at?: string | null
           geom?: unknown
@@ -5552,6 +5557,7 @@ export type Database = {
           deleted_at?: string | null
           dispositivo?: string | null
           duplicado_de?: string | null
+          ejecutado_por?: string | null
           espesor_m?: number | null
           finished_at?: string | null
           geom?: unknown
@@ -6512,6 +6518,8 @@ export type Database = {
           days_left: number | null
           description: string | null
           due_date: string | null
+          ejecutado_por: string | null
+          encargado: string | null
           evidence_count: number | null
           foto_referencia_path: string | null
           fotos_antes: number | null
@@ -7318,6 +7326,7 @@ export type Database = {
           crew_color: string | null
           crew_id: string | null
           crew_name: string | null
+          ejecutado_por: string | null
           espesor_m: number | null
           evidence_count: number | null
           finished_at: string | null

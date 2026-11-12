@@ -27,7 +27,7 @@ import { pushSupported, pushPermission, enablePush, isStandalone, isIOS } from '
 import { toast } from 'sonner'
 import { mensajeAmigable } from '@/lib/errores'
 import { RendimientosForm } from '@/components/config/rendimientos-form'
-import { correoDeUsuario, usuarioDeCorreo, usuarioValido } from '@/lib/usuario'
+import { CLAVE_MINIMA, correoDeUsuario, usuarioDeCorreo, usuarioValido } from '@/lib/usuario'
 
 export function ConfiguracionClient() {
   const { service, services, can, profile, switchService } = useSession()
@@ -124,7 +124,7 @@ export function ConfiguracionClient() {
     { name: 'email', label: 'Usuario o correo', type: 'text', required: true, placeholder: 'jramos',
       hint: 'Un usuario (jramos) o un correo completo', showIf: () => !userForm.row },
     { name: 'password', label: 'Contraseña', type: 'text', placeholder: 'Se genera si la dejas vacía',
-      hint: 'Mínimo 8 caracteres', showIf: () => !userForm.row },
+      hint: `Mínimo ${CLAVE_MINIMA} caracteres`, showIf: () => !userForm.row },
     { name: 'role', label: 'Rol en el servicio', type: 'select', required: true, options: roleOptions },
     { name: 'dni', label: 'DNI', type: 'text', placeholder: '43128907' },
     { name: 'phone', label: 'Teléfono', type: 'tel', placeholder: '+51 987 654 321' },
@@ -209,8 +209,8 @@ export function ConfiguracionClient() {
       toast.error('Usuario no válido', { description: 'Usa letras, números, punto o guion (3 a 40), o un correo completo.' })
       return
     }
-    if (!isEdit && v.password && String(v.password).length < 8) {
-      toast.error('La contraseña debe tener al menos 8 caracteres')
+    if (!isEdit && v.password && String(v.password).length < CLAVE_MINIMA) {
+      toast.error(`La contraseña debe tener al menos ${CLAVE_MINIMA} caracteres`)
       return
     }
     const res = await fetch('/api/usuarios', {
@@ -987,7 +987,7 @@ export function ConfiguracionClient() {
         title="Restablecer contraseña"
         description={passForm.row ? `Se asignará una nueva contraseña a ${passForm.row.profiles.full_name}.` : ''}
         size="sm"
-        fields={[{ name: 'new_password', label: 'Nueva contraseña', type: 'text', required: true, span: 2, hint: 'Mínimo 8 caracteres. Entrégasela por un canal seguro.' }]}
+        fields={[{ name: 'new_password', label: 'Nueva contraseña', type: 'text', required: true, span: 2, hint: `Mínimo ${CLAVE_MINIMA} caracteres. Entrégasela por un canal seguro.` }]}
         submitLabel="Restablecer"
         onSubmit={async (v) => {
           const res = await fetch('/api/usuarios', {

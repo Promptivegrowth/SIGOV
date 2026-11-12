@@ -30,3 +30,9 @@ export function usuarioValido(entrada: string): boolean {
     ? /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(limpio)
     : /^[a-z0-9._-]{3,40}$/i.test(limpio)
 }
+
+/**
+ * El mínimo de la contraseña, el mismo que exige la autenticación de la
+ * nube. SERVICON reparte claves provisionales de 6 (Jefe01, Super01…).
+ */
+export const CLAVE_MINIMA = 6

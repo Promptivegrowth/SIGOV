@@ -1,4 +1,5 @@
 import { NextResponse, type NextRequest } from 'next/server'
+import { CLAVE_MINIMA } from '@/lib/usuario'
 import { createClient, createAdminClient } from '@/lib/supabase/server'
 
 export const runtime = 'nodejs'
@@ -95,8 +96,8 @@ export async function POST(req: NextRequest) {
     return prohibido('Solo un administrador de la plataforma puede crear administradores')
   }
 
-  if (body.password && String(body.password).length < 8) {
-    return NextResponse.json({ error: 'La contraseña debe tener al menos 8 caracteres' }, { status: 400 })
+  if (body.password && String(body.password).length < CLAVE_MINIMA) {
+    return NextResponse.json({ error: `La contraseña debe tener al menos ${CLAVE_MINIMA} caracteres` }, { status: 400 })
   }
   const password: string = body.password || `Sigov${Math.random().toString(36).slice(2, 8)}!`
 
@@ -218,8 +219,8 @@ export async function PATCH(req: NextRequest) {
   }
 
   if (body.new_password) {
-    if (String(body.new_password).length < 8) {
-      return NextResponse.json({ error: 'La contraseña debe tener al menos 8 caracteres' }, { status: 400 })
+    if (String(body.new_password).length < CLAVE_MINIMA) {
+      return NextResponse.json({ error: `La contraseña debe tener al menos ${CLAVE_MINIMA} caracteres` }, { status: 400 })
     }
     const { error } = await admin.auth.admin.updateUserById(body.id, { password: body.new_password })
     if (error) return NextResponse.json({ error: error.message }, { status: 400 })

@@ -79,6 +79,21 @@ class Configuracion @Inject constructor(
      * desde dos celulares (Elvis, 11/11): la nube solo toma como copia un
      * segundo avance de la misma partida si viene del mismo celular.
      */
+    private val _quienUsa = MutableStateFlow(guardado.getString(CLAVE_QUIEN_USA, null))
+
+    /**
+     * Quién usa este celular: el jefe o el subjefe de la cuadrilla. Con la
+     * cuenta compartida es lo único que dice quién ejecutó cada registro
+     * (Elvis, 12/11: Augusto figuraba en el Excel por eso).
+     */
+    val quienUsa: StateFlow<String?> = _quienUsa.asStateFlow()
+
+    fun fijarQuienUsa(nombre: String?) {
+        val limpio = nombre?.trim()?.ifBlank { null }
+        guardado.edit().putString(CLAVE_QUIEN_USA, limpio).apply()
+        _quienUsa.value = limpio
+    }
+
     val idDeInstalacion: String by lazy {
         guardado.getString(CLAVE_INSTALACION, null) ?: java.util.UUID.randomUUID().toString().also {
             guardado.edit().putString(CLAVE_INSTALACION, it).apply()
@@ -129,6 +144,7 @@ class Configuracion @Inject constructor(
         const val CLAVE_MODO_ORIGINALES = "modo_originales"
         const val CLAVE_ORDEN_PCI = "orden_pci"
         const val CLAVE_INSTALACION = "id_instalacion"
+        const val CLAVE_QUIEN_USA = "quien_usa"
     }
 }
 
