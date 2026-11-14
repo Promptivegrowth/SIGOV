@@ -15,7 +15,7 @@ import { Button } from '@/components/ui/button'
 import { Badge } from '@/components/ui/badge'
 import { Switch } from '@/components/ui/primitives'
 import { DateRangeTabs, rangeFromPreset, type DatePresetKey } from '@/components/shared/misc'
-import { SEMAFORO, ASSET_CONDITION } from '@/lib/constants'
+import { ASSET_CONDITION } from '@/lib/constants'
 import { cn, fmtNumber, fmtDate } from '@/lib/utils'
 import { etiquetaDeLado } from '@/lib/lados'
 
@@ -35,6 +35,21 @@ const LAYERS: LayerDef[] = [
   { key: 'inventario', label: 'Inventario vial', icon: Boxes, color: 'var(--chart-2)', module: 'inventario', defaultOn: false },
   { key: 'evidencias', label: 'Evidencias GPS', icon: Camera, color: 'var(--chart-3)', module: 'campo', defaultOn: false },
 ]
+
+/**
+ * Los colores del PCI en el mapa, los mismos de la app (OBS 7): el orden
+ * decide el color de un grupo cuando dos estados empatan.
+ */
+const ESTADOS_PCI_MAPA = [
+  { clave: 'vencido', label: 'Vencido', color: '#DC2626' },
+  { clave: 'observado', label: 'Observado', color: '#7C3AED' },
+  { clave: 'por_vencer', label: 'Por vencer', color: '#EAB308' },
+  { clave: 'en_ejecucion', label: 'En ejecución', color: '#2563EB' },
+  { clave: 'por_atender', label: 'Por atender', color: '#94A3B8' },
+  { clave: 'por_validar', label: 'Por validar', color: '#0891B2' },
+  { clave: 'validado_servicon', label: 'Validado SERVICON', color: '#0E7490' },
+  { clave: 'conforme', label: 'Conforme COVINCA', color: '#16A34A' },
+] as const
 
 export function MapaClient() {
   const { service, hasModule } = useSession()
@@ -157,23 +172,53 @@ export function MapaClient() {
       }
 
       // ── PCIs ────────────────────────────────────────────────────────
+      // Por estado real, igual que la app (OBS 7 y 8). Los grupos muestran
+      // cuántos ítems tienen, el color del estado que más se repite y un
+      // anillo oscuro si mezclan estados.
       if (active.has('pci')) {
-        setSource('src-pci', q.data.pci)
-        if (!m.getLayer('l-pci')) {
+        if (!m.getSource('src-pci')) {
+          m.addSource('src-pci', {
+            type: 'geojson', data: q.data.pci ?? empty,
+            cluster: true, clusterRadius: 44, clusterMaxZoom: 13,
+            clusterProperties: Object.fromEntries(ESTADOS_PCI_MAPA.map((e) => [
+              e.clave, ['+', ['case', ['==', ['get', 'estado'], e.clave], 1, 0]],
+            ])) as any,
+          })
+          const maximo: any = ['max', ...ESTADOS_PCI_MAPA.map((e) => ['get', e.clave])]
+          const predominante: any = ['case',
+            ...ESTADOS_PCI_MAPA.flatMap((e) => [['==', ['get', e.clave], maximo], e.color]),
+            '#64748b']
+          const estadosPresentes: any = ['+', ...ESTADOS_PCI_MAPA.map((e) => ['case', ['>', ['get', e.clave], 0], 1, 0])]
+          m.addLayer({
+            id: 'l-pci-cluster', type: 'circle', source: 'src-pci',
+            filter: ['has', 'point_count'],
+            paint: {
+              'circle-color': predominante, 'circle-opacity': 0.92,
+              'circle-radius': ['step', ['get', 'point_count'], 14, 10, 18, 50, 24, 200, 30],
+              'circle-stroke-width': ['case', ['>', estadosPresentes, 1], 4, 2],
+              'circle-stroke-color': ['case', ['>', estadosPresentes, 1], '#0f172a', '#ffffff'],
+            },
+          })
+          m.addLayer({
+            id: 'l-pci-count', type: 'symbol', source: 'src-pci',
+            filter: ['has', 'point_count'],
+            layout: { 'text-field': ['get', 'point_count_abbreviated'], 'text-size': 11, 'text-font': ['Open Sans Bold'] },
+            paint: { 'text-color': '#ffffff' },
+          })
           m.addLayer({
             id: 'l-pci', type: 'circle', source: 'src-pci',
+            filter: ['!', ['has', 'point_count']],
             paint: {
-              'circle-color': [
-                'match', ['get', 'semaforo'],
-                'vencido', '#7f1d1d', 'rojo', '#dc2626', 'ambar', '#f59e0b',
-                'verde', '#16a34a', 'ok', '#0891a8', '#64748b',
-              ],
+              'circle-color': ['match', ['get', 'estado'],
+                ...ESTADOS_PCI_MAPA.flatMap((e) => [e.clave, e.color]), '#64748b'] as any,
               'circle-radius': ['interpolate', ['linear'], ['zoom'], 7, 4, 14, 9],
               'circle-stroke-width': 1.6,
               'circle-stroke-color': '#ffffff',
-              'circle-opacity': 0.92,
+              'circle-opacity': 0.95,
             },
           })
+        } else {
+          ;(m.getSource('src-pci') as any).setData(q.data.pci ?? empty)
         }
       }
 
@@ -235,7 +280,7 @@ export function MapaClient() {
       vis('l-tramos-label', active.has('tramos'))
       ;['l-assets', 'l-assets-cluster', 'l-assets-count'].forEach((id) => vis(id, active.has('inventario')))
       ;['l-reg', 'l-reg-cluster', 'l-reg-count'].forEach((id) => vis(id, active.has('registros')))
-      vis('l-pci', active.has('pci'))
+      ;['l-pci', 'l-pci-cluster', 'l-pci-count'].forEach((id) => vis(id, active.has('pci')))
       vis('l-ev', active.has('evidencias'))
 
       // Encuadre inicial a los tramos
@@ -391,11 +436,9 @@ export function MapaClient() {
               {/* Leyendas de estado */}
               {active.has('pci') && (
                 <Legend
-                  title="Semáforo de PCI"
-                  items={(['verde', 'ambar', 'rojo', 'vencido', 'ok'] as const).map((k) => ({
-                    label: SEMAFORO[k].label,
-                    color: `var(--sem-${k})`,
-                  }))}
+                  title="Ítems PCI por estado"
+                  items={ESTADOS_PCI_MAPA.map((e) => ({ label: e.label, color: e.color }))}
+                  note="Por vencer y vencido marcan solo lo que sigue abierto. Un grupo con anillo oscuro mezcla estados."
                 />
               )}
               {active.has('inventario') && (
@@ -489,7 +532,8 @@ function popupHtml(layerId: string, p: any): string {
       return head(`${p.pci_code} · ítem ${p.item}`, p.descripcion) +
         body(row('Tramo', p.section) + row('Progresiva', p.progresiva) +
              row('Vence', p.due_date ? fmtDate(p.due_date) : '—') +
-             row('Días restantes', p.days_left) + row('Estado', p.status))
+             row('Días restantes', p.days_left) + row('Cuadrilla', p.crew) +
+             row('Estado', ESTADOS_PCI_MAPA.find((e) => e.clave === p.estado)?.label ?? p.status))
     case 'l-ev':
       return head(p.activity ?? 'Evidencia', `${p.phase ?? ''} · ${p.crew ?? ''}`) +
         body(row('Progresiva', p.progresiva) + row('Precisión', `±${Number(p.accuracy ?? 0).toFixed(0)} m`) +

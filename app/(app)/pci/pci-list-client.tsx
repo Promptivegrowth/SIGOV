@@ -192,7 +192,7 @@ export function PciListClient() {
         ) : (
           <div className="grid grid-cols-1 gap-3 sm:grid-cols-2 xl:grid-cols-4">
             <StatCard index={0} label="N.º de PCI abiertos" value={totals.abiertos} icon={FileText} tone="primary" hint={`de ${fmtNumber(data?.length ?? 0)} PCI registrados`} />
-            <StatCard index={1} label="N.º de ítems PCI abiertos" value={totals.itemsAbiertos} icon={Filter} hint={`de ${fmtNumber(totals.items)} ítems · ${fmtNumber(totals.levantados)} levantados`} />
+            <StatCard index={1} label="N.º de ítems PCI abiertos" value={totals.itemsAbiertos} icon={Filter} hint={`de ${fmtNumber(totals.items)} ítems · ${fmtNumber(totals.levantados)} culminados (por validar o conformes)`} />
             <StatCard index={2} label="Ítems críticos" value={totals.criticos} icon={Timer} tone="warning" hint="20% o menos del plazo" />
             <StatCard index={3} label="Ítems vencidos" value={totals.vencidos} icon={TriangleAlert} tone={totals.vencidos ? 'danger' : 'success'} hint="pasaron la fecha límite" />
           </div>

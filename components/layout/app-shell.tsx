@@ -35,13 +35,16 @@ export function AppShell({ children }: { children: React.ReactNode }) {
   React.useEffect(() => setMobileOpen(false), [pathname])
 
   // Guardia de acceso: un módulo apagado para el servicio activo — o un módulo
-  // fuera del rol — no debe ser alcanzable escribiendo la URL a mano.
-  React.useEffect(() => {
+  // fuera del rol — no debe ser alcanzable escribiendo la URL a mano. Mientras
+  // se redirige no se muestra nada: ni un instante de la página ajena.
+  const bloqueada = React.useMemo(() => {
     const item = NAV.find((n) => pathname === n.href || pathname.startsWith(`${n.href}/`))
-    if (!item) return
-    const blocked = (item.module && !hasModule(item.module)) || !item.roles.includes(role)
-    if (blocked) router.replace('/dashboard')
-  }, [pathname, hasModule, role, router])
+    if (!item) return false
+    return Boolean((item.module && !hasModule(item.module)) || !item.roles.includes(role))
+  }, [pathname, hasModule, role])
+  React.useEffect(() => {
+    if (bloqueada) router.replace('/dashboard')
+  }, [bloqueada, router])
 
   return (
     <div className={cn('bg-background min-h-dvh', can.field && 'field-mode')}>
@@ -74,7 +77,7 @@ export function AppShell({ children }: { children: React.ReactNode }) {
               exit={{ opacity: 0, y: -4 }}
               transition={{ duration: 0.22, ease: [0.22, 1, 0.36, 1] }}
             >
-              {children}
+              {bloqueada ? null : children}
             </motion.div>
           </AnimatePresence>
         </main>

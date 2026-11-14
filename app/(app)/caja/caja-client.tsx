@@ -288,7 +288,7 @@ export function CajaClient() {
                           <Eye /> Comprobante
                         </Button>
                       )}
-                      {can.manage && m.status !== 'aprobado' && m.kind !== 'apertura' && (
+                      {can.admin && m.status !== 'aprobado' && m.kind !== 'apertura' && (
                         <Button size="sm" onClick={() => setRevisando(m)}>
                           Revisar
                         </Button>

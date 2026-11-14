@@ -345,7 +345,7 @@ export function ConfiguracionClient() {
             <TabsTrigger value="servicios"><Building2 className="size-3.5" />Servicios</TabsTrigger>
             <TabsTrigger value="ajustes"><SlidersHorizontal className="size-3.5" />Ajustes</TabsTrigger>
             <TabsTrigger value="dispositivo"><HardDrive className="size-3.5" />Dispositivo</TabsTrigger>
-            {can.manage && <TabsTrigger value="seguridad"><ShieldCheck className="size-3.5" />Seguridad</TabsTrigger>}
+            {can.admin && <TabsTrigger value="seguridad"><ShieldCheck className="size-3.5" />Seguridad</TabsTrigger>}
           </TabsList>
 
           {/* ═══ USUARIOS ══════════════════════════════════════════════════ */}
@@ -357,7 +357,7 @@ export function ConfiguracionClient() {
                   {members.data?.length ?? 0} personas con acceso a {service.name}
                 </p>
               </div>
-              {can.manage && (
+              {can.admin && (
                 <Button onClick={() => setUserForm({ open: true })}>
                   <UserPlus className="size-4" />
                   Nuevo usuario
@@ -423,7 +423,7 @@ export function ConfiguracionClient() {
                               {p?.last_seen_at ? fmtRelative(p.last_seen_at) : 'sin registro'}
                             </td>
                             <td className="px-4 py-3">
-                              {can.manage && (
+                              {can.admin && (
                                 <div className="flex justify-end gap-1">
                                   <Tip label="Editar">
                                     <Button variant="ghost" size="icon-sm" onClick={() => setUserForm({ open: true, row: m })}>
@@ -507,7 +507,7 @@ export function ConfiguracionClient() {
                   {(crews.data ?? []).reduce((s: number, c: any) => s + (c.crew_members?.length ?? 0), 0)} integrantes
                 </p>
               </div>
-              {can.manage && (
+              {can.admin && (
                 <Button onClick={() => setCrewForm({ open: true })}>
                   <Plus className="size-4" />
                   Nueva cuadrilla
@@ -520,7 +520,7 @@ export function ConfiguracionClient() {
             ) : !crews.data?.length ? (
               <Card><CardContent className="p-0">
                 <EmptyState icon={Truck} title="Sin cuadrillas" description="Crea la primera cuadrilla para poder programar y registrar trabajo en campo."
-                  action={can.manage && <Button onClick={() => setCrewForm({ open: true })}><Plus className="size-4" />Nueva cuadrilla</Button>} />
+                  action={can.admin && <Button onClick={() => setCrewForm({ open: true })}><Plus className="size-4" />Nueva cuadrilla</Button>} />
               </CardContent></Card>
             ) : (
               crews.data.map((c: any) => (
@@ -538,7 +538,7 @@ export function ConfiguracionClient() {
                         </p>
                       </div>
                       <Badge variant="secondary">{c.crew_members?.length ?? 0} integrantes</Badge>
-                      {can.manage && (
+                      {can.admin && (
                         <div className="flex gap-1">
                           <Tip label="Editar cuadrilla">
                             <Button variant="ghost" size="icon-sm" onClick={() => setCrewForm({ open: true, row: c })}>
@@ -573,7 +573,7 @@ export function ConfiguracionClient() {
                               {m.position}{m.dni ? ` · DNI ${m.dni}` : ''}
                             </span>
                           </span>
-                          {can.manage && (
+                          {can.admin && (
                             <button
                               onClick={() => setConfirm({
                                 open: true,
@@ -611,7 +611,7 @@ export function ConfiguracionClient() {
                   {fmtNumber((sections.data ?? []).reduce((s: number, r: any) => s + Number(r.length_m ?? 0), 0) / 1000, 1)} km
                 </p>
               </div>
-              {can.manage && (
+              {can.admin && (
                 <Button onClick={() => setSectionForm({ open: true })}>
                   <Plus className="size-4" />
                   Nuevo tramo
@@ -653,7 +653,7 @@ export function ConfiguracionClient() {
                               : <Badge variant="secondary">Sin geometría</Badge>}
                           </td>
                           <td className="px-4 py-3 text-right">
-                            {can.manage && (
+                            {can.admin && (
                               <span className="flex justify-end gap-1">
                                 <Tip label={s.geom ? 'Reemplazar el trazo' : 'Cargar el trazo (KML/KMZ)'}>
                                   <Button variant="ghost" size="icon-sm" onClick={() => setGeomSection(s)}>
@@ -695,7 +695,7 @@ export function ConfiguracionClient() {
                   {activities.data?.length ?? 0} partidas de mantenimiento rutinario
                 </p>
               </div>
-              {can.manage && (
+              {can.admin && (
                 <Button onClick={() => setActivityForm({ open: true })}>
                   <Plus className="size-4" />
                   Nueva actividad
@@ -735,7 +735,7 @@ export function ConfiguracionClient() {
                               : <span className="text-muted-foreground text-[11.5px]">opcional</span>}
                           </td>
                           <td className="px-4 py-3 text-right">
-                            {can.manage && (
+                            {can.admin && (
                               <span className="flex justify-end gap-1">
                                 <Tip label="Editar actividad">
                                   <Button variant="ghost" size="icon-sm" onClick={() => setActivityForm({ open: true, row: a })}>
@@ -765,7 +765,7 @@ export function ConfiguracionClient() {
 
           {/* ═══ SERVICIOS ═════════════════════════════════════════════════ */}
           <TabsContent value="rendimientos" className="mt-4">
-            <RendimientosForm serviceId={service.id} editable={can.manage} />
+            <RendimientosForm serviceId={service.id} editable={can.admin} />
           </TabsContent>
 
           <TabsContent value="servicios" className="mt-4 space-y-3">
@@ -844,7 +844,7 @@ export function ConfiguracionClient() {
           </TabsContent>
 
           {/* ═══ SEGURIDAD ═════════════════════════════════════════════════ */}
-          {can.manage && (
+          {can.admin && (
             <TabsContent value="seguridad" className="mt-4 space-y-4">
               <div className="grid grid-cols-1 gap-3 md:grid-cols-3">
                 {[

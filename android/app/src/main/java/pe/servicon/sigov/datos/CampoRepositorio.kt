@@ -475,6 +475,8 @@ class CampoRepositorio @Inject constructor(
         registro: RegistroLocal,
         cantidad: Double,
         observacion: String? = registro.observacion,
+        /** Por qué se ejecutó más de lo solicitado (OBS 1): queda en el avance. */
+        excesoMotivo: String? = null,
     ): RegistroLocal = withContext(Dispatchers.IO) {
         val nuevo = registro.copy(cantidad = cantidad, observacion = observacion)
         partes.guardarRegistro(nuevo)
@@ -501,9 +503,20 @@ class CampoRepositorio @Inject constructor(
                 }
                 put("quantity", cantidad)
                 observacion?.takeIf { it.isNotBlank() }?.let { put("observation", it) }
+                excesoMotivo?.takeIf { it.isNotBlank() }?.let { put("exceso_motivo", it) }
             },
         )
         nuevo
+    }
+
+    /**
+     * La situación de un PCI con todas sus cuadrillas (CASO 6): cada jefe
+     * ejecuta lo suyo, pero ve cómo va el PCI entero. Null sin señal.
+     */
+    suspend fun situacionPci(pciId: String): JsonObject? = withContext(Dispatchers.IO) {
+        runCatching {
+            supabase.postgrest.rpc("pci_situacion", buildJsonObject { put("p_pci", pciId) }).decodeAs<JsonObject>()
+        }.getOrNull()
     }
 
     suspend fun validarPci(itemId: String, conforme: Boolean, nota: String?) = withContext(Dispatchers.IO) {

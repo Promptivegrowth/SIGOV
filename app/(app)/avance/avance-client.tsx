@@ -95,7 +95,10 @@ export function AvanceClient() {
   const avance = plan.length ? Math.round((ejecutadas / plan.length) * 100) : 0
 
   const delDia = plan.filter((p: any) => p.scheduled_on === hoy)
-  const pciAtendidos = pci.filter((p: any) => ['levantado', 'subsanado', 'validado'].includes(p.status)).length
+  // OBS 8: lo que espera revisión y lo conforme, aparte
+  const pciPorValidar = pci.filter((p: any) => ['levantado', 'subsanado'].includes(p.status)).length
+  const pciConformes = pci.filter((p: any) => p.status === 'validado').length
+  const pciObservados = pci.filter((p: any) => p.status === 'observado').length
   const pciAbiertos = pci.filter((p: any) => ['pendiente', 'en_atencion'].includes(p.status))
   // Documentos PCI distintos con algún ítem abierto: no es lo mismo «3 PCI»
   // que «314 ítems» (OBS-12).
@@ -157,8 +160,11 @@ export function AvanceClient() {
                 </CardHeader>
                 <CardContent className="space-y-2.5 pt-2">
                   <Fila label="Ítems asignados" valor={pci.length} />
-                  <Fila label="Ítems atendidos" valor={pciAtendidos} tono="success" />
-                  <Fila label="Ítems abiertos" valor={pciAbiertos.length} tono="warning" />
+                  {/* OBS 16: por atender + en ejecución son los pendientes de culminar */}
+                  <Fila label="Ítems PCI pendientes de culminar" valor={pciAbiertos.length} tono="warning" />
+                  <Fila label="Ítems observados" valor={pciObservados} tono="danger" />
+                  <Fila label="Ítems por validar" valor={pciPorValidar} />
+                  <Fila label="Ítems conformes" valor={pciConformes} tono="success" />
                   <Fila label="Ítems vencidos"
                     valor={pciAbiertos.filter((p: any) => (p.days_left ?? 1) < 0).length} tono="danger" />
                 </CardContent>
@@ -241,7 +247,7 @@ export function AvanceClient() {
             {pciAbiertos.length > 0 && (
               <Card>
                 <CardHeader className="pb-2">
-                  <CardTitle className="text-[15px]">Ítems PCI por atender</CardTitle>
+                  <CardTitle className="text-[15px]">Ítems PCI pendientes de culminar</CardTitle>
                   <CardDescription className="text-[12px]">Lo que vence primero va arriba</CardDescription>
                 </CardHeader>
                 <CardContent className="px-3 pb-3">

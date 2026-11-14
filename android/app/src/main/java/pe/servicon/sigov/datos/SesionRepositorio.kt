@@ -248,6 +248,24 @@ class SesionRepositorio @Inject constructor(
             ?.jsonObject?.get("full_name")?.jsonPrimitive?.contentOrNull
     }
 
+    /**
+     * El contrato del usuario: el de su cuadrilla, o el primero en que es
+     * miembro. El supervisor y SSOMA no lideran cuadrilla y registran
+     * observaciones e inspecciones desde el campo (matriz, 14/11).
+     */
+    suspend fun servicioId(): String? = cuadrilla()?.servicioId ?: recordando("mi_servicio") {
+        val usuario = usuarioId() ?: return@recordando null
+        supabase.postgrest
+            .from("service_members")
+            .select(Columns.list("service_id")) {
+                filter { eq("profile_id", usuario) }
+                limit(1)
+            }
+            .decodeList<JsonObject>()
+            .firstOrNull()
+            ?.get("service_id")?.jsonPrimitive?.contentOrNull
+    }
+
     /** La cuadrilla que lidera, que es la que va a registrar trabajo. */
     suspend fun cuadrilla(): Cuadrilla? = recordando("mi_cuadrilla") {
         val usuario = usuarioId() ?: return@recordando null

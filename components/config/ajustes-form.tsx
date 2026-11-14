@@ -119,7 +119,7 @@ export function AjustesDelServicio() {
             <Switch
               checked={selloActivo}
               onCheckedChange={(v) => cambiar('sello', 'activo', v)}
-              disabled={!can.manage}
+              disabled={!can.admin}
             />
           </label>
 
@@ -136,7 +136,7 @@ export function AjustesDelServicio() {
                 <Switch
                   checked={c.fija ? true : sello[c.clave] === true}
                   onCheckedChange={(v) => cambiar('sello', c.clave, v)}
-                  disabled={c.fija || !can.manage || !selloActivo || (c.clave === 'precision' && sello.geo !== true)}
+                  disabled={c.fija || !can.admin || !selloActivo || (c.clave === 'precision' && sello.geo !== true)}
                 />
               </label>
             ))}
@@ -167,7 +167,7 @@ export function AjustesDelServicio() {
                 min={1}
                 value={actual?.alertas?.dias_aviso_vencimiento ?? 30}
                 onChange={(e) => cambiar('alertas', 'dias_aviso_vencimiento', Number(e.target.value))}
-                disabled={!can.manage}
+                disabled={!can.admin}
               />
             </label>
             <label className="block">
@@ -179,7 +179,7 @@ export function AjustesDelServicio() {
                 min={1}
                 value={actual?.alertas?.dias_aviso_pci ?? 2}
                 onChange={(e) => cambiar('alertas', 'dias_aviso_pci', Number(e.target.value))}
-                disabled={!can.manage}
+                disabled={!can.admin}
               />
             </label>
             {/* Los plazos que admite el contrato (OBS-08) y la tolerancia antes
@@ -191,7 +191,7 @@ export function AjustesDelServicio() {
               <Input
                 value={(actual?.pci?.plazos ?? [1, 2, 3, 7, 14]).join(', ')}
                 onChange={(e) => cambiar('pci', 'plazos', e.target.value.split(',').map((x) => Number(x.trim())).filter((n) => Number.isInteger(n) && n > 0))}
-                disabled={!can.manage}
+                disabled={!can.admin}
               />
             </label>
             <label className="block">
@@ -203,7 +203,7 @@ export function AjustesDelServicio() {
                 min={0}
                 value={actual?.pci?.tolerancia ?? 1}
                 onChange={(e) => cambiar('pci', 'tolerancia', Number(e.target.value))}
-                disabled={!can.manage}
+                disabled={!can.admin}
               />
             </label>
           </CardContent>
@@ -239,7 +239,7 @@ export function AjustesDelServicio() {
                   min={5}
                   value={actual?.ubicacion?.[clave] ?? omision}
                   onChange={(e) => cambiar('ubicacion', clave, Math.max(5, Number(e.target.value)))}
-                  disabled={!can.manage}
+                  disabled={!can.admin}
                 />
                 <span className="text-muted-foreground mt-1 block text-[11px]">{detalle}</span>
               </label>
@@ -248,7 +248,7 @@ export function AjustesDelServicio() {
         </Card>
       </div>
 
-      {can.manage && (
+      {can.admin && (
         <div className="flex items-center justify-end gap-2">
           {sucio && (
             <Button variant="ghost" size="sm" onClick={() => setBorrador(null)}>

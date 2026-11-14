@@ -26,7 +26,7 @@ import { mensajeAmigable } from '@/lib/errores'
  * no se borra: se desactiva. Deja de ofrecerse para pedir, en la web y en
  * el celular, y su historia queda intacta.
  */
-export function MaestroTab({ serviceId, can }: { serviceId: string; can: { manage: boolean } }) {
+export function MaestroTab({ serviceId, can }: { serviceId: string; can: { manage: boolean; admin: boolean } }) {
   const sb = React.useMemo(() => createClient(), [])
   const qc = useQueryClient()
   const categorias = useCategorias()
@@ -39,18 +39,21 @@ export function MaestroTab({ serviceId, can }: { serviceId: string; can: { manag
   const maestro = useQuery({
     queryKey: ['insumos', serviceId, 'maestro'],
     queryFn: async () => {
-      const [s, v] = await Promise.all([
+      const [s, v, c] = await Promise.all([
         sb.from('supplies')
-          .select('id, code, name, category, unit_id, min_stock, unit_cost, is_active, notes, created_at, updated_at, units(symbol, name)')
+          .select('id, code, name, category, unit_id, min_stock, is_active, notes, created_at, updated_at, units(symbol, name)')
           .eq('service_id', serviceId)
           .is('deleted_at', null)
           .order('code'),
         sb.from('v_supplies').select('id, stock, committed').eq('service_id', serviceId),
+        // El costo es información económica interna: tabla propia (0126)
+        sb.from('supply_costs').select('supply_id, unit_cost').eq('service_id', serviceId),
       ])
       if (s.error) throw s.error
       if (v.error) throw v.error
       const stock = new Map((v.data ?? []).map((x: any) => [x.id, x]))
-      return (s.data ?? []).map((x: any) => ({ ...x, ...stock.get(x.id) }))
+      const costos = new Map((c.data ?? []).map((x: any) => [x.supply_id, x.unit_cost]))
+      return (s.data ?? []).map((x: any) => ({ ...x, ...stock.get(x.id), unit_cost: costos.get(x.id) ?? null }))
     },
   })
 
@@ -84,7 +87,7 @@ export function MaestroTab({ serviceId, can }: { serviceId: string; can: { manag
           <option value="inactivos">Desactivados ({inactivos})</option>
           <option value="todos">Todos</option>
         </Selector>
-        {can.manage && (
+        {can.admin && (
           <Button className="sm:ml-auto" onClick={() => setEditando('nuevo')}>
             <Plus /> Nuevo insumo
           </Button>
@@ -109,7 +112,7 @@ export function MaestroTab({ serviceId, can }: { serviceId: string; can: { manag
                 <th className="px-2 py-2 text-right font-medium">Costo ref.</th>
                 <th className="px-2 py-2 text-right font-medium">Stock</th>
                 <th className="px-2 py-2 font-medium">Estado</th>
-                {can.manage && <th className="px-2 py-2" />}
+                {can.admin && <th className="px-2 py-2" />}
               </tr>
             </thead>
             <tbody>
@@ -128,7 +131,7 @@ export function MaestroTab({ serviceId, can }: { serviceId: string; can: { manag
                   <td className="px-2 py-2">
                     {s.is_active ? <Badge variant="success">Activo</Badge> : <Badge variant="outline">Desactivado</Badge>}
                   </td>
-                  {can.manage && (
+                  {can.admin && (
                     <td className="px-2 py-2 text-right whitespace-nowrap">
                       <Button size="icon-sm" variant="ghost" onClick={() => setEditando(s)} aria-label={`Editar ${s.name}`}>
                         <Pencil />
@@ -207,14 +210,21 @@ function InsumoDialog({ serviceId, insumo, onClose, onHecho }: {
       category: categoria,
       unit_id: unitId,
       min_stock: leerCifra(minimo) || 0,
-      unit_cost: costo.trim() ? leerCifra(costo) : null,
       notes: notas.trim() || null,
       updated_at: new Date().toISOString(),
     }
     setEnviando(true)
     const { data, error } = insumo
-      ? await sb.from('supplies').update(fila).eq('id', insumo.id).select('code').single()
-      : await sb.from('supplies').insert({ ...fila, service_id: serviceId, code: code.trim() }).select('code').single()
+      ? await sb.from('supplies').update(fila).eq('id', insumo.id).select('id, code').single()
+      : await sb.from('supplies').insert({ ...fila, service_id: serviceId, code: code.trim() }).select('id, code').single()
+    // El costo va aparte: solo el administrador lo ve y lo escribe (0126)
+    if (!error && data) {
+      const valor = costo.trim() ? leerCifra(costo) : null
+      const r = valor == null
+        ? await sb.from('supply_costs').delete().eq('supply_id', data.id)
+        : await sb.from('supply_costs').upsert({ supply_id: data.id, service_id: serviceId, unit_cost: valor, updated_at: new Date().toISOString() })
+      if (r.error) { setEnviando(false); toast.error(mensajeAmigable(r.error, 'Se guardó el insumo, pero no su costo')); onHecho(); return }
+    }
     setEnviando(false)
     if (error) {
       toast.error(error.message.includes('ux_supplies_servicio_nombre')

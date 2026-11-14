@@ -24,6 +24,12 @@ object Peru {
     /** El día de hoy en Lima. Es la fecha con la que se abre el parte. */
     fun hoy(): LocalDate = LocalDate.now(zona)
 
+    /** «2026-11-14T15:32:00Z» → «14/11/2026 10:32», en hora de Lima. */
+    fun fechaHora(iso: String): String = runCatching {
+        java.time.OffsetDateTime.parse(iso).atZoneSameInstant(zona)
+            .format(java.time.format.DateTimeFormatter.ofPattern("dd/MM/yyyy HH:mm"))
+    }.getOrDefault(iso.take(16).replace('T', ' '))
+
     fun ahora(): LocalDateTime = LocalDateTime.now(zona)
 
     fun hora(): LocalTime = LocalTime.now(zona)

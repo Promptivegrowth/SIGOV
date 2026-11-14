@@ -42,12 +42,22 @@ class AccesoViewModel @Inject constructor(
         _estado.update { it.copy(cargando = true, error = null) }
 
         viewModelScope.launch {
-            runCatching { sesion.entrar(s.correo, s.contrasena) }
+            runCatching {
+                sesion.entrar(s.correo, s.contrasena)
+                // El Visor COVINCA revisa en la plataforma web: la app es
+                // para el personal de campo de SERVICON (matriz, 14/11)
+                if (sesion.perfil()?.role == "visor") {
+                    sesion.salir()
+                    error("VISOR")
+                }
+            }
                 .onSuccess { _estado.update { e -> e.copy(cargando = false, entro = true) } }
                 .onFailure { fallo ->
                     // El mensaje que devuelve el servidor viene en inglés y no
                     // le dice nada a un capataz a las seis de la mañana.
                     val mensaje = when {
+                        fallo.message == "VISOR" ->
+                            "Esta aplicación es para el personal de campo de SERVICON. Revisa y descarga la información desde la plataforma web."
                         fallo.message?.contains("Invalid login", true) == true ||
                         fallo.message?.contains("credentials", true) == true ->
                             "El usuario o la contraseña no coinciden."

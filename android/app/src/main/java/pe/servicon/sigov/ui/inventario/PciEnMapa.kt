@@ -18,6 +18,7 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.toArgb
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
@@ -72,15 +73,18 @@ import pe.servicon.sigov.ui.theme.Marca
  */
 enum class AvancePci(val etiqueta: String, val singular: String, val color: Color) {
     // Los que no tienen ni una foto (Elvis, 26/10: «un filtro de pendientes»)
-    POR_ATENDER("Por atender", "Por atender · sin fotos", Color(0xFF64748B)),
+    POR_ATENDER("Por atender", "Por atender · sin fotos", Color(0xFF94A3B8)),
     EN_EJECUCION("En ejecución", "En ejecución", Color(0xFF2563EB)),
-    ATENDIDO("Atendidos / Por validar", "Por validar", Color(0xFF16A34A)),
+    // OBS 8 (4.º entregable): lo que espera revisión no es lo conforme
+    POR_VALIDAR("Por validar", "Por validar", Color(0xFF0891B2)),
+    CONFORME("Conformes", "Conforme COVINCA", Color(0xFF16A34A)),
     // Morado, para no confundirlo con el rojo de lo vencido (REV3-OBS-30)
     OBSERVADO("Observados", "Observado", Color(0xFF7C3AED)),
 }
 
 fun avanceDe(item: ItemPci): AvancePci = when (estadoDe(item)) {
-    Estado.CONFORMES, Estado.VALIDADOS -> AvancePci.ATENDIDO
+    Estado.CONFORMES -> AvancePci.POR_VALIDAR
+    Estado.VALIDADOS -> AvancePci.CONFORME
     Estado.EN_EJECUCION -> AvancePci.EN_EJECUCION
     Estado.OBSERVADOS -> AvancePci.OBSERVADO
     else -> AvancePci.POR_ATENDER
@@ -94,7 +98,9 @@ fun avanceDe(item: ItemPci): AvancePci = when (estadoDe(item)) {
 fun colorEnMapa(item: ItemPci): Color {
     val a = avanceDe(item)
     return when {
-        a == AvancePci.ATENDIDO -> AvancePci.ATENDIDO.color
+        // Lo culminado y lo observado van por su estado; el plazo solo pinta
+        // lo que sigue por atender o en ejecución (OBS 7)
+        a == AvancePci.POR_VALIDAR || a == AvancePci.CONFORME || a == AvancePci.OBSERVADO -> a.color
         plazoDe(item) == PlazoEnMapa.VENCIDO -> PlazoEnMapa.VENCIDO.color
         plazoDe(item) == PlazoEnMapa.POR_VENCER -> PlazoEnMapa.POR_VENCER.color
         else -> a.color
@@ -103,12 +109,40 @@ fun colorEnMapa(item: ItemPci): Color {
 
 /** El plazo de lo que falta atender: aparte del estado, para no mezclarlos. */
 enum class PlazoEnMapa(val etiqueta: String, val color: Color) {
-    POR_VENCER("Por vencer (2 días)", Color(0xFFF59E0B)),
+    POR_VENCER("Por vencer (2 días)", Color(0xFFEAB308)),
     VENCIDO("Vencidos", Color(0xFFDC2626)),
 }
 
+/**
+ * Las claves con que se cuentan los estados de un grupo, en el orden que
+ * desempata cuando dos se repiten igual: lo más urgente primero.
+ */
+private val CLAVES_DE_GRUPO: List<Pair<String, Color>> = listOf(
+    "vencido" to PlazoEnMapa.VENCIDO.color,
+    "observado" to AvancePci.OBSERVADO.color,
+    "por_vencer" to PlazoEnMapa.POR_VENCER.color,
+    "en_ejecucion" to AvancePci.EN_EJECUCION.color,
+    "por_atender" to AvancePci.POR_ATENDER.color,
+    "por_validar" to AvancePci.POR_VALIDAR.color,
+    "conforme" to AvancePci.CONFORME.color,
+)
+
+/** La clave de color de un punto, la misma que decide su color. */
+private fun claveDeGrupo(item: ItemPci): String {
+    val a = avanceDe(item)
+    return when {
+        a == AvancePci.POR_VALIDAR -> "por_validar"
+        a == AvancePci.CONFORME -> "conforme"
+        a == AvancePci.OBSERVADO -> "observado"
+        plazoDe(item) == PlazoEnMapa.VENCIDO -> "vencido"
+        plazoDe(item) == PlazoEnMapa.POR_VENCER -> "por_vencer"
+        a == AvancePci.EN_EJECUCION -> "en_ejecucion"
+        else -> "por_atender"
+    }
+}
+
 fun plazoDe(item: ItemPci): PlazoEnMapa? {
-    if (avanceDe(item) == AvancePci.ATENDIDO) return null
+    if (avanceDe(item) == AvancePci.POR_VALIDAR || avanceDe(item) == AvancePci.CONFORME) return null
     val dias = diasQueLeQuedan(item) ?: return null
     return when {
         dias < 0 -> PlazoEnMapa.VENCIDO
@@ -352,8 +386,8 @@ fun PantallaPciEnMapa(
                         verticalArrangement = Arrangement.spacedBy(2.dp),
                     ) {
                         listOf(
-                            listOf(AvancePci.ATENDIDO.color to "Atendido", PlazoEnMapa.VENCIDO.color to "Vencido", PlazoEnMapa.POR_VENCER.color to "Por vencer"),
-                            listOf(AvancePci.EN_EJECUCION.color to "En ejecución", AvancePci.OBSERVADO.color to "Observado", AvancePci.POR_ATENDER.color to "Por atender"),
+                            listOf(AvancePci.POR_ATENDER.color to "Por atender", AvancePci.EN_EJECUCION.color to "En ejecución", AvancePci.POR_VALIDAR.color to "Por validar"),
+                            listOf(AvancePci.CONFORME.color to "Conforme", AvancePci.OBSERVADO.color to "Observado", PlazoEnMapa.POR_VENCER.color to "Por vencer", PlazoEnMapa.VENCIDO.color to "Vencido"),
                         ).forEach { fila ->
                             Row(horizontalArrangement = Arrangement.spacedBy(6.dp)) {
                                 fila.forEach { (c, t) ->
@@ -478,15 +512,30 @@ private fun MapaDePci(
                         PropertyFactory.lineOpacity(0.85f),
                     ))
                     // Lejos, los puntos se agrupan con su cantidad (REV3-REC-01)
-                    estilo.addSource(GeoJsonSource("src-pci", FeatureCollection.fromFeatures(emptyList()),
-                        org.maplibre.android.style.sources.GeoJsonOptions().withCluster(true).withClusterMaxZoom(11).withClusterRadius(42)))
+                    // OBS 7: el grupo lleva el color del estado que más se repite y
+                    // un anillo oscuro si mezcla estados
+                    val opciones = org.maplibre.android.style.sources.GeoJsonOptions()
+                        .withCluster(true).withClusterMaxZoom(11).withClusterRadius(42)
+                    CLAVES_DE_GRUPO.forEach { (clave, _) ->
+                        opciones.withClusterProperty(clave, Expression.literal("+"),
+                            Expression.switchCase(Expression.eq(Expression.get("clave"), Expression.literal(clave)), Expression.literal(1), Expression.literal(0)))
+                    }
+                    estilo.addSource(GeoJsonSource("src-pci", FeatureCollection.fromFeatures(emptyList()), opciones))
+                    val maximo = Expression.max(*CLAVES_DE_GRUPO.map { (clave, _) -> Expression.get(clave) }.toTypedArray())
+                    val predominante = Expression.switchCase(
+                        *CLAVES_DE_GRUPO.flatMap { (clave, color) -> listOf(Expression.eq(Expression.get(clave), maximo), Expression.color(color.toArgb())) }.toTypedArray(),
+                        Expression.color(android.graphics.Color.parseColor("#64748B")),
+                    )
+                    val estadosPresentes = Expression.sum(
+                        *CLAVES_DE_GRUPO.map { (clave, _) -> Expression.switchCase(Expression.gt(Expression.get(clave), Expression.literal(0)), Expression.literal(1), Expression.literal(0)) }.toTypedArray())
+                    val mixto = Expression.gt(estadosPresentes, Expression.literal(1))
                     estilo.addLayer(CircleLayer("capa-pci-grupos", "src-pci").withProperties(
-                        PropertyFactory.circleColor("#072D70"),
-                        PropertyFactory.circleOpacity(0.8f),
+                        PropertyFactory.circleColor(predominante),
+                        PropertyFactory.circleOpacity(0.9f),
                         PropertyFactory.circleRadius(Expression.step(Expression.get("point_count"), Expression.literal(12f),
                             Expression.stop(5, 16f), Expression.stop(20, 21f), Expression.stop(60, 27f))),
-                        PropertyFactory.circleStrokeWidth(2f),
-                        PropertyFactory.circleStrokeColor("#FFFFFF"),
+                        PropertyFactory.circleStrokeWidth(Expression.switchCase(mixto, Expression.literal(4f), Expression.literal(2f))),
+                        PropertyFactory.circleStrokeColor(Expression.switchCase(mixto, Expression.color(android.graphics.Color.parseColor("#0F172A")), Expression.color(android.graphics.Color.WHITE))),
                     ).withFilter(Expression.has("point_count")))
                     // Sin texto: el mapa base no trae fuentes; el tamaño del grupo dice cuántos son
                     estilo.addLayer(CircleLayer("capa-pci", "src-pci").withFilter(Expression.not(Expression.has("point_count"))).withProperties(
@@ -522,7 +571,9 @@ private fun MapaDePci(
             Feature.fromGeometry(Point.fromLngLat(lng, lat)).apply {
                 addStringProperty("id", i.id)
                 addStringProperty("color", hex(colorEnMapa(i)))
-                addStringProperty("borde", "#FFFFFF")
+                addStringProperty("clave", claveDeGrupo(i))
+                // Lo observado vencido conserva su morado con el borde rojo
+                addStringProperty("borde", if (avanceDe(i) == AvancePci.OBSERVADO && plazoDe(i) == PlazoEnMapa.VENCIDO) "#DC2626" else "#FFFFFF")
             }
         }
         val lineas = items.mapNotNull { i ->

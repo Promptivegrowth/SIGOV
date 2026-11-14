@@ -157,93 +157,107 @@ fun PantallaJornada(
                 .padding(14.dp),
             verticalArrangement = Arrangement.spacedBy(10.dp),
         ) {
-            // ── La fila de contexto del documento ───────────────────────
-            Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                // Tocar la fecha permite ir a un día anterior y subsanar lo que faltó
-                FichaDato(
-                    Icons.Outlined.CalendarMonth,
-                    if (estado.diaDocumentos == pe.servicon.sigov.datos.Peru.hoy()) "Fecha" else "Viendo el día",
-                    estado.fechaCorta,
-                    if (estado.diaDocumentos == pe.servicon.sigov.datos.Peru.hoy()) Marca.Azul else Marca.Naranja,
-                    Modifier.weight(1f),
-                    alTocar = { eligiendoDia = true },
-                )
-                FichaDato(
-                    Icons.Outlined.Groups, "Cuadrilla",
-                    estado.cuadrillaCodigo.ifBlank { if (estado.cargando) "…" else "—" },
-                    Marca.VerdeBandera, Modifier.weight(1f),
+            // El supervisor, el residente, el administrador y SSOMA no llevan
+            // cuadrilla en el teléfono: registran observaciones e inspeccionan el
+            // inventario; lo demás está en la plataforma web (matriz, 14/11)
+            val esJefe = estado.rol == "jefe_cuadrilla"
+            if (!esJefe && !estado.cargando) {
+                Text(
+                    "Desde el teléfono registras observaciones de campo y revisas el inventario vial. " +
+                        "La programación, los PCI y las revisiones se gestionan en la plataforma web.",
+                    style = MaterialTheme.typography.bodyMedium,
+                    color = TintaSuave,
                 )
             }
-            if (estado.personas.isNotEmpty()) {
-                FichaDato(
-                    Icons.Outlined.PhoneAndroid, "Usa este celular",
-                    estado.quienUsa ?: "Elegir",
-                    Marca.Azul, Modifier.fillMaxWidth(),
-                    alTocar = { eligiendoPersona = true },
-                )
-            }
-            Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                FichaDato(
-                    Icons.Outlined.SupervisorAccount, "Supervisor",
-                    // Mientras carga no se afirma nada: «Sin asignar» es una
-                    // frase que dice algo, y a los dos segundos resulta falsa.
-                    estado.supervisor.ifBlank { if (estado.cargando) "…" else "Sin asignar" },
-                    Marca.Azul, Modifier.weight(1f),
-                )
-                FichaDato(
-                    Icons.Outlined.Place, "Sector / Tramo",
-                    estado.sector.ifBlank { if (estado.cargando) "…" else "—" },
-                    Marca.Naranja, Modifier.weight(1f),
-                )
-            }
-            Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                FichaDato(
-                    Icons.Outlined.AccountBalanceWallet, "Saldo disponible",
-                    estado.saldo,
-                    Marca.VerdeBandera, Modifier.weight(1f),
-                    alTocar = alAbrirCaja,
-                )
-                FichaDato(
-                    // Lo que espera señal, y dicho así (SEG-V2-OBS-01): lo que
-                    // falta hacer está en «Documentos del día» y en PCI
-                    Icons.Outlined.CloudUpload, "Por sincronizar",
-                    if (estado.pendientes == 0) "Todo enviado" else estado.pendientes.toString(),
-                    if (estado.pendientes == 0) Marca.VerdeBandera else Marca.Naranja,
-                    Modifier.weight(1f),
-                    alTocar = alAbrirSincronizacion,
-                )
-            }
+            if (esJefe) {
+                // ── La fila de contexto del documento ───────────────────────
+                Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                    // Tocar la fecha permite ir a un día anterior y subsanar lo que faltó
+                    FichaDato(
+                        Icons.Outlined.CalendarMonth,
+                        if (estado.diaDocumentos == pe.servicon.sigov.datos.Peru.hoy()) "Fecha" else "Viendo el día",
+                        estado.fechaCorta,
+                        if (estado.diaDocumentos == pe.servicon.sigov.datos.Peru.hoy()) Marca.Azul else Marca.Naranja,
+                        Modifier.weight(1f),
+                        alTocar = { eligiendoDia = true },
+                    )
+                    FichaDato(
+                        Icons.Outlined.Groups, "Cuadrilla",
+                        estado.cuadrillaCodigo.ifBlank { if (estado.cargando) "…" else "—" },
+                        Marca.VerdeBandera, Modifier.weight(1f),
+                    )
+                }
+                if (estado.personas.isNotEmpty()) {
+                    FichaDato(
+                        Icons.Outlined.PhoneAndroid, "Usa este celular",
+                        estado.quienUsa ?: "Elegir",
+                        Marca.Azul, Modifier.fillMaxWidth(),
+                        alTocar = { eligiendoPersona = true },
+                    )
+                }
+                Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                    FichaDato(
+                        Icons.Outlined.SupervisorAccount, "Supervisor",
+                        // Mientras carga no se afirma nada: «Sin asignar» es una
+                        // frase que dice algo, y a los dos segundos resulta falsa.
+                        estado.supervisor.ifBlank { if (estado.cargando) "…" else "Sin asignar" },
+                        Marca.Azul, Modifier.weight(1f),
+                    )
+                    FichaDato(
+                        Icons.Outlined.Place, "Sector / Tramo",
+                        estado.sector.ifBlank { if (estado.cargando) "…" else "—" },
+                        Marca.Naranja, Modifier.weight(1f),
+                    )
+                }
+                Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                    FichaDato(
+                        Icons.Outlined.AccountBalanceWallet, "Saldo disponible",
+                        estado.saldo,
+                        Marca.VerdeBandera, Modifier.weight(1f),
+                        alTocar = alAbrirCaja,
+                    )
+                    FichaDato(
+                        // Lo que espera señal, y dicho así (SEG-V2-OBS-01): lo que
+                        // falta hacer está en «Documentos del día» y en PCI
+                        Icons.Outlined.CloudUpload, "Por sincronizar",
+                        if (estado.pendientes == 0) "Todo enviado" else estado.pendientes.toString(),
+                        if (estado.pendientes == 0) Marca.VerdeBandera else Marca.Naranja,
+                        Modifier.weight(1f),
+                        alTocar = alAbrirSincronizacion,
+                    )
+                }
 
-            // ── Los documentos del día: lo que falta, en rojo ───────────
-            if (estado.diaDocumentos != pe.servicon.sigov.datos.Peru.hoy()) {
-                Surface(
-                    color = Marca.Naranja.copy(alpha = 0.12f),
-                    shape = RoundedCornerShape(12.dp),
-                    modifier = Modifier.fillMaxWidth(),
-                ) {
-                    Row(Modifier.padding(horizontal = 14.dp, vertical = 8.dp), verticalAlignment = Alignment.CenterVertically) {
-                        Text(
-                            "Documentos del " + pe.servicon.sigov.datos.Peru.fechaLarga(estado.diaDocumentos).lowercase() +
-                                ". Toca uno en rojo para subsanarlo.",
-                            style = MaterialTheme.typography.bodySmall,
-                            color = Marca.Naranja,
-                            modifier = Modifier.weight(1f),
-                        )
-                        TextButton(onClick = { vm.verDia(pe.servicon.sigov.datos.Peru.hoy()) }) { Text("Volver a hoy") }
+                // ── Los documentos del día: lo que falta, en rojo ───────────
+                if (estado.diaDocumentos != pe.servicon.sigov.datos.Peru.hoy()) {
+                    Surface(
+                        color = Marca.Naranja.copy(alpha = 0.12f),
+                        shape = RoundedCornerShape(12.dp),
+                        modifier = Modifier.fillMaxWidth(),
+                    ) {
+                        Row(Modifier.padding(horizontal = 14.dp, vertical = 8.dp), verticalAlignment = Alignment.CenterVertically) {
+                            Text(
+                                "Documentos del " + pe.servicon.sigov.datos.Peru.fechaLarga(estado.diaDocumentos).lowercase() +
+                                    ". Toca uno en rojo para subsanarlo.",
+                                style = MaterialTheme.typography.bodySmall,
+                                color = Marca.Naranja,
+                                modifier = Modifier.weight(1f),
+                            )
+                            TextButton(onClick = { vm.verDia(pe.servicon.sigov.datos.Peru.hoy()) }) { Text("Volver a hoy") }
+                        }
                     }
                 }
-            }
-            if (estado.documentos.isNotEmpty()) {
-                DocumentosDelDia(
-                    documentos = estado.documentos,
-                    alTocar = { d ->
-                        when (d.tipo) {
-                            "reporte_diario" -> alAbrirParteDelDia(d.fecha)
-                            "higiene" -> alAbrirHigieneDelDia(d.fecha)
-                            else -> alAbrirDocumento(d)
-                        }
-                    },
-                )
+                if (estado.documentos.isNotEmpty()) {
+                    DocumentosDelDia(
+                        documentos = estado.documentos,
+                        alTocar = { d ->
+                            when (d.tipo) {
+                                "reporte_diario" -> alAbrirParteDelDia(d.fecha)
+                                "higiene" -> alAbrirHigieneDelDia(d.fecha)
+                                else -> alAbrirDocumento(d)
+                            }
+                        },
+                    )
+                }
             }
 
             // ── El menú, en cuadrícula de dos columnas ──────────────────
@@ -258,7 +272,7 @@ fun PantallaJornada(
             val verde = Marca.VerdeBandera
             val apartados = listOf(
                 Apartado(Icons.Outlined.Assignment, "Programación", "Lo asignado a tu cuadrilla", azul, estado.programadas, alAbrirProgramacion),
-                Apartado(Icons.AutoMirrored.Outlined.ListAlt, "Ítems PCI", "Por atender", verde, estado.pci, alAbrirPci),
+                Apartado(Icons.AutoMirrored.Outlined.ListAlt, "Ítems PCI", "Pendientes de culminar", verde, estado.pci, alAbrirPci),
                 Apartado(Icons.Outlined.EditNote, "Reporte Diario", "Registrar lo ejecutado", azul, 0, alAbrirParte),
                 Apartado(Icons.Outlined.PhotoCamera, "Fotos / Evidencias", "Fotos con GPS y sello", verde, 0, alAbrirEvidencias),
                 Apartado(Icons.Outlined.Map, "Inventario vial", "Qué hay en tu tramo", azul, 0, alAbrirInventario),
@@ -277,6 +291,8 @@ fun PantallaJornada(
                 Apartado(Icons.Outlined.Sync, "Sincronización", "Registros pendientes", azul, estado.pendientes, alAbrirSincronizacion),
                 Apartado(Icons.Outlined.Settings, "Configuración", "Sello y envío de fotos", verde, 0, alAbrirConfiguracion),
             ).filterNotNull()
+                // Sin cuadrilla, lo que se hace en campo con otro rol
+                .filter { a -> esJefe || a.titulo in setOf("Inventario vial", "Observaciones", "Sincronización", "Configuración") }
 
             apartados.chunked(2).forEach { pareja ->
                 // La fila se mide por el azulejo más alto y los dos se

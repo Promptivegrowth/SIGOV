@@ -236,20 +236,23 @@ class ObservacionesViewModel @Inject constructor(
     fun cargar() {
         viewModelScope.launch {
             runCatching {
-                val c = sesion.cuadrilla() ?: error("Tu usuario no dirige ninguna cuadrilla.")
-                val tramos = campo.tramos(c.servicioId)
-                val actividades = campo.actividades(c.servicioId)
+                // El supervisor y SSOMA también registran observaciones: sin
+                // cuadrilla, vale el contrato (matriz, 14/11; CASO 18)
+                val c = sesion.cuadrilla()
+                val servicioId = sesion.servicioId() ?: error("Tu usuario no está asignado a ningún contrato.")
+                val tramos = campo.tramos(servicioId)
+                val actividades = campo.actividades(servicioId)
                     .filter { it.code.startsWith("COV-") && it.category != null }
                     .sortedWith(compareBy({ it.numeroCovinca ?: Int.MAX_VALUE }, { it.code }))
                 val unidades = campo.unidades().associate { it.id to it.symbol }
                 val perfil = runCatching { sesion.perfil() }.getOrNull()
-                val lista = repo.lista(c.servicioId)
-                val umbral = campo.ajustes(c.servicioId).ubicacion.avisoGpsM
+                val lista = repo.lista(servicioId)
+                val umbral = campo.ajustes(servicioId).ubicacion.avisoGpsM
                 _estado.update {
                     it.copy(
                         cargando = false, lista = lista, tramos = tramos, actividades = actividades, unidades = unidades,
                         umbralGps = umbral,
-                        tramoPorDefecto = tramos.firstOrNull { t -> t.id == c.tramoId },
+                        tramoPorDefecto = tramos.firstOrNull { t -> t.id == c?.tramoId },
                         usuarioId = perfil?.id,
                         esGestor = perfil?.role in setOf("admin", "supervisor", "residente"),
                     )
@@ -305,10 +308,11 @@ class ObservacionesViewModel @Inject constructor(
                 }
             }
             runCatching {
-                val c = sesion.cuadrilla() ?: error("Tu usuario no dirige ninguna cuadrilla.")
-                val ajustes = campo.ajustes(c.servicioId)
+                val c = sesion.cuadrilla()
+                val servicioId = sesion.servicioId() ?: error("Tu usuario no está asignado a ningún contrato.")
+                val ajustes = campo.ajustes(servicioId)
                 repo.registrar(
-                    c.servicioId, c.id, c.name, tramo, actividades, progresiva, progresivaFin, lado, descripcion, fotos,
+                    servicioId, c?.id, c?.name, tramo, actividades, progresiva, progresivaFin, lado, descripcion, fotos,
                     configuracion.selloEfectivo(ajustes.sello), punto, puntoId,
                 )
             }.onSuccess { id ->
@@ -408,8 +412,7 @@ class ObservacionesViewModel @Inject constructor(
         _estado.update { it.copy(exportando = true) }
         viewModelScope.launch {
             runCatching {
-                val c = sesion.cuadrilla()
-                val servicio = c?.servicioId?.let { campo.contrato(it) }
+                val servicio = sesion.servicioId()?.let { campo.contrato(it) }
                 val hoy = Peru.hoy()
                 val nombre = "OBSERVACIONES_${hoy}"
                 val fotos = lista.map { miniatura(it, 420) }
@@ -460,7 +463,7 @@ class ObservacionesViewModel @Inject constructor(
                     formatos.armarObservaciones(
                         cab = CabeceraPdf(
                             servicio = servicio?.name ?: "", cliente = servicio?.cliente, contrato = servicio?.contrato,
-                            cuadrilla = c?.name, fecha = hoy, lugar = null,
+                            cuadrilla = sesion.cuadrilla()?.name, fecha = hoy, lugar = null,
                             emitidoPor = runCatching { sesion.perfil()?.nombre }.getOrNull() ?: "SIGOV",
                         ),
                         resumen = "${lista.size} observaciones · ${filtroLegible(e)}",

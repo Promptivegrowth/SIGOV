@@ -134,6 +134,11 @@ class JornadaViewModel @Inject constructor(
                 // El resto se baja después del perfil para que la pantalla no
                 // espere a la red para mostrar el nombre.
                 if (cuadrilla == null) {
+                    // Supervisor, residente, administrador o SSOMA: sin cuadrilla,
+                    // los catálogos del contrato para registrar observaciones e
+                    // inspeccionar el inventario sin señal (matriz, 14/11)
+                    sesion.servicioId()?.let { sid -> runCatching { campo.bajarCatalogos(sid) } }
+                    runCatching { avisosRepo.notificarNuevos() }
                     _estado.update { it.copy(cargando = false) }
                     return@runCatching
                 }

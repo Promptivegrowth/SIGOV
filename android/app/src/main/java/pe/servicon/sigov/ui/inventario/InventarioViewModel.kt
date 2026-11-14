@@ -124,8 +124,7 @@ class InventarioViewModel @Inject constructor(
     private fun cargar() {
         viewModelScope.launch {
             runCatching {
-                val cuadrilla = sesion.cuadrilla()
-                val servicioId = cuadrilla?.servicioId
+                val servicioId = sesion.servicioId()
                     ?: error("Tu usuario no está asignado a ningún contrato.")
 
                 // Primero lo guardado, para que la pantalla abra al instante
@@ -139,7 +138,7 @@ class InventarioViewModel @Inject constructor(
                 val campos = inventario.camposPorTipo()
                 val frescos = inventario.elementos(servicioId, refrescar = true)
                 // De entrada, el tramo de la cuadrilla, con sus cuentas
-                val tramo = _estado.value.tramoId ?: cuadrilla.tramoId?.takeIf { id -> frescos.any { e -> e.tramoId == id } }
+                val tramo = _estado.value.tramoId ?: sesion.cuadrilla()?.tramoId?.takeIf { id -> frescos.any { e -> e.tramoId == id } }
                 val resumen = inventario.resumen(servicioId, tramo)
 
                 _estado.update {
@@ -263,7 +262,7 @@ class InventarioViewModel @Inject constructor(
         viewModelScope.launch {
             runCatching {
                 val cuadrilla = sesion.cuadrilla()
-                val servicioId = cuadrilla?.servicioId ?: _estado.value.servicioId
+                val servicioId = sesion.servicioId() ?: _estado.value.servicioId
                 val ajustes = campo.ajustes(servicioId)
                 evidencias.guardarDeActivo(
                     servicioId = servicioId,

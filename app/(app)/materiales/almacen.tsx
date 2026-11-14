@@ -37,7 +37,7 @@ const VISTA = [
  */
 export function AlmacenTab({ serviceId, can }: {
   serviceId: string
-  can: { write: boolean; manage: boolean }
+  can: { write: boolean; manage: boolean; admin: boolean }
 }) {
   const qc = useQueryClient()
   const insumos = useInsumos(serviceId)
@@ -81,7 +81,7 @@ export function AlmacenTab({ serviceId, can }: {
         <Selector value={vista} onChange={(v) => setVista(v as any)} className="w-full sm:w-56">
           {VISTA.map((v) => <option key={v.key} value={v.key}>{v.label}</option>)}
         </Selector>
-        {can.manage && (
+        {can.admin && (
           <div className="flex gap-2 sm:ml-auto">
             <Button variant="outline" onClick={() => setRegistrar({ tipo: 'ajuste' })}>
               <SlidersHorizontal /> Ajuste, merma o devolución
@@ -338,7 +338,7 @@ export function MovimientoDialog({ serviceId, tipoInicial, insumoInicial, onClos
 function KardexDialog({ insumo, serviceId, can, onClose, onRegistrar }: {
   insumo: any
   serviceId: string
-  can: { manage: boolean }
+  can: { manage: boolean; admin: boolean }
   onClose: () => void
   onRegistrar: (tipo: TipoMovimiento) => void
 }) {
@@ -368,7 +368,7 @@ function KardexDialog({ insumo, serviceId, can, onClose, onRegistrar }: {
           </DialogDescription>
         </DialogHeader>
 
-        {can.manage && (
+        {can.admin && (
           <div className="flex flex-wrap gap-2">
             <Button size="sm" onClick={() => onRegistrar('ingreso')}><PackagePlus /> Ingreso</Button>
             <Button size="sm" variant="outline" onClick={() => onRegistrar('ajuste')}><SlidersHorizontal /> Ajuste, merma o devolución</Button>

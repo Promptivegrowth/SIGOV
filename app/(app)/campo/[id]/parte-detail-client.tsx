@@ -36,7 +36,7 @@ import { mensajeAmigable } from '@/lib/errores'
 import { LADOS, etiquetaDeLado } from '@/lib/lados'
 
 export function ParteDetailClient({ orderId }: { orderId: string }) {
-  const { service, profile, can, role } = useSession()
+  const { service, profile, can, role, crew } = useSession()
   const qc = useQueryClient()
   const sb = React.useMemo(() => createClient(), [])
   const [entryOpen, setEntryOpen] = React.useState(false)
@@ -137,7 +137,13 @@ export function ParteDetailClient({ orderId }: { orderId: string }) {
   const o = order.data
   const st = o ? WORK_ORDER_STATUS[o.status as keyof typeof WORK_ORDER_STATUS] : null
   const editable = o?.status === 'borrador' || o?.status === 'observado'
-  const isOwner = role === 'jefe_cuadrilla'
+  // El dueño del parte es el jefe de ESA cuadrilla, no cualquier jefe
+  // (CASO 27: el de la 01 no edita el parte de la 05)
+  const isOwner = role === 'jefe_cuadrilla' && !!o && o.crew_id === crew?.id
+  // Fotos desde el ordenador: también el supervisor, el residente y el
+  // administrador (matriz: «Importar fotos desde galería/PC»); la base
+  // comprueba que la cuadrilla esté a su cargo
+  const puedeSubirFotos = isOwner || ['admin', 'supervisor', 'residente'].includes(role)
 
   const totalMetrado = (entries.data ?? []).reduce((s: number, e: any) => s + Number(e.quantity ?? 0), 0)
   const totalFotos = (entries.data ?? []).reduce((s: number, e: any) => s + Number(e.evidence_count ?? 0), 0)
@@ -339,7 +345,7 @@ export function ParteDetailClient({ orderId }: { orderId: string }) {
                     <EvidenceGrid
                       entryId={e.id}
                       count={e.evidence_count}
-                      canAdd={editable && isOwner}
+                      canAdd={editable && puedeSubirFotos}
                       onAdd={() => setCameraFor(e)}
                       label={e.activity_name + ' en ' + e.section_name}
                       context={{

@@ -149,6 +149,12 @@ data class ItemPci(
     @SerialName("foto_referencia_path") val fotoReferencia: String? = null,
     /** El supervisor puede pausar un PCI para la cuadrilla. */
     @SerialName("activo_para_cuadrilla") val activoParaCuadrilla: Boolean = true,
+    /** Dos revisiones (4.º entregable): SERVICON valida, COVINCA da la conformidad. */
+    @SerialName("validado_servicon_at") val validadoServiconEn: String? = null,
+    /** Quién observó: «SERVICON» o «COVINCA», con su nombre y la fecha (CASO 40). */
+    @SerialName("observado_entidad") val observadoEntidad: String? = null,
+    @SerialName("observado_por_nombre") val observadoPorNombre: String? = null,
+    @SerialName("observado_at") val observadoEn: String? = null,
 ) {
     val estaPendiente: Boolean get() = status == "pendiente"
     val estaEnAtencion: Boolean get() = status == "en_atencion"
@@ -157,6 +163,14 @@ data class ItemPci(
     val estaLevantado: Boolean get() = status in setOf("levantado", "validado", "subsanado")
     val esperaValidacion: Boolean get() = status in setOf("levantado", "subsanado")
     val esConforme: Boolean get() = status == "validado"
+    /** SERVICON ya lo validó; falta la conformidad de COVINCA. */
+    val validadoServicon: Boolean get() = esperaValidacion && validadoServiconEn != null
+    /** «Visor COVINCA» o «Supervisor SERVICON». */
+    val observadoPor: String? get() = when (observadoEntidad) {
+        "COVINCA" -> "Visor COVINCA"
+        "SERVICON" -> "Supervisor SERVICON"
+        else -> null
+    }
     /** Lo que sigue en manos de la cuadrilla. */
     val estaAbierto: Boolean get() = status in setOf("pendiente", "en_atencion", "observado")
 

@@ -50,7 +50,8 @@ async function guard(serviceId?: string | null): Promise<Guardia | { error: Next
       .eq('service_id', serviceId)
       .eq('profile_id', user.id)
       .maybeSingle()
-    if (member && ['admin', 'supervisor', 'residente'].includes(member.role)) return { user, admin, esAdmin: false }
+    // Usuarios y permisos: solo el administrador (matriz de funciones, 14/11)
+    if (member && member.role === 'admin') return { user, admin, esAdmin: false }
   }
 
   return { error: NextResponse.json({ error: 'Sin permisos para gestionar usuarios' }, { status: 403 }) }

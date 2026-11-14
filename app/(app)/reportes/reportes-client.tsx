@@ -32,28 +32,30 @@ interface ReportDef {
   tone: string
   /** La economía interna no sale del Administrador */
   soloAdmin?: boolean
+  /** Interno de SERVICON: el Visor COVINCA no lo ve (CASO 29) */
+  sinVisor?: boolean
 }
 
 const REPORTS: ReportDef[] = [
   { key: 'diario', label: 'Reporte diario de ejecución', description: 'Actividades ejecutadas por cuadrilla, con progresivas, metrados y conteo de evidencias.', icon: HardHat, module: 'campo', tone: 'var(--chart-1)' },
   { key: 'metrados', label: 'Resumen de metrados', description: 'Metrado acumulado por actividad y unidad, contra la meta programada.', icon: Ruler, module: 'programacion', tone: 'var(--chart-4)' },
   { key: 'pci', label: 'Reporte de PCIs', description: 'Ítems con su plazo, semáforo de vencimiento, responsable y estado de levantamiento.', icon: TriangleAlert, module: 'pci', tone: 'var(--sem-rojo)' },
-  { key: 'ssoma', label: 'Reporte SSOMA', description: 'Charlas, asistencia firmada, checklists con hallazgos y ATS/IPERC del periodo.', icon: ShieldCheck, module: 'ssoma', tone: 'var(--chart-3)' },
+  { key: 'ssoma', label: 'Reporte SSOMA', description: 'Charlas, asistencia firmada, checklists con hallazgos y ATS/IPERC del periodo.', icon: ShieldCheck, module: 'ssoma', tone: 'var(--chart-3)', sinVisor: true },
   { key: 'inventario', label: 'Inventario vial', description: 'Elementos por tipo, tramo y progresiva, con estado de conservación e inspecciones.', icon: Boxes, module: 'inventario', tone: 'var(--chart-2)' },
   // La economía interna: solo el Administrador la exporta (15.1)
   { key: 'caja', label: 'Caja chica', description: 'Movimientos por cuadrilla y categoría, con su comprobante y estado de revisión.', icon: Wallet, module: 'caja', tone: 'var(--success)', soloAdmin: true },
-  { key: 'materiales', label: 'Materiales e insumos', description: 'Solicitudes con su fecha de necesidad, cuadrilla, ítems y estado de atención.', icon: Package, module: 'materiales', tone: 'var(--info)' },
+  { key: 'materiales', label: 'Materiales e insumos', description: 'Solicitudes con su fecha de necesidad, cuadrilla, ítems y estado de atención.', icon: Package, module: 'materiales', tone: 'var(--info)', sinVisor: true },
 ]
 
 export function ReportesClient() {
-  const { service, profile, hasModule, can } = useSession()
+  const { service, profile, hasModule, can, role } = useSession()
   const sb = React.useMemo(() => createClient(), [])
   const [preset, setPreset] = React.useState<DatePresetKey>('30d')
   const [busy, setBusy] = React.useState<string | null>(null)
   const range = React.useMemo(() => rangeFromPreset(preset), [preset])
 
   const available = REPORTS.filter(
-    (r) => (!r.module || hasModule(r.module)) && (!r.soloAdmin || can.admin)
+    (r) => (!r.module || hasModule(r.module)) && (!r.soloAdmin || can.admin) && (!r.sinVisor || role !== 'visor')
   )
 
   const meta = (titulo: string, subtitulo?: string): ReportMeta => ({

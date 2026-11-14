@@ -218,7 +218,7 @@ private fun Contadores(
     Row(horizontalArrangement = Arrangement.spacedBy(10.dp)) {
         Contador("Registros", estado.registros.toString(), Marca.Azul, Modifier.weight(1f), alAbrirParte)
         Contador("Registros con foto", estado.fotos.toString(), Marca.VerdeBandera, Modifier.weight(1f), alAbrirEvidencias)
-        Contador("Ítems PCI por atender ya", estado.pciUrgentes.toString(), if (estado.pciUrgentes > 0) Semaforo.Vencido else Marca.Naranja, Modifier.weight(1f), alAbrirPci)
+        Contador("Ítems PCI pendientes de culminar · vencen ya", estado.pciUrgentes.toString(), if (estado.pciUrgentes > 0) Semaforo.Vencido else Marca.Naranja, Modifier.weight(1f), alAbrirPci)
     }
 }
 

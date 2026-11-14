@@ -25,6 +25,10 @@ import androidx.compose.material.icons.outlined.Straighten
 import androidx.compose.material.icons.outlined.WarningAmber
 import androidx.compose.material3.*
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.collectAsState
+import kotlinx.serialization.json.contentOrNull
+import kotlinx.serialization.json.intOrNull
+import kotlinx.serialization.json.jsonPrimitive
 import androidx.compose.runtime.DisposableEffect
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
@@ -149,7 +153,7 @@ fun PantallaPci(
                 alQuitarFoto = { quitando = it },
                 alTomarFoto = { fase -> vm.tomarFoto(item, fase) },
                 alVerReferencia = { vm.verReferencia(item) },
-                alRegistrarMetrado = { vm.registrarMetrado(item, it) },
+                alRegistrarMetrado = { cantidad, motivo -> vm.registrarMetrado(item, cantidad, motivo) },
             )
         }
     }
@@ -251,6 +255,8 @@ private fun ListaDeItems(estado: EstadoPci, vm: PciViewModel, alRegistrarFotos: 
                 }
             }
         } else {
+            // Cómo va el PCI entero, con todas sus cuadrillas (CASO 6)
+            item { SituacionDelPci(estado.abierto, vm) }
             // Dentro del PCI, su propio filtro de estado
             item {
                 Fichas {
@@ -545,9 +551,11 @@ private fun FichaDelItem(
     alQuitarFoto: (pe.servicon.sigov.datos.FotoDelItem) -> Unit,
     alTomarFoto: (Fase) -> Unit,
     alVerReferencia: () -> Unit,
-    alRegistrarMetrado: (Double) -> Unit,
+    alRegistrarMetrado: (Double, String?) -> Unit,
 ) {
     var texto by remember(item.id) { mutableStateOf(if (metrado > 0) numero(metrado) else "") }
+    var excesoPendiente by remember(item.id) { mutableStateOf<Double?>(null) }
+    var motivoExceso by remember(item.id) { mutableStateOf("") }
     val cantidad = texto.replace(',', '.').toDoubleOrNull()
     val estado = estadoDe(item)
 
@@ -608,7 +616,14 @@ private fun FichaDelItem(
             ) {
                 Icon(Icons.Outlined.WarningAmber, contentDescription = null, tint = Semaforo.Vencido)
                 Column {
-                    Text("Observación", style = MaterialTheme.typography.labelLarge, color = Semaforo.Vencido)
+                    // CASO 40: quién observó, con su entidad
+                    Text(
+                        item.observadoPor?.let { "Observado por: $it" } ?: "Observación",
+                        style = MaterialTheme.typography.labelLarge, color = Semaforo.Vencido,
+                    )
+                    listOfNotNull(item.observadoPorNombre, item.observadoEn?.let { pe.servicon.sigov.datos.Peru.fechaHora(it) })
+                        .takeIf { it.isNotEmpty() }
+                        ?.let { Text(it.joinToString(" · "), style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant) }
                     Text(item.observacion!!, style = MaterialTheme.typography.bodyMedium)
                     Text(
                         "Vuelve a tomar las fotos que hagan falta: con las tres etapas pasa a revisión otra vez.",
@@ -623,8 +638,9 @@ private fun FichaDelItem(
 
         if (item.estaLevantado) {
             Text(
-                if (item.esConforme) "COVINCA validó este ítem: sus fotos ya no se cambian."
-                else "Atendido con sus tres fotos: espera la revisión de COVINCA. Si una salió mal, quítala y toma otra.",
+                if (item.esConforme) "Conforme COVINCA: sus fotos ya no se cambian."
+                else if (item.validadoServicon) "Validado por SERVICON: espera la conformidad de COVINCA. Si una foto salió mal, quítala y toma otra."
+                else "Culminado con sus tres fotos: lo valida SERVICON y da la conformidad COVINCA. Si una foto salió mal, quítala y toma otra.",
                 style = MaterialTheme.typography.bodyMedium,
                 color = MaterialTheme.colorScheme.onSurfaceVariant,
             )
@@ -684,12 +700,91 @@ private fun FichaDelItem(
                 ocupado,
                 cantidad != null && cantidad > 0 && cantidad != metrado,
                 Modifier,
-            ) { cantidad?.let(alRegistrarMetrado) }
+            ) {
+                val c = cantidad ?: return@Boton
+                // OBS 1 / CASO 11: más de lo solicitado se puede, pero se avisa
+                // antes y queda solicitado, ejecutado, diferencia, quién y cuándo
+                val solicitado = item.quantity
+                if (solicitado != null && solicitado > 0 && c > solicitado) excesoPendiente = c
+                else alRegistrarMetrado(c, null)
+            }
         }
+    }
+    excesoPendiente?.let { c ->
+        val solicitado = item.quantity ?: 0.0
+        AlertDialog(
+            onDismissRequest = { excesoPendiente = null },
+            title = { Text("Metrado sobre lo solicitado") },
+            text = {
+                Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
+                    Text("El metrado ejecutado supera la cantidad solicitada para este ítem PCI. ¿Desea continuar?")
+                    val u = item.unidad.orEmpty()
+                    Text(
+                        "Solicitado: ${numero(solicitado)} $u\nEjecutado: ${numero(c)} $u\nDiferencia: ${numero(c - solicitado)} $u",
+                        style = MaterialTheme.typography.bodyMedium, fontWeight = FontWeight.SemiBold,
+                    )
+                    OutlinedTextField(
+                        value = motivoExceso, onValueChange = { motivoExceso = it },
+                        label = { Text("Motivo (opcional)") }, shape = RoundedCornerShape(12.dp),
+                        modifier = Modifier.fillMaxWidth(),
+                    )
+                }
+            },
+            confirmButton = {
+                TextButton(onClick = {
+                    alRegistrarMetrado(c, motivoExceso.trim().ifBlank { null })
+                    excesoPendiente = null
+                    motivoExceso = ""
+                }) { Text("Continuar") }
+            },
+            dismissButton = { TextButton(onClick = { excesoPendiente = null }) { Text("Revisar") } },
+        )
     }
 }
 
 // ─── Piezas ───────────────────────────────────────────────────────────────
+
+/**
+ * La situación del PCI completo: si varias cuadrillas lo comparten, cada jefe
+ * ve cuánto falta para terminarlo entre todos (CASO 6). Sin señal no se
+ * muestra: las cifras de la nube no se inventan.
+ */
+@Composable
+private fun SituacionDelPci(pciId: String?, vm: PciViewModel) {
+    if (pciId == null) return
+    LaunchedEffect(pciId) { vm.cargarSituacion(pciId) }
+    val todas by vm.situacion.collectAsState()
+    val s = todas[pciId] ?: return
+    fun n(clave: String) = s[clave]?.jsonPrimitive?.intOrNull ?: 0
+    val cuadrillas = (s["cuadrillas"] as? kotlinx.serialization.json.JsonArray).orEmpty().mapNotNull { it as? kotlinx.serialization.json.JsonObject }
+    Column(
+        Modifier
+            .fillMaxWidth()
+            .padding(horizontal = 12.dp, vertical = 4.dp)
+            .background(Marca.Azul.copy(alpha = 0.06f), RoundedCornerShape(10.dp))
+            .padding(10.dp),
+        verticalArrangement = Arrangement.spacedBy(2.dp),
+    ) {
+        Text("Situación del PCI · todas las cuadrillas", style = MaterialTheme.typography.labelLarge, fontWeight = FontWeight.SemiBold)
+        Text(
+            listOf(
+                "${n("items")} ítems", "${n("por_atender")} por atender", "${n("en_ejecucion")} en ejecución",
+                "${n("por_validar") + n("validado_servicon")} por validar", "${n("observados")} observados", "${n("conformes")} conformes",
+            ).joinToString(" · "),
+            style = MaterialTheme.typography.bodySmall,
+        )
+        if (cuadrillas.size > 1) {
+            Text(
+                cuadrillas.joinToString(" · ") { c ->
+                    val code = c["crew"]?.jsonPrimitive?.contentOrNull ?: "—"
+                    "$code ${c["culminados"]?.jsonPrimitive?.intOrNull ?: 0}/${c["items"]?.jsonPrimitive?.intOrNull ?: 0}"
+                },
+                style = MaterialTheme.typography.bodySmall,
+                color = MaterialTheme.colorScheme.onSurfaceVariant,
+            )
+        }
+    }
+}
 
 @Composable
 private fun Titulo(texto: String) {
@@ -779,12 +874,13 @@ private fun ubicacion(item: ItemPci): String =
 /** El estado dicho como en la propuesta, con el matiz que hace falta. */
 private fun etiquetaDe(item: ItemPci): String = when (estadoDe(item)) {
     Estado.CONFORMES -> when {
+        item.validadoServicon -> "Validado SERVICON · por validar COVINCA"
         item.status == "subsanado" -> "Subsanado · por validar"
         item.estaLevantado -> "Por validar"
         else -> "Por validar · por enviar"
     }
     Estado.VALIDADOS -> "Conforme COVINCA"
-    Estado.OBSERVADOS -> "Observado"
+    Estado.OBSERVADOS -> item.observadoEntidad?.let { if (it == "COVINCA") "Observado por COVINCA" else "Observado por SERVICON" } ?: "Observado"
     Estado.EN_EJECUCION -> "En ejecución"
     else -> "Por atender"
 }

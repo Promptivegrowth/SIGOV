@@ -86,20 +86,22 @@ export const NAV: NavItem[] = [
     icon: LayoutDashboard, roles: ['admin','supervisor','residente','ing_seguridad','visor','jefe_cuadrilla'] },
   { href: '/jornada',      label: 'Mi Jornada',    icon: ClipboardList,
     roles: ['jefe_cuadrilla'], module: 'campo' },
+  // Matriz de funciones (Elvis, 14/11): SSOMA consulta la programación y el reporte diario
   { href: '/programacion', label: 'Programación',  icon: CalendarRange,
-    roles: ['admin','supervisor','residente','jefe_cuadrilla','visor'], module: 'programacion', field: true },
+    roles: ['admin','supervisor','residente','jefe_cuadrilla','visor','ing_seguridad'], module: 'programacion', field: true },
   { href: '/pci',          label: 'PCIs',          icon: TriangleAlert,
     roles: ['admin','supervisor','residente','jefe_cuadrilla','visor'], module: 'pci', field: true, badge: 'pci' },
   { href: '/campo',        label: 'Campo',
     labelPorRol: { jefe_cuadrilla: 'Reporte Diario', visor: 'Ejecución / Campo', admin: 'Reportes Diarios' },
-    icon: HardHat, roles: ['admin','supervisor','residente','jefe_cuadrilla','visor'], module: 'campo', field: true, badge: 'sync' },
+    icon: HardHat, roles: ['admin','supervisor','residente','jefe_cuadrilla','visor','ing_seguridad'], module: 'campo', field: true, badge: 'sync' },
   { href: '/caja',         label: 'Caja chica',    labelPorRol: { jefe_cuadrilla: 'Registro de Gastos / Mi Caja' },
     icon: Wallet, roles: ['admin','supervisor','residente','jefe_cuadrilla'], module: 'caja' },
   // Regla 1.2: pedir materiales no es tarea del Jefe de Cuadrilla, así que
   // el apartado no figura en su menú (la base tampoco le deja crear pedidos).
+  // El Visor COVINCA no ve materiales: almacén y costos son internos (CASO 29)
   { href: '/materiales',   label: 'Materiales',
-    labelPorRol: { admin: 'Materiales / Insumos', visor: 'Materiales / Insumos' },
-    icon: Package, roles: ['admin','supervisor','residente','visor'], module: 'materiales' },
+    labelPorRol: { admin: 'Materiales / Insumos' },
+    icon: Package, roles: ['admin','supervisor','residente'], module: 'materiales' },
   { href: '/evidencias',   label: 'Fotos / Evidencias',
     labelPorRol: { visor: 'Fotografías', ing_seguridad: 'Evidencias SSOMA' },
     icon: Camera, roles: ['admin','supervisor','residente','ing_seguridad','jefe_cuadrilla','visor'], module: 'campo' },
@@ -113,10 +115,12 @@ export const NAV: NavItem[] = [
     roles: ['admin','supervisor','residente','ing_seguridad','visor'], module: 'mapa' },
   { href: '/inventario',   label: 'Inventario',    labelPorRol: { admin: 'Inventario / Vehículos' },
     icon: Boxes, roles: ['admin','supervisor','residente','visor','ing_seguridad'], module: 'inventario' },
+  // SSOMA registra observaciones de seguridad (SST); el Visor solo consulta
   { href: '/observaciones', label: 'Observaciones', icon: TriangleAlert,
-    roles: ['admin','supervisor','residente','visor'], module: 'inventario' },
+    roles: ['admin','supervisor','residente','visor','ing_seguridad'], module: 'inventario' },
+  // SSOMA interno: no es del Visor COVINCA (CASO 29)
   { href: '/ssoma',        label: 'SSOMA',         icon: ShieldCheck,
-    roles: ['admin','supervisor','residente','ing_seguridad','visor'], module: 'ssoma', field: true },
+    roles: ['admin','supervisor','residente','ing_seguridad'], module: 'ssoma', field: true },
   { href: '/vencimientos', label: 'Vencimientos',  icon: CalendarClock,
     roles: ['admin','supervisor','residente','ing_seguridad'], module: 'ssoma' },
   { href: '/auditoria',    label: 'Auditoría',     icon: History,
@@ -147,7 +151,7 @@ export const SEMAFORO = {
   ambar:   { label: 'Por vencer',  className: 'bg-sem-ambar',   text: 'text-sem-ambar',   ring: 'ring-sem-ambar/30' },
   rojo:    { label: 'Crítico',     className: 'bg-sem-rojo',    text: 'text-sem-rojo',    ring: 'ring-sem-rojo/30' },
   vencido: { label: 'Vencido',     className: 'bg-sem-vencido', text: 'text-sem-vencido', ring: 'ring-sem-vencido/30' },
-  ok:      { label: 'Levantado',   className: 'bg-sem-ok',      text: 'text-sem-ok',      ring: 'ring-sem-ok/30' },
+  ok:      { label: 'Culminado',   className: 'bg-sem-ok',      text: 'text-sem-ok',      ring: 'ring-sem-ok/30' },
 } as const
 
 export type Semaforo = keyof typeof SEMAFORO
@@ -180,6 +184,28 @@ export const PCI_ITEM_STATUS = {
   subsanado:   { label: 'Subsanado · por validar', className: 'bg-warning/20 text-warning' },
   validado:    { label: 'Conforme',               className: 'bg-success/20 text-success' },
 } as const
+
+/**
+ * El estado que se muestra, con las dos revisiones (Elvis, 4.º entregable):
+ * un ítem por validar que SERVICON ya validó espera la conformidad de
+ * COVINCA, y lo observado dice quién lo observó.
+ */
+export function estadoPci(i: { status: string; validado_servicon_at?: string | null; observado_entidad?: string | null }) {
+  if (['levantado', 'subsanado'].includes(i.status) && i.validado_servicon_at) {
+    return { clave: 'validado_servicon', label: 'Validado SERVICON · por validar COVINCA', className: 'bg-info/15 text-info' }
+  }
+  if (i.status === 'validado') return { clave: 'validado', label: 'Conforme COVINCA', className: PCI_ITEM_STATUS.validado.className }
+  if (i.status === 'observado' && i.observado_entidad) {
+    return { clave: 'observado', label: `Observado por ${i.observado_entidad === 'COVINCA' ? 'COVINCA' : 'SERVICON'}`, className: PCI_ITEM_STATUS.observado.className }
+  }
+  const st = PCI_ITEM_STATUS[i.status as keyof typeof PCI_ITEM_STATUS] ?? PCI_ITEM_STATUS.pendiente
+  return { clave: i.status, label: st.label, className: st.className }
+}
+
+/** Quién observó, como lo pide el CASO 40. */
+export function observadoPor(entidad: string | null | undefined): string {
+  return entidad === 'COVINCA' ? 'Visor COVINCA' : entidad === 'SERVICON' ? 'Supervisor SERVICON' : 'Revisión'
+}
 
 /** Los estados en que el ítem ya salió de la cuadrilla. */
 export const PCI_ITEM_LEVANTADO: readonly string[] = ['levantado', 'subsanado', 'validado']

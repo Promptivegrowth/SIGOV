@@ -98,6 +98,8 @@ const RAMAS = [
     nombre: 'SSOMA',
     icono: ShieldCheck,
     niveles: 'FECHA / CUADRILLA / TIPO DE DOCUMENTO',
+    // SSOMA interno de SERVICON: no es del Visor COVINCA (CASO 29)
+    sinVisor: true,
   },
   {
     clave: 'gastos' as const,
@@ -119,14 +121,14 @@ type ClaveDeRama = (typeof RAMAS)[number]['clave']
 // ═══ El componente ════════════════════════════════════════════════════
 
 export function ArbolDeArchivo({ desde, hasta }: { desde: string; hasta: string }) {
-  const { service, can } = useSession()
+  const { service, can, role } = useSession()
   const sb = React.useMemo(() => createClient(), [])
   const [rama, setRama] = React.useState<ClaveDeRama>('programacion')
   const [abiertos, setAbiertos] = React.useState<Set<string>>(new Set())
   const [foto, setFoto] = React.useState<string | null>(null)
   const [bajando, setBajando] = React.useState<string | null>(null)
 
-  const visibles = RAMAS.filter((r) => !r.soloAdmin || can.admin)
+  const visibles = RAMAS.filter((r) => (!r.soloAdmin || can.admin) && (!('sinVisor' in r) || role !== 'visor'))
   const actual = visibles.find((r) => r.clave === rama) ?? visibles[0]
 
   const arbol = useQuery({

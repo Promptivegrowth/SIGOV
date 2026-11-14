@@ -35,7 +35,7 @@ const haceDias = (n: number) => {
 export function MovimientosTab({ service, profileName, can }: {
   service: any
   profileName: string
-  can: { manage: boolean }
+  can: { manage: boolean; admin: boolean }
 }) {
   const sb = React.useMemo(() => createClient(), [])
   const qc = useQueryClient()
@@ -168,7 +168,7 @@ export function MovimientosTab({ service, profileName, can }: {
             {filas.length} movimiento{filas.length === 1 ? '' : 's'}
             {filas.length >= 2000 && ' · se muestran los 2,000 más recientes: acorta el periodo'}
           </p>
-          <TablaKardex filas={filas} conInsumo onAnular={can.manage ? setAnulando : undefined} />
+          <TablaKardex filas={filas} conInsumo onAnular={can.admin ? setAnulando : undefined} />
         </>
       )}
 

@@ -78,10 +78,15 @@ data class Aviso(
         get() {
             val item = dato("pci_item_id") ?: url?.let { Regex("item=([0-9a-f-]{36})").find(it)?.groupValues?.get(1) }
             val pci = dato("pci_id") ?: url?.let { Regex("/pci/([0-9a-f-]{36})").find(it)?.groupValues?.get(1) }
+            // El aviso por PCI abre el PCI ya filtrado: «PCI 70 tiene 8 ítems
+            // observados» abre en Observados (CASO 41)
+            val filtro = (dato("estado") ?: url?.let { Regex("estado=([a-z_]+)").find(it)?.groupValues?.get(1) })?.let {
+                when (it) { "observado" -> "OBSERVADOS"; "por_validar" -> "CONFORMES"; else -> null }
+            }
             return when {
                 type == "error_sincronizacion" -> "sincronizacion"
                 item != null && pci != null -> "pci?pci=$pci&item=$item"
-                pci != null -> "pci?pci=$pci"
+                pci != null -> "pci?pci=$pci" + (filtro?.let { "&estado=$it" } ?: "")
                 type.startsWith("pci") -> "pci"
                 type.startsWith("programacion") || type.startsWith("partida") ->
                     dato("fecha")?.let { "programacion?fecha=$it" } ?: "programacion?fecha=${Peru.hoy()}"

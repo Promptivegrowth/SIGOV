@@ -1920,6 +1920,7 @@ export type Database = {
           altitude_m: number | null
           asset_id: string | null
           caption: string | null
+          cargada_at: string | null
           client_id: string
           created_at: string
           created_by: string | null
@@ -1927,6 +1928,7 @@ export type Database = {
           device_id: string | null
           device_model: string | null
           estado_activo: string | null
+          fecha_original: string | null
           geom: unknown
           heading: number | null
           height: number | null
@@ -1941,6 +1943,7 @@ export type Database = {
           master_width: number | null
           mime_type: string
           observacion_id: string | null
+          origen_captura: string | null
           pci_item_id: string | null
           phase: Database["public"]["Enums"]["evidence_phase"]
           progresiva_m: number | null
@@ -1949,6 +1952,7 @@ export type Database = {
           revision: string | null
           revision_nota: string | null
           section_id: string | null
+          sello_aplicado: boolean | null
           service_id: string
           sha256: string
           size_bytes: number | null
@@ -1966,6 +1970,7 @@ export type Database = {
           altitude_m?: number | null
           asset_id?: string | null
           caption?: string | null
+          cargada_at?: string | null
           client_id?: string
           created_at?: string
           created_by?: string | null
@@ -1973,6 +1978,7 @@ export type Database = {
           device_id?: string | null
           device_model?: string | null
           estado_activo?: string | null
+          fecha_original?: string | null
           geom?: unknown
           heading?: number | null
           height?: number | null
@@ -1987,6 +1993,7 @@ export type Database = {
           master_width?: number | null
           mime_type?: string
           observacion_id?: string | null
+          origen_captura?: string | null
           pci_item_id?: string | null
           phase?: Database["public"]["Enums"]["evidence_phase"]
           progresiva_m?: number | null
@@ -1995,6 +2002,7 @@ export type Database = {
           revision?: string | null
           revision_nota?: string | null
           section_id?: string | null
+          sello_aplicado?: boolean | null
           service_id: string
           sha256: string
           size_bytes?: number | null
@@ -2012,6 +2020,7 @@ export type Database = {
           altitude_m?: number | null
           asset_id?: string | null
           caption?: string | null
+          cargada_at?: string | null
           client_id?: string
           created_at?: string
           created_by?: string | null
@@ -2019,6 +2028,7 @@ export type Database = {
           device_id?: string | null
           device_model?: string | null
           estado_activo?: string | null
+          fecha_original?: string | null
           geom?: unknown
           heading?: number | null
           height?: number | null
@@ -2033,6 +2043,7 @@ export type Database = {
           master_width?: number | null
           mime_type?: string
           observacion_id?: string | null
+          origen_captura?: string | null
           pci_item_id?: string | null
           phase?: Database["public"]["Enums"]["evidence_phase"]
           progresiva_m?: number | null
@@ -2041,6 +2052,7 @@ export type Database = {
           revision?: string | null
           revision_nota?: string | null
           section_id?: string | null
+          sello_aplicado?: boolean | null
           service_id?: string
           sha256?: string
           size_bytes?: number | null
@@ -2246,8 +2258,10 @@ export type Database = {
       }
       import_batches: {
         Row: {
+          accion: string | null
           created_at: string
           created_by: string | null
+          duplicados: number | null
           error_rows: number
           errors: Json
           file_name: string | null
@@ -2256,14 +2270,21 @@ export type Database = {
           id: string
           kind: string
           mapping: Json
+          nuevos: number | null
           ok_rows: number
+          pci_ids: string[] | null
+          rol: string | null
           service_id: string
           status: string
           total_rows: number
+          valid_rows: number | null
+          warning_rows: number | null
         }
         Insert: {
+          accion?: string | null
           created_at?: string
           created_by?: string | null
+          duplicados?: number | null
           error_rows?: number
           errors?: Json
           file_name?: string | null
@@ -2272,14 +2293,21 @@ export type Database = {
           id?: string
           kind: string
           mapping?: Json
+          nuevos?: number | null
           ok_rows?: number
+          pci_ids?: string[] | null
+          rol?: string | null
           service_id: string
           status?: string
           total_rows?: number
+          valid_rows?: number | null
+          warning_rows?: number | null
         }
         Update: {
+          accion?: string | null
           created_at?: string
           created_by?: string | null
+          duplicados?: number | null
           error_rows?: number
           errors?: Json
           file_name?: string | null
@@ -2288,10 +2316,15 @@ export type Database = {
           id?: string
           kind?: string
           mapping?: Json
+          nuevos?: number | null
           ok_rows?: number
+          pci_ids?: string[] | null
+          rol?: string | null
           service_id?: string
           status?: string
           total_rows?: number
+          valid_rows?: number | null
+          warning_rows?: number | null
         }
         Relationships: [
           {
@@ -2935,6 +2968,94 @@ export type Database = {
           },
         ]
       }
+      pci_item_revisiones: {
+        Row: {
+          cuando: string
+          entidad: string
+          evidencias: string[] | null
+          id: string
+          motivo: string | null
+          nivel: string
+          pci_id: string
+          pci_item_id: string
+          quien: string | null
+          resultado: string
+          rol: string | null
+          service_id: string
+        }
+        Insert: {
+          cuando?: string
+          entidad: string
+          evidencias?: string[] | null
+          id?: string
+          motivo?: string | null
+          nivel: string
+          pci_id: string
+          pci_item_id: string
+          quien?: string | null
+          resultado: string
+          rol?: string | null
+          service_id: string
+        }
+        Update: {
+          cuando?: string
+          entidad?: string
+          evidencias?: string[] | null
+          id?: string
+          motivo?: string | null
+          nivel?: string
+          pci_id?: string
+          pci_item_id?: string
+          quien?: string | null
+          resultado?: string
+          rol?: string | null
+          service_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "pci_item_revisiones_pci_id_fkey"
+            columns: ["pci_id"]
+            isOneToOne: false
+            referencedRelation: "pcis"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "pci_item_revisiones_pci_id_fkey"
+            columns: ["pci_id"]
+            isOneToOne: false
+            referencedRelation: "v_pci_resumen"
+            referencedColumns: ["pci_id"]
+          },
+          {
+            foreignKeyName: "pci_item_revisiones_pci_item_id_fkey"
+            columns: ["pci_item_id"]
+            isOneToOne: false
+            referencedRelation: "pci_items"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "pci_item_revisiones_pci_item_id_fkey"
+            columns: ["pci_item_id"]
+            isOneToOne: false
+            referencedRelation: "v_pci_items"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "pci_item_revisiones_quien_fkey"
+            columns: ["quien"]
+            isOneToOne: false
+            referencedRelation: "profiles"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "pci_item_revisiones_service_id_fkey"
+            columns: ["service_id"]
+            isOneToOne: false
+            referencedRelation: "services"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       pci_items: {
         Row: {
           activity_id: string | null
@@ -2951,8 +3072,12 @@ export type Database = {
           encargado: string | null
           foto_referencia_path: string | null
           id: string
+          import_batch_id: string | null
           item_number: number
           notes: string | null
+          observado_at: string | null
+          observado_entidad: string | null
+          observado_por: string | null
           pci_id: string
           prog_end_m: number | null
           prog_start_m: number | null
@@ -2968,6 +3093,8 @@ export type Database = {
           term_days: number
           unit_id: string | null
           updated_at: string
+          validado_servicon_at: string | null
+          validado_servicon_by: string | null
           validated_at: string | null
           validated_by: string | null
         }
@@ -2986,8 +3113,12 @@ export type Database = {
           encargado?: string | null
           foto_referencia_path?: string | null
           id?: string
+          import_batch_id?: string | null
           item_number: number
           notes?: string | null
+          observado_at?: string | null
+          observado_entidad?: string | null
+          observado_por?: string | null
           pci_id: string
           prog_end_m?: number | null
           prog_start_m?: number | null
@@ -3003,6 +3134,8 @@ export type Database = {
           term_days?: number
           unit_id?: string | null
           updated_at?: string
+          validado_servicon_at?: string | null
+          validado_servicon_by?: string | null
           validated_at?: string | null
           validated_by?: string | null
         }
@@ -3021,8 +3154,12 @@ export type Database = {
           encargado?: string | null
           foto_referencia_path?: string | null
           id?: string
+          import_batch_id?: string | null
           item_number?: number
           notes?: string | null
+          observado_at?: string | null
+          observado_entidad?: string | null
+          observado_por?: string | null
           pci_id?: string
           prog_end_m?: number | null
           prog_start_m?: number | null
@@ -3038,6 +3175,8 @@ export type Database = {
           term_days?: number
           unit_id?: string | null
           updated_at?: string
+          validado_servicon_at?: string | null
+          validado_servicon_by?: string | null
           validated_at?: string | null
           validated_by?: string | null
         }
@@ -3085,6 +3224,20 @@ export type Database = {
             referencedColumns: ["id"]
           },
           {
+            foreignKeyName: "pci_items_import_batch_id_fkey"
+            columns: ["import_batch_id"]
+            isOneToOne: false
+            referencedRelation: "import_batches"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "pci_items_observado_por_fkey"
+            columns: ["observado_por"]
+            isOneToOne: false
+            referencedRelation: "profiles"
+            referencedColumns: ["id"]
+          },
+          {
             foreignKeyName: "pci_items_pci_id_fkey"
             columns: ["pci_id"]
             isOneToOne: false
@@ -3124,6 +3277,13 @@ export type Database = {
             columns: ["unit_id"]
             isOneToOne: false
             referencedRelation: "units"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "pci_items_validado_servicon_by_fkey"
+            columns: ["validado_servicon_by"]
+            isOneToOne: false
+            referencedRelation: "profiles"
             referencedColumns: ["id"]
           },
           {
@@ -3664,6 +3824,85 @@ export type Database = {
             columns: ["profile_id"]
             isOneToOne: false
             referencedRelation: "profiles"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      reasignaciones: {
+        Row: {
+          crew_a: string | null
+          crew_de: string | null
+          cuando: string
+          id: string
+          motivo: string | null
+          quien: string | null
+          registro_id: string
+          service_id: string
+          tipo: string
+        }
+        Insert: {
+          crew_a?: string | null
+          crew_de?: string | null
+          cuando?: string
+          id?: string
+          motivo?: string | null
+          quien?: string | null
+          registro_id: string
+          service_id: string
+          tipo: string
+        }
+        Update: {
+          crew_a?: string | null
+          crew_de?: string | null
+          cuando?: string
+          id?: string
+          motivo?: string | null
+          quien?: string | null
+          registro_id?: string
+          service_id?: string
+          tipo?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "reasignaciones_crew_a_fkey"
+            columns: ["crew_a"]
+            isOneToOne: false
+            referencedRelation: "crews"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "reasignaciones_crew_a_fkey"
+            columns: ["crew_a"]
+            isOneToOne: false
+            referencedRelation: "v_hygiene_today"
+            referencedColumns: ["crew_id"]
+          },
+          {
+            foreignKeyName: "reasignaciones_crew_de_fkey"
+            columns: ["crew_de"]
+            isOneToOne: false
+            referencedRelation: "crews"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "reasignaciones_crew_de_fkey"
+            columns: ["crew_de"]
+            isOneToOne: false
+            referencedRelation: "v_hygiene_today"
+            referencedColumns: ["crew_id"]
+          },
+          {
+            foreignKeyName: "reasignaciones_quien_fkey"
+            columns: ["quien"]
+            isOneToOne: false
+            referencedRelation: "profiles"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "reasignaciones_service_id_fkey"
+            columns: ["service_id"]
+            isOneToOne: false
+            referencedRelation: "services"
             referencedColumns: ["id"]
           },
         ]
@@ -4703,6 +4942,59 @@ export type Database = {
         }
         Relationships: []
       }
+      supply_costs: {
+        Row: {
+          service_id: string
+          supply_id: string
+          unit_cost: number | null
+          updated_at: string
+          updated_by: string | null
+        }
+        Insert: {
+          service_id: string
+          supply_id: string
+          unit_cost?: number | null
+          updated_at?: string
+          updated_by?: string | null
+        }
+        Update: {
+          service_id?: string
+          supply_id?: string
+          unit_cost?: number | null
+          updated_at?: string
+          updated_by?: string | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "supply_costs_service_id_fkey"
+            columns: ["service_id"]
+            isOneToOne: false
+            referencedRelation: "services"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "supply_costs_supply_id_fkey"
+            columns: ["supply_id"]
+            isOneToOne: true
+            referencedRelation: "supplies"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "supply_costs_supply_id_fkey"
+            columns: ["supply_id"]
+            isOneToOne: true
+            referencedRelation: "v_supplies"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "supply_costs_updated_by_fkey"
+            columns: ["updated_by"]
+            isOneToOne: false
+            referencedRelation: "profiles"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       supply_request_items: {
         Row: {
           client_id: string
@@ -5487,6 +5779,10 @@ export type Database = {
           duplicado_de: string | null
           ejecutado_por: string | null
           espesor_m: number | null
+          exceso: number | null
+          exceso_at: string | null
+          exceso_motivo: string | null
+          exceso_por: string | null
           finished_at: string | null
           geom: unknown
           hora_fin: string | null
@@ -5506,6 +5802,7 @@ export type Database = {
           section_id: string
           service_id: string
           side: Database["public"]["Enums"]["road_side"]
+          solicitado: number | null
           started_at: string | null
           unit_id: string | null
           updated_at: string
@@ -5523,6 +5820,10 @@ export type Database = {
           duplicado_de?: string | null
           ejecutado_por?: string | null
           espesor_m?: number | null
+          exceso?: number | null
+          exceso_at?: string | null
+          exceso_motivo?: string | null
+          exceso_por?: string | null
           finished_at?: string | null
           geom?: unknown
           hora_fin?: string | null
@@ -5542,6 +5843,7 @@ export type Database = {
           section_id: string
           service_id: string
           side?: Database["public"]["Enums"]["road_side"]
+          solicitado?: number | null
           started_at?: string | null
           unit_id?: string | null
           updated_at?: string
@@ -5559,6 +5861,10 @@ export type Database = {
           duplicado_de?: string | null
           ejecutado_por?: string | null
           espesor_m?: number | null
+          exceso?: number | null
+          exceso_at?: string | null
+          exceso_motivo?: string | null
+          exceso_por?: string | null
           finished_at?: string | null
           geom?: unknown
           hora_fin?: string | null
@@ -5578,6 +5884,7 @@ export type Database = {
           section_id?: string
           service_id?: string
           side?: Database["public"]["Enums"]["road_side"]
+          solicitado?: number | null
           started_at?: string | null
           unit_id?: string | null
           updated_at?: string
@@ -5610,6 +5917,13 @@ export type Database = {
             columns: ["duplicado_de"]
             isOneToOne: false
             referencedRelation: "work_entries"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "work_entries_exceso_por_fkey"
+            columns: ["exceso_por"]
+            isOneToOne: false
+            referencedRelation: "profiles"
             referencedColumns: ["id"]
           },
           {
@@ -6513,6 +6827,7 @@ export type Database = {
           assigned_to: string | null
           assignee_name: string | null
           closed_at: string | null
+          conforme_por: string | null
           created_at: string | null
           crew_name: string | null
           days_left: number | null
@@ -6530,6 +6845,9 @@ export type Database = {
           metrado_registrado: number | null
           notes: string | null
           observacion: string | null
+          observado_at: string | null
+          observado_entidad: string | null
+          observado_por_nombre: string | null
           pci_code: string | null
           pci_id: string | null
           pci_priority: Database["public"]["Enums"]["pci_priority"] | null
@@ -6552,6 +6870,8 @@ export type Database = {
           term_days: number | null
           unit_symbol: string | null
           updated_at: string | null
+          validado_servicon_at: string | null
+          validado_servicon_por: string | null
           validated_at: string | null
         }
         Relationships: [
@@ -6632,6 +6952,7 @@ export type Database = {
           service_id: string | null
           title: string | null
           urgentes: number | null
+          validado_servicon: number | null
           vencidos: number | null
         }
         Relationships: [
@@ -7518,6 +7839,24 @@ export type Database = {
         Returns: Json
       }
       avisar_pedido: { Args: { p_id: string }; Returns: undefined }
+      aviso_resolver: {
+        Args: { p_clave: string; p_profile: string; p_tipo: string }
+        Returns: undefined
+      }
+      aviso_vivo: {
+        Args: {
+          p_clave: string
+          p_cuerpo: string
+          p_data: Json
+          p_profile: string
+          p_service: string
+          p_severidad: string
+          p_tipo: string
+          p_titulo: string
+          p_url: string
+        }
+        Returns: undefined
+      }
       buscar: {
         Args: { p_limit?: number; p_q: string; p_service_id: string }
         Returns: Json
@@ -7582,6 +7921,12 @@ export type Database = {
         }
         Returns: Json
       }
+      cuadrilla_a_mi_cargo: {
+        Args: { crew: string; sid: string }
+        Returns: boolean
+      }
+      cuadrilla_de_evidencia: { Args: { p_evidencia: string }; Returns: string }
+      cuadrillas_visibles: { Args: never; Returns: string[] }
       dar_de_baja_evidencia: {
         Args: { p_client_id: string }
         Returns: undefined
@@ -7659,6 +8004,7 @@ export type Database = {
         Args: { p_crew_id: string; p_service_id: string }
         Returns: boolean
       }
+      es_admin: { Args: { sid: string }; Returns: boolean }
       estoy_activo: { Args: never; Returns: boolean }
       evaluate_pci_deadlines: { Args: never; Returns: Json }
       evidence_gallery: {
@@ -7829,6 +8175,8 @@ export type Database = {
         Args: { p_aceptar?: boolean; p_item: string; p_nota?: string }
         Returns: Json
       }
+      pci_avisos: { Args: { p_pci: string }; Returns: undefined }
+      pci_corto: { Args: { p_codigo: string }; Returns: string }
       pci_fijar_plazo: {
         Args: { p_items: string[]; p_motivo?: string; p_plazo: number }
         Returns: Json
@@ -7839,6 +8187,7 @@ export type Database = {
       }
       pci_geojson: { Args: { p_service_id: string }; Returns: Json }
       pci_iniciar_atencion: { Args: { p_item: string }; Returns: Json }
+      pci_item_historial: { Args: { p_item: string }; Returns: Json }
       pci_item_semaforo: {
         Args: {
           p_due: string
@@ -7848,6 +8197,7 @@ export type Database = {
         Returns: string
       }
       pci_levantar: { Args: { p_item: string; p_nota?: string }; Returns: Json }
+      pci_situacion: { Args: { p_pci: string }; Returns: Json }
       pci_tablero: {
         Args: {
           p_crew?: string
@@ -7901,6 +8251,7 @@ export type Database = {
         Args: { p_item: Database["public"]["Tables"]["pci_items"]["Row"] }
         Returns: boolean
       }
+      puede_campo: { Args: { sid: string }; Returns: boolean }
       puede_leer_servicio: { Args: { p_service_id: string }; Returns: boolean }
       puede_llevar_cuadrilla: { Args: { p_crew: string }; Returns: boolean }
       puede_llevar_parte: {
@@ -7908,6 +8259,7 @@ export type Database = {
         Returns: boolean
       }
       puede_revisar_ssoma: { Args: { sid: string }; Returns: boolean }
+      puede_ssoma_campo: { Args: { sid: string }; Returns: boolean }
       puedo_mover_partida: {
         Args: { p_crew_id: string; p_service_id: string }
         Returns: boolean
@@ -7921,6 +8273,15 @@ export type Database = {
         Returns: undefined
       }
       quitar_pagina_documento: { Args: { p_client_id: string }; Returns: Json }
+      reasignar_cuadrilla: {
+        Args: {
+          p_crew: string
+          p_ids: string[]
+          p_motivo?: string
+          p_tipo: string
+        }
+        Returns: Json
+      }
       reenviar_pedido: {
         Args: { p_items: Json; p_nota?: string; p_request_id: string }
         Returns: undefined
@@ -7958,6 +8319,10 @@ export type Database = {
       revert_pci_suspension_sin_permiso: {
         Args: { p_suspension_id: string }
         Returns: Json
+      }
+      revisa_cuadrilla: {
+        Args: { crew: string; sid: string }
+        Returns: boolean
       }
       revisar_documento: {
         Args: { p_conforme: boolean; p_documento_id: string; p_nota?: string }
@@ -8048,6 +8413,8 @@ export type Database = {
         Args: { p_aceptar: boolean; p_vehiculo: string }
         Returns: Json
       }
+      ve_caja: { Args: { crew: string; sid: string }; Returns: boolean }
+      ve_lo_interno: { Args: { sid: string }; Returns: boolean }
       vehiculo_por_placa: {
         Args: {
           p_km: number

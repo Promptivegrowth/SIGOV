@@ -23,14 +23,38 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@
 import { EmptyState, SemaforoBadge, Progresiva, ProgressBar } from '@/components/shared/misc'
 import { SuspensionDialog } from '@/components/pci/suspension-dialog'
 import { PciItemSheet } from '@/components/pci/pci-item-sheet'
+import { FormDialog } from '@/components/forms/form-dialog'
 import { FotosReferencialesLote } from '@/components/pci/fotos-referenciales-lote'
 import { VencimientosPorPlazo } from '@/components/pci/vencimientos-por-plazo'
 import { CuadrillasDelPci } from '@/components/pci/cuadrillas-del-pci'
 import { descargarPdf, descargarExcel, type ReportMeta } from '@/lib/reports'
-import { PCI_PRIORITY, PCI_ITEM_STATUS, SEMAFORO, type Semaforo } from '@/lib/constants'
+import { PCI_PRIORITY, SEMAFORO, estadoPci, type Semaforo } from '@/lib/constants'
 import { cn, fmtDate, fmtNumber, truncate, toISODate } from '@/lib/utils'
 import { toast } from 'sonner'
 import { mensajeAmigable } from '@/lib/errores'
+
+/**
+ * Los estados por los que se filtra un PCI, como se ven en el mapa y la app:
+ * «Por validar» espera a SERVICON, «Validado SERVICON» espera la conformidad
+ * de COVINCA y «Conforme COVINCA» ya la tiene (OBS 8). «Por revisar» es lo
+ * que espera a COVINCA, haya o no validado SERVICON.
+ */
+const ESTADOS_FILTRO = [
+  { clave: 'pendiente', label: 'Por atender', color: '#94A3B8' },
+  { clave: 'en_atencion', label: 'En ejecución', color: '#2563EB' },
+  { clave: 'por_validar', label: 'Por validar', color: '#0891B2' },
+  { clave: 'validado_servicon', label: 'Validado SERVICON', color: '#0E7490' },
+  { clave: 'observado', label: 'Observado', color: '#7C3AED' },
+  { clave: 'validado', label: 'Conforme COVINCA', color: '#16A34A' },
+  { clave: 'por_revisar', label: 'Por revisar (COVINCA)', color: '#0891B2' },
+] as const
+
+function coincideEstado(r: any, clave: string): boolean {
+  const e = estadoPci(r).clave
+  if (clave === 'por_validar') return e === 'levantado' || e === 'subsanado'
+  if (clave === 'por_revisar') return ['levantado', 'subsanado', 'validado_servicon'].includes(e)
+  return e === clave
+}
 
 export function PciDetailClient({ pciId }: { pciId: string }) {
   const { service, can, profile, role } = useSession()
@@ -40,7 +64,13 @@ export function PciDetailClient({ pciId }: { pciId: string }) {
 
   const [q, setQ] = React.useState('')
   const [semFilter, setSemFilter] = React.useState<string>('todos')
-  const [statusFilter, setStatusFilter] = React.useState<string>('todos')
+  // El aviso abre el PCI ya filtrado: «PCI 70 tiene 8 ítems observados» (CASO 41)
+  const [statusFilter, setStatusFilter] = React.useState<string>(() => {
+    const e = params.get('estado')
+    if (e === 'por_validar') return role === 'visor' ? 'por_revisar' : 'por_validar'
+    return e && ESTADOS_FILTRO.some((x) => x.clave === e) ? e : 'todos'
+  })
+  const [reasignar, setReasignar] = React.useState<{ crewId: string; motivo: string } | null>(null)
   const [selected, setSelected] = React.useState<Set<string>>(new Set())
   const [suspOpen, setSuspOpen] = React.useState(params.get('suspension') === '1')
   const [sheetItem, setSheetItem] = React.useState<any>(null)
@@ -78,7 +108,7 @@ export function PciDetailClient({ pciId }: { pciId: string }) {
   const filtered = React.useMemo(() => {
     let rows = items.data ?? []
     if (semFilter !== 'todos') rows = rows.filter((r: any) => r.semaforo === semFilter)
-    if (statusFilter !== 'todos') rows = rows.filter((r: any) => r.status === statusFilter)
+    if (statusFilter !== 'todos') rows = rows.filter((r: any) => coincideEstado(r, statusFilter))
     if (q) {
       const s = q.toLowerCase()
       rows = rows.filter(
@@ -106,6 +136,21 @@ export function PciDetailClient({ pciId }: { pciId: string }) {
     overscan: 12,
   })
 
+  // El aviso de un ítem abre su ficha (?item=)
+  const itemPedido = params.get('item')
+  React.useEffect(() => {
+    if (!itemPedido || !items.data) return
+    const it = items.data.find((r: any) => r.id === itemPedido)
+    if (it) setSheetItem(it)
+  }, [itemPedido, items.data])
+
+  // Cuántos hay en cada estado real (OBS 8: «Por validar» y «Conforme» aparte)
+  const porEstado = React.useMemo(() => {
+    const acc: Record<string, number> = {}
+    for (const r of items.data ?? []) for (const e of ESTADOS_FILTRO) if (coincideEstado(r, e.clave)) acc[e.clave] = (acc[e.clave] ?? 0) + 1
+    return acc
+  }, [items.data])
+
   const counts = React.useMemo(() => {
     const acc: Record<string, number> = {}
     for (const r of items.data ?? []) acc[r.semaforo!] = (acc[r.semaforo!] ?? 0) + 1
@@ -129,12 +174,17 @@ export function PciDetailClient({ pciId }: { pciId: string }) {
     else setSelected(new Set(filtered.map((r: any) => r.id)))
   }
 
-  const bulkAssign = async (crewId: string) => {
+  // Asignar pasa por la base: queda quién, cuándo, de qué cuadrilla a cuál y
+  // el motivo, y a la cuadrilla nueva le llega un aviso por PCI (CASO 6, 36)
+  const bulkAssign = async (crewId: string, motivo?: string) => {
     const ids = [...selected]
-    const { error } = await sb.from('pci_items').update({ assigned_crew_id: crewId }).in('id', ids)
+    const yaTenian = (items.data ?? []).some((r: any) => selected.has(r.id) && r.assigned_crew_id && r.assigned_crew_id !== crewId)
+    if (yaTenian && !motivo) { setReasignar({ crewId, motivo: '' }); return }
+    const { data, error } = await sb.rpc('reasignar_cuadrilla', { p_tipo: 'pci', p_ids: ids, p_crew: crewId, p_motivo: motivo })
     if (error) return toast.error(mensajeAmigable(error))
-    toast.success(`${ids.length} ítems asignados`)
+    toast.success(`${(data as any)?.cambiados ?? ids.length} ítems asignados`)
     setSelected(new Set())
+    setReasignar(null)
     qc.invalidateQueries({ queryKey: ['pci-items', pciId] })
   }
 
@@ -182,7 +232,7 @@ export function PciDetailClient({ pciId }: { pciId: string }) {
         plazo: i.term_days + ' d',
         vence: fmtDate(i.due_date),
         semaforo: SEMAFORO[i.semaforo as Semaforo]?.label ?? i.semaforo,
-        estado: PCI_ITEM_STATUS[i.status as keyof typeof PCI_ITEM_STATUS]?.label ?? i.status,
+        estado: estadoPci(i).label,
         cuadrilla: i.crew_name ?? '-',
         // Como la columna ENCARGADO del control del PCI: quién lo ejecutó
         encargado: i.ejecutado_por ?? i.encargado ?? '-',
@@ -216,7 +266,9 @@ export function PciDetailClient({ pciId }: { pciId: string }) {
           landscape: true,
           kpis: [
             { label: 'Items', value: fmtNumber(filtered.length) },
-            { label: 'Levantados', value: fmtNumber(counts.ok ?? 0) },
+            { label: 'Por validar', value: fmtNumber((porEstado.por_validar ?? 0) + (porEstado.validado_servicon ?? 0)) },
+            { label: 'Conformes COVINCA', value: fmtNumber(porEstado.validado ?? 0) },
+            { label: 'Observados', value: fmtNumber(porEstado.observado ?? 0) },
             { label: 'Vencidos', value: fmtNumber(counts.vencido ?? 0) },
             { label: 'Criticos', value: fmtNumber(counts.rojo ?? 0) },
           ],
@@ -370,7 +422,8 @@ export function PciDetailClient({ pciId }: { pciId: string }) {
             Todos
             <span className="font-bold tabular-nums">{total}</span>
           </button>
-          {(['verde', 'ambar', 'rojo', 'vencido', 'ok'] as Semaforo[]).map((k) => (
+          {/* El semáforo es del plazo; el estado va en su propia fila */}
+          {(['verde', 'ambar', 'rojo', 'vencido'] as Semaforo[]).map((k) => (
             <button
               key={k}
               onClick={() => setSemFilter(semFilter === k ? 'todos' : k)}
@@ -382,6 +435,23 @@ export function PciDetailClient({ pciId }: { pciId: string }) {
               <span className="size-2.5 rounded-full" style={{ background: `var(--sem-${k})` }} />
               {SEMAFORO[k].label}
               <span className="font-bold tabular-nums">{counts[k] ?? 0}</span>
+            </button>
+          ))}
+        </div>
+
+        <div className="flex flex-wrap gap-2">
+          {ESTADOS_FILTRO.filter((e) => e.clave !== 'por_revisar').map((e) => (
+            <button
+              key={e.clave}
+              onClick={() => setStatusFilter(statusFilter === e.clave ? 'todos' : e.clave)}
+              className={cn(
+                'flex items-center gap-2 rounded-lg border px-3 py-1.5 text-[12px] font-medium transition-all',
+                statusFilter === e.clave ? 'border-primary bg-primary/8' : 'border-border bg-card hover:border-primary/30'
+              )}
+            >
+              <span className="size-2.5 rounded-full" style={{ background: e.color }} />
+              {e.label}
+              <span className="font-bold tabular-nums">{porEstado[e.clave] ?? 0}</span>
             </button>
           ))}
         </div>
@@ -402,8 +472,8 @@ export function PciDetailClient({ pciId }: { pciId: string }) {
             </SelectTrigger>
             <SelectContent>
               <SelectItem value="todos">Todos los estados</SelectItem>
-              {Object.entries(PCI_ITEM_STATUS).map(([k, v]) => (
-                <SelectItem key={k} value={k}>{v.label}</SelectItem>
+              {ESTADOS_FILTRO.map((e) => (
+                <SelectItem key={e.clave} value={e.clave}>{e.label}</SelectItem>
               ))}
             </SelectContent>
           </Select>
@@ -428,7 +498,7 @@ export function PciDetailClient({ pciId }: { pciId: string }) {
         {selected.size > 0 && can.manage && (
           <div className="bg-primary/8 border-primary/25 flex flex-wrap items-center gap-3 rounded-xl border px-4 py-2.5">
             <span className="text-[13px] font-semibold">{selected.size} seleccionados</span>
-            <Select onValueChange={bulkAssign}>
+            <Select onValueChange={(v) => void bulkAssign(v)}>
               <SelectTrigger size="sm" className="w-52">
                 <SelectValue placeholder="Asignar a cuadrilla…" />
               </SelectTrigger>
@@ -565,6 +635,18 @@ export function PciDetailClient({ pciId }: { pciId: string }) {
       </PageBody>
 
       <FotosReferencialesLote open={lote} onOpenChange={setLote} items={(items.data ?? []) as any} />
+
+      {/* Reasignar ítems que ya tenían cuadrilla: el motivo queda en el historial */}
+      <FormDialog
+        open={!!reasignar}
+        onOpenChange={(v) => !v && setReasignar(null)}
+        title="Motivo de la reasignación"
+        description="Algunos ítems ya tenían cuadrilla. Queda registrado quién, cuándo, de qué cuadrilla a cuál y por qué."
+        fields={[{ name: 'motivo', label: 'Motivo', type: 'textarea', required: true, span: 2 }]}
+        size="sm"
+        submitLabel="Reasignar"
+        onSubmit={async (v) => { if (reasignar) await bulkAssign(reasignar.crewId, String(v.motivo).trim()) }}
+      />
 
       <PciItemSheet
         item={sheetItem}

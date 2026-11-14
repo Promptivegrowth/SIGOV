@@ -17,7 +17,7 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@
 import { EvidenceGrid } from '@/components/campo/evidence-grid'
 import { SemaforoBadge } from '@/components/shared/misc'
 import { CameraCapture } from '@/components/campo/camera-capture'
-import { PCI_ITEM_STATUS, PCI_ITEM_LEVANTADO } from '@/lib/constants'
+import { PCI_ITEM_LEVANTADO, estadoPci, observadoPor } from '@/lib/constants'
 import { fmtDate, fmtDateTime, fmtNumber, uuid } from '@/lib/utils'
 import { enqueue, enqueueBlob, getDeviceId } from '@/lib/offline/db'
 import { syncNow } from '@/lib/offline/sync'
@@ -55,6 +55,7 @@ export function PciItemSheet({
   const [notes, setNotes] = React.useState('')
   const [crewId, setCrewId] = React.useState('')
   const [observacion, setObservacion] = React.useState('')
+  const [motivo, setMotivo] = React.useState('')
   const [busy, setBusy] = React.useState(false)
 
   React.useEffect(() => {
@@ -62,19 +63,18 @@ export function PciItemSheet({
     setNotes(item.notes ?? '')
     setCrewId(item.assigned_crew_id ?? '')
     setObservacion('')
+    setMotivo('')
   }, [item])
 
+  // Todo lo que pasó con el ítem: importación, asignaciones, avances, fotos
+  // y cada revisión con su entidad (CASO 45)
   const historial = useQuery({
     queryKey: ['pci-item-eventos', item?.id],
     enabled: !!item?.id,
     queryFn: async () => {
-      const { data, error } = await sb
-        .from('pci_item_eventos')
-        .select('id, de, a, nota, cuando, quien:profiles(full_name)')
-        .eq('pci_item_id', item.id)
-        .order('cuando', { ascending: false })
+      const { data, error } = await sb.rpc('pci_item_historial', { p_item: item.id })
       if (error) throw error
-      return data ?? []
+      return ((data as any[]) ?? []).slice().reverse()
     },
   })
 
@@ -83,11 +83,20 @@ export function PciItemSheet({
 
   if (!item) return null
 
-  const st = PCI_ITEM_STATUS[item.status as keyof typeof PCI_ITEM_STATUS] ?? PCI_ITEM_STATUS.pendiente
+  const st = estadoPci(item)
   const isClosed = PCI_ITEM_LEVANTADO.includes(item.status)
   const porValidar = ['levantado', 'subsanado'].includes(item.status)
-  // Valida quien administra el contrato y COVINCA, que entra como visor
-  const puedeValidar = can.manage || role === 'visor'
+  // Dos revisiones: SERVICON (supervisor de la cuadrilla, residente o
+  // administrador) valida internamente; COVINCA da la conformidad, y puede
+  // observar aun después de la validación interna (CASO 39)
+  const esCovinca = role === 'visor'
+  const puedeValidar = (esCovinca || can.manage) && porValidar
+  const yaValidoServicon = !!item.validado_servicon_at
+  // Ejecuta solo el jefe de la cuadrilla (matriz); fotos también el supervisor
+  const esJefe = role === 'jefe_cuadrilla'
+  const puedeFotos = ['jefe_cuadrilla', 'admin', 'supervisor', 'residente'].includes(role)
+  const cambiaCuadrilla = (crewId || null) !== (item.assigned_crew_id ?? null)
+  const pideMotivo = cambiaCuadrilla && !!item.assigned_crew_id
 
   const refresh = () => {
     qc.invalidateQueries({ queryKey: ['pci-items'] })
@@ -126,7 +135,8 @@ export function PciItemSheet({
     void llamar(
       'pci_validar',
       { p_item: item.id, p_conforme: conforme, p_nota: observacion.trim() || null },
-      conforme ? 'Ítem conforme' : 'Ítem observado: vuelve a la cuadrilla',
+      !conforme ? 'Ítem observado: vuelve a la cuadrilla'
+        : esCovinca ? 'Conforme COVINCA' : 'Validado por SERVICON: pasa a la revisión de COVINCA',
     )
   }
 
@@ -141,14 +151,24 @@ export function PciItemSheet({
   }
 
   const saveAssignment = async () => {
+    if (pideMotivo && !motivo.trim()) {
+      toast.error('Escribe el motivo de la reasignación: queda en el historial.')
+      return
+    }
     setBusy(true)
-    const { error } = await sb
-      .from('pci_items')
-      .update({ assigned_crew_id: crewId || null, notes: notes || null })
-      .eq('id', item.id)
+    // El cambio de cuadrilla pasa por la base: deja cuadrilla anterior, nueva,
+    // quién, cuándo y motivo, y avisa a la cuadrilla nueva (CASO 36)
+    if (cambiaCuadrilla && crewId) {
+      const r = await sb.rpc('reasignar_cuadrilla', {
+        p_tipo: 'pci', p_ids: [item.id], p_crew: crewId, p_motivo: motivo.trim() || undefined,
+      })
+      if (r.error) { setBusy(false); toast.error(mensajeAmigable(r.error)); return }
+    }
+    const { error } = await sb.from('pci_items').update({ notes: notes || null }).eq('id', item.id)
     setBusy(false)
     if (error) { toast.error(mensajeAmigable(error)); return }
-    toast.success('Ítem actualizado')
+    toast.success(cambiaCuadrilla ? 'Ítem reasignado' : 'Ítem actualizado')
+    setMotivo('')
     refresh()
   }
 
@@ -213,8 +233,15 @@ export function PciItemSheet({
               <div className="bg-destructive/8 border-destructive/25 flex items-start gap-2.5 rounded-lg border px-3 py-2.5">
                 <TriangleAlert className="text-destructive mt-0.5 size-4 shrink-0" />
                 <div>
-                  <p className="text-[12.5px] font-semibold">Observación de COVINCA</p>
-                  <p className="text-muted-foreground text-[12px]">{item.observacion}</p>
+                  {/* CASO 40: de dónde viene la observación */}
+                  <p className="text-[12.5px] font-semibold">
+                    Observado por: {observadoPor(item.observado_entidad)}
+                    {item.status === 'subsanado' && ' · subsanado, por validar'}
+                  </p>
+                  <p className="text-muted-foreground text-[11.5px]">
+                    {[item.observado_por_nombre, item.observado_at && fmtDateTime(item.observado_at)].filter(Boolean).join(' · ')}
+                  </p>
+                  <p className="text-[12px]">{item.observacion}</p>
                 </div>
               </div>
             )}
@@ -230,13 +257,13 @@ export function PciItemSheet({
               </h3>
               <p className="text-muted-foreground mt-0.5 text-[11.5px]">
                 Antes {item.fotos_antes ?? 0} · durante {item.fotos_durante ?? 0} · después {item.fotos_despues ?? 0}
-                {item.requires_evidence && ' — con las tres el ítem pasa solo a «Por validar», a la revisión de COVINCA.'}
+                {item.requires_evidence && ' — con las tres el ítem pasa solo a «Por validar»: lo valida SERVICON y da la conformidad COVINCA.'}
               </p>
               <EvidenceGrid
                 pciItemId={item.id}
                 count={item.evidence_count ?? 0}
                 // Hasta que COVINCA valida se pueden agregar o cambiar fotos (REV3-OBS-04)
-                canAdd={can.write && item.status !== 'validado'}
+                canAdd={puedeFotos && item.status !== 'validado'}
                 onAdd={() => setCamera(true)}
                 label={`el ítem ${item.item_number} del ${item.pci_code}`}
                 context={{
@@ -277,6 +304,12 @@ export function PciItemSheet({
                     </SelectContent>
                   </Select>
                 </Field>
+                {pideMotivo && (
+                  <Field label="Motivo de la reasignación" hint="Obligatorio: queda en el historial con la cuadrilla anterior y la nueva">
+                    <Textarea value={motivo} onChange={(e) => setMotivo(e.target.value)} rows={2}
+                      placeholder="Por qué pasa a otra cuadrilla…" />
+                  </Field>
+                )}
                 <Field label="Notas" hint="Queda registrado junto al ítem">
                   <Textarea value={notes} onChange={(e) => setNotes(e.target.value)} rows={2}
                     placeholder="Observaciones del levantamiento, coordinaciones…" />
@@ -292,20 +325,22 @@ export function PciItemSheet({
                 <ShieldCheck className="text-success mt-0.5 size-4 shrink-0" />
                 <div>
                   <p className="text-[12.5px] font-semibold">
-                    {item.status === 'validado' ? 'Conforme'
-                      : item.status === 'subsanado' ? 'Subsanado, pendiente de validación COVINCA'
-                      : 'Levantado, pendiente de validación COVINCA'}
+                    {item.status === 'validado' ? 'Conforme COVINCA'
+                      : yaValidoServicon ? 'Validado SERVICON, pendiente de la conformidad COVINCA'
+                      : item.status === 'subsanado' ? 'Subsanado, pendiente de validación'
+                      : 'Culminado por la cuadrilla, pendiente de validación'}
                   </p>
                   <p className="text-muted-foreground text-[12px]">
-                    {item.closed_at ? `Levantado el ${fmtDate(item.closed_at)}` : ''}
-                    {item.validated_at ? ` · Conforme el ${fmtDate(item.validated_at)}` : ''}
+                    {item.closed_at ? `Culminado el ${fmtDate(item.closed_at)}` : ''}
+                    {yaValidoServicon ? ` · Validado SERVICON el ${fmtDate(item.validado_servicon_at)}${item.validado_servicon_por ? ' por ' + item.validado_servicon_por : ''}` : ''}
+                    {item.validated_at ? ` · Conforme COVINCA el ${fmtDate(item.validated_at)}${item.conforme_por ? ' por ' + item.conforme_por : ''}` : ''}
                   </p>
                 </div>
               </div>
             )}
 
-            {/* La conformidad de COVINCA */}
-            {puedeValidar && porValidar && (
+            {/* La revisión: SERVICON valida, COVINCA da la conformidad */}
+            {puedeValidar && (
               <Field label="Observación para la cuadrilla" hint="Obligatoria si se observa el ítem">
                 <Textarea value={observacion} onChange={(e) => setObservacion(e.target.value)} rows={2}
                   placeholder="Qué falta o qué hay que corregir…" />
@@ -319,16 +354,14 @@ export function PciItemSheet({
                   <History className="size-4" />
                   Historial
                 </h3>
-                <ol className="mt-2 space-y-2">
-                  {historial.data!.map((e: any) => (
-                    <li key={e.id} className="text-[12px] leading-snug">
-                      <span className="font-medium">
-                        {(PCI_ITEM_STATUS as Record<string, { label: string }>)[e.a]?.label ?? e.a}
-                      </span>
+                <ol className="mt-2 space-y-2 border-l border-border pl-3">
+                  {historial.data!.map((e: any, i: number) => (
+                    <li key={i} className="text-[12px] leading-snug">
+                      <span className="font-medium">{e.detalle}</span>
                       <span className="text-muted-foreground">
-                        {' · '}{fmtDateTime(e.cuando)}{e.quien?.full_name ? ` · ${e.quien.full_name}` : ''}
+                        {' · '}{fmtDateTime(e.cuando)}{e.quien ? ` · ${e.quien}` : ''}
+                        {e.entidad ? ` (${e.entidad})` : ''}
                       </span>
-                      {e.nota && <p className="text-muted-foreground">{e.nota}</p>}
                     </li>
                   ))}
                 </ol>
@@ -338,30 +371,32 @@ export function PciItemSheet({
 
           {/* Acciones */}
           <div className="flex flex-wrap gap-2 border-t border-border p-4">
-            {can.write && item.status === 'pendiente' && (
+            {esJefe && item.status === 'pendiente' && (
               <Button variant="outline" className="flex-1" loading={busy} onClick={iniciar}>
                 Marcar en ejecución
               </Button>
             )}
-            {can.write && !isClosed && (
+            {esJefe && !isClosed && (
               <Button variant="accent" className="flex-1" loading={busy} onClick={levantar}>
                 <CircleCheck className="size-4" />
                 {item.status === 'observado' ? 'Dar por subsanado' : 'Levantar ítem'}
               </Button>
             )}
-            {puedeValidar && porValidar && (
+            {puedeValidar && (
               <>
                 <Button variant="outline" loading={busy} onClick={() => validar(false)}>
                   <CircleX className="size-4" />
                   Observar
                 </Button>
-                <Button variant="success" className="flex-1" loading={busy} onClick={() => validar(true)}>
-                  <ShieldCheck className="size-4" />
-                  Conforme
-                </Button>
+                {(esCovinca || !yaValidoServicon) && (
+                  <Button variant="success" className="flex-1" loading={busy} onClick={() => validar(true)}>
+                    <ShieldCheck className="size-4" />
+                    {esCovinca ? 'Conforme COVINCA' : 'Validar (SERVICON)'}
+                  </Button>
+                )}
               </>
             )}
-            {((!can.write && !(puedeValidar && porValidar)) || item.status === 'validado') && (
+            {((!esJefe && !puedeValidar) || item.status === 'validado') && (
               <Button variant="ghost" className="flex-1" onClick={onClose}>Cerrar</Button>
             )}
           </div>

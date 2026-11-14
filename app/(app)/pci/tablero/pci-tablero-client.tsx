@@ -274,7 +274,9 @@ export function PciTableroClient() {
             />
             <StatCard index={1} label="Pendientes" value={Number(resumen?.pendientes ?? 0)} icon={ClipboardList} tone="warning" hint="sin empezar" />
             <StatCard index={2} label="En atención" value={Number(resumen?.en_atencion ?? 0)} icon={CalendarClock} tone="info" hint="cuadrilla trabajando" />
-            <StatCard index={3} label="Levantados" value={Number(resumen?.levantados ?? 0) + Number(resumen?.validados ?? 0)} icon={ListChecks} tone="success" hint={`${fmtNumber(resumen?.validados ?? 0)} ya validados`} />
+            {/* OBS 8: lo que espera revisión y lo conforme, aparte */}
+            <StatCard index={3} label="Por validar" value={Number(resumen?.levantados ?? 0)} icon={ListChecks} tone="info" hint="culminados, en revisión" />
+            <StatCard index={3} label="Conformes COVINCA" value={Number(resumen?.validados ?? 0)} icon={ListChecks} tone="success" hint="con la conformidad" />
             <StatCard index={4} label="Vencidos" value={Number(resumen?.vencidos ?? 0)} icon={TriangleAlert} tone={Number(resumen?.vencidos ?? 0) > 0 ? 'danger' : 'success'} hint={`${fmtNumber(resumen?.por_vencer ?? 0)} por vencer`} />
             <StatCard index={5} label="Sin evidencia" value={Number(resumen?.sin_evidencia ?? 0)} icon={Camera} tone={Number(resumen?.sin_evidencia ?? 0) > 0 ? 'warning' : 'success'} hint="abiertos y exigen foto" />
             <StatCard index={6} label="Fotos observadas" value={Number(resumen?.fotos_observadas ?? 0)} icon={ImageOff} tone={Number(resumen?.fotos_observadas ?? 0) > 0 ? 'danger' : 'success'} hint="COVINCA pide tomarlas de nuevo" />

@@ -247,6 +247,16 @@ class PciViewModel @Inject constructor(
     }
 
     fun abrirPci(id: String) = _estado.update { it.copy(abierto = id, estadoDelPci = Estado.PENDIENTES) }
+
+    private val _situacion = kotlinx.coroutines.flow.MutableStateFlow<Map<String, kotlinx.serialization.json.JsonObject>>(emptyMap())
+    /** La situación de cada PCI con todas sus cuadrillas (CASO 6). */
+    val situacion: kotlinx.coroutines.flow.StateFlow<Map<String, kotlinx.serialization.json.JsonObject>> = _situacion
+
+    fun cargarSituacion(pciId: String) {
+        viewModelScope.launch {
+            campo.situacionPci(pciId)?.let { s -> _situacion.update { it + (pciId to s) } }
+        }
+    }
     fun cerrarPci() = _estado.update { it.copy(abierto = null, ficha = null) }
 
     /** Tocar un contador filtra por él; tocarlo otra vez vuelve a lo pendiente. */
@@ -347,13 +357,13 @@ class PciViewModel @Inject constructor(
     }
 
     /** El metrado es opcional: el ítem queda conforme por sus fotos. */
-    fun registrarMetrado(item: ItemPci, cantidad: Double) {
+    fun registrarMetrado(item: ItemPci, cantidad: Double, motivoExceso: String? = null) {
         _estado.update { it.copy(trabajando = item.id, aviso = null, error = null) }
         viewModelScope.launch {
             runCatching {
                 val cuadrilla = sesion.cuadrilla() ?: error("Tu usuario no dirige ninguna cuadrilla.")
                 val registro = campo.registroDelItemPci(cuadrilla.servicioId, cuadrilla.id, item)
-                campo.fijarMetrado(registro, cantidad)
+                campo.fijarMetrado(registro, cantidad, excesoMotivo = motivoExceso)
             }.onSuccess {
                 _estado.update {
                     it.copy(

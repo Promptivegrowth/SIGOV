@@ -33,7 +33,7 @@ const PCI_DESDE_EXCEL = '__excel__'
 type Step = 'tipo' | 'archivo' | 'mapeo' | 'validacion' | 'resultado'
 
 export function ImportarClient() {
-  const { service, profile } = useSession()
+  const { service, profile, role } = useSession()
   const params = useSearchParams()
   const qc = useQueryClient()
   const sb = React.useMemo(() => createClient(), [])
@@ -219,9 +219,36 @@ export function ImportarClient() {
     setStep('validacion')
   }
 
-  // ── Importación transaccional ─────────────────────────────────────────
-  const runImport = async () => {
+  // ── CASO 4: si el PCI ya existe, se dice qué hay y se decide ──────────
+  // Nunca se duplica en silencio: cancelar, importar solo los ítems nuevos
+  // (se omiten los repetidos) o, con confirmación, actualizar también los
+  // existentes (solo lo que describe el Excel: estado, fotos y cuadrilla
+  // asignada no se tocan).
+  const [analisisPci, setAnalisisPci] = React.useState<null | { pcis: { code: string; existe: boolean; repetidos: number; nuevos: number }[] }>(null)
+  const prepararImportacion = async () => {
     if (!schema) return
+    if (schema.key !== 'pci') { void runImport('todo'); return }
+    setImporting(true)
+    const codigos = pciId === PCI_DESDE_EXCEL
+      ? [...new Set(valid.map((v) => String(v.pci_code).trim()))]
+      : [(pcis.data ?? []).find((p: any) => p.id === pciId)?.code].filter(Boolean)
+    const filas: { code: string; existe: boolean; repetidos: number; nuevos: number }[] = []
+    for (const code of codigos) {
+      const pci = (pcis.data ?? []).find((p: any) => normKey(p.code) === normKey(String(code)))
+      const delPci = pciId === PCI_DESDE_EXCEL ? valid.filter((v) => String(v.pci_code).trim() === code) : valid
+      const existentes = pci ? await numerosDeItemExistentes(sb, pci.id).catch(() => new Set<number>()) : new Set<number>()
+      const repetidos = delPci.filter((v) => existentes.has(Number(v.item_number))).length
+      filas.push({ code: String(code), existe: !!pci, repetidos, nuevos: delPci.length - repetidos })
+    }
+    setImporting(false)
+    if (filas.some((x) => x.existe && x.repetidos > 0)) setAnalisisPci({ pcis: filas })
+    else void runImport('todo')
+  }
+
+  // ── Importación transaccional ─────────────────────────────────────────
+  const runImport = async (accion: 'todo' | 'solo_nuevos' | 'actualizar') => {
+    if (!schema) return
+    setAnalisisPci(null)
     setImporting(true)
 
     const batch = await sb
@@ -237,6 +264,12 @@ export function ImportarClient() {
         mapping,
         errors: issues.slice(0, 200) as any,
         created_by: profile.id,
+        // Trazabilidad de la importación (4.º entregable): quién y con qué rol,
+        // cuántos registros válidos, rechazados y con advertencias, qué se decidió
+        rol: role,
+        valid_rows: valid.length,
+        warning_rows: avisos.length,
+        accion,
       })
       .select('id')
       .single()
@@ -244,6 +277,7 @@ export function ImportarClient() {
     let inserted = 0
     let updated = 0
     let failed = 0
+    let duplicados = 0
     const errors: any[] = []
 
     const pcisTocados: { id: string; code: string; nuevo: boolean; publicado: boolean }[] = []
@@ -283,6 +317,8 @@ export function ImportarClient() {
         }
       }
       const payload = valid.map((v) => buildRow(schema.key, v, service.id, profile.id, destinoDe.get(v)))
+      // El ítem sabe de qué importación salió (historial del ítem, CASO 45)
+      if (schema.key === 'pci' && batch.data?.id) for (const r of payload) r.import_batch_id = batch.data.id
 
       // Tandas a escribir. Lo normal es una sola (upsert de todo). El PCI va
       // aparte: volver a subir el mismo Excel no puede devolver a «pendiente»
@@ -298,6 +334,7 @@ export function ImportarClient() {
         const delPci = payload.filter((r) => r.pci_id === destino.id)
         const existentes = await numerosDeItemExistentes(sb, destino.id)
         const nuevos = delPci.filter((r) => !existentes.has(r.item_number))
+        duplicados += delPci.length - nuevos.length
         // Del ítem que ya existe solo se refresca lo que describe el Excel, y
         // solo las columnas que se mapearon: una columna sin asignar no borra
         // lo que ya había. Estado, plazo, vencimiento, cuadrilla, fechas de
@@ -318,10 +355,13 @@ export function ImportarClient() {
         // la escritura, se respeta el suyo en vez de pisarle el estado.
         tandas.push({ filas: nuevos, opciones: { onConflict: 'pci_id,item_number', ignoreDuplicates: true }, nuevas: true })
         // defaultToNull=false: lo que no va en la fila no se escribe como NULL.
-        tandas.push({ filas: viejos, opciones: { onConflict: 'pci_id,item_number', defaultToNull: false }, nuevas: false })
+        // Los repetidos solo se actualizan si se eligió y confirmó (CASO 4)
+        if (accion !== 'solo_nuevos') {
+          tandas.push({ filas: viejos.map(({ import_batch_id: _x, ...r }) => r), opciones: { onConflict: 'pci_id,item_number', defaultToNull: false }, nuevas: false })
+        }
         // La cuadrilla del Excel solo se pone a los ítems que no tenían una:
         // reimportar no le quita el trabajo a la cuadrilla que ya lo atiende.
-        if (mapping.crew_code) {
+        if (mapping.crew_code && accion !== 'solo_nuevos') {
           const porCuadrilla = new Map<string, number[]>()
           for (const r of delPci) {
             if (!existentes.has(r.item_number) || !r.assigned_crew_id) continue
@@ -370,6 +410,9 @@ export function ImportarClient() {
           status: failed ? 'fallido' : 'completado',
           errors: [...issues.slice(0, 100), ...errors] as any,
           finished_at: new Date().toISOString(),
+          pci_ids: pcisTocados.map((p) => p.id),
+          nuevos: inserted,
+          duplicados,
         })
         .eq('id', batch.data!.id)
 
@@ -453,6 +496,8 @@ export function ImportarClient() {
               </div>
             </motion.div>
           )}
+
+          {step === 'tipo' && <HistorialDeImportaciones serviceId={service.id} />}
 
           {/* ── 2. Archivo ────────────────────────────────────────────── */}
           {step === 'archivo' && schema && (
@@ -738,12 +783,43 @@ export function ImportarClient() {
                   <ArrowLeft className="size-4" />
                   Ajustar mapeo
                 </Button>
-                <Button onClick={runImport} loading={importing} disabled={!valid.length} className="ml-auto">
+                <Button onClick={() => void prepararImportacion()} loading={importing} disabled={!valid.length} className="ml-auto">
                   <Database className="size-4" />
                   Importar {fmtNumber(valid.length)} registros
                 </Button>
               </div>
             </motion.div>
+          )}
+
+          {analisisPci && (
+            <Card className="border-warning/40">
+              <CardContent className="space-y-3 p-4">
+                <p className="flex items-center gap-2 text-[13.5px] font-semibold">
+                  <TriangleAlert className="text-warning size-4" />
+                  Este PCI ya existe en SIGOV
+                </p>
+                <ul className="space-y-1 text-[12.5px]">
+                  {analisisPci.pcis.map((x) => (
+                    <li key={x.code}>
+                      <strong>{x.code}</strong>: {x.existe ? `${fmtNumber(x.repetidos)} ítems ya existen · ${fmtNumber(x.nuevos)} ítems nuevos` : `nuevo · ${fmtNumber(x.nuevos)} ítems`}
+                    </li>
+                  ))}
+                </ul>
+                <p className="text-muted-foreground text-[12px]">
+                  Nada se duplica. Elige qué hacer con los ítems que ya existen. Actualizar solo cambia lo que describe el Excel:
+                  estado, fotos, metrado y cuadrilla asignada se conservan.
+                </p>
+                <div className="flex flex-wrap gap-2">
+                  <Button variant="ghost" onClick={() => setAnalisisPci(null)}>Cancelar</Button>
+                  <Button variant="outline" onClick={() => void runImport('solo_nuevos')} loading={importing}>
+                    Importar solo los nuevos (omitir repetidos)
+                  </Button>
+                  <Button onClick={() => { if (confirm('¿Actualizar también la descripción de los ítems que ya existen?')) void runImport('actualizar') }} loading={importing}>
+                    Nuevos y actualizar existentes
+                  </Button>
+                </div>
+              </CardContent>
+            </Card>
           )}
 
           {/* ── 5. Resultado ──────────────────────────────────────────── */}
@@ -969,4 +1045,57 @@ function buildRow(
         yield_per_day: v.yield_per_day ?? null,
       }
   }
+}
+
+/**
+ * Las últimas importaciones: archivo, quién y con qué rol, cuándo, cuántos
+ * registros válidos, rechazados y con advertencias, y qué se decidió con los
+ * repetidos (4.º entregable: registro de importación).
+ */
+function HistorialDeImportaciones({ serviceId }: { serviceId: string }) {
+  const sb = React.useMemo(() => createClient(), [])
+  const q = useQuery({
+    queryKey: ['import-batches', serviceId],
+    queryFn: async () => (await sb.from('import_batches')
+      .select('id, kind, file_name, total_rows, valid_rows, error_rows, warning_rows, nuevos, duplicados, accion, rol, status, created_at, quien:profiles!import_batches_created_by_fkey(full_name)')
+      .eq('service_id', serviceId).order('created_at', { ascending: false }).limit(10)).data ?? [],
+  })
+  if (!q.data?.length) return null
+  const ACCION: Record<string, string> = { todo: 'todo', solo_nuevos: 'solo nuevos', actualizar: 'nuevos y actualizados' }
+  return (
+    <Card className="mt-4">
+      <CardContent className="p-0">
+        <p className="border-b border-border px-4 py-3 text-[13px] font-semibold">Últimas importaciones</p>
+        <div className="overflow-x-auto">
+          <table className="w-full text-[12px]">
+            <thead className="text-muted-foreground text-left">
+              <tr>
+                {['Fecha', 'Tipo', 'Archivo', 'Importó', 'Filas', 'Válidas', 'Rechazadas', 'Advertencias', 'Nuevos', 'Repetidos', 'Acción', 'Estado'].map((h) => (
+                  <th key={h} className="px-3 py-2 font-medium">{h}</th>
+                ))}
+              </tr>
+            </thead>
+            <tbody>
+              {q.data.map((b: any) => (
+                <tr key={b.id} className="border-t border-border">
+                  <td className="px-3 py-2 whitespace-nowrap">{new Date(b.created_at).toLocaleString('es-PE', { dateStyle: 'short', timeStyle: 'short' })}</td>
+                  <td className="px-3 py-2">{b.kind}</td>
+                  <td className="max-w-[220px] truncate px-3 py-2">{b.file_name ?? '—'}</td>
+                  <td className="px-3 py-2 whitespace-nowrap">{b.quien?.full_name ?? '—'}{b.rol ? ` · ${b.rol}` : ''}</td>
+                  <td className="px-3 py-2 tabular-nums">{fmtNumber(b.total_rows ?? 0)}</td>
+                  <td className="px-3 py-2 tabular-nums">{b.valid_rows != null ? fmtNumber(b.valid_rows) : '—'}</td>
+                  <td className="px-3 py-2 tabular-nums">{fmtNumber(b.error_rows ?? 0)}</td>
+                  <td className="px-3 py-2 tabular-nums">{b.warning_rows != null ? fmtNumber(b.warning_rows) : '—'}</td>
+                  <td className="px-3 py-2 tabular-nums">{b.nuevos != null ? fmtNumber(b.nuevos) : '—'}</td>
+                  <td className="px-3 py-2 tabular-nums">{b.duplicados != null ? fmtNumber(b.duplicados) : '—'}</td>
+                  <td className="px-3 py-2">{b.accion ? ACCION[b.accion] ?? b.accion : '—'}</td>
+                  <td className="px-3 py-2">{b.status}</td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        </div>
+      </CardContent>
+    </Card>
+  )
 }
