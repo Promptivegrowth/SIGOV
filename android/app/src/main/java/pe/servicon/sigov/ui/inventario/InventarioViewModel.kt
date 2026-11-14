@@ -40,6 +40,10 @@ enum class Semaforo(val clave: String, val etiqueta: String) {
 data class TramoDelInventario(val id: String, val etiqueta: String, val nombre: String?, val orden: Int)
 
 data class EstadoInventario(
+    /** La cámara del inventario, como la de PCI (OBS 13): GPS y sello. */
+    val gpsCamara: String? = null,
+    val buscandoGpsCamara: Boolean = false,
+    val selloCamara: pe.servicon.sigov.datos.Sello? = null,
     val cargando: Boolean = true,
     val servicioId: String = "",
     val todos: List<ElementoVial> = emptyList(),
@@ -191,10 +195,37 @@ class InventarioViewModel @Inject constructor(
         viewModelScope.launch {
             val historial = inventario.historial(elemento.id)
             val fotos = inventario.galeria(elemento.id)
-            val galeria = fotos.map { it to inventario.urlDeMiniatura(it.ruta) }
+            // Las que aún no suben, desde el teléfono y con su rótulo (OBS 12)
+            val enLaNube = fotos.mapNotNull { it.clientId }.toSet()
+            val locales = runCatching { evidencias.pendientesDeActivo(elemento.id) }.getOrDefault(emptyList())
+                .filter { (e, _) -> e.clientId !in enLaNube }
+                .map { (e, estadoFoto) ->
+                    FotoDeActivo(
+                        id = e.clientId, clientId = e.clientId, ruta = e.rutaDestino,
+                        tomada = java.time.Instant.ofEpochMilli(e.tomadaEn).toString(),
+                        caption = e.leyenda, estado = estadoFoto, pendiente = true,
+                    ) to (if (java.io.File(e.rutaLocal).exists()) "file://" + e.rutaLocal else null)
+                }
+            val galeria = locales.sortedByDescending { it.first.tomada } + fotos.map { it to inventario.urlDeMiniatura(it.ruta) }
             _estado.update {
                 if (it.abierto?.id != elemento.id) it   // se abrió otro mientras tanto
                 else it.copy(historial = historial, galeria = galeria, cargandoFicha = false)
+            }
+        }
+    }
+
+    /** Al abrir la cámara: la ubicación con su precisión y el sello del contrato (OBS 13). */
+    fun prepararCamara() {
+        _estado.update { it.copy(buscandoGpsCamara = true) }
+        viewModelScope.launch {
+            val sello = runCatching { configuracion.selloEfectivo(campo.ajustes(sesion.servicioId() ?: _estado.value.servicioId).sello) }.getOrNull()
+            val punto = runCatching { ubicacion.actual() }.getOrNull()
+            _estado.update {
+                it.copy(
+                    buscandoGpsCamara = false,
+                    selloCamara = sello,
+                    gpsCamara = punto?.let { p -> "%.5f, %.5f  ±%.0f m".format(p.latitud, p.longitud, p.precision) },
+                )
             }
         }
     }
@@ -226,9 +257,20 @@ class InventarioViewModel @Inject constructor(
                 .onSuccess {
                     val quedan = _estado.value.galeria.filter { (f, _) -> f.id != foto.id && !f.esBase }
                     val ultima = quedan.maxByOrNull { (f, _) -> f.tomada ?: "" }?.first
+                    // La visita de esa foto se descuenta si era la única del día (OBS 10),
+                    // y la última visita pasa a ser la de la foto más reciente que queda
+                    val dia = { iso: String? -> iso?.let { runCatching { java.time.OffsetDateTime.parse(it).atZoneSameInstant(Peru.zona).toLocalDate() }
+                        .recoverCatching { _ -> java.time.Instant.parse(it).atZone(Peru.zona).toLocalDate() }.getOrNull() } }
+                    val otraDelDia = quedan.any { (f, _) -> dia(f.tomada) != null && dia(f.tomada) == dia(foto.tomada) }
+                    val eraLaUltima = e.ultimaVisitaEn != null && dia(e.ultimaVisitaEn) == dia(foto.tomada)
                     val actualizado = e.copy(
                         observado = ultima?.estado == "observado",
                         observacion = if (ultima?.estado == "observado") ultima.caption ?: "Observado en campo" else null,
+                        visitas = if (otraDelDia) e.visitas else (e.visitas - 1).coerceAtLeast(0),
+                        ultimaVisitaEn = if (eraLaUltima) ultima?.tomada else e.ultimaVisitaEn,
+                        ultimaVisitaEstado = if (eraLaUltima) ultima?.estado else e.ultimaVisitaEstado,
+                        ultimaVisitaComentario = if (eraLaUltima) ultima?.caption else e.ultimaVisitaComentario,
+                        ultimaVisitaPor = if (eraLaUltima && ultima == null) null else e.ultimaVisitaPor,
                     )
                     _estado.update {
                         it.copy(
@@ -267,7 +309,8 @@ class InventarioViewModel @Inject constructor(
                 evidencias.guardarDeActivo(
                     servicioId = servicioId,
                     activoId = e.id,
-                    nombre = e.name ?: e.tipo ?: "Elemento",
+                    // El código identifica el registro en el sello (OBS 13)
+                    nombre = listOfNotNull(e.code, e.name ?: e.tipo ?: "Elemento").joinToString(" · "),
                     tramoId = e.tramoId,
                     tramo = e.tramo,
                     progresiva = e.progresivaM,
@@ -287,11 +330,25 @@ class InventarioViewModel @Inject constructor(
                     tomada = java.time.Instant.ofEpochMilli(local.tomadaEn).toString(),
                     caption = comentario?.trim()?.ifBlank { null },
                     estado = estado,
+                    pendiente = true,
                 ) to "file://" + local.rutaLocal
-                val actualizado = if (estado == "ok") e.copy(
+                // La ficha se actualiza al instante (OBS 10 y 11): última visita,
+                // con hora, estado, comentario y quién; un día nuevo suma visita
+                val ahora = java.time.Instant.ofEpochMilli(local.tomadaEn).toString()
+                val diaNuevo = e.ultimaVisitaEn?.let {
+                    runCatching { java.time.OffsetDateTime.parse(it).atZoneSameInstant(Peru.zona).toLocalDate() }.getOrNull()
+                } != Peru.hoy()
+                val conVisita = e.copy(
+                    ultimaVisitaEn = ahora, ultimaVisitaEstado = estado,
+                    ultimaVisitaComentario = comentario?.trim()?.ifBlank { null },
+                    ultimaVisitaPor = sesion.perfil()?.nombre,
+                    ultimaVisitaConHora = true,
+                    visitas = if (diaNuevo) e.visitas + 1 else e.visitas,
+                )
+                val actualizado = if (estado == "ok") conVisita.copy(
                     semaforo = Semaforo.AL_DIA.clave, observado = false, observacion = null,
                     ultimaIntervencion = Peru.hoy().toString(), diasSinIntervenir = 0,
-                ) else e.copy(observado = true, observacion = comentario?.trim()?.ifBlank { null } ?: "Observado en campo")
+                ) else conVisita.copy(observado = true, observacion = comentario?.trim()?.ifBlank { null } ?: "Observado en campo")
                 _estado.update {
                     it.copy(
                         guardandoFoto = false,

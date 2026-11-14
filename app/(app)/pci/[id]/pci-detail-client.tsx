@@ -259,6 +259,14 @@ export function PciDetailClient({ pciId }: { pciId: string }) {
         contrato: service.contract_code,
         periodo: 'Notificado el ' + fmtDate(p?.notified_on) + ' - plazo base ' + (p?.default_days ?? 0) + ' dias',
         generadoPor: profile.full_name,
+        // Lo que se filtró y cuántos ítems salen (OBS 9)
+        filtros: [
+          statusFilter !== 'todos' && 'Estado: ' + (ESTADOS_FILTRO.find((x) => x.clave === statusFilter)?.label ?? statusFilter),
+          semFilter !== 'todos' && 'Plazo: ' + (SEMAFORO[semFilter as Semaforo]?.label ?? semFilter),
+          q && `Búsqueda: «${q}»`,
+        ].filter(Boolean).join(' · ') || undefined,
+        registros: rows.length,
+        cuadrilla: [...new Set(filtered.map((i: any) => i.crew_name).filter(Boolean))].join(', ') || null,
       }
       const stamp = toISODate(new Date())
       if (format === 'pdf') {

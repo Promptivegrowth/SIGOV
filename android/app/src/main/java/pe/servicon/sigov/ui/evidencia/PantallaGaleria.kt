@@ -322,19 +322,25 @@ private fun TarjetaDeGrupo(grupo: GrupoDeFotos, alAbrir: () -> Unit, alAbrirFoto
             }
             Spacer(Modifier.height(8.dp))
             Row(horizontalArrangement = Arrangement.spacedBy(6.dp)) {
-                Etapa("A", grupo.antes)
-                Etapa("D", grupo.durante)
-                Etapa("DP", grupo.despues)
+                if (grupo.antes + grupo.durante + grupo.despues == 0 && grupo.generales > 0) {
+                    // Solo complementarias: «General: N foto(s)» (OBS 6)
+                    Etapa("General:", grupo.generales, if (grupo.generales == 1) " foto" else " fotos")
+                } else {
+                    Etapa("A", grupo.antes)
+                    Etapa("D", grupo.durante)
+                    Etapa("DP", grupo.despues)
+                    if (grupo.generales > 0) Etapa("General", grupo.generales)
+                }
             }
         }
     }
 }
 
 @Composable
-private fun Etapa(letra: String, n: Int) {
+private fun Etapa(letra: String, n: Int, sufijo: String = "") {
     val color = if (n > 0) Semaforo.EnPlazo else MaterialTheme.colorScheme.onSurfaceVariant
     Text(
-        "$letra $n",
+        "$letra $n$sufijo",
         style = MaterialTheme.typography.labelSmall,
         fontWeight = FontWeight.SemiBold,
         color = color,

@@ -46,6 +46,13 @@ data class EquipoDeSeguridad(
     /** El dictamen de la última inspección: pendiente, conforme, observado… (REV3-OBS-45) */
     @SerialName("ultima_revision_estado") val ultimaRevisionEstado: String? = null,
     @SerialName("ultima_inspeccion_on") val ultimaInspeccion: String? = null,
+    /** Vigencia por la fecha (vigente, vencido, sin_fecha), aparte del dictamen (OBS 14). */
+    val vigencia: String? = null,
+    @SerialName("ultima_conforme_on") val ultimaConforme: String? = null,
+    /** La observación anterior que sigue sin levantar, y la nueva inspección enviada (OBS 15). */
+    @SerialName("observacion_pendiente_nota") val observacionPendienteNota: String? = null,
+    @SerialName("observacion_pendiente_on") val observacionPendiente: String? = null,
+    @SerialName("inspeccion_pendiente_on") val inspeccionPendiente: String? = null,
 ) {
     val revisionLegible: String?
         get() = when (ultimaRevisionEstado) {

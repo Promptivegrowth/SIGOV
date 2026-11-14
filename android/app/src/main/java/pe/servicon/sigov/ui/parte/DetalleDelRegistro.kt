@@ -173,7 +173,11 @@ fun DetalleDelRegistro(
             recursos.forEach { r ->
                 Linea(
                     listOfNotNull(r.codigo, r.descripcion).joinToString(" · "),
-                    r.cantidad?.let { Numeros.tres(it) + (r.unidad?.let { u -> " $u" } ?: "") } ?: "",
+                    listOfNotNull(
+                        r.cantidad?.let { Numeros.tres(it) + (r.unidad?.let { u -> " $u" } ?: "") },
+                        r.horasUso?.let { Numeros.tres(it) + " h" },
+                        r.participacionPct?.let { Numeros.tres(it) + " %" },
+                    ).joinToString(" · "),
                     porEnviar = !r.enviado,
                     alQuitar = if (editable) ({ alQuitarRecurso(r) }) else null,
                 )

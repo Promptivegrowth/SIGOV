@@ -244,7 +244,7 @@ export function ArbolDeArchivo({ desde, hasta }: { desde: string; hasta: string 
       <Dialog open={!!foto} onOpenChange={(v) => !v && setFoto(null)}>
         <DialogContent className="max-w-4xl">
           <DialogHeader><DialogTitle>Fotografía</DialogTitle></DialogHeader>
-          {foto && <ImageViewer src={foto} className="h-[70vh] w-full" />}
+          {foto && <ImageViewer src={foto} alt="Fotografía" descargar="SIGOV_foto.webp" className="h-[70vh] w-full" />}
         </DialogContent>
       </Dialog>
     </div>

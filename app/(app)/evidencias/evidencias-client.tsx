@@ -47,8 +47,15 @@ const COLUMNAS = [
   'origen', 'crew_id', 'crew_numero', 'crew_sede', 'crew_code', 'crew_name', 'activity_id', 'activity_code',
   'activity_name', 'activity_carpeta_ns', 'sector_code', 'sector_folder', 'section_name', 'progresiva_m', 'side',
   'pci_id', 'pci_code', 'pci_item_id', 'pci_item_number', 'pci_term_days', 'revision', 'revision_nota', 'caption',
-  'lat', 'lng',
+  'lat', 'lng', 'created_at', 'cargada_at', 'origen_captura', 'sello_aplicado',
 ].join(', ')
+
+/** De dónde vino la foto (OBS 2 y 6). */
+const ORIGEN_CAPTURA: Record<string, string> = {
+  camara_sigov: 'Cámara SIGOV', galeria: 'Importada de la galería', archivo_web: 'Archivo subido desde la web',
+}
+/** La foto sin actividad: complementaria del día, no se fuerza a antes/durante/después (OBS 6). */
+const GENERAL = 'Evidencia general / complementaria'
 
 type Foto = FotoExportable & {
   thumb_path: string | null
@@ -61,6 +68,10 @@ type Foto = FotoExportable & {
   caption: string | null
   lat: number | null
   lng: number | null
+  created_at: string | null
+  cargada_at: string | null
+  origen_captura: string | null
+  sello_aplicado: boolean | null
 }
 
 type Origen = 'todos' | 'mr' | 'pci'
@@ -80,13 +91,12 @@ const ATAJOS = [
 
 const sinTildes = (t: string) => t.normalize('NFD').replace(/\p{Mn}+/gu, '').toLowerCase()
 
-/** A · D · DP de un grupo de fotos. */
+/** A · D · DP de un grupo de fotos, y las generales aparte (OBS 6). */
 function etapas(fotos: Foto[]) {
-  return {
-    a: fotos.filter((f) => f.phase === 'antes').length,
-    d: fotos.filter((f) => f.phase === 'durante').length,
-    dp: fotos.filter((f) => f.phase === 'despues').length,
-  }
+  const a = fotos.filter((f) => f.phase === 'antes').length
+  const d = fotos.filter((f) => f.phase === 'durante').length
+  const dp = fotos.filter((f) => f.phase === 'despues').length
+  return { a, d, dp, g: fotos.length - a - d - dp }
 }
 
 export function EvidenciasClient() {
@@ -182,7 +192,7 @@ export function EvidenciasClient() {
         items.set(f.pci_item_number!, [...(items.get(f.pci_item_number!) ?? []), f])
         porPci.set(f.pci_code!, items)
       } else {
-        const k = `${fechaDeFoto(f)}|${f.activity_id ?? f.activity_name}|${f.crew_id}`
+        const k = `${fechaDeFoto(f)}|${f.activity_id ?? f.activity_name ?? 'general'}|${f.crew_id}`
         porActividad.set(k, [...(porActividad.get(k) ?? []), f])
       }
     }
@@ -316,7 +326,7 @@ export function EvidenciasClient() {
           <p className="text-[13px]">
             Evidencias encontradas: <strong className="tabular-nums">{fmtNumber(visibles.length)}</strong>
             <span className="text-muted-foreground ml-2 text-[12px] tabular-nums">
-              A {totales.a} · D {totales.d} · DP {totales.dp}
+              A {totales.a} · D {totales.d} · DP {totales.dp}{totales.g > 0 && ` · General ${totales.g}`}
             </span>
           </p>
           <Button variant="ghost" size="sm" onClick={() => setReciente((v) => !v)}>
@@ -405,7 +415,7 @@ export function EvidenciasClient() {
                     return (
                       <Fila
                         key={f0.id}
-                        titulo={f0.activity_name ?? 'Actividad sin nombre'}
+                        titulo={f0.activity_name ?? GENERAL}
                         detalle={<>
                           <span>{fmtDate(fechaDeFoto(f0))}</span>
                           {!esJefe && f0.crew_name && <span>{f0.crew_name}</span>}
@@ -415,7 +425,7 @@ export function EvidenciasClient() {
                         </>}
                         fotos={fa}
                         url={urlMiniatura}
-                        alAbrir={(i) => setGaleria({ titulo: `${f0.activity_name ?? 'Actividad'} · ${fmtDate(fechaDeFoto(f0))}`, fotos: fa, i })}
+                        alAbrir={(i) => setGaleria({ titulo: `${f0.activity_name ?? GENERAL} · ${fmtDate(fechaDeFoto(f0))}`, fotos: fa, i })}
                       />
                     )
                   })}
@@ -485,19 +495,28 @@ function CampoFecha({ etiqueta, valor, min, max, alCambiar }: {
   )
 }
 
-function Etapas({ a, d, dp }: { a: number; d: number; dp: number }) {
+function Etapas({ a, d, dp, g }: { a: number; d: number; dp: number; g: number }) {
+  // Solo generales: «General: N foto(s)», sin contadores en cero (OBS 6)
+  if (a + d + dp === 0 && g > 0) {
+    return (
+      <span className="flex items-center gap-1 text-[11px] font-semibold tabular-nums">
+        <span className="bg-secondary text-foreground rounded px-1.5 py-0.5">General: {g} {g === 1 ? 'foto' : 'fotos'}</span>
+      </span>
+    )
+  }
   return (
     <span className="flex items-center gap-1 text-[11px] font-semibold tabular-nums">
       <span className="bg-warning/15 text-warning rounded px-1.5 py-0.5">A {a}</span>
       <span className="bg-success/15 text-success rounded px-1.5 py-0.5">D {d}</span>
       <span className="bg-destructive/12 text-destructive rounded px-1.5 py-0.5">DP {dp}</span>
+      {g > 0 && <span className="bg-secondary text-foreground rounded px-1.5 py-0.5">General {g}</span>}
     </span>
   )
 }
 
 function Bloque({ icono: Icono, titulo, etiqueta, resumen, etapas: e, abierto, alAlternar, children }: {
   icono: React.ComponentType<{ className?: string }>
-  titulo: string; etiqueta: string; resumen: string; etapas: { a: number; d: number; dp: number }
+  titulo: string; etiqueta: string; resumen: string; etapas: { a: number; d: number; dp: number; g: number }
   abierto: boolean; alAlternar: () => void; children: React.ReactNode
 }) {
   return (
@@ -576,7 +595,14 @@ function Galeria({ titulo, fotos, i, alCerrar, alMover }: {
           <p className="flex flex-wrap items-center gap-x-3 text-[11.5px] text-white/70">
             {f.section_name && <span>{f.section_name}</span>}
             <Progresiva from={f.progresiva_m} className="text-[11px] text-white/70" />
-            <span className="flex items-center gap-1"><Clock className="size-3" />{fmtDateTime(f.taken_at)}</span>
+            <span className="flex items-center gap-1" title="Fecha de captura"><Clock className="size-3" />Captura {fmtDateTime(f.taken_at)}</span>
+            {f.cargada_at && Math.abs(new Date(f.cargada_at).getTime() - new Date(f.taken_at ?? f.cargada_at).getTime()) > 60_000 && (
+              <span title="Cuándo se cargó al sistema">Carga {fmtDateTime(f.cargada_at)}</span>
+            )}
+            {f.created_at && <span title="Cuándo llegó a la nube">Sincronización {fmtDateTime(f.created_at)}</span>}
+            {f.origen_captura && f.origen_captura !== 'camara_sigov' && (
+              <span>{ORIGEN_CAPTURA[f.origen_captura] ?? f.origen_captura}{f.sello_aplicado === false ? ' · sin sello SIGOV' : ''}</span>
+            )}
             {f.lat != null && (
               <span className="flex items-center gap-1"><MapPin className="size-3" />{Number(f.lat).toFixed(5)}, {Number(f.lng).toFixed(5)}</span>
             )}
@@ -586,12 +612,13 @@ function Galeria({ titulo, fotos, i, alCerrar, alMover }: {
         </div>
         <Button variant="ghost" size="icon" onClick={alCerrar} aria-label="Cerrar"><X className="size-5 text-white" /></Button>
       </div>
-      <div className="relative mx-4 mb-4 flex flex-1 items-center gap-2">
+      <div className="relative mx-4 mb-4 flex min-h-0 flex-1 items-center gap-2">
         <Button variant="ghost" size="icon" disabled={i === 0} onClick={() => alMover(i - 1)} aria-label="Anterior">
           <ChevronLeft className="size-6 text-white" />
         </Button>
-        <div className="relative h-full flex-1">
-          {url.data && <ImageViewer src={url.data} alt={titulo} className="h-full" />}
+        {/* La foto ocupa el alto disponible: los controles (zoom y descarga) quedan a la vista */}
+        <div className="relative h-full min-h-0 flex-1">
+          {url.data && <ImageViewer src={url.data} alt={titulo} descargar={`SIGOV_evidencia_${f.id}.webp`} className="absolute inset-0" />}
         </div>
         <Button variant="ghost" size="icon" disabled={i >= fotos.length - 1} onClick={() => alMover(i + 1)} aria-label="Siguiente">
           <ChevronRight className="size-6 text-white" />

@@ -18,6 +18,12 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.input.KeyboardType
 import androidx.compose.ui.unit.dp
 import pe.servicon.sigov.datos.local.ParteLocal
+import pe.servicon.sigov.datos.VersionDelParte
+import pe.servicon.sigov.datos.Peru
+import androidx.compose.foundation.clickable
+import androidx.compose.foundation.shape.CircleShape
+import androidx.compose.ui.draw.clip
+import androidx.compose.ui.graphics.Color
 import pe.servicon.sigov.ui.theme.Marca
 import pe.servicon.sigov.ui.theme.Semaforo
 
@@ -170,4 +176,49 @@ fun DialogoEnviar(registros: Int, sinFotos: Int, faltanDatos: Boolean, alCerrar:
         confirmButton = { TextButton(onClick = alEnviar) { Text("Enviar") } },
         dismissButton = { TextButton(onClick = alCerrar) { Text("Cancelar") } },
     )
+}
+
+/**
+ * El historial del reporte (CASO 14): cada envío, observación y validación,
+ * con su nota, quién y cuándo. Plegado: se abre al tocarlo.
+ */
+@Composable
+fun HistorialDelParte(historial: List<VersionDelParte>) {
+    var abierto by remember { mutableStateOf(false) }
+    Card(
+        shape = RoundedCornerShape(14.dp),
+        colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface),
+        border = CardDefaults.outlinedCardBorder(),
+        modifier = Modifier.fillMaxWidth(),
+    ) {
+        Column(Modifier.padding(14.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
+            Row(Modifier.fillMaxWidth().clickable { abierto = !abierto }, verticalAlignment = Alignment.CenterVertically) {
+                Text("Historial del reporte", style = MaterialTheme.typography.titleSmall, fontWeight = FontWeight.Bold, modifier = Modifier.weight(1f))
+                Text(
+                    "Versión ${historial.maxOf { it.version }} · " + if (abierto) "Ocultar" else "Ver",
+                    style = MaterialTheme.typography.labelMedium, color = Marca.Azul,
+                )
+            }
+            val filas = if (abierto) historial.reversed() else historial.takeLast(1)
+            filas.forEach { v ->
+                val (titulo, color) = when (v.accion) {
+                    "enviado" -> (if (v.version > 1) "Reenviado (versión ${v.version})" else "Enviado (versión 1)") to Marca.Azul
+                    "observado" -> "Observado por el supervisor" to Semaforo.Vencido
+                    else -> "Validado" to Color(0xFF15803D)
+                }
+                Row(horizontalArrangement = Arrangement.spacedBy(10.dp)) {
+                    Box(Modifier.padding(top = 5.dp).size(8.dp).clip(CircleShape).background(color))
+                    Column(Modifier.weight(1f)) {
+                        Text(titulo, style = MaterialTheme.typography.bodyMedium, fontWeight = FontWeight.SemiBold, color = color)
+                        Text(
+                            listOfNotNull(Peru.fechaHora(v.at), v.por).joinToString(" · ") +
+                                (v.actividades?.takeIf { v.accion == "enviado" && it > 0 }?.let { " · $it actividades" } ?: ""),
+                            style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant,
+                        )
+                        v.nota?.takeIf { it.isNotBlank() }?.let { Text("«$it»", style = MaterialTheme.typography.bodySmall) }
+                    }
+                }
+            }
+        }
+    }
 }

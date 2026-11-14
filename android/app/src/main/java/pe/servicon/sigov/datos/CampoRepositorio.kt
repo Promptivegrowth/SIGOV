@@ -76,6 +76,16 @@ class CampoRepositorio @Inject constructor(
                 .decodeList<JsonObject>()
         )
 
+        // Los sectores: el reporte los deduce de la progresiva (OBS 5)
+        runCatching {
+            guardar(
+                "service_sectors",
+                supabase.postgrest.from("service_sectors")
+                    .select { filter { eq("service_id", servicioId) }; order("orden", Order.ASCENDING) }
+                    .decodeList<JsonObject>()
+            )
+        }
+
         guardar(
             "crews",
             supabase.postgrest.from("crews")
@@ -134,6 +144,10 @@ class CampoRepositorio @Inject constructor(
     suspend fun actividades(servicioId: String): List<Actividad> =
         catalogo.de("activities_catalog", servicioId)
             .mapNotNull { runCatching { json.decodeFromString<Actividad>(it.datos) }.getOrNull() }
+
+    suspend fun sectores(servicioId: String): List<Sector> =
+        catalogo.de("service_sectors", servicioId)
+            .mapNotNull { runCatching { json.decodeFromString<Sector>(it.datos) }.getOrNull() }
 
     suspend fun tramos(servicioId: String): List<Tramo> =
         catalogo.de("road_sections", servicioId)
@@ -690,6 +704,14 @@ class CampoRepositorio @Inject constructor(
                 )
             )
         }
+    }
+
+    /** Las versiones del reporte en la nube: cada envío, observación y validación (CASO 14). */
+    suspend fun historialDelParte(idEnLaNube: String): List<VersionDelParte> = withContext(Dispatchers.IO) {
+        runCatching {
+            supabase.postgrest.rpc("parte_historial", buildJsonObject { put("p_id", idEnLaNube) })
+                .decodeAs<List<VersionDelParte>>()
+        }.getOrDefault(emptyList())
     }
 
     /** Clima, horario, personal y notas del día (OBS-27/33). */

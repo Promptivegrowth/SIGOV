@@ -210,16 +210,13 @@ private fun FilaEquipo(equipo: EquipoDeSeguridad, alInspeccionar: () -> Unit) {
                     }
                 }
 
-                // El dictamen de la última inspección (REV3-OBS-45)
-                equipo.revisionLegible?.let { r ->
-                    Spacer(Modifier.height(8.dp))
-                    val color = when (equipo.ultimaRevisionEstado) {
-                        "conforme" -> Marca.VerdeBandera
-                        "pendiente" -> Marca.Azul
-                        else -> Semaforo.Vencido
-                    }
+                // Vigencia y revisión SSOMA, cada una por su lado (OBS 14):
+                // un equipo vencido puede tener su última revisión conforme
+                val dma = { f: String -> f.take(10).split("-").reversed().joinToString("/") }
+                fun Etiqueta(texto: String, color: androidx.compose.ui.graphics.Color) = @Composable {
+                    Spacer(Modifier.height(6.dp))
                     Text(
-                        r + (equipo.ultimaInspeccion?.let { " · inspección del ${it.take(10).split("-").reversed().joinToString("/")}" } ?: ""),
+                        texto,
                         style = MaterialTheme.typography.bodySmall,
                         fontWeight = FontWeight.SemiBold,
                         color = color,
@@ -228,18 +225,30 @@ private fun FilaEquipo(equipo: EquipoDeSeguridad, alInspeccionar: () -> Unit) {
                             .padding(horizontal = 10.dp, vertical = 5.dp),
                     )
                 }
-
-                if (equipo.status == "observado" || equipo.observaciones > 0) {
-                    Spacer(Modifier.height(8.dp))
-                    Text(
-                        "Tiene ${equipo.observaciones} observación" +
-                            (if (equipo.observaciones == 1) "" else "es") + " sin levantar",
-                        style = MaterialTheme.typography.bodySmall,
-                        color = Semaforo.PorVencer,
-                        modifier = Modifier
-                            .background(Semaforo.PorVencer.copy(alpha = 0.10f), RoundedCornerShape(8.dp))
-                            .padding(horizontal = 10.dp, vertical = 5.dp),
-                    )
+                Spacer(Modifier.height(2.dp))
+                when (equipo.vigencia) {
+                    "vencido" -> Etiqueta("Vigencia: Vencido" + (equipo.vence?.let { " desde el ${dma(it)}" } ?: ""), Semaforo.Vencido)()
+                    "vigente" -> Etiqueta("Vigencia: Vigente" + (equipo.vence?.let { " hasta el ${dma(it)}" } ?: ""), Marca.VerdeBandera)()
+                    else -> {}
+                }
+                when {
+                    equipo.ultimaRevisionEstado == "conforme" && equipo.ultimaConforme != null ->
+                        Etiqueta("Última revisión SSOMA: Conforme el ${dma(equipo.ultimaConforme)}", Marca.VerdeBandera)()
+                    equipo.ultimaRevisionEstado == null -> Etiqueta("Revisión SSOMA: sin inspecciones", MaterialTheme.colorScheme.onSurfaceVariant)()
+                    equipo.observacionPendiente == null && equipo.ultimaRevisionEstado == "pendiente" ->
+                        Etiqueta("Revisión SSOMA: Pendiente" + (equipo.ultimaInspeccion?.let { " · inspección del ${dma(it)}" } ?: ""), Marca.Azul)()
+                    else -> {}
+                }
+                // Observación anterior y nueva inspección, diferenciadas (OBS 15)
+                equipo.observacionPendiente?.let { f ->
+                    Etiqueta(
+                        "Observación anterior pendiente de levantamiento (${dma(f)})" +
+                            (equipo.observacionPendienteNota?.let { ": $it" } ?: ""),
+                        Semaforo.Vencido,
+                    )()
+                }
+                equipo.inspeccionPendiente?.takeIf { equipo.ultimaRevisionEstado == "pendiente" && equipo.observacionPendiente != null }?.let { f ->
+                    Etiqueta("Nueva inspección enviada a SSOMA el ${dma(f)}", Marca.Azul)()
                 }
 
                 Spacer(Modifier.height(12.dp))

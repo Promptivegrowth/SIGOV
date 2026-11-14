@@ -26,11 +26,12 @@ import { Tip } from '@/components/ui/primitives'
 import { CameraCapture } from '@/components/campo/camera-capture'
 import { EvidenceGrid } from '@/components/campo/evidence-grid'
 import { ParteInforme } from '@/components/campo/parte-informe'
+import { HistorialDelParte } from '@/components/campo/historial-del-parte'
 import { WORK_ORDER_STATUS, EVIDENCE_PHASE } from '@/lib/constants'
 import { cn, fmtDate, fmtNumber, fmtProgresiva, parseProgresiva, uuid, fmtRelative } from '@/lib/utils'
 import { enqueue, enqueueBlob, getDeviceId } from '@/lib/offline/db'
 import { syncNow } from '@/lib/offline/sync'
-import { getGpsFix, haptic, type SealedPhoto } from '@/lib/camera'
+import { getGpsFix, haptic, camposDeCaptura, type SealedPhoto } from '@/lib/camera'
 import { toast } from 'sonner'
 import { mensajeAmigable } from '@/lib/errores'
 import { LADOS, etiquetaDeLado } from '@/lib/lados'
@@ -58,7 +59,11 @@ export function ParteDetailClient({ orderId }: { orderId: string }) {
         fecha: datos.parte.work_date, cuadrilla: datos.cuadrilla?.numero ?? 0, sede: datos.cuadrilla?.sede ?? '',
         tipo: 'reporte_diario', extension: '.pdf',
       }).archivo
-      doc.save(nombre)
+      // Sin metrado completo sale solo la vista previa marcada (OBS 4)
+      doc.save(datos.incompleto.length ? 'BORRADOR_' + nombre : nombre)
+      if (datos.incompleto.length) {
+        toast.warning('Borrador – reporte incompleto', { description: datos.incompleto.join('; ') })
+      }
     } catch (e) {
       toast.error('No se pudo armar el FOR:001', { description: mensajeAmigable(e) })
     } finally {
@@ -76,7 +81,7 @@ export function ParteDetailClient({ orderId }: { orderId: string }) {
         fecha: datos.parte.work_date, cuadrilla: datos.cuadrilla?.numero ?? 0, sede: datos.cuadrilla?.sede ?? '',
         tipo: 'reporte_diario', extension: '.xlsx',
       }).archivo
-      await for001Excel(datos, nombre)
+      await for001Excel(datos, datos.incompleto.length ? 'BORRADOR_' + nombre : nombre)
     } catch (e) {
       toast.error('No se pudo armar el FOR:001 en Excel', { description: mensajeAmigable(e) })
     } finally {
@@ -156,6 +161,7 @@ export function ParteDetailClient({ orderId }: { orderId: string }) {
     haptic([30, 40, 30])
     toast.success('Parte enviado al supervisor')
     qc.invalidateQueries({ queryKey: ['work-order', orderId] })
+    qc.invalidateQueries({ queryKey: ['parte-historial', orderId] })
   }
 
   const review = async (approve: boolean, notes?: string) => {
@@ -165,6 +171,7 @@ export function ParteDetailClient({ orderId }: { orderId: string }) {
     toast.success(approve ? 'Parte validado' : 'Parte observado')
     setReviewOpen(false)
     qc.invalidateQueries({ queryKey: ['work-order', orderId] })
+    qc.invalidateQueries({ queryKey: ['parte-historial', orderId] })
   }
 
   return (
@@ -248,6 +255,26 @@ export function ParteDetailClient({ orderId }: { orderId: string }) {
             </div>
           </div>
         )}
+
+        {/* Con fotos pero sin metrado: borrador, no versión oficial (OBS 4, CASO 15) */}
+        {(() => {
+          const sin = (entries.data ?? []).filter((e: any) => !(Number(e.quantity) > 0))
+          if (!sin.length || o?.status === 'validado') return null
+          return (
+            <div className="border-accent/40 bg-accent/[0.08] flex items-start gap-3 rounded-xl border px-4 py-3">
+              <TriangleAlert className="text-accent-foreground mt-0.5 size-4 shrink-0" />
+              <div>
+                <p className="text-[13px] font-semibold">Reporte incompleto</p>
+                <p className="text-muted-foreground mt-0.5 text-[12.5px]">
+                  {sin.map((e: any) => `«${e.activity_name ?? 'Actividad'}»`).join(', ')} {sin.length === 1 ? 'no tiene' : 'no tienen'} metrado.
+                  El FOR:001 sale como «BORRADOR – REPORTE INCOMPLETO» y no se puede enviar ni validar hasta completarlo.
+                </p>
+              </div>
+            </div>
+          )
+        })()}
+
+        <HistorialDelParte orderId={orderId} />
 
         {editable && isOwner && (
           <Button variant="accent" size="field" className="w-full sm:w-auto" onClick={() => setEntryOpen(true)}>
@@ -414,10 +441,9 @@ export function ParteDetailClient({ orderId }: { orderId: string }) {
               heading: photo.gps.heading,
               section_id: cameraFor.section_id,
               progresiva_m: cameraFor.prog_start_m,
-              taken_at: photo.takenAt.toISOString(),
+              ...camposDeCaptura(photo),
               sha256: photo.sha256,
               ...original,
-              watermarked: true,
               device_id: await getDeviceId(),
               device_model: navigator.userAgent.slice(0, 90),
               created_by: profile.id,

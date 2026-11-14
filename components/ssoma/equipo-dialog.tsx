@@ -283,6 +283,7 @@ export function HistorialEquipoDialog({ equipo, onClose }: { equipo: any | null;
             {[TIPOS_DE_EQUIPO[equipo.kind], equipo.capacity, equipo.crew_name].filter(Boolean).join(' · ')}
           </DialogDescription>
         </DialogHeader>
+        <EstadoDelEquipo equipo={equipo} />
         {revisiones.isLoading && <SkeletonList rows={3} />}
         {revisiones.data?.length === 0 && (
           <p className="text-muted-foreground text-[13px]">Todavía no tiene inspecciones registradas.</p>
@@ -317,8 +318,7 @@ export function HistorialEquipoDialog({ equipo, onClose }: { equipo: any | null;
                     <div className="flex flex-wrap gap-2">
                       <Button size="sm" onClick={() => dictaminar(r, 'conforme')}><Check className="size-3.5" />Conforme</Button>
                       <Button size="sm" variant="outline" onClick={() => dictaminar(r, 'observado')}>Observado</Button>
-                      <Button size="sm" variant="outline" onClick={() => dictaminar(r, 'vencido')}>Vencido</Button>
-                      <Button size="sm" variant="outline" onClick={() => dictaminar(r, 'requiere_correccion')}>Requiere corrección</Button>
+                      {/* La vigencia sale de la fecha de vencimiento, no del dictamen (OBS 14) */}
                     </div>
                   </div>
                 )}
@@ -336,5 +336,39 @@ export function HistorialEquipoDialog({ equipo, onClose }: { equipo: any | null;
         )}
       </DialogContent>
     </Dialog>
+  )
+}
+
+/**
+ * Vigencia y revisión SSOMA por separado (OBS 14), y la observación anterior
+ * distinta de la nueva inspección enviada (OBS 15).
+ */
+export function EstadoDelEquipo({ equipo, compacto = false }: { equipo: any; compacto?: boolean }) {
+  const chips: { texto: string; tono: string }[] = []
+  if (equipo.vigencia === 'vencido') chips.push({ texto: `Vigencia: Vencido${equipo.expires_on ? ` desde el ${fmtDate(equipo.expires_on)}` : ''}`, tono: 'bg-destructive/10 text-destructive' })
+  else if (equipo.vigencia === 'vigente') chips.push({ texto: `Vigencia: Vigente${equipo.expires_on ? ` hasta el ${fmtDate(equipo.expires_on)}` : ''}`, tono: 'bg-success/10 text-success' })
+  if (equipo.ultima_revision_estado === 'conforme' && equipo.ultima_conforme_on) {
+    chips.push({ texto: `Última revisión SSOMA: Conforme el ${fmtDate(equipo.ultima_conforme_on)}`, tono: 'bg-success/10 text-success' })
+  } else if (!equipo.ultima_revision_estado) {
+    chips.push({ texto: 'Revisión SSOMA: sin inspecciones', tono: 'bg-secondary text-muted-foreground' })
+  } else if (equipo.ultima_revision_estado === 'pendiente' && !equipo.observacion_pendiente_on) {
+    chips.push({ texto: `Revisión SSOMA: Pendiente${equipo.ultima_inspeccion_on ? ` · inspección del ${fmtDate(equipo.ultima_inspeccion_on)}` : ''}`, tono: 'bg-info/10 text-info' })
+  }
+  if (equipo.observacion_pendiente_on) {
+    chips.push({
+      texto: `Observación anterior pendiente de levantamiento (${fmtDate(equipo.observacion_pendiente_on)})${equipo.observacion_pendiente_nota && !compacto ? `: ${equipo.observacion_pendiente_nota}` : ''}`,
+      tono: 'bg-destructive/10 text-destructive',
+    })
+  }
+  if (equipo.inspeccion_pendiente_on && equipo.ultima_revision_estado === 'pendiente' && equipo.observacion_pendiente_on) {
+    chips.push({ texto: `Nueva inspección enviada a SSOMA el ${fmtDate(equipo.inspeccion_pendiente_on)}`, tono: 'bg-info/10 text-info' })
+  }
+  if (!chips.length) return null
+  return (
+    <div className="flex flex-wrap gap-1.5">
+      {chips.map((c) => (
+        <span key={c.texto} className={`rounded-md px-2 py-1 text-[11.5px] font-medium ${c.tono}`}>{c.texto}</span>
+      ))}
+    </div>
   )
 }

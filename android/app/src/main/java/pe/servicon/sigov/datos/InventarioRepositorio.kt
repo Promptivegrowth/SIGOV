@@ -61,6 +61,13 @@ data class ElementoVial(
     /** La última foto de campo lo dejó observado. */
     val observado: Boolean = false,
     val observacion: String? = null,
+    /** La última visita: hora, estado, comentario y quién (OBS 11). */
+    @SerialName("ultima_visita_at") val ultimaVisitaEn: String? = null,
+    @SerialName("ultima_visita_estado") val ultimaVisitaEstado: String? = null,
+    @SerialName("ultima_visita_comentario") val ultimaVisitaComentario: String? = null,
+    @SerialName("ultima_visita_por") val ultimaVisitaPor: String? = null,
+    /** Sin hora cuando la intervención se cargó sin foto otro día. */
+    @SerialName("ultima_visita_con_hora") val ultimaVisitaConHora: Boolean = true,
 ) {
     /** «Tramo 1» si el tramo tiene número; si no, su código. */
     val tramoCorto: String? get() = tramoNumero?.let { "Tramo $it" } ?: tramoCodigo
@@ -110,6 +117,11 @@ data class FotoDeActivo(
     /** La llave de la foto, para quitarla si se tomó por error. */
     @SerialName("client_id") val clientId: String? = null,
     @SerialName("deleted_at") val quitada: String? = null,
+    /**
+     * Sigue en el teléfono: se muestra desde el archivo local con el rótulo
+     * «Fotografía pendiente de sincronización» (OBS 12).
+     */
+    @kotlinx.serialization.Transient val pendiente: Boolean = false,
 ) {
     /** La del Inventario Vial 2024: la base, que nunca se reemplaza. */
     val esBase: Boolean get() = ruta.contains("/inventario-")

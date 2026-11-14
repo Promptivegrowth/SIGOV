@@ -21,7 +21,7 @@ import { PCI_ITEM_LEVANTADO, estadoPci, observadoPor } from '@/lib/constants'
 import { fmtDate, fmtDateTime, fmtNumber, uuid } from '@/lib/utils'
 import { enqueue, enqueueBlob, getDeviceId } from '@/lib/offline/db'
 import { syncNow } from '@/lib/offline/sync'
-import type { SealedPhoto } from '@/lib/camera'
+import { camposDeCaptura, type SealedPhoto } from '@/lib/camera'
 import { toast } from 'sonner'
 import { mensajeAmigable } from '@/lib/errores'
 import { usePlazosPci, etiquetaPlazo } from '@/lib/hooks/use-plazos-pci'
@@ -439,10 +439,9 @@ export function PciItemSheet({
               altitude_m: photo.gps.altitude,
               section_id: item.section_id,
               progresiva_m: item.prog_start_m,
-              taken_at: photo.takenAt.toISOString(),
+              ...camposDeCaptura(photo),
               sha256: photo.sha256,
               ...original,
-              watermarked: true,
               device_id: await getDeviceId(),
               device_model: navigator.userAgent.slice(0, 90),
               created_by: profile.id,

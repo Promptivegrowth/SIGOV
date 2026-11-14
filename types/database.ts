@@ -1145,6 +1145,82 @@ export type Database = {
           },
         ]
       }
+      crew_supervisores: {
+        Row: {
+          at: string
+          crew_id: string
+          id: string
+          motivo: string | null
+          por: string | null
+          service_id: string
+          supervisor_anterior: string | null
+          supervisor_nuevo: string | null
+        }
+        Insert: {
+          at?: string
+          crew_id: string
+          id?: string
+          motivo?: string | null
+          por?: string | null
+          service_id: string
+          supervisor_anterior?: string | null
+          supervisor_nuevo?: string | null
+        }
+        Update: {
+          at?: string
+          crew_id?: string
+          id?: string
+          motivo?: string | null
+          por?: string | null
+          service_id?: string
+          supervisor_anterior?: string | null
+          supervisor_nuevo?: string | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "crew_supervisores_crew_id_fkey"
+            columns: ["crew_id"]
+            isOneToOne: false
+            referencedRelation: "crews"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "crew_supervisores_crew_id_fkey"
+            columns: ["crew_id"]
+            isOneToOne: false
+            referencedRelation: "v_hygiene_today"
+            referencedColumns: ["crew_id"]
+          },
+          {
+            foreignKeyName: "crew_supervisores_por_fkey"
+            columns: ["por"]
+            isOneToOne: false
+            referencedRelation: "profiles"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "crew_supervisores_service_id_fkey"
+            columns: ["service_id"]
+            isOneToOne: false
+            referencedRelation: "services"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "crew_supervisores_supervisor_anterior_fkey"
+            columns: ["supervisor_anterior"]
+            isOneToOne: false
+            referencedRelation: "profiles"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "crew_supervisores_supervisor_nuevo_fkey"
+            columns: ["supervisor_nuevo"]
+            isOneToOne: false
+            referencedRelation: "profiles"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       crew_vehicle_assignments: {
         Row: {
           created_at: string
@@ -1288,6 +1364,7 @@ export type Database = {
           supervisor_id: string | null
           updated_at: string
           vehicle: string | null
+          version: number
         }
         Insert: {
           code: string
@@ -1310,6 +1387,7 @@ export type Database = {
           supervisor_id?: string | null
           updated_at?: string
           vehicle?: string | null
+          version?: number
         }
         Update: {
           code?: string
@@ -1332,6 +1410,7 @@ export type Database = {
           supervisor_id?: string | null
           updated_at?: string
           vehicle?: string | null
+          version?: number
         }
         Relationships: [
           {
@@ -2581,6 +2660,7 @@ export type Database = {
           service_id: string
           side: string | null
           updated_at: string
+          version: number
         }
         Insert: {
           activity_id?: string | null
@@ -2612,6 +2692,7 @@ export type Database = {
           service_id: string
           side?: string | null
           updated_at?: string
+          version?: number
         }
         Update: {
           activity_id?: string | null
@@ -2643,6 +2724,7 @@ export type Database = {
           service_id?: string
           side?: string | null
           updated_at?: string
+          version?: number
         }
         Relationships: [
           {
@@ -2758,8 +2840,10 @@ export type Database = {
           created_by: string | null
           deleted_at: string | null
           descripcion: string
+          horas_uso: number | null
           id: string
           observacion: string | null
+          participacion_pct: number | null
           service_id: string
           tipo: string
           unidad: string | null
@@ -2775,8 +2859,10 @@ export type Database = {
           created_by?: string | null
           deleted_at?: string | null
           descripcion: string
+          horas_uso?: number | null
           id?: string
           observacion?: string | null
+          participacion_pct?: number | null
           service_id: string
           tipo: string
           unidad?: string | null
@@ -2792,8 +2878,10 @@ export type Database = {
           created_by?: string | null
           deleted_at?: string | null
           descripcion?: string
+          horas_uso?: number | null
           id?: string
           observacion?: string | null
+          participacion_pct?: number | null
           service_id?: string
           tipo?: string
           unidad?: string | null
@@ -2832,6 +2920,70 @@ export type Database = {
           },
           {
             foreignKeyName: "parte_recursos_work_order_id_fkey"
+            columns: ["work_order_id"]
+            isOneToOne: false
+            referencedRelation: "work_orders"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      parte_revisiones: {
+        Row: {
+          accion: string
+          actividades: number | null
+          at: string
+          detalle: Json | null
+          id: string
+          metrado_total: number | null
+          nota: string | null
+          por: string | null
+          service_id: string
+          version: number
+          work_order_id: string
+        }
+        Insert: {
+          accion: string
+          actividades?: number | null
+          at?: string
+          detalle?: Json | null
+          id?: string
+          metrado_total?: number | null
+          nota?: string | null
+          por?: string | null
+          service_id: string
+          version: number
+          work_order_id: string
+        }
+        Update: {
+          accion?: string
+          actividades?: number | null
+          at?: string
+          detalle?: Json | null
+          id?: string
+          metrado_total?: number | null
+          nota?: string | null
+          por?: string | null
+          service_id?: string
+          version?: number
+          work_order_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "parte_revisiones_por_fkey"
+            columns: ["por"]
+            isOneToOne: false
+            referencedRelation: "profiles"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "parte_revisiones_service_id_fkey"
+            columns: ["service_id"]
+            isOneToOne: false
+            referencedRelation: "services"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "parte_revisiones_work_order_id_fkey"
             columns: ["work_order_id"]
             isOneToOne: false
             referencedRelation: "work_orders"
@@ -3097,6 +3249,7 @@ export type Database = {
           validado_servicon_by: string | null
           validated_at: string | null
           validated_by: string | null
+          version: number
         }
         Insert: {
           activity_id?: string | null
@@ -3138,6 +3291,7 @@ export type Database = {
           validado_servicon_by?: string | null
           validated_at?: string | null
           validated_by?: string | null
+          version?: number
         }
         Update: {
           activity_id?: string | null
@@ -3179,6 +3333,7 @@ export type Database = {
           validado_servicon_by?: string | null
           validated_at?: string | null
           validated_by?: string | null
+          version?: number
         }
         Relationships: [
           {
@@ -3439,6 +3594,7 @@ export type Database = {
           updated_at: string
           validated_at: string | null
           validated_by: string | null
+          version: number
         }
         Insert: {
           activity_id: string
@@ -3480,6 +3636,7 @@ export type Database = {
           updated_at?: string
           validated_at?: string | null
           validated_by?: string | null
+          version?: number
         }
         Update: {
           activity_id?: string
@@ -3521,6 +3678,7 @@ export type Database = {
           updated_at?: string
           validated_at?: string | null
           validated_by?: string | null
+          version?: number
         }
         Relationships: [
           {
@@ -4068,6 +4226,7 @@ export type Database = {
           side: Database["public"]["Enums"]["road_side"]
           type_id: string
           updated_at: string
+          version: number
         }
         Insert: {
           attributes?: Json
@@ -4098,6 +4257,7 @@ export type Database = {
           side?: Database["public"]["Enums"]["road_side"]
           type_id: string
           updated_at?: string
+          version?: number
         }
         Update: {
           attributes?: Json
@@ -4128,6 +4288,7 @@ export type Database = {
           side?: Database["public"]["Enums"]["road_side"]
           type_id?: string
           updated_at?: string
+          version?: number
         }
         Relationships: [
           {
@@ -6382,6 +6543,7 @@ export type Database = {
           activity_name: string | null
           altitude_m: number | null
           caption: string | null
+          cargada_at: string | null
           client_id: string | null
           created_at: string | null
           created_by: string | null
@@ -6392,6 +6554,7 @@ export type Database = {
           crew_numero: number | null
           crew_sede: string | null
           device_model: string | null
+          fecha_original: string | null
           fecha_sello: string | null
           height: number | null
           id: string | null
@@ -6403,6 +6566,7 @@ export type Database = {
           master_width: number | null
           mime_type: string | null
           origen: string | null
+          origen_captura: string | null
           pci_code: string | null
           pci_id: string | null
           pci_item_id: string | null
@@ -6418,6 +6582,7 @@ export type Database = {
           section_name: string | null
           sector_code: string | null
           sector_folder: string | null
+          sello_aplicado: boolean | null
           service_id: string | null
           sha256: string | null
           side: string | null
@@ -6577,6 +6742,11 @@ export type Database = {
           type_id: string | null
           type_name: string | null
           ultima_intervencion: string | null
+          ultima_visita_at: string | null
+          ultima_visita_comentario: string | null
+          ultima_visita_con_hora: boolean | null
+          ultima_visita_estado: string | null
+          ultima_visita_por: string | null
           visitas: number | null
         }
         Relationships: [
@@ -6757,6 +6927,7 @@ export type Database = {
           service_id: string | null
           side: string | null
           unit_symbol: string | null
+          version: number | null
         }
         Relationships: [
           {
@@ -7062,6 +7233,7 @@ export type Database = {
           updated_at: string | null
           validated_at: string | null
           validated_by_name: string | null
+          version: number | null
           week: number | null
           year: number | null
         }
@@ -7221,6 +7393,7 @@ export type Database = {
           type_id: string | null
           type_name: string | null
           updated_at: string | null
+          version: number | null
         }
         Relationships: [
           {
@@ -7262,18 +7435,26 @@ export type Database = {
           holder_id: string | null
           holder_name: string | null
           id: string | null
+          inspeccion_pendiente_at: string | null
+          inspeccion_pendiente_on: string | null
           kind: Database["public"]["Enums"]["safety_equipment_kind"] | null
           last_check_on: string | null
           location: string | null
           next_check_on: string | null
           notes: string | null
+          observacion_pendiente_at: string | null
+          observacion_pendiente_nota: string | null
+          observacion_pendiente_on: string | null
           observaciones_abiertas: number | null
           semaforo: string | null
           serial_number: string | null
           service_id: string | null
           status: Database["public"]["Enums"]["safety_equipment_status"] | null
+          ultima_conforme_at: string | null
+          ultima_conforme_on: string | null
           ultima_inspeccion_on: string | null
           ultima_revision_estado: string | null
+          vigencia: string | null
         }
         Relationships: [
           {
@@ -7838,6 +8019,7 @@ export type Database = {
         }
         Returns: Json
       }
+      avance_diario_partida: { Args: { p_plan_item: string }; Returns: Json }
       avisar_pedido: { Args: { p_id: string }; Returns: undefined }
       aviso_resolver: {
         Args: { p_clave: string; p_profile: string; p_tipo: string }
@@ -7862,6 +8044,10 @@ export type Database = {
         Returns: Json
       }
       calibrar_tramo: { Args: { p_section_id: string }; Returns: number }
+      cambiar_supervisor: {
+        Args: { p_crew: string; p_motivo?: string; p_supervisor: string }
+        Returns: Json
+      }
       can_manage: { Args: { sid: string }; Returns: boolean }
       can_write: { Args: { sid: string }; Returns: boolean }
       cargar_pagina_documento: {
@@ -7921,6 +8107,7 @@ export type Database = {
         }
         Returns: Json
       }
+      crew_historial_supervisor: { Args: { p_crew: string }; Returns: Json }
       cuadrilla_a_mi_cargo: {
         Args: { crew: string; sid: string }
         Returns: boolean
@@ -8133,6 +8320,7 @@ export type Database = {
         }[]
       }
       parse_progresiva: { Args: { p: string }; Returns: number }
+      parte_historial: { Args: { p_id: string }; Returns: Json }
       parte_por: {
         Args: { p_crew_id?: string; p_fecha?: string; p_id: string }
         Returns: {
@@ -8164,6 +8352,10 @@ export type Database = {
           isOneToOne: true
           isSetofReturn: false
         }
+      }
+      parte_sin_metrado: {
+        Args: { p_work_order_id: string }
+        Returns: string[]
       }
       partida_finalizar: { Args: { p_item: string }; Returns: Json }
       partida_impedimento: {

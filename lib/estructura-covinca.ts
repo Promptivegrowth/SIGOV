@@ -340,6 +340,8 @@ export async function armarEstructuraCovinca(opciones: {
       .gte('work_date', desde)
       .lte('work_date', hasta)
       .is('deleted_at', null)
+      // Al cliente solo va lo enviado o validado: un borrador no es oficial (OBS 4)
+      .in('status', ['enviado', 'validado'])
       .order('work_date')
     if (cuadrillaId) c = c.eq('crew_id', cuadrillaId)
     const { data: partes } = await c

@@ -184,6 +184,7 @@ fun PantallaParte(
             ) {
                 item { Resumen(estado) }
                 estado.observacion?.let { nota -> item { ObservacionDelSupervisor(nota) } }
+                if (estado.historial.isNotEmpty()) item { HistorialDelParte(estado.historial) }
                 estado.parte?.let { p ->
                     item { DatosDelDia(p, alEditar = { editandoDatos = true }, vehiculos = estado.vehiculosDelDia, supervisor = estado.supervisor) }
                 }
@@ -294,8 +295,8 @@ fun PantallaParte(
     if (anotandoRecurso || recursoDe != null) {
         DialogoRecurso(
             alCerrar = { anotandoRecurso = false; recursoDe = null },
-            alGuardar = { tipo, codigo, descripcion, unidad, cantidad, observacion ->
-                vm.registrarRecurso(tipo, codigo, descripcion, unidad, cantidad, observacion, recursoDe)
+            alGuardar = { q ->
+                vm.registrarRecurso(q, recursoDe)
                 anotandoRecurso = false; recursoDe = null
             },
         )

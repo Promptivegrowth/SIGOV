@@ -39,6 +39,7 @@ data class MaterialDelRegistro(val insumoId: String, val nombre: String, val uni
 /** Un equipo u otro recurso anotado al registrar el avance (REV3-OBS-07). */
 data class EquipoDelRegistro(
     val tipo: String, val codigo: String?, val descripcion: String, val unidad: String?, val cantidad: Double?, val observacion: String?,
+    val horasUso: Double? = null, val participacionPct: Double? = null,
 )
 
 data class EstadoParte(
@@ -79,6 +80,8 @@ data class EstadoParte(
     val rendimientos: List<pe.servicon.sigov.datos.Rendimiento> = emptyList(),
     /** Lo que observó el supervisor al devolver el parte. */
     val observacion: String? = null,
+    /** Envíos, observaciones y validaciones del reporte (CASO 14). */
+    val historial: List<pe.servicon.sigov.datos.VersionDelParte> = emptyList(),
     /** La fecha en que se programó cada partida del parte, si es otra (REV3-OBS-20). */
     val fechasProgramadas: Map<String, String> = emptyMap(),
     val guardando: Boolean = false,
@@ -350,7 +353,7 @@ class ParteViewModel @Inject constructor(
                 }
                 // Y sus equipos, como en el PCI: el ítem lleva todo lo suyo (REV3-OBS-07)
                 equipos.forEach { q ->
-                    recursoRepo.registrar(parte, q.tipo, q.codigo, q.descripcion, q.unidad, q.cantidad, q.observacion, registro)
+                    recursoRepo.registrar(parte, q.tipo, q.codigo, q.descripcion, q.unidad, q.cantidad, q.observacion, registro, q.horasUso, q.participacionPct)
                 }
             }.onSuccess {
                 if (materiales.any { m -> m.cantidad > 0 }) cargarMateriales()
@@ -480,12 +483,32 @@ class ParteViewModel @Inject constructor(
             listOf(r?.let { e.codigoDe(it) } ?: "", act?.numeroCovinca?.toString() ?: "", r?.actividadNombre ?: c.actividad ?: "",
                 c.nombre, pe.servicon.sigov.datos.Numeros.tres(c.cantidad), c.unidad ?: "")
         }
-        val equipos = e.recursos.filter { it.tipo == "equipo" }.mapIndexed { i, x ->
-            listOf(x.codigo ?: "", "${i + 1}", x.descripcion, x.unidad ?: "", x.cantidad?.let { pe.servicon.sigov.datos.Numeros.tres(it) } ?: "")
+        // Consolidado del día (OBS 3): el equipo es 1 und. con sus horas sumadas
+        val consolidado = pe.servicon.sigov.datos.consolidarRecursos(e.recursos)
+        val tres = { v: Double -> pe.servicon.sigov.datos.Numeros.tres(v) }
+        val equipos = consolidado.filter { it.tipo == "equipo" }.mapIndexed { i, x ->
+            listOf(x.codigo ?: "", "${i + 1}", x.descripcion, x.unidad ?: "", x.cantidad?.let(tres) ?: "", x.horas?.let(tres) ?: "")
         }
-        val otros = e.recursos.filter { it.tipo != "equipo" }.map { x ->
-            listOf(x.descripcion, x.unidad ?: "", x.cantidad?.let { pe.servicon.sigov.datos.Numeros.tres(it) } ?: "", x.observacion ?: "")
+        val otros = consolidado.filter { it.tipo != "equipo" }.map { x ->
+            listOf(
+                x.descripcion, x.unidad ?: "", x.cantidad?.let(tres) ?: "",
+                listOfNotNull(
+                    pe.servicon.sigov.datos.TiposDeRecurso.nombre(x.tipo),
+                    x.horas?.let { "Uso: ${tres(it)} h" },
+                    x.detalle, x.observacion,
+                ).joinToString(" · "),
+            )
         }
+        // Sin metrado no hay versión oficial (OBS 4, CASO 15)
+        val incompleto = buildList {
+            if (e.registros.isEmpty()) add("sin actividades registradas")
+            e.registros.filter { it.cantidad <= 0.0 }.forEach { add("«${it.actividadNombre}» sin metrado") }
+        }
+        // El sector, de la progresiva y el tramo (OBS 5): sin volver a preguntarlo
+        val sectores = runCatching { campo.sectores(parte.servicioId) }.getOrDefault(emptyList())
+        fun sectorDe(r: RegistroLocal): String? =
+            r.progresivaInicio?.let { p -> pe.servicon.sigov.datos.Sector.de(sectores, r.tramoId, p)?.code }
+                ?: r.planItemId?.let { partidas[it]?.sector }
         val procesos = e.registros.map { r ->
             when (r.origen) { "programacion" -> "MR"; "pci" -> "PCI"; "emergencia" -> "AT. EMERG."; else -> "OTROS" }
         }.toSet()
@@ -498,7 +521,7 @@ class ParteViewModel @Inject constructor(
             supervisor = e.supervisor ?: "",
             cuadrilla = e.cuadrilla,
             capataz = sesion.perfil()?.nombre ?: "",
-            sector = partidas.values.mapNotNull { it?.sector }.distinct().joinToString(", "),
+            sector = e.registros.mapNotNull { sectorDe(it) }.distinct().joinToString(", "),
             filas = filas,
             materiales = materiales,
             equipos = equipos,
@@ -510,6 +533,7 @@ class ParteViewModel @Inject constructor(
                 e.vehiculosDelDia.takeIf { it.isNotEmpty() }?.let { "Vehículo: " + it.joinToString(", ") },
             ).joinToString(" · "),
             validador = null,
+            incompleto = incompleto,
         )
     }
 
@@ -526,7 +550,8 @@ class ParteViewModel @Inject constructor(
         _estado.update { it.copy(imprimiendo = true) }
         viewModelScope.launch {
             runCatching {
-                val archivo = for001.armar(datosFor001(), "FOR001_${parte.fecha}_${e.cuadrilla.filter { it.isLetterOrDigit() }}")
+                val d = datosFor001()
+                val archivo = for001.armar(d, (if (d.incompleto.isNotEmpty()) "BORRADOR_" else "") + "FOR001_${parte.fecha}_${e.cuadrilla.filter { it.isLetterOrDigit() }}")
                 if (compartir) formatos.compartir(archivo, "Reporte diario ${parte.fecha}")
                 else formatos.abrir(archivo)
             }.onFailure { fallo ->
@@ -549,7 +574,7 @@ class ParteViewModel @Inject constructor(
         viewModelScope.launch {
             runCatching {
                 val d = datosFor001()
-                val nombre = "FOR001_${parte.fecha}_${e.cuadrilla.filter { it.isLetterOrDigit() }}"
+                val nombre = (if (d.incompleto.isNotEmpty()) "BORRADOR_" else "") + "FOR001_${parte.fecha}_${e.cuadrilla.filter { it.isLetterOrDigit() }}"
                 val columnas = listOf("COD. PARTIDA", "N°", "N° PCI", "ÍTEM", "UND", "ACTIVIDAD", "HORA INICIO", "HORA FIN",
                     "DURACIÓN", "CANT. PERS.", "PROG. INICIAL", "PROG. FINAL", "LD/LI/EJE", "LONGITUD (m)", "ANCHO (m)",
                     "ESPESOR (m)", "METRADO", "UND", "OBSERVACIONES")
@@ -557,7 +582,8 @@ class ParteViewModel @Inject constructor(
                     fun t(v: String) = celdaTexto(v)
                     fun n(v: String) = v.replace(",", "").toDoubleOrNull()?.let { Celda.Numero(it) } ?: celdaTexto(v)
                     val dia = "%02d/%02d/%d".format(d.fecha.dayOfMonth, d.fecha.monthValue, d.fecha.year)
-                    val ficha = listOf(
+                    val ficha = listOfNotNull(
+                        d.incompleto.takeIf { it.isNotEmpty() }?.let { "Estado" to "BORRADOR – REPORTE INCOMPLETO: " + it.joinToString("; ") },
                         "Formato" to "FOR:001 · Reporte diario de ejecución - Mantenimiento rutinario",
                         "Fecha" to dia,
                         "Proceso" to listOf("MR", "PCI", "AT. EMERG.", "OTROS").filter { it in d.procesos }.joinToString(", "),
@@ -589,9 +615,9 @@ class ParteViewModel @Inject constructor(
                             ),
                             HojaXlsx(
                                 nombre = "IV Equipos", ficha = listOf("Fecha" to dia, "Cuadrilla" to d.cuadrilla),
-                                columnas = listOf("CÓDIGO", "N°", "DESCRIPCIÓN EQUIPO", "UND", "CANT"),
-                                anchos = listOf(12.0, 5.0, 34.0, 7.0, 9.0),
-                                filas = d.equipos.map { r -> listOf(t(r[0]), n(r[1]), t(r[2]), t(r[3]), n(r[4])) },
+                                columnas = listOf("CÓDIGO", "N°", "DESCRIPCIÓN EQUIPO", "UND", "CANT. FÍSICA", "HORAS DE USO"),
+                                anchos = listOf(12.0, 5.0, 34.0, 7.0, 11.0, 11.0),
+                                filas = d.equipos.map { r -> listOf(t(r[0]), n(r[1]), t(r[2]), t(r[3]), n(r[4]), n(r[5])) },
                             ),
                             HojaXlsx(
                                 nombre = "V Otros recursos", ficha = listOf("Fecha" to dia, "Cuadrilla" to d.cuadrilla),
@@ -635,8 +661,9 @@ class ParteViewModel @Inject constructor(
             val parte = _estado.value.parte ?: return@launch
             val remoto = campo.parteEnLaNube(parte) ?: return@launch
             val local = partes.parteDe(parte.clientId) ?: parte
+            val historial = campo.historialDelParte(remoto.id)
             _estado.update {
-                it.copy(parte = local, observacion = remoto.observacion?.takeIf { remoto.status == "observado" })
+                it.copy(parte = local, observacion = remoto.observacion?.takeIf { remoto.status == "observado" }, historial = historial)
             }
         }
     }
@@ -655,6 +682,15 @@ class ParteViewModel @Inject constructor(
         val parte = _estado.value.parte ?: return
         if (_estado.value.registros.isEmpty()) {
             _estado.update { it.copy(error = "Registra al menos una actividad antes de enviar el reporte.") }
+            return
+        }
+        // Con fotos pero sin metrado, el reporte sigue incompleto (OBS 4, CASO 15)
+        val sinMetrado = _estado.value.registros.filter { it.cantidad <= 0.0 }
+        if (sinMetrado.isNotEmpty()) {
+            _estado.update {
+                it.copy(error = "Reporte incompleto: " + sinMetrado.joinToString(", ") { r -> "«${r.actividadNombre}»" } +
+                    (if (sinMetrado.size == 1) " no tiene" else " no tienen") + " metrado. Regístralo antes de enviar el reporte.")
+            }
             return
         }
         viewModelScope.launch {
@@ -709,15 +745,12 @@ class ParteViewModel @Inject constructor(
         }
     }
 
-    fun registrarRecurso(
-        tipo: String, codigo: String?, descripcion: String, unidad: String?, cantidad: Double?, observacion: String?,
-        registro: RegistroLocal? = null,
-    ) {
+    fun registrarRecurso(q: EquipoDelRegistro, registro: RegistroLocal? = null) {
         val parte = _estado.value.parte ?: return
         viewModelScope.launch {
-            runCatching { recursoRepo.registrar(parte, tipo, codigo, descripcion, unidad, cantidad, observacion, registro) }
+            runCatching { recursoRepo.registrar(parte, q.tipo, q.codigo, q.descripcion, q.unidad, q.cantidad, q.observacion, registro, q.horasUso, q.participacionPct) }
                 .onSuccess {
-                    _estado.update { it.copy(aviso = if (tipo == "equipo") "Equipo anotado." else "Recurso anotado.") }
+                    _estado.update { it.copy(aviso = pe.servicon.sigov.datos.TiposDeRecurso.nombre(q.tipo) + " anotado.") }
                     cargarRecursos()
                 }
                 .onFailure { f -> _estado.update { it.copy(error = f.enCristiano()) } }

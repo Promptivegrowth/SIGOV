@@ -135,7 +135,7 @@ export function MapaDeInventario() {
     queryFn: async () => {
       const [{ data }, { data: activo }, { data: vinculos }] = await Promise.all([
         sb.from('v_inventario')
-          .select('foto_actual, foto_actual_fecha, foto_anterior, foto_anterior_fecha, condition, intervenciones, visitas, dias_sin_intervenir, ultima_intervencion, dias_entre_fotos')
+          .select('foto_actual, foto_actual_fecha, foto_anterior, foto_anterior_fecha, condition, intervenciones, visitas, dias_sin_intervenir, ultima_intervencion, dias_entre_fotos, ultima_visita_at, ultima_visita_estado, ultima_visita_comentario, ultima_visita_por, ultima_visita_con_hora')
           .eq('id', elegido.id).single(),
         sb.from('road_assets')
           .select('progresiva_fin_m, attributes, asset_types(schema)')
@@ -478,10 +478,18 @@ export function MapaDeInventario() {
                       {SEMAFOROS[(elegido.semaforo as ClaveSemaforo) ?? 'sin_intervenir'].label}
                     </p>
                     <p className="text-muted-foreground text-[11.5px] leading-tight">
-                      {elegido.ultima_intervencion
-                        ? `Última intervención el ${fmtDate(elegido.ultima_intervencion)} · hace ${elegido.dias} días`
+                      {(fotos.data?.ultima_intervencion ?? elegido.ultima_intervencion)
+                        ? `Última intervención el ${fmtDate(fotos.data?.ultima_intervencion ?? elegido.ultima_intervencion)} · hace ${fotos.data?.dias_sin_intervenir ?? elegido.dias} días`
                         : 'Nunca se registró una intervención'}
                     </p>
+                    {/* La última visita, con hora, estado, comentario y quién (OBS 11) */}
+                    {fotos.data?.ultima_visita_at && (
+                      <p className="text-muted-foreground mt-0.5 text-[11.5px] leading-tight">
+                        Última visita: {fotos.data.ultima_visita_con_hora ? fmtDateTime(fotos.data.ultima_visita_at) : fmtDate(fotos.data.ultima_visita_at)} · {fotos.data.ultima_visita_estado === 'observado' ? 'Observado' : 'Conforme'}
+                        {fotos.data.ultima_visita_por ? ` · ${fotos.data.ultima_visita_por}` : ''}
+                        {fotos.data.ultima_visita_comentario ? ` · «${fotos.data.ultima_visita_comentario}»` : ''}
+                      </p>
+                    )}
                   </div>
                 </div>
                 {elegido.observado && (
@@ -507,7 +515,8 @@ export function MapaDeInventario() {
                     etiqueta="Condición base del inventario"
                     valor={ASSET_CONDITION[elegido.condition as keyof typeof ASSET_CONDITION]?.label ?? elegido.condition ?? '—'}
                   />
-                  <Dato etiqueta="Intervenciones" valor={String(elegido.intervenciones ?? 0)} />
+                  {/* Visitas: días distintos en el elemento, no fotos (OBS 10) */}
+                  <Dato etiqueta="Visitas" valor={String(fotos.data?.visitas ?? elegido.visitas ?? 0)} />
                 </div>
 
                 {/* Lo que el inventario oficial registra de este tipo de elemento */}

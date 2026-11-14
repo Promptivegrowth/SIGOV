@@ -46,6 +46,8 @@ data class GrupoDeFotos(
     val antes get() = fotos.count { it.phase == "antes" }
     val durante get() = fotos.count { it.phase == "durante" }
     val despues get() = fotos.count { it.phase == "despues" }
+    /** Complementarias: no se fuerzan a antes/durante/después (OBS 6). */
+    val generales get() = fotos.size - antes - durante - despues
 }
 
 data class EstadoGaleria(
@@ -100,7 +102,7 @@ data class EstadoGaleria(
         get() = visibles
             .groupBy { f ->
                 if (f.pciCodigo != null) "pci|${f.pciCodigo}|${f.pciItem}"
-                else "mr|${f.fecha ?: f.tomadaEn.take(10)}|${f.actividadId ?: f.actividad}"
+                else "mr|${f.fecha ?: f.tomadaEn.take(10)}|${f.actividadId ?: f.actividad ?: "general"}"
             }
             .map { (clave, fs) ->
                 val f = fs.first()
@@ -110,7 +112,7 @@ data class EstadoGaleria(
                     esPci = esPci,
                     origen = if (esPci) listOfNotNull(codigoCortoDePci(f.pciCodigo), f.pciItem?.let { "Ítem $it" }).joinToString(" · ")
                              else "MR / Programación",
-                    titulo = f.actividad ?: if (esPci) "Ítem de PCI" else "Actividad sin nombre",
+                    titulo = f.actividad ?: if (esPci) "Ítem de PCI" else "Evidencia general / complementaria",
                     ubicacion = listOfNotNull(f.tramo, f.progresiva?.let { pe.servicon.sigov.datos.Progresiva.aTexto(it) }?.let { "Km $it" })
                         .joinToString(", "),
                     fecha = fs.mapNotNull { it.fecha }.maxOrNull() ?: f.tomadaEn.take(10),

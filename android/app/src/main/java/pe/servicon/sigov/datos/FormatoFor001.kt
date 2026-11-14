@@ -42,12 +42,14 @@ data class DatosFor001(
     val filas: List<FilaFor001>,
     /** COD. PARTIDA, N°, ACTIVIDAD, MATERIALES, CANT, UND */
     val materiales: List<List<String>>,
-    /** CÓDIGO, N°, DESCRIPCIÓN EQUIPO, UND, CANT */
+    /** CÓDIGO, N°, DESCRIPCIÓN EQUIPO, UND, CANT (física), HORAS DE USO */
     val equipos: List<List<String>>,
     /** DESCRIPCIÓN, UND, CANT, OBSERVACIONES */
     val otros: List<List<String>>,
     val observaciones: String,
     val validador: String?,
+    /** Lo que falta para la versión oficial; con algo, sale «BORRADOR – REPORTE INCOMPLETO» (OBS 4). */
+    val incompleto: List<String> = emptyList(),
 )
 
 /**
@@ -103,7 +105,24 @@ class FormatoFor001 @Inject constructor(
             c.drawLine(m, m + 17 * mm, an - m, m + 17 * mm, Paint().apply { strokeWidth = 2.2f; color = verde })
         }
 
+        /** La marca de agua del borrador, cruzada sobre toda la hoja (OBS 4). */
+        fun borrador(c: Canvas) {
+            if (d.incompleto.isEmpty()) return
+            c.save()
+            c.rotate(-24f, an / 2, al / 2)
+            c.drawText("BORRADOR – REPORTE INCOMPLETO", an / 2, al / 2 + 18f,
+                p(46f, true, Color.argb(48, 200, 30, 30)).apply { textAlign = Paint.Align.CENTER })
+            c.restore()
+            val banda = Paint().apply { color = Color.rgb(253, 236, 236) }
+            c.drawRect(m, al - 15.5f * mm, an - m, al - 10 * mm, banda)
+            c.drawText(
+                ("BORRADOR – REPORTE INCOMPLETO · No es la versión oficial: " + d.incompleto.joinToString("; ")).take(190),
+                m + 2 * mm, al - 11.8f * mm, p(7f, true, Color.rgb(185, 28, 28)),
+            )
+        }
+
         fun pie(c: Canvas, pagina: Int) {
+            borrador(c)
             c.drawLine(m, al - 9 * mm, an - m, al - 9 * mm, Paint().apply { strokeWidth = 1.1f; color = verde })
             c.drawText("GRUPO SERVICON V&D EIRL", m, al - 5 * mm, p(7.5f, true, azul))
             c.drawText("PÁGINA $pagina DE 2", an - m, al - 5 * mm, p(7.5f, false, azul).apply { textAlign = Paint.Align.RIGHT })
@@ -236,8 +255,10 @@ class FormatoFor001 @Inject constructor(
         y += 6.5f * mm
         val finMat = tabla(c2, m, y, listOf(20f, 8f, 36f, 40f, 13f, 11f).map { it * mm },
             listOf("COD. PARTIDA", "N°", "ACTIVIDAD", "MATERIALES", "CANT", "UND"), d.materiales, 16, 5 * mm, setOf(1, 4, 5))
+        // La plantilla no tiene columna de horas: van con la descripción (OBS 3)
+        val equiposPdf = d.equipos.map { r -> listOf(r[0], r[1], r[2] + (r.getOrNull(5)?.takeIf { it.isNotBlank() }?.let { " · $it h" } ?: ""), r[3], r[4]) }
         val finEq = tabla(c2, xEq, y, listOf(12f, 7f, 25f, 10f, 10f).map { it * mm },
-            listOf("CÓDIGO", "N°", "DESCRIPCIÓN EQUIPO", "UND", "CANT"), d.equipos, 16, 5 * mm, setOf(1, 3, 4))
+            listOf("CÓDIGO", "N°", "DESCRIPCIÓN EQUIPO", "UND", "CANT"), equiposPdf, 16, 5 * mm, setOf(1, 3, 4))
         val finOtros = tabla(c2, xOtros, y, listOf(anchoOtros * 0.36f, 10 * mm, 10 * mm, anchoOtros * 0.64f - 20 * mm),
             listOf("DESCRIPCIÓN", "UND", "CANT", "OBSERVACIONES"), d.otros, 16, 5 * mm, setOf(1, 2))
         y = maxOf(finMat, finEq, finOtros) + 4 * mm

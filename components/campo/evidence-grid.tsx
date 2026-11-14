@@ -23,7 +23,7 @@ import { EVIDENCE_PHASE } from '@/lib/constants'
 import { cn, fmtDateTime, fmtProgresiva, bytes, uuid } from '@/lib/utils'
 import { enqueue, enqueueBlob, getDeviceId } from '@/lib/offline/db'
 import { syncNow } from '@/lib/offline/sync'
-import type { SealedPhoto } from '@/lib/camera'
+import { camposDeCaptura, type SealedPhoto } from '@/lib/camera'
 import { toast } from 'sonner'
 import { mensajeAmigable } from '@/lib/errores'
 
@@ -182,10 +182,9 @@ export function EvidenceGrid({
           altitude_m: sealed.gps.altitude,
           section_id: context?.sectionId ?? null,
           progresiva_m: context?.progresivaM ?? null,
-          taken_at: sealed.takenAt.toISOString(),
+          ...camposDeCaptura(sealed),
           sha256: sealed.sha256,
           ...original,
-          watermarked: true,
           device_id: deviceId,
           device_model: navigator.userAgent.slice(0, 90),
           caption: 'Cargada desde el dispositivo',

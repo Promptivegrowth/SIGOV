@@ -98,15 +98,29 @@ export function ImageViewer({
     if (punteros.current.size === 0) arrastre.current = null
   }
 
-  const bajar = () => {
+  // El enlace firmado es de otro dominio: el navegador ignora `download` y
+  // solo la abre. Se baja el archivo y se guarda con su nombre.
+  const bajar = async () => {
     const a = document.createElement('a')
-    a.href = src
-    a.download = descargar ?? 'evidencia.jpg'
-    a.target = '_blank'
-    a.rel = 'noopener'
+    let local: string | null = null
+    try {
+      const r = await fetch(src)
+      if (!r.ok) throw new Error(String(r.status))
+      const blob = await r.blob()
+      local = URL.createObjectURL(blob)
+      const ext = blob.type === 'image/jpeg' ? '.jpg' : blob.type === 'image/png' ? '.png' : blob.type === 'image/webp' ? '.webp' : ''
+      const nombre = descargar ?? 'SIGOV_foto'
+      a.href = local
+      a.download = ext && !nombre.toLowerCase().endsWith(ext) ? nombre.replace(/\.(jpe?g|png|webp)$/i, '') + ext : nombre
+    } catch {
+      a.href = src
+      a.target = '_blank'
+      a.rel = 'noopener'
+    }
     document.body.appendChild(a)
     a.click()
     a.remove()
+    if (local) setTimeout(() => URL.revokeObjectURL(local!), 4000)
   }
 
   return (
@@ -134,7 +148,8 @@ export function ImageViewer({
       />
 
       {/* Controles */}
-      <div className="absolute right-2 bottom-2 flex items-center gap-1 rounded-full bg-black/55 p-1 backdrop-blur-sm">
+      {/* Arriba: abajo a la derecha va el sello de la foto, que no se tapa */}
+      <div className="absolute top-2 right-2 flex items-center gap-1 rounded-full bg-black/55 p-1 backdrop-blur-sm">
         <Tip label="Alejar">
           <Button variant="ghost" size="icon-sm" className="text-white hover:bg-white/15 hover:text-white"
             onClick={() => zoomEn(escala - PASO)} disabled={escala <= MIN} aria-label="Alejar">

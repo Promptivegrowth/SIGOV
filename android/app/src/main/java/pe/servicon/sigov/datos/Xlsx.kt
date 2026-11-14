@@ -87,7 +87,7 @@ object Xlsx {
                     zip.closeEntry()
                     rels.append(relacionDeImagen("rId${k + 1}", medio))
                     // La fila (base 0) de la foto: los títulos van en filaTitulos
-                    dibujo.append(anclaDeImagen(h.columnaDeImagen, filaTitulos + fila, k + 1))
+                    dibujo.append(anclaDeImagen(h.columnaDeImagen, filaTitulos + fila, k + 1, h.anchos.getOrNull(h.columnaDeImagen) ?: 22.0))
                 }
                 dibujo.append("</xdr:wsDr>")
                 rels.append("</Relationships>")
@@ -97,15 +97,29 @@ object Xlsx {
         }
     }
 
-    // 4:3, unos 152 × 114 px, con un pequeño margen dentro de la celda
-    private fun anclaDeImagen(col: Int, fila: Int, n: Int) =
-        "<xdr:oneCellAnchor><xdr:from><xdr:col>$col</xdr:col><xdr:colOff>38100</xdr:colOff>" +
-            "<xdr:row>$fila</xdr:row><xdr:rowOff>38100</xdr:rowOff></xdr:from>" +
-            "<xdr:ext cx=\"1447800\" cy=\"1085850\"/><xdr:pic><xdr:nvPicPr><xdr:cNvPr id=\"${n + 1}\" name=\"Foto $n\"/>" +
+    /**
+     * La foto anclada a su celda por sus dos esquinas (twoCellAnchor, «mover y
+     * cambiar de tamaño con las celdas»): acompaña a su fila al ordenar y al
+     * filtrar (OBS 9). 4:3, hasta 152 × 114 px, centrada y dentro de la celda.
+     */
+    private fun anclaDeImagen(col: Int, fila: Int, n: Int, anchoCaracteres: Double): String {
+        val celdaAncho = ((anchoCaracteres * 7 + 5) * 9525).toLong()
+        val celdaAlto = 90L * 12700
+        val margen = 38100L
+        var cx = minOf(1447800L, celdaAncho - 2 * margen)
+        var cy = cx * 3 / 4
+        if (cy > celdaAlto - 2 * margen) { cy = celdaAlto - 2 * margen; cx = cy * 4 / 3 }
+        val x0 = (celdaAncho - cx) / 2
+        val y0 = (celdaAlto - cy) / 2
+        return "<xdr:twoCellAnchor editAs=\"twoCell\"><xdr:from><xdr:col>$col</xdr:col><xdr:colOff>$x0</xdr:colOff>" +
+            "<xdr:row>$fila</xdr:row><xdr:rowOff>$y0</xdr:rowOff></xdr:from>" +
+            "<xdr:to><xdr:col>$col</xdr:col><xdr:colOff>${x0 + cx}</xdr:colOff><xdr:row>$fila</xdr:row><xdr:rowOff>${y0 + cy}</xdr:rowOff></xdr:to>" +
+            "<xdr:pic><xdr:nvPicPr><xdr:cNvPr id=\"${n + 1}\" name=\"Foto $n\"/>" +
             "<xdr:cNvPicPr><a:picLocks noChangeAspect=\"1\"/></xdr:cNvPicPr></xdr:nvPicPr>" +
             "<xdr:blipFill><a:blip r:embed=\"rId$n\"/><a:stretch><a:fillRect/></a:stretch></xdr:blipFill>" +
-            "<xdr:spPr><a:xfrm><a:off x=\"0\" y=\"0\"/><a:ext cx=\"1447800\" cy=\"1085850\"/></a:xfrm>" +
-            "<a:prstGeom prst=\"rect\"><a:avLst/></a:prstGeom></xdr:spPr></xdr:pic><xdr:clientData/></xdr:oneCellAnchor>"
+            "<xdr:spPr><a:xfrm><a:off x=\"0\" y=\"0\"/><a:ext cx=\"$cx\" cy=\"$cy\"/></a:xfrm>" +
+            "<a:prstGeom prst=\"rect\"><a:avLst/></a:prstGeom></xdr:spPr></xdr:pic><xdr:clientData/></xdr:twoCellAnchor>"
+    }
 
     private fun relacionDeImagen(id: String, medio: Int) =
         "<Relationship Id=\"$id\" Type=\"http://schemas.openxmlformats.org/officeDocument/2006/relationships/image\" Target=\"../media/image$medio.jpeg\"/>"

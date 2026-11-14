@@ -432,9 +432,14 @@ private fun Partida(
             )
             Spacer(Modifier.height(6.dp))
             Row(verticalAlignment = Alignment.CenterVertically) {
+                // Acumulado, saldo y % (CASO 12)
+                val ej = item.ejecutado ?: 0.0
+                val mt = item.meta ?: 0.0
+                val u = item.unidad?.let { " $it" } ?: ""
                 Text(
-                    "Ejecutado ${cifra(item.ejecutado ?: 0.0)} de ${cifra(item.meta ?: 0.0)}" +
-                        (item.unidad?.let { " $it" } ?: ""),
+                    "Acumulado ${cifra(ej)} de ${cifra(mt)}$u · " +
+                        (if (ej > mt) "exceso ${cifra(ej - mt)}$u" else "saldo ${cifra(mt - ej)}$u") +
+                        (if (mt > 0) " · ${"%.0f".format(ej / mt * 100)} %" else ""),
                     style = MaterialTheme.typography.bodySmall,
                     color = MaterialTheme.colorScheme.onSurfaceVariant,
                     modifier = Modifier.weight(1f),

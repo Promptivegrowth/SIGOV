@@ -110,6 +110,12 @@ fun VisorDeFoto(
                 Icon(Icons.Outlined.Close, contentDescription = "Cerrar", tint = Color.White)
             }
 
+            // Descargar esta foto a la galería del teléfono (Luigi, 14/11)
+            pe.servicon.sigov.ui.componentes.BotonDescargarFoto(
+                foto.rutaLocal?.let { File(it) } ?: foto.url,
+                Modifier.align(Alignment.TopStart).statusBarsPadding().padding(8.dp),
+            )
+
             // Con guantes puestos el pellizco no siempre sale; los botones
             // hacen lo mismo y siempre responden.
             Surface(
@@ -217,6 +223,18 @@ private fun FichaDeLaFoto(foto: EvidenciaEnGaleria, modifier: Modifier = Modifie
             }
         }
 
+        // Captura, carga y sincronización, cada una por su lado (OBS 6)
+        Text(
+            listOfNotNull(
+                "Captura " + pe.servicon.sigov.datos.Peru.fechaHora(foto.tomadaEn),
+                foto.cargadaEn?.takeIf { it.take(16) != foto.tomadaEn.take(16) }?.let { "Carga " + pe.servicon.sigov.datos.Peru.fechaHora(it) },
+                foto.sincronizadaEn?.let { "Sincronización " + pe.servicon.sigov.datos.Peru.fechaHora(it) } ?: "Pendiente de sincronización",
+                when (foto.origenCaptura) { "galeria" -> "Importada de la galería"; "archivo_web" -> "Subida desde la web"; else -> null }
+                    ?.let { if (foto.selloAplicado == false) "$it · sin sello SIGOV" else it },
+            ).joinToString(" · "),
+            style = MaterialTheme.typography.labelSmall,
+            color = Color.White.copy(alpha = 0.7f),
+        )
         Text(
             listOfNotNull(
                 Fase.entries.firstOrNull { it.valor == foto.phase }?.etiqueta,

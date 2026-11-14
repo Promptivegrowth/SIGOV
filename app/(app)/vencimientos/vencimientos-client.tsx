@@ -1,7 +1,7 @@
 'use client'
 
 import { UsoDeVehiculos } from '@/components/vehiculos/uso-de-vehiculos'
-import { EquipoDialog, HistorialEquipoDialog, usePuedeAdministrarEquipos } from '@/components/ssoma/equipo-dialog'
+import { EquipoDialog, HistorialEquipoDialog, EstadoDelEquipo, usePuedeAdministrarEquipos } from '@/components/ssoma/equipo-dialog'
 import * as React from 'react'
 import Link from 'next/link'
 import { useQuery, useQueryClient } from '@tanstack/react-query'
@@ -381,6 +381,7 @@ export function VencimientosClient() {
                         {[e.capacity, e.location, e.crew_name, e.holder_name]
                           .filter(Boolean).join(' · ')}
                       </p>
+                      <div className="mt-1.5"><EstadoDelEquipo equipo={e} compacto /></div>
                     </div>
 
                     <div className="text-right">

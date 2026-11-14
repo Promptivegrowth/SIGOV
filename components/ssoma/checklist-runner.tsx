@@ -23,7 +23,7 @@ import { EmptyState } from '@/components/shared/misc'
 import { enqueue, enqueueBlob, getDeviceId } from '@/lib/offline/db'
 import { conRespaldoLocal, espejo } from '@/lib/offline/catalogos'
 import { syncNow } from '@/lib/offline/sync'
-import { getGpsFix, sealPhoto } from '@/lib/camera'
+import { getGpsFix, sealPhoto, camposDeCaptura } from '@/lib/camera'
 import { cn, uuid, toISODate, fmtDate } from '@/lib/utils'
 import { toast } from 'sonner'
 import { mensajeAmigable } from '@/lib/errores'
@@ -170,9 +170,8 @@ export function ChecklistRunner({
           lat: gps.lat,
           lng: gps.lng,
           accuracy_m: gps.accuracy,
-          taken_at: sealed.takenAt.toISOString(),
+          ...camposDeCaptura(sealed),
           sha256: sealed.sha256,
-          watermarked: true,
           device_id: await getDeviceId(),
           caption: q.label,
           created_by: profile.id,

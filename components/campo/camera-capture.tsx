@@ -11,7 +11,7 @@ import { Button } from '@/components/ui/button'
 import { Badge } from '@/components/ui/badge'
 import { cn, fmtProgresiva } from '@/lib/utils'
 import {
-  openCamera, sealPhoto, watchGps, cameraSupported, haptic,
+  openCamera, sealPhoto, watchGps, cameraSupported, haptic, leerFechaExif,
   MAX_ACCURACY_M, type GpsFix, type SealedPhoto,
 } from '@/lib/camera'
 import { EVIDENCE_PHASE } from '@/lib/constants'
@@ -125,7 +125,14 @@ export function CameraCapture({
     }
   }
 
-  const fromFile = async (file: File) => {
+  // Un archivo elegido espera la decisión del sello (OBS 2)
+  const [archivo, setArchivo] = React.useState<File | null>(null)
+  const fromFile = (file: File) => {
+    if (!gps) return toast.error('Esperando señal GPS')
+    setArchivo(file)
+  }
+  const procesarArchivo = async (file: File, sellar: boolean) => {
+    setArchivo(null)
     if (!gps) return toast.error('Esperando señal GPS')
     setBusy(true)
     try {
@@ -138,8 +145,11 @@ export function CameraCapture({
         progresivaM: context.progresivaM,
         fase: EVIDENCE_PHASE[phase].label,
         gps,
-        takenAt: new Date(),
+        takenAt: new Date(file.lastModified || Date.now()),
         usuario: context.usuario,
+        sinSello: !sellar,
+        origen: 'archivo_web',
+        fechaOriginal: await leerFechaExif(file),
       })
       setPreview({ url: URL.createObjectURL(sealed.blob), sealed })
     } catch {
@@ -162,6 +172,7 @@ export function CameraCapture({
 
   return (
     <div className="fixed inset-0 z-[60] flex flex-col bg-black">
+      {archivo && <PreguntaDeSello archivo={archivo} alElegir={(s) => procesarArchivo(archivo, s)} alCancelar={() => setArchivo(null)} />}
       {/* ── Barra superior ─────────────────────────────────────────────── */}
       <div className="safe-top relative z-10 flex items-center justify-between px-4 py-3">
         <button
@@ -351,6 +362,36 @@ function GpsPill({ gps, ok }: { gps: GpsFix | null; ok: boolean }) {
       <span className="font-mono text-[11px] text-white">
         {gps ? `±${gps.accuracy.toFixed(0)} m` : 'Buscando GPS'}
       </span>
+    </div>
+  )
+}
+
+/** La foto elegida, antes de procesarla: ¿lleva el sello SIGOV? (OBS 2) */
+function PreguntaDeSello({ archivo, alElegir, alCancelar }: {
+  archivo: File
+  alElegir: (sellar: boolean) => void
+  alCancelar: () => void
+}) {
+  const [url] = React.useState(() => URL.createObjectURL(archivo))
+  React.useEffect(() => () => URL.revokeObjectURL(url), [url])
+  return (
+    <div className="absolute inset-0 z-30 flex items-center justify-center bg-black/80 p-4">
+      <div className="bg-card text-card-foreground w-full max-w-md rounded-2xl p-4 shadow-xl">
+        <p className="text-[15px] font-semibold">Importar foto</p>
+        {/* eslint-disable-next-line @next/next/no-img-element */}
+        <img src={url} alt="Foto elegida" className="bg-muted mt-3 max-h-64 w-full rounded-lg object-contain" />
+        <p className="mt-3 text-[13.5px]">¿Desea aplicar el sello SIGOV de fecha y hora a esta fotografía?</p>
+        <p className="text-muted-foreground mt-1 text-[12px]">
+          Si ya trae fecha, hora o progresiva, consérvala sin sello para no poner uno encima del otro.
+        </p>
+        <div className="mt-4 flex flex-col gap-2 sm:flex-row-reverse">
+          <Button className="flex-1" onClick={() => alElegir(true)}>Sí, aplicar sello SIGOV</Button>
+          <Button className="flex-1" variant="outline" onClick={() => alElegir(false)}>No, conservar original</Button>
+        </div>
+        <button onClick={alCancelar} className="text-muted-foreground mt-3 w-full text-center text-[12px] hover:underline">
+          Cancelar
+        </button>
+      </div>
     </div>
   )
 }

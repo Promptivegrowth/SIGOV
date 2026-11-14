@@ -220,7 +220,7 @@ export function ProgramacionClient() {
         lado: v.lado || null,
       }
       const { error } = itemForm.row
-        ? await sb.from('plan_items').update(payload).eq('id', itemForm.row.id)
+        ? await sb.from('plan_items').update({ ...payload, version: itemForm.row.version } as any).eq('id', itemForm.row.id)
         : await sb.from('plan_items').insert({ ...payload, created_by: profile.id })
       if (error) { toast.error(mensajeAmigable(error)); return }
       toast.success(itemForm.row ? 'Actividad actualizada' : 'Actividad programada')
@@ -568,12 +568,15 @@ export function ProgramacionClient() {
         submitLabel={itemForm.row ? 'Guardar cambios' : 'Programar'}
         onSubmit={saveItem}
         footerNote={itemForm.row ? (
-          <FotoReferencial
-            tabla="plan_items"
-            id={itemForm.row.id}
-            ruta={itemForm.row.foto_referencia_path}
-            puedeEditar={can.manage}
-          />
+          <div className="space-y-3">
+            <AvanceDiario itemId={itemForm.row.id} unidad={itemForm.row.unit_symbol} meta={Number(itemForm.row.target_qty) || 0} />
+            <FotoReferencial
+              tabla="plan_items"
+              id={itemForm.row.id}
+              ruta={itemForm.row.foto_referencia_path}
+              puedeEditar={can.manage}
+            />
+          </div>
         ) : 'Al guardar la partida podrás cargar su foto referencial (Editar).'}
       />
 
@@ -706,6 +709,7 @@ function PlanChip({ item, canEdit, onEdit }: { item: any; canEdit?: boolean; onE
           <span className="block">{item.prog_start_txt} → {item.prog_end_txt} · {item.lado ? 'lado ' + codigoDeLado(item.lado) : 'lado sin indicar'}</span>
           <span className="block">
             Meta {fmtNumber(item.target_qty, 1)} {item.unit_symbol} · Avance {fmtNumber(item.executed_qty, 1)}
+            {' · '}Saldo {fmtNumber(Math.max(Number(item.target_qty ?? 0) - Number(item.executed_qty ?? 0), 0), 1)}
           </span>
           {item.pci_code && <span className="block text-accent">Origen: {item.pci_code}</span>}
         </span>
@@ -972,6 +976,49 @@ function CalendarView({
           )
         })}
       </div>
+    </div>
+  )
+}
+
+/**
+ * El avance día por día de una partida (CASO 12): ejecutado del día,
+ * acumulado, saldo y porcentaje. Cada registro cuenta una vez.
+ */
+function AvanceDiario({ itemId, unidad, meta }: { itemId: string; unidad?: string | null; meta: number }) {
+  const sb = React.useMemo(() => createClient(), [])
+  const q = useQuery({
+    queryKey: ['avance-diario', itemId],
+    queryFn: async () => {
+      const { data, error } = await sb.rpc('avance_diario_partida', { p_plan_item: itemId } as any)
+      if (error) throw error
+      return ((data ?? []) as unknown) as { dia: string; ejecutado: number; acumulado: number; saldo: number; exceso: number; pct: number | null }[]
+    },
+  })
+  const filas = q.data ?? []
+  const u = unidad ? ` ${unidad}` : ''
+  return (
+    <div className="text-foreground">
+      <p className="mb-1 text-[12px] font-semibold">Avance diario · meta {fmtNumber(meta, 1)}{u}</p>
+      {!filas.length ? (
+        <p className="text-[11.5px]">Todavía sin avance registrado.</p>
+      ) : (
+        <table className="w-full text-[11.5px] tabular-nums">
+          <thead className="text-muted-foreground">
+            <tr><th className="text-left font-medium">Día</th><th className="text-right font-medium">Ejecutado</th><th className="text-right font-medium">Acumulado</th><th className="text-right font-medium">Saldo</th><th className="text-right font-medium">%</th></tr>
+          </thead>
+          <tbody>
+            {filas.map((f) => (
+              <tr key={f.dia} className="border-border border-t">
+                <td>{fmtDate(f.dia)}</td>
+                <td className="text-right">{fmtNumber(Number(f.ejecutado), 2)}{u}</td>
+                <td className="text-right">{fmtNumber(Number(f.acumulado), 2)}{u}</td>
+                <td className="text-right">{Number(f.exceso) > 0 ? `+${fmtNumber(Number(f.exceso), 2)} exceso` : fmtNumber(Number(f.saldo), 2)}</td>
+                <td className="text-right">{f.pct != null ? `${fmtNumber(Number(f.pct), 1)} %` : '—'}</td>
+              </tr>
+            ))}
+          </tbody>
+        </table>
+      )}
     </div>
   )
 }

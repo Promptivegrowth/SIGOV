@@ -494,7 +494,9 @@ fun FormularioActividad(
                                     Row(verticalAlignment = Alignment.CenterVertically) {
                                         Text(
                                             listOfNotNull(q.codigo, q.descripcion).joinToString(" · ") +
-                                                (q.cantidad?.let { " · ${cifra(it)} ${q.unidad.orEmpty()}" } ?: ""),
+                                                (q.cantidad?.let { " · ${cifra(it)} ${q.unidad.orEmpty()}" } ?: "") +
+                                                (q.horasUso?.let { " · ${cifra(it)} h" } ?: "") +
+                                                (q.participacionPct?.let { " · ${cifra(it)} %" } ?: ""),
                                             style = MaterialTheme.typography.bodyMedium,
                                             modifier = Modifier.weight(1f),
                                         )
@@ -632,8 +634,8 @@ fun FormularioActividad(
     if (anotandoEquipo) {
         DialogoRecurso(
             alCerrar = { anotandoEquipo = false },
-            alGuardar = { tipo, codigo, descripcion, unidad, cantidad, observacion ->
-                equipos += EquipoDelRegistro(tipo, codigo, descripcion, unidad, cantidad, observacion)
+            alGuardar = { q ->
+                equipos += q
                 anotandoEquipo = false
             },
         )

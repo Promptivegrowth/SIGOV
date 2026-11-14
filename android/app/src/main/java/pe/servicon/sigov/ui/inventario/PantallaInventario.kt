@@ -19,6 +19,8 @@ import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.outlined.BrokenImage
+import androidx.compose.ui.graphics.vector.rememberVectorPainter
 import androidx.compose.material.icons.outlined.Close
 import androidx.compose.material.icons.outlined.FilterList
 import androidx.compose.material.icons.outlined.Info
@@ -571,6 +573,17 @@ private fun FichaDelElemento(
                     } ?: "Nunca se registró una intervención",
                     fontSize = 12.sp, color = TintaSuave,
                 )
+                // La última visita, con su hora, estado, comentario y quién (OBS 11)
+                elemento.ultimaVisitaEn?.let { at ->
+                    Text(
+                        listOfNotNull(
+                            "Última visita: " + if (elemento.ultimaVisitaConHora) pe.servicon.sigov.datos.Peru.fechaHora(at) else pe.servicon.sigov.datos.Peru.fechaHora(at).substringBefore(" "),
+                            if (elemento.ultimaVisitaEstado == "observado") "Observado" else "Conforme",
+                            elemento.ultimaVisitaPor,
+                        ).joinToString(" · ") + (elemento.ultimaVisitaComentario?.let { "\n«$it»" } ?: ""),
+                        fontSize = 12.sp, color = TintaSuave,
+                    )
+                }
             }
         }
 
@@ -707,9 +720,17 @@ private fun FichaDelElemento(
                             fontSize = 12.5.sp, fontWeight = FontWeight.SemiBold, modifier = Modifier.width(88.dp),
                         )
                         AsyncImage(model = url, contentDescription = null, contentScale = ContentScale.Crop,
+                            error = rememberVectorPainter(Icons.Outlined.BrokenImage),
+                            fallback = rememberVectorPainter(Icons.Outlined.BrokenImage),
                             modifier = Modifier.size(width = 46.dp, height = 34.dp).clip(RoundedCornerShape(5.dp)).background(Color(0xFFE9EDF3)))
                         Column(Modifier.weight(1f)) {
                             Text(if (foto.esBase) pieDeFoto(foto.ruta, foto.tomada) else fechaYHora(foto.tomada), fontSize = 12.sp)
+                            // No se finge una foto que no está (OBS 12)
+                            when {
+                                foto.pendiente && url != null -> Text("Fotografía pendiente de sincronización", fontSize = 11.sp, color = Marca.Naranja)
+                                foto.pendiente -> Text("Fotografía no disponible en este teléfono", fontSize = 11.sp, color = ROJO_OBSERVADO)
+                                url == null -> Text("Fotografía no disponible sin conexión", fontSize = 11.sp, color = TintaSuave)
+                            }
                             foto.caption?.takeIf { it.isNotBlank() && !foto.esBase }?.let {
                                 Text(it, fontSize = 11.sp, color = TintaSuave, maxLines = 2)
                             }
@@ -778,11 +799,20 @@ private fun DialogoNuevaFoto(
     // con el encuadre real, y vuelve sola al disparar
     var camaraAbierta by remember { mutableStateOf(false) }
     if (camaraAbierta) {
+        val est by vm.estado.collectAsState()
+        LaunchedEffect(Unit) { vm.prepararCamara() }
+        val e = est.abierto
         pe.servicon.sigov.ui.evidencia.CamaraSimple(
             titulo = "Foto de intervención",
             destino = { vm.archivoTemporal() },
             alTomar = { f -> toma = f; error = null; camaraAbierta = false },
             alCerrar = { camaraAbierta = false },
+            gps = est.gpsCamara,
+            buscandoGps = est.buscandoGpsCamara,
+            sello = est.selloCamara,
+            identificacion = e?.let {
+                listOfNotNull(it.code, it.name ?: it.tipo, it.tramoCorto, it.progresiva?.let { p -> "Km $p" }).joinToString(" · ")
+            },
         )
     }
     fun tomar() { camaraAbierta = true }

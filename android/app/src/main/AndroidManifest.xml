@@ -18,6 +18,10 @@
     <uses-permission
         android:name="android.permission.READ_EXTERNAL_STORAGE"
         android:maxSdkVersion="32" />
+    <!-- Descargar una foto a la galería: hasta Android 9 pide este permiso -->
+    <uses-permission
+        android:name="android.permission.WRITE_EXTERNAL_STORAGE"
+        android:maxSdkVersion="28" />
 
     <!-- Avisos de PCI por vencer y partes por validar -->
     <uses-permission android:name="android.permission.POST_NOTIFICATIONS" />

@@ -73,6 +73,11 @@ data class EvidenciaEnGaleria(
     val side: String? = null,
     /** Si COVINCA la observó. */
     val revision: String? = null,
+    /** Cuándo llegó a la nube (sincronización) y cuándo se cargó (OBS 6). */
+    @SerialName("created_at") val sincronizadaEn: String? = null,
+    @SerialName("cargada_at") val cargadaEn: String? = null,
+    @SerialName("origen_captura") val origenCaptura: String? = null,
+    @SerialName("sello_aplicado") val selloAplicado: Boolean? = null,
 ) {
     /** Si la foto sigue en el equipo se muestra de ahí: no gasta datos. */
     var rutaLocal: String? = null
@@ -152,14 +157,27 @@ class EvidenciaRepositorio @Inject constructor(
 
         val clientId = UUID.randomUUID().toString()
         val destino = File(carpeta(), clientId + ".webp")
-        val sellar = conMarcaDeAgua && sello.activo
+        // La importada de la galería trae su decisión: sellarla o no (OBS 2)
+        val deGaleria = FotosDeGaleria.tomar(original)
+        val sellar = (deGaleria?.sellar ?: conMarcaDeAgua) && sello.activo
+        val origenCaptura = if (deGaleria != null) "galeria" else "camara_sigov"
 
         // OBS-23: primero el original JPG 4080 × 3060 que pide COVINCA, ya
         // sellado; el WebP liviano sale de él, así el sello es el mismo en
         // los dos. Si el equipo no da para una imagen tan grande (memoria),
         // se sigue como antes: sin original, pero sin perder la foto.
         val archivoOriginal = File(carpeta(), "$clientId-original.jpg")
-        val conOriginal = runCatching {
+        // La importada sin sello se conserva tal cual: el original es el
+        // archivo que se eligió, sin recortar ni reescribir (OBS 2)
+        val originalIntacto = deGaleria != null && !sellar && runCatching {
+            original.inputStream().use { e -> e.read() == 0xFF && e.read() == 0xD8 }
+        }.getOrDefault(false)
+        val conOriginal = if (originalIntacto) runCatching {
+            original.copyTo(archivoOriginal, overwrite = true)
+            val liviano = leerEnderezada(original, 1600) ?: error("sin lectura")
+            destino.outputStream().use { salida -> reducir(liviano, 1600).compress(formatoWebp(), 82, salida) }
+            true
+        }.getOrElse { archivoOriginal.delete(); false } else runCatching {
             // Una toma chica no se amplía a 4080: sería inventar detalle
             val medidaToma = medir(original)
             if (maxOf(medidaToma.outWidth, medidaToma.outHeight) < LADO_MINIMO_ORIGINAL) error("toma chica")
@@ -200,7 +218,7 @@ class EvidenciaRepositorio @Inject constructor(
         // real y de qué trabajo es (OBS-18). Antes de la huella, para que la
         // huella cubra también estos datos.
         escribirMetadatos(destino, registro, punto, tomadaEn, delSello, fase, cuadrilla, pciCodigo)
-        if (conOriginal) {
+        if (conOriginal && !originalIntacto) {
             escribirMetadatos(archivoOriginal, registro, punto, tomadaEn, delSello, fase, cuadrilla, pciCodigo)
         }
 
@@ -272,12 +290,18 @@ class EvidenciaRepositorio @Inject constructor(
                     put("asset_id", activoId)
                     put("estado_activo", estado)
                 }
-                put("taken_at", DateTimeFormatter.ISO_INSTANT.format(tomadaEn.atOffset(ZoneOffset.UTC)))
+                // Captura, carga y sincronización, cada una en su sitio (OBS 6):
+                // la importada se tomó cuando dice su archivo; se cargó ahora
+                put("taken_at", DateTimeFormatter.ISO_INSTANT.format((deGaleria?.fechaOriginal ?: tomadaEn).atOffset(ZoneOffset.UTC)))
+                put("cargada_at", DateTimeFormatter.ISO_INSTANT.format(tomadaEn.atOffset(ZoneOffset.UTC)))
+                put("origen_captura", origenCaptura)
+                put("sello_aplicado", sellar)
+                deGaleria?.fechaOriginal?.let { put("fecha_original", DateTimeFormatter.ISO_INSTANT.format(it.atOffset(ZoneOffset.UTC))) }
                 momentoDelSello?.let {
                     put("stamped_at", DateTimeFormatter.ISO_INSTANT.format(it.atOffset(ZoneOffset.UTC)))
                 }
                 put("sha256", huella)
-                put("watermarked", conMarcaDeAgua)
+                put("watermarked", sellar)
                 put("device_model", (Build.MANUFACTURER + " " + Build.MODEL).take(90))
                 leyenda?.takeIf { it.isNotBlank() }?.let { put("caption", it) }
                 supabase.usuarioActual()?.let { put("created_by", it) }
@@ -295,6 +319,19 @@ class EvidenciaRepositorio @Inject constructor(
         if (conOriginal) encolarOriginal(clientId, registro.servicioId, tomadaEn, archivoOriginal)
 
         evidencia
+    }
+
+    /**
+     * Las fotos de un elemento que siguen en el teléfono, sin confirmar en la
+     * nube: la ficha las muestra desde el archivo local (OBS 12) en vez de
+     * perderlas al reabrirla sin señal.
+     */
+    suspend fun pendientesDeActivo(activoId: String): List<Pair<EvidenciaLocal, String?>> = withContext(Dispatchers.IO) {
+        cola.sinConfirmar("evidences").mapNotNull { envio ->
+            val cuerpo = runCatching { Json.parseToJsonElement(envio.cuerpo).jsonObject }.getOrNull() ?: return@mapNotNull null
+            if (cuerpo["asset_id"]?.jsonPrimitive?.contentOrNull != activoId) return@mapNotNull null
+            partes.evidencia(envio.clientId)?.let { it to cuerpo["estado_activo"]?.jsonPrimitive?.contentOrNull }
+        }
     }
 
     /**

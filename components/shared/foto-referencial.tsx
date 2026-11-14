@@ -172,7 +172,7 @@ export function FotoReferencial({
       <Dialog open={abierta} onOpenChange={setAbierta}>
         <DialogContent className="max-w-4xl">
           <DialogTitle>Foto referencial</DialogTitle>
-          {enlace.data && <ImageViewer src={enlace.data} alt="Foto referencial" className="h-[70vh]" />}
+          {enlace.data && <ImageViewer src={enlace.data} alt="Foto referencial" descargar="SIGOV_foto_referencial.webp" className="h-[70vh]" />}
         </DialogContent>
       </Dialog>
     </div>

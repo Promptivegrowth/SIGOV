@@ -75,6 +75,12 @@ fun VisorConZoom(modelo: Any?, descripcion: String?, alCerrar: () -> Unit) {
                     .background(Color.Black.copy(alpha = 0.45f), RoundedCornerShape(24.dp)),
             ) { Icon(Icons.Outlined.Close, contentDescription = "Cerrar", tint = Color.White) }
 
+            // Descargar esta foto a la galería del teléfono (Luigi, 14/11)
+            BotonDescargarFoto(
+                modelo,
+                Modifier.align(Alignment.TopStart).statusBarsPadding().padding(8.dp),
+            )
+
             Surface(
                 color = Color.Black.copy(alpha = 0.55f),
                 shape = RoundedCornerShape(24.dp),

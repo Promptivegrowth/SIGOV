@@ -19,10 +19,10 @@ import java.util.UUID
 import javax.inject.Inject
 import javax.inject.Singleton
 
-/** Un equipo u otro recurso (herramienta, EPC…) usado en el día. */
+/** Un equipo u otro recurso (herramienta, EPP, EPC…) usado en el día. */
 data class RecursoDelDia(
     val clientId: String,
-    /** «equipo» u «otro» */
+    /** equipo · herramienta · epp · epc · material · otro */
     val tipo: String,
     val codigo: String?,
     val descripcion: String,
@@ -32,7 +32,68 @@ data class RecursoDelDia(
     val enviado: Boolean,
     /** La actividad del parte en que se usó; sin ella, es del día. */
     val registroClientId: String? = null,
+    /** Horas de uso en la actividad (equipos y herramientas). */
+    val horasUso: Double? = null,
+    /** % de participación en la actividad (herramientas). */
+    val participacionPct: Double? = null,
 )
+
+/** Cómo se nombra cada naturaleza de recurso. */
+object TiposDeRecurso {
+    val todos = listOf("equipo", "herramienta", "epp", "epc", "material", "otro")
+    fun nombre(tipo: String) = when (tipo) {
+        "equipo" -> "Equipo"; "herramienta" -> "Herramienta"; "epp" -> "EPP"; "epc" -> "EPC"
+        "material" -> "Material"; else -> "Otro"
+    }
+    /** Lo que existe físicamente: no se suma entre actividades (OBS 3). */
+    fun esFisico(tipo: String) = tipo in setOf("equipo", "herramienta", "epp", "epc")
+}
+
+/** Un recurso del día, consolidado entre las actividades en que se usó. */
+data class RecursoConsolidado(
+    val tipo: String,
+    val codigo: String?,
+    val descripcion: String,
+    val unidad: String?,
+    /** Física (la mayor) para equipos, herramientas y EPP/EPC; usada (suma) para lo demás. */
+    val cantidad: Double?,
+    /** Suma de las horas de uso. */
+    val horas: Double?,
+    val actividades: Int,
+    /** Detalle por actividad, para la observación: «1.5 h + 2 h», «50 %». */
+    val detalle: String?,
+    val observacion: String?,
+    val enviado: Boolean,
+    val clientIds: List<String>,
+)
+
+/**
+ * El consolidado del día (OBS 3, CASOS 16 y 17): el cemento de dos
+ * actividades se suma (2 + 3 = 5 bolsas); la hidrolavadora usada en dos
+ * actividades sigue siendo 1 und., con sus horas sumadas (2 h + 3 h = 5 h).
+ */
+fun consolidarRecursos(recursos: List<RecursoDelDia>): List<RecursoConsolidado> =
+    recursos.groupBy { Triple(it.tipo, it.descripcion.trim().lowercase(), it.unidad?.trim()?.lowercase()) }.values.map { g ->
+        val x = g.first()
+        val cantidades = g.mapNotNull { it.cantidad }
+        val horas = g.mapNotNull { it.horasUso }
+        val pct = g.mapNotNull { it.participacionPct }
+        val detalle = listOfNotNull(
+            horas.takeIf { it.size > 1 }?.joinToString(" + ") { Numeros.tres(it) + " h" },
+            pct.takeIf { it.isNotEmpty() }?.joinToString(" / ") { Numeros.tres(it) + " %" }?.let { "Participación $it" },
+            "EPP/EPC por jornada".takeIf { x.tipo == "epp" || x.tipo == "epc" },
+        ).joinToString(" · ").ifBlank { null }
+        RecursoConsolidado(
+            tipo = x.tipo, codigo = g.firstNotNullOfOrNull { it.codigo }, descripcion = x.descripcion.trim(), unidad = x.unidad,
+            cantidad = cantidades.takeIf { it.isNotEmpty() }?.let { if (TiposDeRecurso.esFisico(x.tipo)) it.max() else it.sum() },
+            horas = horas.takeIf { it.isNotEmpty() }?.sum(),
+            actividades = g.size,
+            detalle = detalle,
+            observacion = g.mapNotNull { it.observacion?.trim()?.ifBlank { null } }.distinct().joinToString(" · ").ifBlank { null },
+            enviado = g.all { it.enviado },
+            clientIds = g.map { it.clientId },
+        )
+    }
 
 /**
  * Los equipos y los otros recursos del reporte diario (secciones IV y V del
@@ -100,9 +161,13 @@ class RecursoRepositorio @Inject constructor(
         cantidad: Double?,
         observacion: String?,
         registro: RegistroLocal? = null,
+        horasUso: Double? = null,
+        participacionPct: Double? = null,
     ) = withContext(Dispatchers.IO) {
         require(descripcion.isNotBlank()) { "Escribe qué equipo o recurso fue." }
-        require(tipo == "equipo" || tipo == "otro")
+        require(tipo in TiposDeRecurso.todos)
+        require(horasUso == null || horasUso in 0.0..24.0) { "Las horas de uso van de 0 a 24." }
+        require(participacionPct == null || participacionPct in 0.0..100.0) { "La participación va de 0 a 100 %." }
         val clientId = UUID.randomUUID().toString()
         // Espera a su actividad (o a su parte) solo si todavía está en la cola;
         // la nube toma el parte de la actividad
@@ -116,7 +181,7 @@ class RecursoRepositorio @Inject constructor(
                 registro?.idEnServidor == null && parteEnCola -> parte.clientId
                 else -> null
             },
-            etiqueta = (if (tipo == "equipo") "Equipo · " else "Recurso · ") + descripcion.trim(),
+            etiqueta = TiposDeRecurso.nombre(tipo) + " · " + descripcion.trim(),
             cuerpo = buildJsonObject {
                 put("service_id", parte.servicioId)
                 if (!parteEnCola) parte.idEnServidor?.let { put("work_order_id", it) }
@@ -128,6 +193,8 @@ class RecursoRepositorio @Inject constructor(
                 unidad?.trim()?.takeIf { it.isNotEmpty() }?.let { put("unidad", it) }
                 cantidad?.let { put("cantidad", it) }
                 observacion?.trim()?.takeIf { it.isNotEmpty() }?.let { put("observacion", it) }
+                horasUso?.let { put("horas_uso", it) }
+                participacionPct?.let { put("participacion_pct", it) }
                 // Solo para mostrarlo sin señal; la nube lo ignora
                 put("_parte", parte.clientId)
             },
@@ -162,6 +229,8 @@ class RecursoRepositorio @Inject constructor(
         observacion = o["observacion"]?.jsonPrimitive?.content?.takeIf { it != "null" },
         enviado = enviado,
         registroClientId = registroClientId,
+        horasUso = o["horas_uso"]?.jsonPrimitive?.contentOrNull?.toDoubleOrNull(),
+        participacionPct = o["participacion_pct"]?.jsonPrimitive?.contentOrNull?.toDoubleOrNull(),
     )
 
     companion object {

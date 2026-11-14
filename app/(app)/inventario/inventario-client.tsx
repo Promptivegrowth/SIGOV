@@ -25,7 +25,7 @@ import { ConfirmDialog } from '@/components/forms/form-dialog'
 import { AssetForm, InterventionForm } from '@/components/inventario/asset-form'
 import { MapaDeInventario } from '@/components/inventario/mapa-de-inventario'
 import { ASSET_CONDITION } from '@/lib/constants'
-import { cn, fmtDate, fmtNumber, parseFecha } from '@/lib/utils'
+import { cn, fmtDate, fmtDateTime, fmtNumber, parseFecha } from '@/lib/utils'
 import { mensajeAmigable } from '@/lib/errores'
 import { codigoDeLado, etiquetaDeLado } from '@/lib/lados'
 
@@ -82,6 +82,18 @@ export function InventarioClient() {
         .order('intervened_on', { ascending: false })
         .limit(20)
       return data ?? []
+    },
+  })
+
+  /** Visitas y última visita del elemento abierto (OBS 10 y 11) */
+  const visita = useQuery({
+    queryKey: ['asset-visitas', detail?.id],
+    enabled: !!detail?.id,
+    queryFn: async () => {
+      const { data } = await sb.from('v_inventario')
+        .select('visitas, ultima_visita_at, ultima_visita_estado, ultima_visita_comentario, ultima_visita_por, ultima_visita_con_hora')
+        .eq('id', detail.id).maybeSingle()
+      return data
     },
   })
 
@@ -352,7 +364,13 @@ export function InventarioClient() {
                   ['Año de instalación', detail.install_year],
                   ['Última inspección', detail.last_inspected_on ? fmtDate(detail.last_inspected_on) : '—'],
                   ['Próxima inspección', detail.next_inspection_on ? fmtDate(detail.next_inspection_on) : '—'],
-                  ['Intervenciones', detail.interventions_count],
+                  // Visitas: días distintos en el elemento, no cada foto (OBS 10)
+                  ['Visitas', visita.data?.visitas ?? '—'],
+                  ['Última visita', visita.data?.ultima_visita_at
+                    ? [visita.data.ultima_visita_con_hora ? fmtDateTime(visita.data.ultima_visita_at) : fmtDate(visita.data.ultima_visita_at), visita.data.ultima_visita_estado === 'observado' ? 'Observado' : 'Conforme', visita.data.ultima_visita_por]
+                        .filter(Boolean).join(' · ')
+                    : '—'],
+                  ['Comentario de la última visita', visita.data?.ultima_visita_comentario ?? '—'],
                   ['Coordenadas', `${detail.lat?.toFixed(5)}, ${detail.lng?.toFixed(5)}`],
                 ].map(([k, v]) => (
                   <div key={String(k)}>

@@ -40,6 +40,28 @@ data class Tramo(
     val calibracion: kotlinx.serialization.json.JsonElement? = null,
 )
 
+/** Un sector del contrato (1.1, 4.2…): se deduce de la progresiva y el tramo (OBS 5). */
+@Serializable
+data class Sector(
+    val id: String,
+    val code: String,
+    @SerialName("section_id") val tramoId: String? = null,
+    @SerialName("prog_start_m") val progresivaInicio: Double,
+    @SerialName("prog_end_m") val progresivaFin: Double,
+    val orden: Int? = null,
+) {
+    companion object {
+        /** El de esa progresiva, como `sector_de` en la nube: el fin cuenta solo en el último. */
+        fun de(sectores: List<Sector>, tramoId: String?, progresiva: Double): Sector? {
+            val delTramo = sectores.filter { tramoId == null || it.tramoId == tramoId }.sortedBy { it.orden ?: 0 }
+            val ultimo = delTramo.maxOfOrNull { it.progresivaFin }
+            return delTramo.firstOrNull { s ->
+                progresiva >= s.progresivaInicio && (progresiva < s.progresivaFin || (progresiva == s.progresivaFin && s.progresivaFin == ultimo))
+            }
+        }
+    }
+}
+
 @Serializable
 data class Unidad(
     val id: String,
@@ -261,3 +283,15 @@ data class ResumenPci(
     val completado: Boolean get() = items > 0 && conformes == items
 }
 
+
+/** Una versión del reporte diario: enviado, observado o validado (CASO 14). */
+@Serializable
+data class VersionDelParte(
+    val version: Int = 1,
+    val accion: String,
+    val nota: String? = null,
+    val at: String,
+    val por: String? = null,
+    val actividades: Int? = null,
+    @SerialName("metrado_total") val metradoTotal: Double? = null,
+)

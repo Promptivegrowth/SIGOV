@@ -212,7 +212,7 @@ export function AssetForm({
     }
 
     const { error } = editing
-      ? await sb.from('road_assets').update(payload).eq('id', editing.id)
+      ? await sb.from('road_assets').update({ ...payload, version: (editing as any).version } as any).eq('id', editing.id)
       : await sb.from('road_assets').insert({ ...payload, created_by: profile.id })
 
     setSaving(false)

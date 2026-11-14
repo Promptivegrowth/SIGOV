@@ -115,6 +115,12 @@ export interface WatermarkData {
   gps: GpsFix
   takenAt: Date
   usuario?: string
+  /** Subida de un archivo sin el sello SIGOV: ya trae el suyo (OBS 2). */
+  sinSello?: boolean
+  /** De dónde vino: la cámara de SIGOV o un archivo del equipo (OBS 6). */
+  origen?: 'camara_sigov' | 'archivo_web'
+  /** La fecha que dice el propio archivo (EXIF), si la trae. */
+  fechaOriginal?: Date | null
 }
 
 export interface SealedPhoto {
@@ -125,6 +131,11 @@ export interface SealedPhoto {
   height: number
   takenAt: Date
   gps: GpsFix
+  origen: 'camara_sigov' | 'archivo_web'
+  selloAplicado: boolean
+  fechaOriginal: Date | null
+  /** Cuándo se cargó al sistema (distinta de la captura en un archivo). */
+  cargadaAt: Date
   /**
    * El original JPG 4080 × 3060 para COVINCA (OBS-23; la medida de las fotos
    * que COVINCA ya acepta), sellado igual. Solo de fotos horizontales.
@@ -176,7 +187,7 @@ export async function sealPhoto(source: Blob | HTMLVideoElement, data: Watermark
       const mCtx = mCanvas.getContext('2d')!
       mCtx.imageSmoothingQuality = 'high'
       mCtx.drawImage(bitmap, (bitmap.width - sw) / 2, (bitmap.height - sh) / 2, sw, sh, 0, 0, mw, mh)
-      drawWatermark(mCtx, mw, mh, data)
+      if (!data.sinSello) drawWatermark(mCtx, mw, mh, data)
       const mBlob = await toBlobSafe(mCanvas, 'image/jpeg', 0.88)
       if (mBlob.type === 'image/jpeg') master = { blob: mBlob, width: mw, height: mh, sha256: await sha256(mBlob) }
     } catch {
@@ -191,7 +202,7 @@ export async function sealPhoto(source: Blob | HTMLVideoElement, data: Watermark
   ctx.drawImage(bitmap, 0, 0, w, h)
   bitmap.close?.()
 
-  drawWatermark(ctx, w, h, data)
+  if (!data.sinSello) drawWatermark(ctx, w, h, data)
 
   const blob = await toBlobSafe(canvas, 'image/webp', 0.82)
 
@@ -209,10 +220,84 @@ export async function sealPhoto(source: Blob | HTMLVideoElement, data: Watermark
     sha256: await sha256(blob),
     width: w,
     height: h,
-    takenAt: data.takenAt,
+    takenAt: data.fechaOriginal ?? data.takenAt,
     gps: data.gps,
     master,
+    origen: data.origen ?? 'camara_sigov',
+    selloAplicado: !data.sinSello,
+    fechaOriginal: data.fechaOriginal ?? null,
+    cargadaAt: new Date(),
   }
+}
+
+/**
+ * Captura, carga y origen de una foto, para el registro de la evidencia
+ * (OBS 6): la de un archivo se tomó cuando dice su EXIF y se cargó ahora.
+ */
+export function camposDeCaptura(p: SealedPhoto) {
+  return {
+    taken_at: p.takenAt.toISOString(),
+    cargada_at: p.cargadaAt.toISOString(),
+    origen_captura: p.origen,
+    sello_aplicado: p.selloAplicado,
+    fecha_original: p.fechaOriginal?.toISOString() ?? null,
+    watermarked: p.selloAplicado,
+  }
+}
+
+/**
+ * La fecha de toma que trae un JPG en su EXIF (DateTimeOriginal o, si no,
+ * DateTime), leída como hora del Perú. Null si no la trae o no es JPG.
+ */
+export async function leerFechaExif(archivo: Blob): Promise<Date | null> {
+  try {
+    const v = new DataView(await archivo.slice(0, 256 * 1024).arrayBuffer())
+    if (v.getUint16(0) !== 0xffd8) return null
+    let p = 2
+    while (p + 4 < v.byteLength) {
+      const marca = v.getUint16(p)
+      const largo = v.getUint16(p + 2)
+      if (marca === 0xffe1 && v.getUint32(p + 4) === 0x45786966) {
+        const tiff = p + 10
+        const le = v.getUint16(tiff) === 0x4949
+        const u16 = (o: number) => v.getUint16(tiff + o, le)
+        const u32 = (o: number) => v.getUint32(tiff + o, le)
+        const texto = (o: number) => {
+          let s = ''
+          for (let i = 0; i < 19; i++) s += String.fromCharCode(v.getUint8(tiff + o + i))
+          return s
+        }
+        const buscar = (ifd: number, tag: number): number | null => {
+          const n = u16(ifd)
+          for (let i = 0; i < n; i++) {
+            const e = ifd + 2 + i * 12
+            if (u16(e) === tag) return e
+          }
+          return null
+        }
+        const ifd0 = u32(4)
+        let fecha: string | null = null
+        const exifPtr = buscar(ifd0, 0x8769)
+        if (exifPtr != null) {
+          const e = buscar(u32(exifPtr + 8), 0x9003)
+          if (e != null) fecha = texto(u32(e + 8))
+        }
+        if (!fecha) {
+          const e = buscar(ifd0, 0x0132)
+          if (e != null) fecha = texto(u32(e + 8))
+        }
+        const m = fecha?.match(/^(\d{4}):(\d{2}):(\d{2}) (\d{2}):(\d{2}):(\d{2})$/)
+        if (!m) return null
+        const d = new Date(`${m[1]}-${m[2]}-${m[3]}T${m[4]}:${m[5]}:${m[6]}-05:00`)
+        return isNaN(d.getTime()) ? null : d
+      }
+      if ((marca & 0xff00) !== 0xff00) return null
+      p += 2 + largo
+    }
+  } catch {
+    /* archivo sin EXIF legible */
+  }
+  return null
 }
 
 /**

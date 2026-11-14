@@ -16,7 +16,7 @@ import { Badge } from '@/components/ui/badge'
 import { EVIDENCE_PHASE } from '@/lib/constants'
 import { cn, bytes, fmtProgresiva } from '@/lib/utils'
 import {
-  sealPhoto, getGpsFix, watchGps, haptic,
+  sealPhoto, getGpsFix, watchGps, haptic, leerFechaExif,
   MAX_ACCURACY_M, type GpsFix, type SealedPhoto,
 } from '@/lib/camera'
 import { toast } from 'sonner'
@@ -78,6 +78,8 @@ export function PhotoUploader({
   const [gpsError, setGpsError] = React.useState<string | null>(null)
   const [busy, setBusy] = React.useState(false)
   const [dragging, setDragging] = React.useState(false)
+  /** null: aún no se decide si estas fotos llevan el sello SIGOV (OBS 2) */
+  const [sellar, setSellar] = React.useState<boolean | null>(null)
   const inputRef = React.useRef<HTMLInputElement>(null)
   const cameraRef = React.useRef<HTMLInputElement>(null)
 
@@ -97,6 +99,7 @@ export function PhotoUploader({
       if (i.sealedUrl) URL.revokeObjectURL(i.sealedUrl)
     })
     setItems([])
+    setSellar(null)
     setGps(null)
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [open])
@@ -139,6 +142,12 @@ export function PhotoUploader({
 
   // ── Sellado de todas las fotos pendientes ──────────────────────────────
   const sealAll = async () => {
+    if (sellar == null) {
+      toast.error('Elige si se aplica el sello SIGOV', {
+        description: 'Indica si estas fotos llevan el sello de fecha y hora o se conservan tal como vienen.',
+      })
+      return
+    }
     const fix = gps ?? (await getGpsFix().catch(() => null))
     if (!fix) {
       toast.error('Sin ubicación', {
@@ -163,6 +172,10 @@ export function PhotoUploader({
           gps: it.exifGps ?? fix,
           takenAt: new Date(it.file.lastModified || Date.now()),
           usuario: context.usuario,
+          // Un archivo del equipo: su fecha es la del EXIF y el sello es opcional (OBS 2 y 6)
+          sinSello: !sellar,
+          origen: 'archivo_web',
+          fechaOriginal: await leerFechaExif(it.file),
         })
         setItems((prev) =>
           prev.map((x) =>
@@ -212,6 +225,12 @@ export function PhotoUploader({
     setItems((prev) =>
       prev.map((x) => (x.id === id ? { ...x, phase, state: x.state === 'listo' ? 'pendiente' : x.state } : x))
     )
+  }
+
+  const elegirSello = (v: boolean) => {
+    setSellar(v)
+    // Cambiar la decisión vuelve a procesar las ya selladas
+    setItems((prev) => prev.map((x) => (x.state === 'listo' ? { ...x, state: 'pendiente' } : x)))
   }
 
   const listos = items.filter((i) => i.state === 'listo').length
@@ -426,17 +445,37 @@ export function PhotoUploader({
           </>
         )}
 
+        {items.length > 0 && (
+          <div className="border-border bg-muted/30 rounded-lg border px-3.5 py-3">
+            <p className="text-[13px] font-medium">¿Desea aplicar el sello SIGOV de fecha y hora a estas fotografías?</p>
+            <p className="text-muted-foreground mt-0.5 text-[11.5px]">
+              Si ya traen fecha, hora o progresiva, consérvalas sin sello para no poner uno encima del otro.
+              La fecha de toma se lee del propio archivo; la de carga queda registrada aparte.
+            </p>
+            <div className="mt-2.5 flex flex-wrap gap-2">
+              <Button size="sm" variant={sellar === true ? 'default' : 'outline'} onClick={() => elegirSello(true)}>
+                <ShieldCheck className="size-3.5" />
+                Sí, aplicar sello SIGOV
+              </Button>
+              <Button size="sm" variant={sellar === false ? 'default' : 'outline'} onClick={() => elegirSello(false)}>
+                <Images className="size-3.5" />
+                No, conservar original
+              </Button>
+            </div>
+          </div>
+        )}
+
         <DialogFooter>
           <span className="text-muted-foreground mr-auto self-center text-[12px]">
             {items.length === 0
               ? 'Ninguna foto seleccionada'
-              : `${items.length} foto${items.length === 1 ? '' : 's'} · ${listos} sellada${listos === 1 ? '' : 's'}`}
+              : `${items.length} foto${items.length === 1 ? '' : 's'} · ${listos} lista${listos === 1 ? '' : 's'}`}
           </span>
           <Button variant="ghost" onClick={() => onOpenChange(false)}>Cancelar</Button>
           {pendientes > 0 ? (
             <Button onClick={sealAll} loading={busy} disabled={!items.length}>
               <ShieldCheck className="size-4" />
-              Procesar y sellar ({pendientes})
+              {sellar === false ? 'Procesar' : 'Procesar y sellar'} ({pendientes})
             </Button>
           ) : (
             <Button onClick={confirm} loading={busy} disabled={!listos}>

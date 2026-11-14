@@ -17,6 +17,10 @@ import androidx.compose.ui.text.input.KeyboardType
 import androidx.compose.ui.unit.dp
 import pe.servicon.sigov.datos.Numeros
 import pe.servicon.sigov.datos.RecursoDelDia
+import pe.servicon.sigov.datos.TiposDeRecurso
+import pe.servicon.sigov.datos.consolidarRecursos
+import androidx.compose.foundation.layout.ExperimentalLayoutApi
+import androidx.compose.foundation.layout.FlowRow
 import pe.servicon.sigov.ui.theme.Marca
 
 /**
@@ -57,16 +61,9 @@ fun RecursosDelDia(
                     modifier = Modifier.padding(horizontal = 16.dp, vertical = 6.dp),
                 )
             }
-            // Acumulado por equipo: el mismo equipo en varias actividades suma
-            recursos.groupBy { Triple(it.tipo, it.descripcion.trim().lowercase(), it.unidad) }.values.map { grupo ->
-                if (grupo.size == 1) grupo.first()
-                else grupo.first().copy(
-                    cantidad = grupo.mapNotNull { it.cantidad }.takeIf { it.isNotEmpty() }?.sum(),
-                    observacion = "Acumulado de ${grupo.size} actividades",
-                    enviado = grupo.all { it.enviado },
-                    clientId = "",
-                )
-            }.forEach { r ->
+            // Consolidado (OBS 3): el equipo es su cantidad física y sus horas
+            // sumadas; el material, la suma de lo usado
+            consolidarRecursos(recursos).forEach { r ->
                 Row(
                     Modifier.fillMaxWidth().padding(horizontal = 16.dp, vertical = 8.dp),
                     verticalAlignment = Alignment.CenterVertically,
@@ -77,7 +74,12 @@ fun RecursosDelDia(
                             style = MaterialTheme.typography.bodyLarge,
                         )
                         Text(
-                            listOfNotNull(if (r.tipo == "equipo") "Equipo" else "Otro recurso", r.observacion).joinToString(" · "),
+                            listOfNotNull(
+                                TiposDeRecurso.nombre(r.tipo),
+                                r.horas?.let { "Uso total: ${Numeros.tres(it)} h" },
+                                "En ${r.actividades} actividades".takeIf { r.actividades > 1 },
+                                r.detalle, r.observacion,
+                            ).joinToString(" · "),
                             style = MaterialTheme.typography.bodySmall,
                             color = MaterialTheme.colorScheme.onSurfaceVariant,
                         )
@@ -91,7 +93,9 @@ fun RecursosDelDia(
                     }
                     if (!r.enviado) {
                         Icon(Icons.Outlined.CloudUpload, contentDescription = "Por enviar", tint = Marca.Naranja, modifier = Modifier.padding(start = 8.dp).size(18.dp))
-                        if (r.clientId.isNotEmpty()) IconButton(onClick = { alQuitar(r) }) { Icon(Icons.Outlined.Close, contentDescription = "Quitar") }
+                        if (r.actividades == 1) recursos.firstOrNull { it.clientId == r.clientIds.first() }?.let { uno ->
+                            IconButton(onClick = { alQuitar(uno) }) { Icon(Icons.Outlined.Close, contentDescription = "Quitar") }
+                        }
                     }
                 }
             }
@@ -99,33 +103,53 @@ fun RecursosDelDia(
     }
 }
 
-/** Anotar un equipo o un recurso. */
+/**
+ * Anotar un equipo, una herramienta, EPP/EPC o un material (OBS 3): el equipo
+ * lleva su cantidad física y las horas de uso en la actividad; la
+ * herramienta, sus horas o su % de participación cuando corresponde.
+ */
+@OptIn(ExperimentalLayoutApi::class)
 @Composable
 fun DialogoRecurso(
     alCerrar: () -> Unit,
-    alGuardar: (tipo: String, codigo: String?, descripcion: String, unidad: String?, cantidad: Double?, observacion: String?) -> Unit,
+    alGuardar: (EquipoDelRegistro) -> Unit,
 ) {
     var tipo by remember { mutableStateOf("equipo") }
     var codigo by remember { mutableStateOf("") }
     var descripcion by remember { mutableStateOf("") }
     var unidad by remember { mutableStateOf("und") }
     var cantidad by remember { mutableStateOf("1") }
+    var horas by remember { mutableStateOf("") }
+    var participacion by remember { mutableStateOf("") }
     var observacion by remember { mutableStateOf("") }
-    val qty = cantidad.replace(',', '.').toDoubleOrNull()
+    fun dec(v: String) = v.replace(',', '.').toDoubleOrNull()
+    val qty = dec(cantidad)
+    val h = dec(horas)
+    val pct = dec(participacion)
+    val conHoras = tipo == "equipo" || tipo == "herramienta"
+    val horasOk = horas.isBlank() || (h != null && h in 0.0..24.0)
+    val pctOk = participacion.isBlank() || (pct != null && pct in 0.0..100.0)
+    fun soloNumero(v: String) = v.filter { it.isDigit() || it == '.' || it == ',' }
 
     AlertDialog(
         onDismissRequest = alCerrar,
         title = { Text("Equipo o recurso") },
         text = {
             Column(verticalArrangement = Arrangement.spacedBy(10.dp)) {
-                Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                    FilterChip(selected = tipo == "equipo", onClick = { tipo = "equipo" }, label = { Text("Equipo") })
-                    FilterChip(selected = tipo == "otro", onClick = { tipo = "otro" }, label = { Text("Herramienta, EPC…") })
+                FlowRow(horizontalArrangement = Arrangement.spacedBy(6.dp)) {
+                    TiposDeRecurso.todos.forEach { t ->
+                        FilterChip(selected = tipo == t, onClick = { tipo = t }, label = { Text(TiposDeRecurso.nombre(t)) })
+                    }
                 }
                 OutlinedTextField(
                     value = descripcion, onValueChange = { descripcion = it },
                     label = { Text(if (tipo == "equipo") "Descripción del equipo" else "Descripción") },
-                    placeholder = { Text(if (tipo == "equipo") "Compactadora tipo plancha" else "Conos de seguridad") },
+                    placeholder = {
+                        Text(when (tipo) {
+                            "equipo" -> "Hidrolavadora"; "herramienta" -> "Carretilla"; "epp" -> "Casco, chaleco"
+                            "epc" -> "Conos de seguridad"; "material" -> "Cemento"; else -> "Descripción"
+                        })
+                    },
                     singleLine = true, modifier = Modifier.fillMaxWidth(),
                 )
                 Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
@@ -141,13 +165,37 @@ fun DialogoRecurso(
                     )
                     OutlinedTextField(
                         value = cantidad,
-                        onValueChange = { v -> cantidad = v.filter { it.isDigit() || it == '.' || it == ',' } },
-                        label = { Text("Cant.") }, singleLine = true,
+                        onValueChange = { cantidad = soloNumero(it) },
+                        label = { Text(if (TiposDeRecurso.esFisico(tipo)) "Cant. física" else "Cant.") }, singleLine = true,
                         keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Decimal),
                         modifier = Modifier.weight(1f),
                     )
                 }
-                if (tipo == "otro") {
+                if (conHoras) {
+                    Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                        OutlinedTextField(
+                            value = horas, onValueChange = { horas = soloNumero(it) },
+                            label = { Text("Horas de uso") }, singleLine = true, isError = !horasOk,
+                            supportingText = { Text(if (horasOk) "En esta actividad" else "De 0 a 24 h") },
+                            keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Decimal),
+                            modifier = Modifier.weight(1f),
+                        )
+                        if (tipo == "herramienta") {
+                            OutlinedTextField(
+                                value = participacion, onValueChange = { participacion = soloNumero(it) },
+                                label = { Text("% particip.") }, singleLine = true, isError = !pctOk,
+                                supportingText = { Text(if (pctOk) "Opcional" else "De 0 a 100") },
+                                keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Decimal),
+                                modifier = Modifier.weight(1f),
+                            )
+                        }
+                    }
+                }
+                if (tipo == "epp" || tipo == "epc") {
+                    Text("Se controla por jornada: en el consolidado del día cuenta una vez, no por actividad.",
+                        style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
+                }
+                if (tipo != "equipo") {
                     OutlinedTextField(
                         value = observacion, onValueChange = { observacion = it },
                         label = { Text("Observación") }, singleLine = true, modifier = Modifier.fillMaxWidth(),
@@ -157,15 +205,19 @@ fun DialogoRecurso(
         },
         confirmButton = {
             TextButton(
-                enabled = descripcion.isNotBlank() && (cantidad.isBlank() || qty != null),
+                enabled = descripcion.isNotBlank() && (cantidad.isBlank() || qty != null) && horasOk && pctOk,
                 onClick = {
                     alGuardar(
-                        tipo,
-                        codigo.takeIf { tipo == "equipo" },
-                        descripcion,
-                        unidad,
-                        qty,
-                        observacion.takeIf { tipo == "otro" },
+                        EquipoDelRegistro(
+                            tipo = tipo,
+                            codigo = codigo.takeIf { tipo == "equipo" },
+                            descripcion = descripcion,
+                            unidad = unidad,
+                            cantidad = qty,
+                            observacion = observacion.takeIf { tipo != "equipo" },
+                            horasUso = h.takeIf { conHoras },
+                            participacionPct = pct.takeIf { tipo == "herramienta" },
+                        )
                     )
                 },
             ) { Text("Guardar") }

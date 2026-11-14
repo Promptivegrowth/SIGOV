@@ -30,6 +30,69 @@ type Datos = {
   registros: any[]
   materiales: { registro: string | null; codigo: string; nombre: string; cantidad: number; unidad: string }[]
   recursos: any[]
+  /** Lo que falta para la versión oficial: con algo, sale como borrador (OBS 4, CASO 15). */
+  incompleto: string[]
+}
+
+const TIPO_RECURSO: Record<string, string> = {
+  equipo: 'Equipo', herramienta: 'Herramienta', epp: 'EPP', epc: 'EPC', material: 'Material', otro: 'Otro',
+}
+/** Lo que existe físicamente: no se suma entre actividades (OBS 3). */
+const FISICO = new Set(['equipo', 'herramienta', 'epp', 'epc'])
+
+export type RecursoConsolidado = {
+  tipo: string
+  codigo: string | null
+  descripcion: string
+  unidad: string | null
+  cantidad: number | null
+  horas: number | null
+  actividades: number
+  detalle: string | null
+  observacion: string | null
+}
+
+/**
+ * El consolidado del día (OBS 3, CASOS 16 y 17): el material de dos
+ * actividades se suma; la hidrolavadora usada en dos actividades sigue
+ * siendo 1 und. (la mayor cantidad física), con sus horas de uso sumadas.
+ */
+export function consolidarRecursos(recursos: any[]): RecursoConsolidado[] {
+  const grupos = new Map<string, any[]>()
+  for (const r of recursos) {
+    const k = [r.tipo, String(r.descripcion ?? '').trim().toLowerCase(), String(r.unidad ?? '').trim().toLowerCase()].join('|')
+    grupos.set(k, [...(grupos.get(k) ?? []), r])
+  }
+  return [...grupos.values()].map((g) => {
+    const x = g[0]
+    const cant = g.map((r) => r.cantidad).filter((v) => v != null).map(Number)
+    const horas = g.map((r) => r.horas_uso).filter((v) => v != null).map(Number)
+    const pct = g.map((r) => r.participacion_pct).filter((v) => v != null).map(Number)
+    const detalle = [
+      horas.length > 1 ? horas.map((h) => `${cifra(h)} h`).join(' + ') : null,
+      pct.length ? `Participación ${pct.map((p) => `${cifra(p)} %`).join(' / ')}` : null,
+      x.tipo === 'epp' || x.tipo === 'epc' ? 'EPP/EPC por jornada' : null,
+    ].filter(Boolean).join(' · ')
+    return {
+      tipo: x.tipo,
+      codigo: g.find((r) => r.codigo)?.codigo ?? null,
+      descripcion: String(x.descripcion ?? '').trim(),
+      unidad: x.unidad ?? null,
+      cantidad: cant.length ? (FISICO.has(x.tipo) ? Math.max(...cant) : cant.reduce((a, b) => a + b, 0)) : null,
+      horas: horas.length ? horas.reduce((a, b) => a + b, 0) : null,
+      actividades: g.length,
+      detalle: detalle || null,
+      observacion: [...new Set(g.map((r) => r.observacion?.trim()).filter(Boolean))].join(' · ') || null,
+    }
+  })
+}
+
+/** Qué le falta a un parte para ser la versión oficial. */
+export function faltantesDelParte(registros: any[]): string[] {
+  if (!registros.length) return ['sin actividades registradas']
+  return registros
+    .filter((r) => !(Number(r.quantity) > 0))
+    .map((r) => `«${r.activity_name ?? 'Actividad'}» sin metrado`)
 }
 
 /** Trae todo lo que el FOR:001 necesita de un parte. */
@@ -45,7 +108,7 @@ export async function datosFor001(sb: SupabaseClient<any>, parteId: string): Pro
     sb.from('movimientos_cuadrilla')
       .select('qty, work_entry_id, supplies(code, name, units(symbol))')
       .eq('crew_id', parte.crew_id).eq('occurred_on', parte.work_date).eq('tipo', 'consumo').is('deleted_at', null),
-    sb.from('parte_recursos').select('tipo, codigo, descripcion, unidad, cantidad, observacion')
+    sb.from('parte_recursos').select('tipo, codigo, descripcion, unidad, cantidad, observacion, horas_uso, participacion_pct')
       .eq('work_order_id', parteId).is('deleted_at', null).order('created_at'),
   ])
   const ids = [crew.data?.leader_id, crew.data?.supervisor_id, parte.reviewed_by].filter(Boolean) as string[]
@@ -82,6 +145,7 @@ export async function datosFor001(sb: SupabaseClient<any>, parteId: string): Pro
       unidad: m.supplies?.units?.symbol ?? '',
     })),
     recursos: recursos.data ?? [],
+    incompleto: faltantesDelParte(registros.data ?? []),
   }
 }
 
@@ -159,7 +223,22 @@ export async function for001Pdf(datos: Datos, logo?: ArrayBuffer | null) {
     doc.line(M, M + 17, W - M, M + 17)
   }
 
+  /** «BORRADOR – REPORTE INCOMPLETO», cruzado sobre la hoja y en una banda (OBS 4). */
+  const borrador = () => {
+    if (!datos.incompleto.length) return
+    doc.setFont('helvetica', 'bold')
+    doc.setFontSize(46)
+    doc.setTextColor(244, 199, 199)
+    doc.text('BORRADOR – REPORTE INCOMPLETO', W / 2, H / 2 + 20, { align: 'center', angle: 24 })
+    doc.setFillColor(253, 236, 236)
+    doc.rect(M, H - 15.5, W - 2 * M, 5.5, 'F')
+    doc.setFontSize(7)
+    doc.setTextColor(185, 28, 28)
+    doc.text(('BORRADOR – REPORTE INCOMPLETO · No es la versión oficial: ' + datos.incompleto.join('; ')).slice(0, 190), M + 2, H - 11.8)
+  }
+
   const pie = (pagina: number) => {
+    borrador()
     doc.setDrawColor(...VERDE)
     doc.setLineWidth(0.4)
     doc.line(M, H - 9, W - M, H - 9)
@@ -310,10 +389,13 @@ export async function for001Pdf(datos: Datos, logo?: ArrayBuffer | null) {
     const r = m.registro ? nombreDe.get(m.registro) : null
     return [r?.activity_code ?? '', r ? String(r.activity_numero ?? '') : '', r?.activity_name ?? '', m.nombre, cifra(m.cantidad, 3), m.unidad]
   })
-  const equipos = datos.recursos.filter((x) => x.tipo === 'equipo')
-    .map((x, i) => [x.codigo ?? '', String(i + 1), x.descripcion, x.unidad ?? '', cifra(x.cantidad)])
-  const otros = datos.recursos.filter((x) => x.tipo === 'otro')
-    .map((x) => [x.descripcion, x.unidad ?? '', cifra(x.cantidad), x.observacion ?? ''])
+  // Consolidado (OBS 3): la plantilla no tiene columna de horas, van con la descripción
+  const consolidado = consolidarRecursos(datos.recursos)
+  const equipos = consolidado.filter((x) => x.tipo === 'equipo')
+    .map((x, i) => [x.codigo ?? '', String(i + 1), x.descripcion + (x.horas != null ? ` · ${cifra(x.horas)} h` : ''), x.unidad ?? '', cifra(x.cantidad)])
+  const otros = consolidado.filter((x) => x.tipo !== 'equipo')
+    .map((x) => [x.descripcion, x.unidad ?? '', cifra(x.cantidad),
+      [TIPO_RECURSO[x.tipo] ?? 'Otro', x.horas != null ? `Uso: ${cifra(x.horas)} h` : null, x.detalle, x.observacion].filter(Boolean).join(' · ')])
   const relleno = (f: string[][], n: number, ancho: number) => { while (f.length < n) f.push(Array(ancho).fill('')); return f }
   const estilo = {
     theme: 'grid' as const,
@@ -425,6 +507,7 @@ export async function for001Excel(datos: Datos, nombre: string) {
 
   const origenes = new Set(registros.map((r) => r.origen))
   const ficha: [string, string][] = [
+    ...(datos.incompleto.length ? [['ESTADO', 'BORRADOR – REPORTE INCOMPLETO: ' + datos.incompleto.join('; ')] as [string, string]] : []),
     ['FECHA', fecha(parte.work_date)],
     ['PROCESO', ([['MR', 'programacion'], ['PCI', 'pci'], ['AT. EMERG.', 'emergencia'], ['OTROS', 'no_programado']] as const)
       .filter(([, k]) => origenes.has(k)).map(([n]) => n).join(', ')],
@@ -453,11 +536,13 @@ export async function for001Excel(datos: Datos, nombre: string) {
       const r = m.registro ? porId.get(m.registro) : null
       return [r?.activity_code ?? '', r?.activity_numero ?? '', r?.activity_name ?? '', m.nombre, m.cantidad, m.unidad]
     }), [['FECHA', fecha(parte.work_date)]])
-  hoja('IV Equipos', [['CÓDIGO', 12], ['N°', 5], ['DESCRIPCIÓN EQUIPO', 34], ['UND', 7], ['CANT', 9]],
-    datos.recursos.filter((x) => x.tipo === 'equipo').map((x, i) => [x.codigo ?? '', i + 1, x.descripcion, x.unidad ?? '', x.cantidad ?? '']),
+  const consolidado = consolidarRecursos(datos.recursos)
+  hoja('IV Equipos', [['CÓDIGO', 12], ['N°', 5], ['DESCRIPCIÓN EQUIPO', 34], ['UND', 7], ['CANT. FÍSICA', 11], ['HORAS DE USO', 11], ['DETALLE', 30]],
+    consolidado.filter((x) => x.tipo === 'equipo').map((x, i) => [x.codigo ?? '', i + 1, x.descripcion, x.unidad ?? '', x.cantidad ?? '', x.horas ?? '', x.detalle ?? '']),
     [['FECHA', fecha(parte.work_date)]])
-  hoja('V Otros recursos', [['DESCRIPCIÓN', 34], ['UND', 7], ['CANT', 9], ['OBSERVACIONES', 34]],
-    datos.recursos.filter((x) => x.tipo === 'otro').map((x) => [x.descripcion, x.unidad ?? '', x.cantidad ?? '', x.observacion ?? '']),
+  hoja('V Otros recursos', [['TIPO', 12], ['DESCRIPCIÓN', 34], ['UND', 7], ['CANT', 9], ['HORAS DE USO', 11], ['OBSERVACIONES', 34]],
+    consolidado.filter((x) => x.tipo !== 'equipo').map((x) => [TIPO_RECURSO[x.tipo] ?? 'Otro', x.descripcion, x.unidad ?? '', x.cantidad ?? '', x.horas ?? '',
+      [x.detalle, x.observacion].filter(Boolean).join(' · ')]),
     [['FECHA', fecha(parte.work_date)]])
 
   const buf = await wb.xlsx.writeBuffer()

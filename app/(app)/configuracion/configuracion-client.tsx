@@ -147,6 +147,19 @@ export function ConfiguracionClient() {
         .filter((m: any) => m.role === 'jefe_cuadrilla')
         .map((m: any) => ({ value: m.profiles.id, label: m.profiles.full_name })),
     },
+    // El supervisor responsable: cambia el ámbito y queda en el historial (CASO 37)
+    ...(can.admin ? [
+      {
+        name: 'supervisor_id', label: 'Supervisor responsable', type: 'select',
+        options: (members.data ?? [])
+          .filter((m: any) => m.role === 'supervisor')
+          .map((m: any) => ({ value: m.profiles.id, label: m.profiles.full_name })),
+      },
+      {
+        name: 'motivo_supervisor', label: 'Motivo del cambio de supervisor', type: 'text',
+        placeholder: 'Vacaciones de Supervisor 01', hint: 'Solo si cambias de supervisor: queda en el historial.',
+      },
+    ] as FormField[] : []),
     // Como figuran en el control del PCI (ENCARGADO): así el importador
     // reconoce la cuadrilla. El subjefe entra con la cuenta del jefe.
     { name: 'jefe_nombre', label: 'Jefe en el control PCI', type: 'text', placeholder: 'José Ramos' },
@@ -240,10 +253,16 @@ export function ConfiguracionClient() {
       vehicle: v.vehicle || null, plate: v.plate || null,
       is_active: !!v.is_active,
     }
-    const { error } = crewForm.row
-      ? await sb.from('crews').update(payload).eq('id', crewForm.row.id)
-      : await sb.from('crews').insert({ ...payload, created_by: profile.id })
+    const { data: creada, error } = crewForm.row
+      ? await sb.from('crews').update({ ...payload, version: crewForm.row.version } as any).eq('id', crewForm.row.id).select('id').single()
+      : await sb.from('crews').insert({ ...payload, created_by: profile.id }).select('id').single()
     if (error) { toast.error(mensajeAmigable(error)); return }
+    // El supervisor, con su motivo y en el historial (CASO 37)
+    const nuevoSup = v.supervisor_id || null
+    if (can.admin && creada && nuevoSup !== (crewForm.row?.supervisor_id ?? null)) {
+      const { error: e2 } = await sb.rpc('cambiar_supervisor', { p_crew: creada.id, p_supervisor: nuevoSup, p_motivo: v.motivo_supervisor?.trim() || null } as any)
+      if (e2) { toast.error(mensajeAmigable(e2)); return }
+    }
     toast.success(crewForm.row ? 'Cuadrilla actualizada' : 'Cuadrilla creada')
     refresh()
   }
@@ -931,6 +950,7 @@ export function ConfiguracionClient() {
         fields={crewFields}
         initial={crewForm.row}
         onSubmit={saveCrew}
+        footerNote={crewForm.row ? <HistorialDeSupervisor crewId={crewForm.row.id} /> : undefined}
       />
 
       <FormDialog
@@ -1128,6 +1148,30 @@ function StatusRow({ ok, label, hint }: { ok: boolean; label: string; hint: stri
         <p className="text-[12.5px] font-medium">{label}</p>
         <p className="text-muted-foreground text-[11px]">{hint}</p>
       </div>
+    </div>
+  )
+}
+
+/** Quién supervisó la cuadrilla y desde cuándo (CASO 37). */
+function HistorialDeSupervisor({ crewId }: { crewId: string }) {
+  const sb = React.useMemo(() => createClient(), [])
+  const q = useQuery({
+    queryKey: ['crew-supervisores', crewId],
+    queryFn: async () => {
+      const { data } = await sb.rpc('crew_historial_supervisor', { p_crew: crewId } as any)
+      return ((data ?? []) as unknown) as { at: string; anterior: string | null; nuevo: string | null; por: string | null; motivo: string | null }[]
+    },
+  })
+  if (!q.data?.length) return null
+  return (
+    <div className="space-y-1 text-[11.5px]">
+      <p className="font-semibold">Historial de supervisor</p>
+      {q.data.slice(0, 5).map((h, i) => (
+        <p key={i} className="text-muted-foreground">
+          {fmtDate(h.at)} · {h.anterior ? `${h.anterior} → ` : ''}{h.nuevo ?? 'Sin supervisor'}
+          {h.por ? ` · por ${h.por}` : ''}{h.motivo ? ` · ${h.motivo}` : ''}
+        </p>
+      ))}
     </div>
   )
 }

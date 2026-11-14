@@ -39,6 +39,15 @@ fun CamaraSimple(
     alCerrar: () -> Unit,
     /** Un formato en papel se fotografía en vertical (REV3-OBS-45). */
     soloHorizontal: Boolean = true,
+    /**
+     * Como las cámaras de PCI y Programación (OBS 13): la ubicación con su
+     * precisión, lo que se imprimirá y qué se fotografía (código, tramo,
+     * progresiva). Sin ellos, la cámara simple de siempre (formatos).
+     */
+    gps: String? = null,
+    buscandoGps: Boolean = false,
+    sello: pe.servicon.sigov.datos.Sello? = null,
+    identificacion: String? = null,
 ) {
     val contexto = LocalContext.current
     val permiso = rememberPermissionState(android.Manifest.permission.CAMERA)
@@ -58,7 +67,32 @@ fun CamaraSimple(
             if (permiso.status.isGranted) {
                 VisorDeCamara(onListo = { disparo = it })
                 BotonDeFlash(disparo, Modifier.align(Alignment.TopEnd).statusBarsPadding().padding(top = 60.dp, end = 12.dp))
+                if (gps != null || buscandoGps) {
+                    SelloEnVivo(
+                        buscando = buscandoGps, coordenadas = gps,
+                        modifier = Modifier.align(Alignment.TopStart).statusBarsPadding().padding(top = 112.dp, start = 12.dp),
+                    )
+                }
+                identificacion?.let {
+                    Text(
+                        it, color = Color.White, style = MaterialTheme.typography.labelMedium,
+                        modifier = Modifier.align(Alignment.TopStart).statusBarsPadding().padding(top = 162.dp, start = 12.dp, end = 12.dp)
+                            .background(Color.Black.copy(alpha = 0.55f), RoundedCornerShape(10.dp)).padding(horizontal = 10.dp, vertical = 6.dp),
+                    )
+                }
+                if (sello?.activo == true) {
+                    SelloPrevio(
+                        fechaEditada = null, extras = sello.extras,
+                        modifier = Modifier.align(Alignment.BottomEnd).padding(end = 12.dp, bottom = 118.dp),
+                    )
+                }
                 if (!horizontal) AvisoDeGirar(Modifier.align(Alignment.Center))
+                // También una foto que ya existe en la galería (OBS 2)
+                BotonDeGaleria(
+                    destino = destino,
+                    alElegir = alTomar,
+                    modifier = Modifier.align(Alignment.BottomStart).padding(start = 20.dp, bottom = 44.dp),
+                )
                 Disparador(
                     habilitado = disparo != null && !tomando && horizontal,
                     guardando = tomando,

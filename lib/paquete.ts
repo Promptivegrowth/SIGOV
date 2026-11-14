@@ -12,8 +12,8 @@
  * índice es lo que convierte un ZIP en un entregable revisable.
  */
 import type { SupabaseClient } from '@supabase/supabase-js'
-import { reportePdf, type ReportMeta } from './reports'
-import { fmtDate } from './utils'
+import { reportePdf, nombreCliente, type ReportMeta } from './reports'
+import { fmtDate, fmtProgresiva } from './utils'
 import { codigoDeLado } from './lados'
 
 /** Las carpetas del paquete, en el orden en que el cliente las revisa. */
@@ -142,6 +142,27 @@ export async function armarPaquete(opciones: {
   const zip = new JSZip()
   const indice: FilaIndice[] = []
 
+  // Los filtros, con sus nombres: van en la portada del índice (OBS 9)
+  const nombres = async (tabla: string, campo: string, ids: (string | null | undefined)[]) => {
+    const v = ids.filter(Boolean) as string[]
+    if (!v.length) return [] as string[]
+    const { data } = await sb.from(tabla).select(campo).in('id', v)
+    return ((data ?? []) as any[]).map((x) => String(x[campo] ?? '')).filter(Boolean)
+  }
+  const [nTramos, nCuadrilla, nActividad, nPci] = await Promise.all([
+    nombres('road_sections', 'code', f.tramoIds ?? []),
+    nombres('crews', 'name', [f.cuadrillaId]),
+    nombres('activities_catalog', 'name', [f.actividadId]),
+    nombres('pcis', 'code', [f.pciId]),
+  ])
+  const filtrosLegibles = [
+    nTramos.length && `Tramo ${nTramos.join(', ')}`,
+    (f.progDesde != null || f.progHasta != null) && `Progresivas ${f.progDesde != null ? fmtProgresiva(f.progDesde) : '…'} a ${f.progHasta != null ? fmtProgresiva(f.progHasta) : '…'}`,
+    nCuadrilla[0] && `Cuadrilla ${nCuadrilla[0]}`,
+    nActividad[0] && `Actividad ${nActividad[0]}`,
+    nPci[0] && nPci[0],
+  ].filter(Boolean).join(' · ')
+
   const meta: ReportMeta = {
     titulo: '',
     servicio: servicioNombre,
@@ -150,6 +171,9 @@ export async function armarPaquete(opciones: {
     periodo: `${fmtDate(desde)} al ${fmtDate(hasta)}`,
     generadoPor,
     organizacion,
+    filtros: filtrosLegibles || undefined,
+    cuadrilla: nCuadrilla[0] ?? null,
+    tramo: nTramos.join(', ') || null,
   }
 
   const avisar = (paso: string, hechos: number, total: number) =>
@@ -693,9 +717,10 @@ export async function construirIndice(
 
   const datos: [string, string][] = [
     ['Servicio', meta.servicio],
-    ['Cliente', meta.cliente ?? '—'],
+    ['Cliente', nombreCliente(meta.cliente)],
     ['Contrato', meta.contrato ?? '—'],
     ['Periodo', `${fmtDate(rango.desde)} al ${fmtDate(rango.hasta)}`],
+    ['Filtros aplicados', meta.filtros || 'Sin filtros'],
     ['Emitido por', meta.organizacion ?? 'Grupo Servicon V&D EIRL'],
     ['Generado por', meta.generadoPor],
     ['Fecha de generación', new Date().toLocaleString('es-PE')],

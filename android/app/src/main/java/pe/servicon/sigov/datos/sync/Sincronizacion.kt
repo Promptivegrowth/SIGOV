@@ -317,6 +317,21 @@ class TrabajadorSincronizacion @AssistedInject constructor(
                     return@runCatching
                 }
 
+                // Primero el archivo y después el registro (OBS 12): si la
+                // subida se corta, la nube no queda apuntando a una foto que no
+                // existe (la ficha mostraba una miniatura en blanco). Subir de
+                // nuevo en un reintento no duplica.
+                archivos.pendiente(envio.clientId)?.let { archivo ->
+                    val fichero = File(archivo.rutaLocal)
+                    if (fichero.exists()) {
+                        supabase.storage.from(archivo.bucket)
+                            .upload(archivo.rutaDestino, fichero.readBytes(), upsert = true)
+                        archivos.marcarSubido(archivo.clientId)
+                    } else if (envio.tabla == "evidences") {
+                        error("La foto ya no está en el teléfono: vuelve a tomarla.")
+                    }
+                }
+
                 // Si la tabla tiene llave natural, primero se mira si ese
                 // registro ya existe en la nube. Existir no es un error: el
                 // parte del día es uno solo, lo abra quien lo abra.
@@ -352,15 +367,6 @@ class TrabajadorSincronizacion @AssistedInject constructor(
                 )
                 yaSubidos += envio.clientId
 
-                // Y detrás del registro, su archivo
-                archivos.pendiente(envio.clientId)?.let { archivo ->
-                    val fichero = File(archivo.rutaLocal)
-                    if (fichero.exists()) {
-                        supabase.storage.from(archivo.bucket)
-                            .upload(archivo.rutaDestino, fichero.readBytes(), upsert = true)
-                        archivos.marcarSubido(archivo.clientId)
-                    }
-                }
             }.onFailure { fallo ->
                 fallaron++
                 val intentos = envio.intentos + 1

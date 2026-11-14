@@ -19,9 +19,68 @@ export interface ReportMeta {
   /** Datos de la organizacion emisora, para la portada */
   organizacion?: string
   ruc?: string
+  /** Lo que el usuario filtró, legible: «Observadas · Señalización · AQP-01» (OBS 9). */
+  filtros?: string
+  cuadrilla?: string | null
+  supervisor?: string | null
+  tramo?: string | null
+  /** Cantidad de registros; si falta, se cuentan las filas de la tabla. */
+  registros?: number
 }
 
 export const ORG_DEFAULT = { nombre: 'Grupo Servicon V&D EIRL', ruc: '' }
+
+/** «COVINCA» → «COVINCA S.A.»: como lo nombra el contrato (OBS 9). */
+export function nombreCliente(c?: string | null) {
+  const v = (c ?? '').trim()
+  if (!v || /^covinca$/i.test(v)) return 'COVINCA S.A.'
+  return v
+}
+
+const ahora = () =>
+  new Intl.DateTimeFormat('es-PE', { dateStyle: 'short', timeStyle: 'short', timeZone: 'America/Lima' }).format(new Date())
+
+/** Las líneas de contexto que lleva toda exportación (OBS 9). */
+function contexto(meta: ReportMeta, filas?: number) {
+  const n = meta.registros ?? filas
+  return {
+    generado: `Generado el ${ahora()} por ${meta.generadoPor || '—'}${n != null ? ` · ${fmtNumber(n)} registro${n === 1 ? '' : 's'}` : ''}`,
+    filtros: meta.filtros ? `Filtros: ${meta.filtros}` : null,
+    alcance: [
+      meta.cuadrilla && `Cuadrilla: ${meta.cuadrilla}`,
+      meta.supervisor && `Supervisor: ${meta.supervisor}`,
+      meta.tramo && `Tramo: ${meta.tramo}`,
+    ].filter(Boolean).join(' · ') || null,
+  }
+}
+
+/** El logo de SERVICON, una vez por sesión, listo para jsPDF y ExcelJS. */
+let logoCache: Promise<{ data: string; w: number; h: number } | null> | null = null
+/** El ya cargado: las páginas de fotos y firmas lo usan sin esperarlo. */
+let logoListo: { data: string; w: number; h: number } | null = null
+function logoServicon() {
+  if (!logoCache) {
+    logoCache = (async () => {
+      try {
+        const blob = await fetch('/marca/logo-servicon.png').then((r) => (r.ok ? r.blob() : Promise.reject()))
+        const data = await new Promise<string>((res, rej) => {
+          const fr = new FileReader()
+          fr.onload = () => res(String(fr.result))
+          fr.onerror = rej
+          fr.readAsDataURL(blob)
+        })
+        const bmp = await createImageBitmap(blob)
+        const out = { data, w: bmp.width, h: bmp.height }
+        bmp.close?.()
+        logoListo = out
+        return out
+      } catch {
+        return null
+      }
+    })()
+  }
+  return logoCache
+}
 
 /* Los colores del logotipo de Grupo Servicon, que es lo que el cliente ve
    impreso: azul #072D70 y naranja #F96414. */
@@ -161,7 +220,7 @@ function cover(doc: any, meta: ReportMeta, kpis?: { label: string; value: string
   doc.addPage()
 }
 
-function header(doc: any, meta: ReportMeta) {
+function header(doc: any, meta: ReportMeta, logo?: { data: string; w: number; h: number } | null, filas?: number) {
   const W = doc.internal.pageSize.getWidth()
 
   doc.setFillColor(BRAND.r, BRAND.g, BRAND.b)
@@ -169,14 +228,25 @@ function header(doc: any, meta: ReportMeta) {
   doc.setFillColor(ACCENT.r, ACCENT.g, ACCENT.b)
   doc.rect(0, 30, W, 1.4, 'F')
 
+  // El logo de SERVICON en su recuadro blanco, y SIGOV al lado (OBS 9)
+  logo = logo ?? logoListo
+  let x0 = 14
+  if (logo) {
+    const alto = 14
+    const ancho = Math.min(40, (logo.w * alto) / logo.h)
+    doc.setFillColor(255, 255, 255)
+    doc.roundedRect(10, 6, ancho + 8, alto + 4, 1.5, 1.5, 'F')
+    doc.addImage(logo.data, 'PNG', 14, 8, ancho, alto)
+    x0 = 10 + ancho + 8 + 5
+  }
   doc.setTextColor(255, 255, 255)
   doc.setFont('helvetica', 'bold')
   doc.setFontSize(16)
-  doc.text('SIGOV', 14, 13)
+  doc.text('SIGOV', x0, 13)
   doc.setFont('helvetica', 'normal')
   doc.setFontSize(7.5)
   doc.setTextColor(255, 255, 255)
-  doc.text('SISTEMA INTEGRAL DE GESTION OPERATIVA VIAL', 14, 18.5)
+  doc.text('SISTEMA INTEGRAL DE GESTION OPERATIVA VIAL', x0, 18.5)
 
   doc.setFontSize(11)
   doc.setFont('helvetica', 'bold')
@@ -193,34 +263,40 @@ function header(doc: any, meta: ReportMeta) {
   doc.setFont('helvetica', 'bold')
   doc.text(meta.servicio, 14, y)
   doc.setFont('helvetica', 'normal')
-  if (meta.cliente) {
-    y += 4.5
-    doc.text(`Cliente: ${meta.cliente}`, 14, y)
-  }
+  y += 4.5
+  doc.text(`Cliente: ${nombreCliente(meta.cliente)}`, 14, y)
   if (meta.subtitulo) {
     y += 4.5
     doc.text(meta.subtitulo, 14, y)
   }
+  const c = contexto(meta, filas)
+  doc.setFontSize(7.8)
+  doc.setTextColor(95, 100, 115)
+  for (const l of [c.generado, c.filtros, c.alcance].filter(Boolean) as string[]) {
+    y += 4.2
+    doc.text(doc.splitTextToSize(l, W - 28).slice(0, 1), 14, y)
+  }
   return y + 6
 }
 
-function footer(doc: any, meta: ReportMeta) {
+function footer(doc: any, meta: ReportMeta, conPortada = true) {
   const pages = doc.internal.getNumberOfPages()
   const W = doc.internal.pageSize.getWidth()
   const H = doc.internal.pageSize.getHeight()
-  // La portada no lleva pie ni numeracion
-  for (let i = 2; i <= pages; i++) {
+  // La portada no lleva pie ni numeracion; sin portada, todas lo llevan
+  const desde = conPortada ? 2 : 1
+  for (let i = desde; i <= pages; i++) {
     doc.setPage(i)
     doc.setDrawColor(215, 218, 226)
     doc.line(14, H - 14, W - 14, H - 14)
     doc.setFontSize(7)
     doc.setTextColor(120, 124, 136)
     doc.text(
-      `Generado por ${meta.generadoPor} · ${new Date().toLocaleString('es-PE')} · SIGOV`,
+      `${meta.titulo} · ${nombreCliente(meta.cliente)} · Generado por ${meta.generadoPor} · ${ahora()} · SIGOV`,
       14,
       H - 9
     )
-    doc.text(`Pagina ${i - 1} de ${pages - 1}`, W - 14, H - 9, { align: 'right' })
+    doc.text(`Página ${i - desde + 1} de ${pages - desde + 1}`, W - 14, H - 9, { align: 'right' })
   }
 }
 
@@ -426,7 +502,8 @@ export async function reportePdf(
 
   if (options?.cover !== false) cover(doc, meta, options?.kpis)
 
-  let y = header(doc, meta)
+  const logo = await logoServicon()
+  let y = header(doc, meta, logo, rows.length)
 
   // KPIs en tarjetas
   if (options?.kpis?.length) {
@@ -511,7 +588,7 @@ export async function reportePdf(
 
   // El pie se pinta al final, con el documento ya completo: si se numerara
   // antes, el panel fotográfico saldría con la numeración equivocada.
-  footer(doc, meta)
+  footer(doc, meta, options?.cover !== false)
 
   return doc
 }
@@ -563,6 +640,12 @@ export async function descargarExcel(
   t1.alignment = { horizontal: 'center' }
   t1.fill = { type: 'pattern', pattern: 'solid', fgColor: { argb: 'FF072D70' } }
 
+  const logo = await logoServicon()
+  if (logo) {
+    const id = wb.addImage({ base64: logo.data, extension: 'png' })
+    const alto = 46
+    portada.addImage(id, { tl: { col: 1.02, row: 0.1 }, ext: { width: (logo.w * alto) / logo.h, height: alto }, editAs: 'absolute' })
+  }
   portada.addRow([])
   const tt = portada.addRow(['', meta.titulo])
   tt.getCell(2).font = { bold: true, size: 16, color: { argb: 'FF141A30' } }
@@ -572,15 +655,21 @@ export async function descargarExcel(
   }
   portada.addRow([])
 
-  const ficha: [string, string][] = [
+  const total = meta.registros ?? sheets.reduce((s, x) => s + x.rows.length, 0)
+  const ficha: [string, string][] = ([
     ['Servicio', meta.servicio],
-    ['Cliente', meta.cliente || '-'],
+    ['Cliente', nombreCliente(meta.cliente)],
     ['Contrato', meta.contrato || '-'],
     ['Periodo', meta.periodo],
+    ['Filtros aplicados', meta.filtros || 'Sin filtros'],
+    ['Cantidad de registros', fmtNumber(total)],
+    ['Cuadrilla', meta.cuadrilla || ''],
+    ['Supervisor', meta.supervisor || ''],
+    ['Tramo / subtramo', meta.tramo || ''],
     ['Emitido por', meta.organizacion || ORG_DEFAULT.nombre],
     ['Elaborado por', meta.generadoPor],
-    ['Fecha de emision', new Date().toLocaleString('es-PE')],
-  ]
+    ['Fecha y hora de emisión', ahora()],
+  ] as [string, string][]).filter(([k, v]) => v || !['Cuadrilla', 'Supervisor', 'Tramo / subtramo'].includes(k))
   for (const [k, v] of ficha) {
     const r = portada.addRow([k.toUpperCase(), v])
     r.getCell(1).font = { size: 8.5, bold: true, color: { argb: 'FF787E8E' } }
@@ -606,8 +695,14 @@ export async function descargarExcel(
     ws.getRow(1).height = 22
 
     ws.mergeCells('A2', `${String.fromCharCode(64 + Math.max(s.columns.length, 3))}2`)
-    ws.getCell('A2').value = `${meta.servicio}${meta.cliente ? ` · ${meta.cliente}` : ''} · ${meta.periodo}`
+    const c = contexto(meta, s.rows.length)
+    ws.getCell('A2').value = [
+      `${meta.servicio} · Cliente: ${nombreCliente(meta.cliente)} · ${meta.periodo}`,
+      c.generado, c.filtros, c.alcance,
+    ].filter(Boolean).join(' · ')
     ws.getCell('A2').font = { size: 9, color: { argb: 'FF6B7280' } }
+    ws.getCell('A2').alignment = { wrapText: true, vertical: 'top' }
+    ws.getRow(2).height = 26
 
     ws.addRow([])
 
@@ -631,16 +726,26 @@ export async function descargarExcel(
     })
 
     // Las fotos dentro de su celda; la fila crece para mostrarlas
+    // La foto queda anclada a su celda (twoCellAnchor, «mover y cambiar de
+    // tamaño con las celdas»): acompaña a su fila al ordenar y al filtrar (OBS 9)
     const col = s.fotos ? s.columns.findIndex((c) => c.key === s.fotos!.key) : -1
     if (col >= 0) {
       const imgs = await Promise.all(s.fotos!.urls.map((u) => (u ? imagenParaPdf(u, 420) : Promise.resolve(null))))
+      const anchoPx = (s.columns[col].width ?? 18) * 7 + 5
+      const altoPx = 90 * (96 / 72)
       imgs.forEach((img, i) => {
         const fila = ws.getRow(5 + i)
         if (!img) { fila.getCell(col + 1).value = 'Sin foto'; return }
         fila.height = 90
-        const k = Math.min(150 / img.w, 112 / img.h)
+        const k = Math.min((anchoPx * 0.9) / img.w, (altoPx * 0.9) / img.h)
+        const fw = (img.w * k) / anchoPx
+        const fh = (img.h * k) / altoPx
         const id = wb.addImage({ base64: img.data, extension: 'jpeg' })
-        ws.addImage(id, { tl: { col: col + 0.05, row: 4 + i + 0.05 }, ext: { width: img.w * k, height: img.h * k }, editAs: 'oneCell' })
+        ws.addImage(id, {
+          tl: { col: col + (1 - fw) / 2, row: 4 + i + (1 - fh) / 2 },
+          br: { col: col + (1 + fw) / 2, row: 4 + i + (1 + fh) / 2 },
+          editAs: 'twoCell',
+        })
       })
     }
 

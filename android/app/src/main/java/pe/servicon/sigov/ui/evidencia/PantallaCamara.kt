@@ -173,6 +173,24 @@ fun PantallaCamara(
 
                     if (!horizontal) AvisoDeGirar(Modifier.align(Alignment.Center))
 
+                    // Una foto que ya existe: de otro celular o para subsanar
+                    // (OBS 2, CASO 9). Se elige la etapa antes de guardarla.
+                    BotonDeGaleria(
+                        destino = { vm.archivoTemporal() },
+                        alElegir = { vm.sellar(it) },
+                        modifier = Modifier.align(Alignment.BottomStart).padding(start = 20.dp, bottom = 36.dp),
+                        extra = {
+                            Row(horizontalArrangement = Arrangement.spacedBy(6.dp)) {
+                                estado.fases.forEach { f ->
+                                    androidx.compose.material3.FilterChip(
+                                        selected = estado.fase == f, onClick = { vm.cambiarFase(f) },
+                                        label = { Text(f.etiqueta) },
+                                    )
+                                }
+                            }
+                        },
+                    )
+
                     Disparador(
                         habilitado = disparo != null && !estado.guardando && horizontal,
                         guardando = estado.guardando,
@@ -342,7 +360,7 @@ internal fun VisorDeCamara(onListo: (ImageCapture) -> Unit) {
 
 /** Lo que va a quedar impreso en la foto, visible antes de disparar. */
 @Composable
-private fun SelloEnVivo(buscando: Boolean, coordenadas: String?, modifier: Modifier = Modifier) {
+internal fun SelloEnVivo(buscando: Boolean, coordenadas: String?, modifier: Modifier = Modifier) {
     Surface(
         color = Color.Black.copy(alpha = 0.55f),
         shape = RoundedCornerShape(24.dp),
@@ -570,7 +588,7 @@ private fun relojDelSello(editada: FechaEditada?): LocalDateTime {
 
 /** La fecha y hora tal como saldrán, abajo a la derecha de la foto. */
 @Composable
-private fun SelloPrevio(fechaEditada: FechaEditada?, extras: List<String>, modifier: Modifier = Modifier) {
+internal fun SelloPrevio(fechaEditada: FechaEditada?, extras: List<String>, modifier: Modifier = Modifier) {
     val momento = relojDelSello(fechaEditada)
     Column(modifier, horizontalAlignment = Alignment.End) {
         if (extras.isNotEmpty()) {

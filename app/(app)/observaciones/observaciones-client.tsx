@@ -191,7 +191,7 @@ export function ObservacionesClient() {
 
   const cambiarEstado = async (o: any, nuevo: Estado, nota?: string) => {
     const { error } = await sb.from('observaciones_campo')
-      .update({ estado: nuevo, ...(nota != null ? { nota_atencion: nota || null } : {}) } as any).eq('id', o.id)
+      .update({ estado: nuevo, ...(nota != null ? { nota_atencion: nota || null } : {}), version: o.version } as any).eq('id', o.id)
     if (error) { toast.error(mensajeAmigable(error)); return }
     toast.success(nuevo === 'atendida' ? 'Observación atendida' : nuevo === 'programada' ? 'Observación programada' : 'Observación pendiente otra vez')
     refrescar()
@@ -213,6 +213,9 @@ export function ObservacionesClient() {
     contrato: (service as any).contract_code,
     periodo: `Al ${fmtDate(new Date())}`,
     generadoPor: profile.full_name ?? '',
+    filtros: filtroLegible || undefined,
+    registros: visibles.length,
+    tramo: tramo !== 'todos' ? tramos.find(([id]) => id === tramo)?.[1] ?? null : null,
   })
 
   /** La primera foto de cada una, firmada: va en la última columna. */
@@ -244,6 +247,8 @@ export function ObservacionesClient() {
     estado: ESTADOS[o.estado as Estado]?.label ?? o.estado,
     fecha: fmtDate(o.observado_on),
     registro: [o.created_by_name, o.crew_name].filter(Boolean).join(' · '),
+    // En el PDF: cuándo y quién lo registró (OBS 9)
+    registro_pdf: [fmtDate(o.observado_on), o.created_by_name].filter(Boolean).join('\n'),
     foto: '',
   }))
 
@@ -289,11 +294,12 @@ export function ObservacionesClient() {
         { header: 'ID', key: 'codigo', width: 17 },
         { header: 'Sector', key: 'sector', width: 13 },
         { header: 'Tramo', key: 'tramo', width: 15 },
-        { header: 'Prog. inicial', key: 'prog_ini', width: 18 },
-        { header: 'Prog. final', key: 'prog_fin', width: 18 },
-        { header: 'Lado', key: 'lado', width: 16 },
-        { header: 'Tipo de actividad', key: 'tipo', width: 25 },
-        { header: 'Actividad', key: 'actividad_cod', width: 40 },
+        { header: 'Prog. inicial', key: 'prog_ini', width: 15 },
+        { header: 'Prog. final', key: 'prog_fin', width: 15 },
+        { header: 'Lado', key: 'lado', width: 12 },
+        { header: 'Tipo de actividad', key: 'tipo', width: 22 },
+        { header: 'Actividad', key: 'actividad_cod', width: 34 },
+        { header: 'Registro / registrado por', key: 'registro_pdf', width: 26 },
         // La observación se lleva el ancho que sobra de la hoja horizontal
         { header: 'Observación', key: 'observacion' },
         { header: 'Metrado', key: 'metrado_txt', width: 15 },
@@ -665,7 +671,7 @@ function Ficha({ o, delPunto = [], alAbrirOtra, puedeGestionar, puedeEditar, alC
       {grande && (
         <Dialog open onOpenChange={(v) => !v && setGrande(null)}>
           <SheetContent side="right" className="w-full max-w-4xl p-2">
-            <ImageViewer src={grande} alt="Foto de la observación" className="h-[90vh]" />
+            <ImageViewer src={grande} alt="Foto de la observación" descargar="SIGOV_observacion.webp" className="h-[90vh]" />
           </SheetContent>
         </Dialog>
       )}
