@@ -51,6 +51,7 @@ fun BarraInferior(
     actual: SeccionInferior,
     alIr: (SeccionInferior) -> Unit,
     pendientes: Int = 0,
+    secciones: List<SeccionInferior> = SeccionInferior.entries,
 ) {
     Surface(color = Color.White, shadowElevation = 12.dp) {
         Column {
@@ -61,7 +62,7 @@ fun BarraInferior(
                     .navigationBarsPadding()
                     .height(64.dp),
             ) {
-                SeccionInferior.entries.forEach { seccion ->
+                secciones.forEach { seccion ->
                     val activa = seccion == actual
                     Column(
                         Modifier

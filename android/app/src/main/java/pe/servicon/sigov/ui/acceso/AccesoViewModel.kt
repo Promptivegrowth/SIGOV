@@ -43,13 +43,9 @@ class AccesoViewModel @Inject constructor(
 
         viewModelScope.launch {
             runCatching {
+                // El Visor COVINCA también entra (Elvis, 17/11): consulta fotos,
+                // PCI e inventario y da su conformidad, sin registrar nada
                 sesion.entrar(s.correo, s.contrasena)
-                // El Visor COVINCA revisa en la plataforma web: la app es
-                // para el personal de campo de SERVICON (matriz, 14/11)
-                if (sesion.perfil()?.role == "visor") {
-                    sesion.salir()
-                    error("VISOR")
-                }
             }
                 .onSuccess { _estado.update { e -> e.copy(cargando = false, entro = true) } }
                 .onFailure { fallo ->

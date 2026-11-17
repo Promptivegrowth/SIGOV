@@ -122,7 +122,7 @@ fun PantallaInventario(
         avisos = avisos,
         acciones = {
             // Lo que no está en el inventario, en su propio apartado (Elvis, 14/10)
-            TextButton(onClick = alVerObservaciones) { Text("Observaciones", fontSize = 12.5.sp) }
+            if (!estado.soloConsulta) TextButton(onClick = alVerObservaciones) { Text("Observaciones", fontSize = 12.5.sp) }
             IconButton(onClick = vm::refrescar) {
                 Icon(Icons.Outlined.Refresh, "Actualizar", tint = Marca.Azul)
             }
@@ -677,10 +677,10 @@ private fun FichaDelElemento(
                             colorTitulo = if (foto.estado == "observado") ROJO_OBSERVADO else Marca.Azul,
                             alTocar = { ampliar(foto.ruta) },
                             // Una foto de intervención tomada por error se quita (Elvis, 26/10)
-                            alQuitar = { quitando = foto },
+                            alQuitar = if (estado.soloConsulta) null else ({ quitando = foto }),
                         )
                     }
-                    item {
+                    if (!estado.soloConsulta) item {
                         Surface(
                             onClick = { registrando = true },
                             shape = RoundedCornerShape(10.dp),

@@ -122,6 +122,8 @@ private fun coincide(item: ItemPci, busqueda: String): Boolean {
 
 data class EstadoPci(
     val cargando: Boolean = true,
+    /** Visor COVINCA: ve todas las cuadrillas y revisa; no ejecuta. */
+    val soloConsulta: Boolean = false,
     val cuadrilla: String = "",
     /** Los PCI activos de la cuadrilla (el supervisor puede pausar alguno). */
     val pcis: List<ResumenPci> = emptyList(),
@@ -356,6 +358,24 @@ class PciViewModel @Inject constructor(
         }
     }
 
+    private var it_cargoAntes = false
+
+    /** «Conforme COVINCA» u «Observar» (Visor COVINCA): con señal, y se recarga. */
+    fun revisar(item: ItemPci, conforme: Boolean, nota: String?) {
+        _estado.update { it.copy(trabajando = item.id, aviso = null, error = null) }
+        viewModelScope.launch {
+            runCatching { campo.revisarItemPci(item.id, conforme, nota) }
+                .onSuccess {
+                    _estado.update {
+                        it.copy(trabajando = null, ficha = null,
+                            aviso = if (conforme) "Ítem ${item.numero ?: ""}: Conforme COVINCA." else "Ítem ${item.numero ?: ""} observado: la cuadrilla recibe el aviso.")
+                    }
+                    cargar(silencioso = true)
+                }
+                .onFailure { fallo -> _estado.update { it.copy(trabajando = null, error = fallo.enCristiano()) } }
+        }
+    }
+
     /** El metrado es opcional: el ítem queda conforme por sus fotos. */
     fun registrarMetrado(item: ItemPci, cantidad: Double, motivoExceso: String? = null) {
         _estado.update { it.copy(trabajando = item.id, aviso = null, error = null) }
@@ -386,16 +406,20 @@ class PciViewModel @Inject constructor(
         if (!silencioso) _estado.update { it.copy(cargando = it.items.isEmpty(), error = null) }
         viewModelScope.launch {
             runCatching {
-                val cuadrilla = sesion.cuadrilla()
+                // El Visor COVINCA ve los PCI de todas las cuadrillas (Elvis, 17/11)
+                val esVisor = sesion.perfil()?.role == "visor"
+                val cuadrilla = if (esVisor) null else sesion.cuadrilla()
                     ?: error("Tu usuario no dirige ninguna cuadrilla. Avisa al coordinador.")
-                val pcis = campo.pciDeLaCuadrilla(cuadrilla.servicioId, cuadrilla.id).filter { it.activo }
+                val servicioId = cuadrilla?.servicioId ?: sesion.servicioId()
+                    ?: error("Tu usuario no está asignado a ningún contrato.")
+                val pcis = campo.pciDeLaCuadrilla(servicioId, cuadrilla?.id).filter { esVisor || it.activo }
                 // Las fotos del teléfono que aún no suben cuentan igual: el
                 // capataz las tomó y no tiene por qué volver a tomarlas
                 val locales = runCatching { partes.fotosPciPorEnviar() }.getOrDefault(emptyList())
                 fun local(id: String, fase: String) = locales.filter { it.pciItemId == id && it.fase == fase }.sumOf { it.cuantas }
                 val activos = pcis.map { it.pciId }.toSet()
-                val items = campo.itemsPciDeLaCuadrilla(cuadrilla.servicioId, cuadrilla.id)
-                    .filter { it.activoParaCuadrilla && it.pciId in activos }
+                val items = campo.itemsPciDeLaCuadrilla(servicioId, cuadrilla?.id)
+                    .filter { (esVisor || it.activoParaCuadrilla) && it.pciId in activos }
                     .map { i ->
                         i.copy(
                             fotosAntes = i.fotosAntes + local(i.id, "antes"),
@@ -409,13 +433,18 @@ class PciViewModel @Inject constructor(
                     itemPedido = null
                     items.firstOrNull { it.id == id }?.let { i -> viewModelScope.launch { abrirFicha(i) } }
                 }
+                val primeraVez = !it_cargoAntes
+                it_cargoAntes = true
                 _estado.update {
                     it.copy(
                         cargando = false,
+                        soloConsulta = esVisor,
+                        // COVINCA abre en lo que espera su revisión
+                        estado = if (esVisor && primeraVez) Estado.CONFORMES else it.estado,
                         pcis = pcis,
                         items = items,
                         fotosPorEnviar = porEnviar,
-                        cuadrilla = cuadrilla.name,
+                        cuadrilla = cuadrilla?.name ?: "Todas las cuadrillas",
                         // Si el PCI abierto se pausó, se vuelve a la vista general
                         abierto = it.abierto?.takeIf { id -> id in activos },
                     )

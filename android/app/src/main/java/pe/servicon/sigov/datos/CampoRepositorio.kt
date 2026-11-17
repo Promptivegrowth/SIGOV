@@ -372,6 +372,18 @@ class CampoRepositorio @Inject constructor(
      * cero: la foto del antes se toma antes de saber cuánto se va a hacer.
      * Todo se guarda en el equipo y sale con la cola, como el resto.
      */
+    /**
+     * «Conforme COVINCA» u «Observar» un ítem (Visor COVINCA, CASOS 8 y 39).
+     * Necesita señal: la conformidad no se deja en cola.
+     */
+    suspend fun revisarItemPci(itemId: String, conforme: Boolean, nota: String?) = withContext(Dispatchers.IO) {
+        supabase.postgrest.rpc("pci_validar", buildJsonObject {
+            put("p_item", itemId)
+            put("p_conforme", conforme)
+            nota?.trim()?.takeIf { it.isNotEmpty() }?.let { put("p_nota", it) }
+        })
+    }
+
     suspend fun registroDelItemPci(servicioId: String, cuadrillaId: String?, item: ItemPci): RegistroLocal {
         val parte = abrirParteDeHoy(servicioId, cuadrillaId)
         partes.registroDePci(parte.clientId, item.id)?.let { return it }

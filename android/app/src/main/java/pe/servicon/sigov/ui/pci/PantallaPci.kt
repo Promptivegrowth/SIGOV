@@ -14,6 +14,7 @@ import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.outlined.ReportProblem
 import androidx.compose.material.icons.outlined.CheckCircle
 import androidx.compose.material.icons.outlined.ChevronRight
 import androidx.compose.material.icons.outlined.Close
@@ -154,17 +155,19 @@ fun PantallaPci(
                 alTomarFoto = { fase -> vm.tomarFoto(item, fase) },
                 alVerReferencia = { vm.verReferencia(item) },
                 alRegistrarMetrado = { cantidad, motivo -> vm.registrarMetrado(item, cantidad, motivo) },
+                soloConsulta = estado.soloConsulta,
+                alRevisar = { conforme, nota -> vm.revisar(item, conforme, nota) },
             )
         }
     }
 
     val pci = estado.pciAbierto
     ArmazonDeApartado(
-        titulo = pci?.let { codigoCortoDePci(it.code) } ?: "PCI · Pendientes de la cuadrilla",
+        titulo = pci?.let { codigoCortoDePci(it.code) } ?: if (estado.soloConsulta) "PCI · Consulta COVINCA" else "PCI · Pendientes de la cuadrilla",
         seccion = "Apartado 4.5",
         alVolver = { if (estado.abierto != null) vm.cerrarPci() else alVolver() },
         cuadrilla = estado.cuadrilla.ifBlank { null },
-        ayuda = if (pci == null) "Los ítems de tus PCI activos, ${estado.orden.etiqueta.lowercase()}."
+        ayuda = if (pci == null) (if (estado.soloConsulta) "Los ítems de los PCI de todas las cuadrillas, " else "Los ítems de tus PCI activos, ") + "${estado.orden.etiqueta.lowercase()}."
                 else "${pci.items} ítems de tu cuadrilla en este PCI.",
         avisos = avisos,
     ) { relleno ->
@@ -329,7 +332,8 @@ private fun ListaDeItems(estado: EstadoPci, vm: PciViewModel, alRegistrarFotos: 
             Box(Modifier.padding(horizontal = 16.dp)) {
                 TarjetaDeItem(
                     item = item,
-                    conBotones = true,
+                    // El visor no ejecuta: abre la ficha para revisar
+                    conBotones = !estado.soloConsulta,
                     conPci = general,
                     ocupado = estado.trabajando == item.id,
                     alTocar = { vm.abrirFicha(item) },
@@ -552,8 +556,11 @@ private fun FichaDelItem(
     alTomarFoto: (Fase) -> Unit,
     alVerReferencia: () -> Unit,
     alRegistrarMetrado: (Double, String?) -> Unit,
+    soloConsulta: Boolean = false,
+    alRevisar: (Boolean, String?) -> Unit = { _, _ -> },
 ) {
     var texto by remember(item.id) { mutableStateOf(if (metrado > 0) numero(metrado) else "") }
+    var notaCovinca by remember(item.id) { mutableStateOf("") }
     var excesoPendiente by remember(item.id) { mutableStateOf<Double?>(null) }
     var motivoExceso by remember(item.id) { mutableStateOf("") }
     val cantidad = texto.replace(',', '.').toDoubleOrNull()
@@ -638,7 +645,12 @@ private fun FichaDelItem(
 
         if (item.estaLevantado) {
             Text(
-                if (item.esConforme) "Conforme COVINCA: sus fotos ya no se cambian."
+                if (soloConsulta) {
+                    if (item.esConforme) "Conforme COVINCA."
+                    else if (item.validadoServicon) "Validado por SERVICON: revisa las fotos y da tu conformidad u observa."
+                    else "Culminado por la cuadrilla con sus tres fotos: revisa las fotos y da tu conformidad u observa."
+                }
+                else if (item.esConforme) "Conforme COVINCA: sus fotos ya no se cambian."
                 else if (item.validadoServicon) "Validado por SERVICON: espera la conformidad de COVINCA. Si una foto salió mal, quítala y toma otra."
                 else "Culminado con sus tres fotos: lo valida SERVICON y da la conformidad COVINCA. Si una foto salió mal, quítala y toma otra.",
                 style = MaterialTheme.typography.bodyMedium,
@@ -647,7 +659,36 @@ private fun FichaDelItem(
         }
 
         // Las fotos que ya se tomaron, por etapa (Elvis, 21/10)
-        FotosTomadas(fotos, cargandoFotos, quitables = !item.esConforme, alVer = alVerFoto, alQuitar = alQuitarFoto)
+        FotosTomadas(fotos, cargandoFotos, quitables = !item.esConforme && !soloConsulta, alVer = alVerFoto, alQuitar = alQuitarFoto)
+
+        // Visor COVINCA: consulta y su revisión, sin ejecutar (Elvis, 17/11)
+        if (soloConsulta) {
+            Text(
+                "Metrado ejecutado: " + (if (metrado > 0) numero(metrado) + (item.unidad?.let { " $it" } ?: "") else "sin registrar") +
+                    (item.quantity?.let { " · solicitado " + numero(it) + (item.unidad?.let { u -> " $u" } ?: "") } ?: ""),
+                style = MaterialTheme.typography.bodyMedium,
+            )
+            if (item.estaLevantado && !item.esConforme) {
+                Text("Revisión COVINCA", style = MaterialTheme.typography.titleSmall)
+                OutlinedTextField(
+                    value = notaCovinca, onValueChange = { notaCovinca = it.take(500) },
+                    label = { Text("Observación (obligatoria para observar)") },
+                    minLines = 2, shape = RoundedCornerShape(12.dp), modifier = Modifier.fillMaxWidth(),
+                )
+                Boton("Conforme COVINCA", Icons.Outlined.CheckCircle, Marca.VerdeBandera, ocupado, true, Modifier.fillMaxWidth()) {
+                    alRevisar(true, null)
+                }
+                Boton("Observar", Icons.Outlined.ReportProblem, Semaforo.Vencido, ocupado, notaCovinca.isNotBlank(), Modifier.fillMaxWidth()) {
+                    alRevisar(false, notaCovinca)
+                }
+            } else if (!item.esConforme) {
+                Text(
+                    "La cuadrilla aún no lo culmina: podrás revisarlo cuando tenga sus fotos de antes, durante y después.",
+                    style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant,
+                )
+            }
+            return@Column
+        }
         if (item.esConforme) return@Column
 
         // Un solo botón: la cámara ya trae Antes, Durante y Después, y abre en

@@ -97,6 +97,14 @@ class MainActivity : ComponentActivity() {
                 }
                 val barra: BarraViewModel = hiltViewModel()
                 val pendientes by barra.pendientes.collectAsStateWithLifecycle(0)
+                // Trabajos es de la cuadrilla; el Visor COVINCA tiene sus fotos
+                // y los demás roles, solo Inicio y Perfil (Elvis, 17/11)
+                val rol by androidx.compose.runtime.produceState<String?>(null, ruta) { value = barra.rol() }
+                val secciones = when (rol) {
+                    null, "jefe_cuadrilla" -> SeccionInferior.entries
+                    "visor" -> listOf(SeccionInferior.INICIO, SeccionInferior.FOTOS, SeccionInferior.PERFIL)
+                    else -> listOf(SeccionInferior.INICIO, SeccionInferior.PERFIL)
+                }
 
                 // La barra inferior solo aparece en las cuatro secciones que
                 // dibujó Elvis; en las pantallas de detalle estorba, porque
@@ -109,6 +117,7 @@ class MainActivity : ComponentActivity() {
                             BarraInferior(
                                 actual = seccion,
                                 pendientes = pendientes,
+                                secciones = secciones,
                                 alIr = { destino ->
                                     if (destino != seccion) {
                                         nav.navigate(destino.ruta) {

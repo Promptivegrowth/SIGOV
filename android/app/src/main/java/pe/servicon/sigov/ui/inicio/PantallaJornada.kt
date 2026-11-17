@@ -161,9 +161,12 @@ fun PantallaJornada(
             // cuadrilla en el teléfono: registran observaciones e inspeccionan el
             // inventario; lo demás está en la plataforma web (matriz, 14/11)
             val esJefe = estado.rol == "jefe_cuadrilla"
+            val esVisor = estado.rol == "visor"
             if (!esJefe && !estado.cargando) {
                 Text(
-                    "Desde el teléfono registras observaciones de campo y revisas el inventario vial. " +
+                    if (esVisor) "Consulta COVINCA: los PCI de todas las cuadrillas con su conformidad, las fotos de antes, durante y después " +
+                        "y el inventario vial. Solo visualización; también puedes revisar y descargar desde la plataforma web."
+                    else "Desde el teléfono registras observaciones de campo y revisas el inventario vial. " +
                         "La programación, los PCI y las revisiones se gestionan en la plataforma web.",
                     style = MaterialTheme.typography.bodyMedium,
                     color = TintaSuave,
@@ -291,8 +294,23 @@ fun PantallaJornada(
                 Apartado(Icons.Outlined.Sync, "Sincronización", "Registros pendientes", azul, estado.pendientes, alAbrirSincronizacion),
                 Apartado(Icons.Outlined.Settings, "Configuración", "Sello y envío de fotos", verde, 0, alAbrirConfiguracion),
             ).filterNotNull()
-                // Sin cuadrilla, lo que se hace en campo con otro rol
-                .filter { a -> esJefe || a.titulo in setOf("Inventario vial", "Observaciones", "Sincronización", "Configuración") }
+                // Sin cuadrilla, lo que se hace en campo con otro rol; el Visor
+                // COVINCA consulta y revisa (Elvis, 17/11)
+                .filter { a ->
+                    when {
+                        esJefe -> true
+                        esVisor -> a.titulo in setOf("Ítems PCI", "Fotos / Evidencias", "Inventario vial")
+                        else -> a.titulo in setOf("Inventario vial", "Observaciones", "Sincronización", "Configuración")
+                    }
+                }
+                .map { a ->
+                    if (!esVisor) a else when (a.titulo) {
+                        "Ítems PCI" -> a.copy(detalle = "Consulta y conformidad", insignia = 0)
+                        "Fotos / Evidencias" -> a.copy(detalle = "Antes, durante y después")
+                        "Inventario vial" -> a.copy(detalle = "Consulta del inventario")
+                        else -> a
+                    }
+                }
 
             apartados.chunked(2).forEach { pareja ->
                 // La fila se mide por el azulejo más alto y los dos se

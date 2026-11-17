@@ -40,6 +40,8 @@ enum class Semaforo(val clave: String, val etiqueta: String) {
 data class TramoDelInventario(val id: String, val etiqueta: String, val nombre: String?, val orden: Int)
 
 data class EstadoInventario(
+    /** Visor COVINCA: consulta del inventario, sin registrar fotos (Elvis, 17/11). */
+    val soloConsulta: Boolean = false,
     /** La cámara del inventario, como la de PCI (OBS 13): GPS y sello. */
     val gpsCamara: String? = null,
     val buscandoGpsCamara: Boolean = false,
@@ -130,6 +132,8 @@ class InventarioViewModel @Inject constructor(
             runCatching {
                 val servicioId = sesion.servicioId()
                     ?: error("Tu usuario no está asignado a ningún contrato.")
+                val esVisor = sesion.perfil()?.role == "visor"
+                _estado.update { it.copy(soloConsulta = esVisor) }
 
                 // Primero lo guardado, para que la pantalla abra al instante
                 val guardado = inventario.elementos(servicioId, refrescar = false)

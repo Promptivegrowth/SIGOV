@@ -73,7 +73,8 @@ fun PantallaGaleria(
         seccion = "Apartado 4.13",
         alVolver = alVolver,
         cuadrilla = estado.cuadrilla.ifBlank { null },
-        ayuda = "Las fotos de tu cuadrilla: de la programación y de tus PCI. Solo visualización.",
+        ayuda = if (estado.cuadrilla == "Todas las cuadrillas") "Las fotos de todas las cuadrillas: de la programación y de los PCI. Solo visualización."
+            else "Las fotos de tu cuadrilla: de la programación y de tus PCI. Solo visualización.",
     ) { relleno ->
         LazyColumn(
             Modifier.fillMaxSize().padding(relleno),

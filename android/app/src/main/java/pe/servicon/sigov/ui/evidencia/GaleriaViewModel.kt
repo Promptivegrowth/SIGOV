@@ -176,16 +176,18 @@ class GaleriaViewModel @Inject constructor(
         _estado.update { it.copy(cargando = true, error = null) }
         viewModelScope.launch {
             runCatching {
-                val cuadrilla = sesion.cuadrilla()
+                // El Visor COVINCA ve las fotos de todas las cuadrillas (Elvis, 17/11)
+                val esVisor = sesion.perfil()?.role == "visor"
+                val cuadrilla = if (esVisor) null else sesion.cuadrilla()
                     ?: error("Tu usuario no dirige ninguna cuadrilla. Avisa al coordinador.")
                 val fotos = evidencias.galeria(
-                    servicioId = cuadrilla.servicioId,
-                    cuadrillaId = cuadrilla.id,
+                    servicioId = cuadrilla?.servicioId ?: sesion.servicioId() ?: error("Tu usuario no está asignado a ningún contrato."),
+                    cuadrillaId = cuadrilla?.id,
                     desde = _estado.value.desde.toString(),
                     hasta = _estado.value.hasta.toString(),
                 )
                 _estado.update {
-                    it.copy(cargando = false, fotos = fotos, cuadrilla = cuadrilla.name)
+                    it.copy(cargando = false, fotos = fotos, cuadrilla = cuadrilla?.name ?: "Todas las cuadrillas")
                 }
             }.onFailure { fallo ->
                 _estado.update { it.copy(cargando = false, error = fallo.enCristiano()) }

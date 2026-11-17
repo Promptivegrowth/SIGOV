@@ -15,6 +15,10 @@ import javax.inject.Inject
 @HiltViewModel
 class BarraViewModel @Inject constructor(
     cola: ColaRepositorio,
+    private val sesion: pe.servicon.sigov.datos.SesionRepositorio,
 ) : ViewModel() {
     val pendientes: Flow<Int> = cola.pendientes
+
+    /** El rol de quien entró: decide qué secciones lleva la barra. */
+    suspend fun rol(): String? = runCatching { sesion.perfil()?.role }.getOrNull()
 }
