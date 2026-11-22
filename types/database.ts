@@ -8462,6 +8462,20 @@ export type Database = {
         }
         Returns: Json
       }
+      bandeja_revision: {
+        Args: {
+          p_crew?: string
+          p_desde?: string
+          p_hasta?: string
+          p_limite?: number
+          p_pci?: string
+          p_q?: string
+          p_service: string
+          p_supervisor?: string
+          p_tab?: string
+        }
+        Returns: Json
+      }
       buscar: {
         Args: { p_limit?: number; p_q: string; p_service_id: string }
         Returns: Json
@@ -8878,6 +8892,7 @@ export type Database = {
         Returns: string[]
       }
       pci_item_historial: { Args: { p_item: string }; Returns: Json }
+      pci_item_sector: { Args: { p_item: string }; Returns: string }
       pci_item_semaforo: {
         Args: {
           p_due: string
@@ -9087,6 +9102,10 @@ export type Database = {
       siguiente_codigo_material: {
         Args: { p_prefijo: string; p_service_id: string }
         Returns: string
+      }
+      sincronizacion_ambito: {
+        Args: { p_dias?: number; p_service: string }
+        Returns: Json
       }
       ssoma_tablero: {
         Args: {

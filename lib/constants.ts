@@ -3,7 +3,7 @@ import {
   LayoutDashboard,
   Wallet, CalendarRange, TriangleAlert, HardHat, MapPinned,
   Boxes, Package, PackageCheck, CalendarClock, ShieldCheck, FileBarChart, Upload, Settings, Map, FolderOpen, Bell, FileSignature, History,
-  ClipboardList, Camera, BarChart3, RefreshCw, Users, Layers, MessageSquareWarning, BellRing,
+  ClipboardList, Camera, BarChart3, RefreshCw, Users, Layers, MessageSquareWarning, BellRing, ClipboardCheck,
 } from 'lucide-react'
 
 export type Role = 'admin' | 'supervisor' | 'residente' | 'jefe_cuadrilla' | 'ing_seguridad' | 'visor'
@@ -145,6 +145,8 @@ export const NAV: NavItem[] = [
     roles: ['visor', 'supervisor', 'residente', 'admin'], module: 'campo' },
   { href: '/revision', label: 'Observaciones de revisión', labelPorRol: { visor: 'Observaciones' },
     icon: MessageSquareWarning, roles: ['visor', 'supervisor', 'residente', 'admin', 'jefe_cuadrilla'] },
+  { href: '/revision-reportes', label: 'Revisión de reportes', labelPorRol: { residente: 'Revisión del contrato', admin: 'Revisión del contrato' },
+    icon: ClipboardCheck, roles: ['supervisor', 'residente', 'admin'] },
   { href: '/notificaciones', label: 'Notificaciones', icon: BellRing,
     roles: ['visor', 'supervisor', 'residente', 'admin', 'ing_seguridad', 'jefe_cuadrilla'] },
 ]

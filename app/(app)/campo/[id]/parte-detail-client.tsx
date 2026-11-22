@@ -174,6 +174,19 @@ export function ParteDetailClient({ orderId }: { orderId: string }) {
     qc.invalidateQueries({ queryKey: ['parte-historial', orderId] })
   }
 
+  // Residente: publicar a COVINCA un parte validado (una vez; validado ya no cambia)
+  const [publicando, setPublicando] = React.useState(false)
+  const publicar = async () => {
+    setPublicando(true)
+    const { error } = await sb.rpc('parte_publicar', { p_ids: [orderId] } as any)
+    setPublicando(false)
+    if (error) return toast.error(mensajeAmigable(error))
+    toast.success('Parte publicado a COVINCA', { description: 'COVINCA ya puede consultarlo con sus fotos.' })
+    qc.invalidateQueries({ queryKey: ['work-order', orderId] })
+    qc.invalidateQueries({ queryKey: ['parte-historial', orderId] })
+  }
+  const versionPublicada = Number((o as any)?.publicacion_version ?? 0)
+
   return (
     <>
       <PageHeader
@@ -207,6 +220,12 @@ export function ParteDetailClient({ orderId }: { orderId: string }) {
                 Enviar a validación
               </Button>
             )}
+            {o?.status === 'validado' && role === 'residente' && versionPublicada === 0 && (
+              <Button onClick={publicar} loading={publicando}>
+                <Send className="size-4" />
+                Publicar a COVINCA
+              </Button>
+            )}
             {o?.status === 'enviado' && can.manage && (
               <Button onClick={() => setReviewOpen(true)}>
                 <CircleCheck className="size-4" />
@@ -219,6 +238,11 @@ export function ParteDetailClient({ orderId }: { orderId: string }) {
         {o && (
           <div className="flex flex-wrap items-center gap-x-6 gap-y-3">
             <Badge className={st!.className}>{st!.label}</Badge>
+            {role !== 'visor' && role !== 'jefe_cuadrilla' && o.status === 'validado' && (
+              <Badge variant={versionPublicada > 0 ? 'info' : 'outline'}>
+                {versionPublicada > 0 ? `Publicado a COVINCA v${versionPublicada}` : 'No publicado a COVINCA'}
+              </Badge>
+            )}
             {o.weather && <span className="text-muted-foreground text-[12.5px]">Clima: {o.weather}</span>}
             {o.start_time && (
               <span className="text-muted-foreground flex items-center gap-1 text-[12.5px]">

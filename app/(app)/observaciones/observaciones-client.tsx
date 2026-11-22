@@ -1,12 +1,13 @@
 'use client'
 
 import * as React from 'react'
+import Link from 'next/link'
 import dynamic from 'next/dynamic'
 import Image from 'next/image'
 import { useQuery, useQueryClient } from '@tanstack/react-query'
 import type { Map as MLMap } from 'maplibre-gl'
 import {
-  MessageSquareWarning, Download, Search, X, CalendarPlus, CircleCheck, Undo2, FileSpreadsheet, ImageDown, Trash2,
+  MessageSquareWarning, Download, Search, X, CalendarPlus, CircleCheck, Undo2, FileSpreadsheet, ImageDown, Trash2, ClipboardCheck,
 } from 'lucide-react'
 import { createClient } from '@/lib/supabase/client'
 import { useSession } from '@/lib/hooks/use-session'
@@ -57,7 +58,7 @@ const kmDe = (o: any) => (o.progresiva_txt ? o.progresiva_txt + (o.progresiva_fi
 const metradoDe = (o: any) => (o.metrado != null ? `${fmtNumber(Number(o.metrado))}${o.unit_symbol ? ' ' + o.unit_symbol : ''}` : null)
 
 export function ObservacionesClient() {
-  const { service, can, profile } = useSession()
+  const { service, can, profile, role } = useSession()
   const sb = React.useMemo(() => createClient(), [])
   const qc = useQueryClient()
   const mapaRef = React.useRef<MapCanvasHandle>(null)
@@ -402,6 +403,12 @@ export function ObservacionesClient() {
         description="Lo que la cuadrilla o el supervisor encuentran en la vía y no está en el inventario: con su tipo de actividad, progresiva, metrado y fotos, para programarlo."
         actions={
           <>
+            {['supervisor', 'residente', 'admin', 'jefe_cuadrilla'].includes(role) && (
+              <Link href="/revision"><Button variant="outline"><MessageSquareWarning className="size-4" /> Observaciones de revisión</Button></Link>
+            )}
+            {['supervisor', 'residente', 'admin'].includes(role) && (
+              <Link href="/revision-reportes"><Button><ClipboardCheck className="size-4" /> {role === 'supervisor' ? 'Revisión de reportes' : 'Revisión del contrato'}</Button></Link>
+            )}
             <Button variant="outline" onClick={() => exportarMapa(false)} loading={exportando === 'mapa'} disabled={!mapa || !!exportando}>
               <ImageDown className="size-4" /> Mapa PNG
             </Button>

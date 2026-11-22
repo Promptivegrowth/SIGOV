@@ -48,20 +48,10 @@ const ORIGEN: Record<string, string> = { camara_sigov: 'Cámara SIGOV', galeria:
 
 type Tab = 'evidencia' | 'observaciones' | 'historial' | 'documentos'
 
-export function RevisionItem({ pciId, itemId }: { pciId: string; itemId: string }) {
-  const { role, service, profile } = useSession()
+/** Lo que necesita cualquier vista de revisión de un ítem (página y bandeja). */
+export function useRevisionDatos(itemId: string) {
   const sb = React.useMemo(() => createClient(), [])
   const qc = useQueryClient()
-  const router = useRouter()
-  const pathname = usePathname()
-  const sp = useSearchParams()
-  const tab = (sp.get('tab') as Tab) ?? 'evidencia'
-  const irA = (t: Tab) => {
-    const n = new URLSearchParams(sp.toString()); n.set('tab', t)
-    router.replace(`${pathname}?${n.toString()}`, { scroll: false })
-  }
-  const esVisor = role === 'visor'
-
   const item = useQuery({
     queryKey: ['rev-item', itemId],
     queryFn: async () => {
@@ -117,9 +107,27 @@ export function RevisionItem({ pciId, itemId }: { pciId: string; itemId: string 
     },
   })
   const refrescar = () => {
+    qc.invalidateQueries({ queryKey: ['bandeja-revision'] })
     for (const k of ['rev-item', 'rev-estado', 'rev-fotos', 'rev-obs', 'rev-hist', 'rev-pub']) qc.invalidateQueries({ queryKey: [k, itemId] })
     qc.invalidateQueries({ queryKey: ['inicio-pci'] })
   }
+
+  return { item, estado, fotos, obs, historial, publicaciones, refrescar }
+}
+
+export function RevisionItem({ pciId, itemId }: { pciId: string; itemId: string }) {
+  const { role, service, profile } = useSession()
+  const router = useRouter()
+  const pathname = usePathname()
+  const sp = useSearchParams()
+  const tab = (sp.get('tab') as Tab) ?? 'evidencia'
+  const irA = (t: Tab) => {
+    const n = new URLSearchParams(sp.toString()); n.set('tab', t)
+    router.replace(`${pathname}?${n.toString()}`, { scroll: false })
+  }
+  const esVisor = role === 'visor'
+
+  const { item, estado, fotos, obs, historial, publicaciones, refrescar } = useRevisionDatos(itemId)
 
   const i = item.data
   const e = estado.data
@@ -775,6 +783,80 @@ function TabDocumentos({ item, fotos, historial, publicaciones, esVisor, meta }:
           </CardContent>
         </Card>
       )}
+    </div>
+  )
+}
+
+/**
+ * Panel de detalle de la bandeja «Revisión de reportes / del contrato»
+ * (maquetas 03_SUPERVISOR_MOVIL_REVISION y 03_RESIDENTE_MOVIL_REVISION):
+ * datos del ítem, las tres fases, el historial corto y el mismo panel de
+ * decisión que la página del ítem (mismas reglas en el servidor).
+ */
+export function RevisionRapida({ itemId }: { itemId: string }) {
+  const { role } = useSession()
+  const sb = React.useMemo(() => createClient(), [])
+  const { item, estado, fotos, historial, refrescar } = useRevisionDatos(itemId)
+  const parte = useQuery({
+    queryKey: ['rev-parte', itemId],
+    queryFn: async () => ((await sb.from('work_entries').select('work_order_id').eq('pci_item_id', itemId).is('deleted_at', null)
+      .order('created_at', { ascending: false }).limit(1)).data?.[0] as any)?.work_order_id as string | undefined,
+  })
+  const i = item.data
+  if (item.isLoading) return <Card><CardContent className="p-4"><SkeletonList rows={4} /></CardContent></Card>
+  if (!i) return <Card><CardContent className="text-muted-foreground p-4 text-[13px]">No tienes acceso a este ítem o ya no existe.</CardContent></Card>
+  const pciCorto = String(i.pci_code ?? '').replace(/^PCI-\d{4}-0*/, 'PCI ')
+  const n = (f: string) => (fotos.data ?? []).filter((x) => x.phase === f).length
+  const hitos = (historial.data ?? []).slice(-4)
+  return (
+    <div className="space-y-3">
+      <Card>
+        <CardContent className="space-y-3 p-4 text-[13px]">
+          <p className="text-[14px] font-bold">{pciCorto} · Ítem {i.item_number}</p>
+          <div className="grid grid-cols-2 gap-x-4 gap-y-2">
+            {[
+              [Calendar, 'Ejecutado', i.closed_at ? fmtDate(i.closed_at) : '—'], [User, 'Cuadrilla', i.crew_name ?? 'Sin asignar'],
+              [FileText, 'Actividad', i.activity_name ?? '—'],
+              [MapPin, 'Progresiva', `${i.prog_start_txt ?? fmtProgresiva(i.prog_start_m)}${i.prog_end_m && i.prog_end_m !== i.prog_start_m ? ` – ${i.prog_end_txt ?? fmtProgresiva(i.prog_end_m)}` : ''}`],
+              [Ruler, 'Metrado', i.metrado_registrado != null ? `${fmtNumber(Number(i.metrado_registrado), 2)} ${i.unit_symbol ?? ''}` : '—'],
+              [Clock, 'Plazo', `${i.term_days} ${i.term_days === 1 ? 'día' : 'días'} · vence ${fmtDate(i.due_date)}`],
+            ].map(([I, k, v]: any) => (
+              <p key={k} className="min-w-0 truncate" title={String(v)}><I className="text-muted-foreground mr-1 inline size-3.5" /><span className="text-muted-foreground">{k}:</span> <strong>{v}</strong></p>
+            ))}
+          </div>
+          <div className="grid grid-cols-3 gap-2">
+            {FASES.map((f) => {
+              const ok = n(f.v) > 0
+              return (
+                <div key={f.v} className={cn('flex items-center justify-center gap-1.5 rounded-md border px-2 py-2 text-[12.5px] font-semibold',
+                  ok ? 'border-success/40 bg-success/8 text-success' : 'border-destructive/40 bg-destructive/8 text-destructive')}>
+                  <ImageIcon className="size-3.5" />{f.t} ({f.n}){ok && <CheckCircle2 className="size-3.5" />}
+                </div>
+              )
+            })}
+          </div>
+          {hitos.length > 0 && (
+            <div>
+              <div className="mb-1 flex items-center justify-between">
+                <span className="font-semibold">Historial</span>
+                {parte.data && <Link href={`/campo/${parte.data}`} className="text-primary inline-flex items-center gap-1 text-[12.5px] underline"><ExternalLink className="size-3" />Ver reporte diario digital</Link>}
+              </div>
+              <ul className="space-y-1 text-[12.5px]">
+                {hitos.map((h: any, k: number) => (
+                  <li key={k} className="flex items-center gap-2"><Clock className="text-muted-foreground size-3" />
+                    <span className="min-w-0 flex-1 truncate" title={h.detalle}>{h.quien && <strong>{h.quien}: </strong>}{h.detalle}</span>
+                    <span className="text-muted-foreground tabular-nums">{h.cuando ? fmtDateTime(h.cuando) : ''}</span>
+                  </li>
+                ))}
+              </ul>
+            </div>
+          )}
+          {!hitos.length && parte.data && <Link href={`/campo/${parte.data}`} className="text-primary inline-flex items-center gap-1 text-[12.5px] underline"><ExternalLink className="size-3" />Ver reporte diario digital</Link>}
+        </CardContent>
+      </Card>
+      <PanelDecision item={i} estado={estado.data} fotos={fotos.data ?? []} rol={role} alCambiar={refrescar} />
+      <p className="text-muted-foreground flex items-center gap-1.5 text-[12px]"><Info className="size-3.5" />Acción según permisos. Conserva historial y originales.
+        <Link href={`/pci/${i.pci_id}/item/${i.id}?tab=historial`} className="text-primary underline">Historial del ítem</Link></p>
     </div>
   )
 }

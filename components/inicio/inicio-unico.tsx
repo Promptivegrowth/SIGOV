@@ -578,12 +578,17 @@ function PestanaPci({ rol, f, fijar, datos: d, cargando, error, cuadrillas, abri
                     </>
                   ) : (
                     <>
-                      <p className="mb-1.5 text-[12px] font-semibold">Atendidos con evidencia incompleta</p>
+                      <div className="mb-1.5 flex items-center justify-between gap-2">
+                        <p className="text-[12px] font-semibold">Atendidos con evidencia incompleta</p>
+                        <Link href={rol === 'supervisor' ? '/revision-reportes' : '/revision-reportes?tab=todos'} className="text-primary text-[12px] underline">
+                          {rol === 'supervisor' ? 'Revisión de reportes' : 'Revisión del contrato'}
+                        </Link>
+                      </div>
                       {(d.incompletos as any[]).length === 0 && <p className="text-muted-foreground text-[12.5px]">Ninguno.</p>}
                       {(d.incompletos as any[]).map((x) => (
                         <div key={x.item_id} className="flex items-center justify-between gap-2 py-0.5 text-[12.5px]">
                           <span className="truncate">{x.pci} · Ítem {x.item} · Falta {(x.faltan as string[]).map(nombreFase).join(', ')}</span>
-                          <Link href={`/pci/${x.pci_id}/item/${x.item_id}`}><Button size="sm" variant="outline"><Eye className="size-3.5" />Revisar</Button></Link>
+                          <Link href={`/revision-reportes?tab=${rol === 'supervisor' ? 'por_validar' : 'todos'}&item=${x.item_id}`}><Button size="sm" variant="outline"><Eye className="size-3.5" />Revisar</Button></Link>
                         </div>
                       ))}
                     </>
