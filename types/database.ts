@@ -5799,6 +5799,687 @@ export type Database = {
           },
         ]
       }
+      ssoma_documento_versiones: {
+        Row: {
+          archivo_nombre: string | null
+          archivo_path: string | null
+          cargado_at: string
+          cargado_por: string | null
+          documento_id: string
+          id: string
+          motivo: string | null
+          nota: string | null
+          revisado_at: string | null
+          revisado_por: string | null
+          revision: string
+          service_id: string
+          vence_on: string | null
+          version: number
+        }
+        Insert: {
+          archivo_nombre?: string | null
+          archivo_path?: string | null
+          cargado_at?: string
+          cargado_por?: string | null
+          documento_id: string
+          id?: string
+          motivo?: string | null
+          nota?: string | null
+          revisado_at?: string | null
+          revisado_por?: string | null
+          revision?: string
+          service_id: string
+          vence_on?: string | null
+          version: number
+        }
+        Update: {
+          archivo_nombre?: string | null
+          archivo_path?: string | null
+          cargado_at?: string
+          cargado_por?: string | null
+          documento_id?: string
+          id?: string
+          motivo?: string | null
+          nota?: string | null
+          revisado_at?: string | null
+          revisado_por?: string | null
+          revision?: string
+          service_id?: string
+          vence_on?: string | null
+          version?: number
+        }
+        Relationships: [
+          {
+            foreignKeyName: "ssoma_documento_versiones_cargado_por_fkey"
+            columns: ["cargado_por"]
+            isOneToOne: false
+            referencedRelation: "profiles"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "ssoma_documento_versiones_documento_id_fkey"
+            columns: ["documento_id"]
+            isOneToOne: false
+            referencedRelation: "ssoma_documentos"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "ssoma_documento_versiones_revisado_por_fkey"
+            columns: ["revisado_por"]
+            isOneToOne: false
+            referencedRelation: "profiles"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "ssoma_documento_versiones_service_id_fkey"
+            columns: ["service_id"]
+            isOneToOne: false
+            referencedRelation: "services"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      ssoma_documentos: {
+        Row: {
+          codigo: string | null
+          created_at: string
+          crew_id: string | null
+          equipment_id: string | null
+          id: string
+          nombre: string
+          numero: number
+          service_id: string
+          tipo: string
+          titular_id: string | null
+          vehicle_id: string | null
+        }
+        Insert: {
+          codigo?: string | null
+          created_at?: string
+          crew_id?: string | null
+          equipment_id?: string | null
+          id?: string
+          nombre: string
+          numero: number
+          service_id: string
+          tipo: string
+          titular_id?: string | null
+          vehicle_id?: string | null
+        }
+        Update: {
+          codigo?: string | null
+          created_at?: string
+          crew_id?: string | null
+          equipment_id?: string | null
+          id?: string
+          nombre?: string
+          numero?: number
+          service_id?: string
+          tipo?: string
+          titular_id?: string | null
+          vehicle_id?: string | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "ssoma_documentos_crew_id_fkey"
+            columns: ["crew_id"]
+            isOneToOne: false
+            referencedRelation: "crews"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "ssoma_documentos_crew_id_fkey"
+            columns: ["crew_id"]
+            isOneToOne: false
+            referencedRelation: "v_hygiene_today"
+            referencedColumns: ["crew_id"]
+          },
+          {
+            foreignKeyName: "ssoma_documentos_equipment_id_fkey"
+            columns: ["equipment_id"]
+            isOneToOne: false
+            referencedRelation: "safety_equipment"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "ssoma_documentos_equipment_id_fkey"
+            columns: ["equipment_id"]
+            isOneToOne: false
+            referencedRelation: "v_safety_equipment"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "ssoma_documentos_service_id_fkey"
+            columns: ["service_id"]
+            isOneToOne: false
+            referencedRelation: "services"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "ssoma_documentos_titular_id_fkey"
+            columns: ["titular_id"]
+            isOneToOne: false
+            referencedRelation: "profiles"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "ssoma_documentos_vehicle_id_fkey"
+            columns: ["vehicle_id"]
+            isOneToOne: false
+            referencedRelation: "v_vehicles"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "ssoma_documentos_vehicle_id_fkey"
+            columns: ["vehicle_id"]
+            isOneToOne: false
+            referencedRelation: "vehicles"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      ssoma_eventos: {
+        Row: {
+          actor: string | null
+          actor_nombre: string | null
+          antes: Json | null
+          codigo: string | null
+          cuando: string
+          despues: Json | null
+          detalle: string | null
+          documento_id: string | null
+          evidencias: string[]
+          hallazgo_id: string | null
+          id: string
+          inspeccion_id: string | null
+          numero: number
+          resultado: string | null
+          service_id: string
+          tipo: string
+          titulo: string
+          version: number | null
+        }
+        Insert: {
+          actor?: string | null
+          actor_nombre?: string | null
+          antes?: Json | null
+          codigo?: string | null
+          cuando?: string
+          despues?: Json | null
+          detalle?: string | null
+          documento_id?: string | null
+          evidencias?: string[]
+          hallazgo_id?: string | null
+          id?: string
+          inspeccion_id?: string | null
+          numero: number
+          resultado?: string | null
+          service_id: string
+          tipo: string
+          titulo: string
+          version?: number | null
+        }
+        Update: {
+          actor?: string | null
+          actor_nombre?: string | null
+          antes?: Json | null
+          codigo?: string | null
+          cuando?: string
+          despues?: Json | null
+          detalle?: string | null
+          documento_id?: string | null
+          evidencias?: string[]
+          hallazgo_id?: string | null
+          id?: string
+          inspeccion_id?: string | null
+          numero?: number
+          resultado?: string | null
+          service_id?: string
+          tipo?: string
+          titulo?: string
+          version?: number | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "ssoma_eventos_actor_fkey"
+            columns: ["actor"]
+            isOneToOne: false
+            referencedRelation: "profiles"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "ssoma_eventos_documento_id_fkey"
+            columns: ["documento_id"]
+            isOneToOne: false
+            referencedRelation: "ssoma_documentos"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "ssoma_eventos_hallazgo_id_fkey"
+            columns: ["hallazgo_id"]
+            isOneToOne: false
+            referencedRelation: "ssoma_hallazgos"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "ssoma_eventos_inspeccion_id_fkey"
+            columns: ["inspeccion_id"]
+            isOneToOne: false
+            referencedRelation: "ssoma_inspecciones"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "ssoma_eventos_inspeccion_id_fkey"
+            columns: ["inspeccion_id"]
+            isOneToOne: false
+            referencedRelation: "v_ssoma_inspecciones"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "ssoma_eventos_service_id_fkey"
+            columns: ["service_id"]
+            isOneToOne: false
+            referencedRelation: "services"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      ssoma_evidencias: {
+        Row: {
+          autor: string | null
+          borrador: boolean
+          bytes: number | null
+          codigo: string | null
+          descripcion: string
+          id: string
+          lat: number | null
+          lng: number | null
+          mime: string | null
+          nombre: string
+          numero: number
+          objeto_id: string
+          objeto_tipo: string
+          origen: string
+          service_id: string
+          storage_path: string
+          subida_at: string
+          tomada_at: string | null
+        }
+        Insert: {
+          autor?: string | null
+          borrador?: boolean
+          bytes?: number | null
+          codigo?: string | null
+          descripcion: string
+          id?: string
+          lat?: number | null
+          lng?: number | null
+          mime?: string | null
+          nombre: string
+          numero: number
+          objeto_id: string
+          objeto_tipo: string
+          origen?: string
+          service_id: string
+          storage_path: string
+          subida_at?: string
+          tomada_at?: string | null
+        }
+        Update: {
+          autor?: string | null
+          borrador?: boolean
+          bytes?: number | null
+          codigo?: string | null
+          descripcion?: string
+          id?: string
+          lat?: number | null
+          lng?: number | null
+          mime?: string | null
+          nombre?: string
+          numero?: number
+          objeto_id?: string
+          objeto_tipo?: string
+          origen?: string
+          service_id?: string
+          storage_path?: string
+          subida_at?: string
+          tomada_at?: string | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "ssoma_evidencias_autor_fkey"
+            columns: ["autor"]
+            isOneToOne: false
+            referencedRelation: "profiles"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "ssoma_evidencias_service_id_fkey"
+            columns: ["service_id"]
+            isOneToOne: false
+            referencedRelation: "services"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      ssoma_hallazgos: {
+        Row: {
+          bloquea_aptitud: boolean
+          cerrado_at: string | null
+          cerrado_por: string | null
+          codigo: string | null
+          creado_at: string
+          creado_por: string | null
+          crew_id: string | null
+          descripcion: string
+          documento_id: string | null
+          estado: string
+          fecha_limite: string
+          id: string
+          inspeccion_id: string | null
+          numero: number
+          responsable_id: string | null
+          responsable_texto: string | null
+          service_id: string
+        }
+        Insert: {
+          bloquea_aptitud?: boolean
+          cerrado_at?: string | null
+          cerrado_por?: string | null
+          codigo?: string | null
+          creado_at?: string
+          creado_por?: string | null
+          crew_id?: string | null
+          descripcion: string
+          documento_id?: string | null
+          estado?: string
+          fecha_limite: string
+          id?: string
+          inspeccion_id?: string | null
+          numero: number
+          responsable_id?: string | null
+          responsable_texto?: string | null
+          service_id: string
+        }
+        Update: {
+          bloquea_aptitud?: boolean
+          cerrado_at?: string | null
+          cerrado_por?: string | null
+          codigo?: string | null
+          creado_at?: string
+          creado_por?: string | null
+          crew_id?: string | null
+          descripcion?: string
+          documento_id?: string | null
+          estado?: string
+          fecha_limite?: string
+          id?: string
+          inspeccion_id?: string | null
+          numero?: number
+          responsable_id?: string | null
+          responsable_texto?: string | null
+          service_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "ssoma_hallazgos_cerrado_por_fkey"
+            columns: ["cerrado_por"]
+            isOneToOne: false
+            referencedRelation: "profiles"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "ssoma_hallazgos_creado_por_fkey"
+            columns: ["creado_por"]
+            isOneToOne: false
+            referencedRelation: "profiles"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "ssoma_hallazgos_crew_id_fkey"
+            columns: ["crew_id"]
+            isOneToOne: false
+            referencedRelation: "crews"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "ssoma_hallazgos_crew_id_fkey"
+            columns: ["crew_id"]
+            isOneToOne: false
+            referencedRelation: "v_hygiene_today"
+            referencedColumns: ["crew_id"]
+          },
+          {
+            foreignKeyName: "ssoma_hallazgos_documento_id_fkey"
+            columns: ["documento_id"]
+            isOneToOne: false
+            referencedRelation: "ssoma_documentos"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "ssoma_hallazgos_inspeccion_id_fkey"
+            columns: ["inspeccion_id"]
+            isOneToOne: false
+            referencedRelation: "ssoma_inspecciones"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "ssoma_hallazgos_inspeccion_id_fkey"
+            columns: ["inspeccion_id"]
+            isOneToOne: false
+            referencedRelation: "v_ssoma_inspecciones"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "ssoma_hallazgos_responsable_id_fkey"
+            columns: ["responsable_id"]
+            isOneToOne: false
+            referencedRelation: "profiles"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "ssoma_hallazgos_service_id_fkey"
+            columns: ["service_id"]
+            isOneToOne: false
+            referencedRelation: "services"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      ssoma_inspecciones: {
+        Row: {
+          codigo: string | null
+          created_at: string
+          crew_id: string | null
+          equipment_id: string | null
+          fecha: string
+          id: string
+          inspector_id: string | null
+          notas: string | null
+          numero: number
+          origen_clave: string | null
+          origen_id: string | null
+          origen_tabla: string | null
+          revisado_at: string | null
+          revisado_por: string | null
+          service_id: string
+          tipo: string
+          ultima_revision: string
+          vehicle_id: string | null
+        }
+        Insert: {
+          codigo?: string | null
+          created_at?: string
+          crew_id?: string | null
+          equipment_id?: string | null
+          fecha: string
+          id?: string
+          inspector_id?: string | null
+          notas?: string | null
+          numero: number
+          origen_clave?: string | null
+          origen_id?: string | null
+          origen_tabla?: string | null
+          revisado_at?: string | null
+          revisado_por?: string | null
+          service_id: string
+          tipo: string
+          ultima_revision?: string
+          vehicle_id?: string | null
+        }
+        Update: {
+          codigo?: string | null
+          created_at?: string
+          crew_id?: string | null
+          equipment_id?: string | null
+          fecha?: string
+          id?: string
+          inspector_id?: string | null
+          notas?: string | null
+          numero?: number
+          origen_clave?: string | null
+          origen_id?: string | null
+          origen_tabla?: string | null
+          revisado_at?: string | null
+          revisado_por?: string | null
+          service_id?: string
+          tipo?: string
+          ultima_revision?: string
+          vehicle_id?: string | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "ssoma_inspecciones_crew_id_fkey"
+            columns: ["crew_id"]
+            isOneToOne: false
+            referencedRelation: "crews"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "ssoma_inspecciones_crew_id_fkey"
+            columns: ["crew_id"]
+            isOneToOne: false
+            referencedRelation: "v_hygiene_today"
+            referencedColumns: ["crew_id"]
+          },
+          {
+            foreignKeyName: "ssoma_inspecciones_equipment_id_fkey"
+            columns: ["equipment_id"]
+            isOneToOne: false
+            referencedRelation: "safety_equipment"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "ssoma_inspecciones_equipment_id_fkey"
+            columns: ["equipment_id"]
+            isOneToOne: false
+            referencedRelation: "v_safety_equipment"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "ssoma_inspecciones_inspector_id_fkey"
+            columns: ["inspector_id"]
+            isOneToOne: false
+            referencedRelation: "profiles"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "ssoma_inspecciones_revisado_por_fkey"
+            columns: ["revisado_por"]
+            isOneToOne: false
+            referencedRelation: "profiles"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "ssoma_inspecciones_service_id_fkey"
+            columns: ["service_id"]
+            isOneToOne: false
+            referencedRelation: "services"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "ssoma_inspecciones_vehicle_id_fkey"
+            columns: ["vehicle_id"]
+            isOneToOne: false
+            referencedRelation: "v_vehicles"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "ssoma_inspecciones_vehicle_id_fkey"
+            columns: ["vehicle_id"]
+            isOneToOne: false
+            referencedRelation: "vehicles"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      ssoma_revisiones: {
+        Row: {
+          borrador: boolean
+          cuando: string
+          evidencias: string[]
+          id: string
+          motivo: string | null
+          objeto_id: string
+          objeto_tipo: string
+          quien: string | null
+          resultado: string | null
+          service_id: string
+          verificado: boolean
+          version_id: string | null
+        }
+        Insert: {
+          borrador?: boolean
+          cuando?: string
+          evidencias?: string[]
+          id?: string
+          motivo?: string | null
+          objeto_id: string
+          objeto_tipo: string
+          quien?: string | null
+          resultado?: string | null
+          service_id: string
+          verificado?: boolean
+          version_id?: string | null
+        }
+        Update: {
+          borrador?: boolean
+          cuando?: string
+          evidencias?: string[]
+          id?: string
+          motivo?: string | null
+          objeto_id?: string
+          objeto_tipo?: string
+          quien?: string | null
+          resultado?: string | null
+          service_id?: string
+          verificado?: boolean
+          version_id?: string | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "ssoma_revisiones_quien_fkey"
+            columns: ["quien"]
+            isOneToOne: false
+            referencedRelation: "profiles"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "ssoma_revisiones_service_id_fkey"
+            columns: ["service_id"]
+            isOneToOne: false
+            referencedRelation: "services"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "ssoma_revisiones_version_id_fkey"
+            columns: ["version_id"]
+            isOneToOne: false
+            referencedRelation: "ssoma_documento_versiones"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       stock_movements: {
         Row: {
           client_id: string
@@ -8553,6 +9234,103 @@ export type Database = {
           },
         ]
       }
+      v_ssoma_inspecciones: {
+        Row: {
+          aptitud: string | null
+          codigo: string | null
+          created_at: string | null
+          crew_code: string | null
+          crew_id: string | null
+          crew_name: string | null
+          equipment_id: string | null
+          estado_mecanico: string | null
+          fecha: string | null
+          hallazgos: number | null
+          hallazgos_abiertos: number | null
+          id: string | null
+          inspector_id: string | null
+          inspector_nombre: string | null
+          notas: string | null
+          numero: number | null
+          objeto: string | null
+          origen_clave: string | null
+          origen_id: string | null
+          origen_tabla: string | null
+          revisado_at: string | null
+          revisado_por: string | null
+          revisado_por_nombre: string | null
+          service_id: string | null
+          tipo: string | null
+          ultima_revision: string | null
+          vehicle_id: string | null
+          vigencia: string | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "ssoma_inspecciones_crew_id_fkey"
+            columns: ["crew_id"]
+            isOneToOne: false
+            referencedRelation: "crews"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "ssoma_inspecciones_crew_id_fkey"
+            columns: ["crew_id"]
+            isOneToOne: false
+            referencedRelation: "v_hygiene_today"
+            referencedColumns: ["crew_id"]
+          },
+          {
+            foreignKeyName: "ssoma_inspecciones_equipment_id_fkey"
+            columns: ["equipment_id"]
+            isOneToOne: false
+            referencedRelation: "safety_equipment"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "ssoma_inspecciones_equipment_id_fkey"
+            columns: ["equipment_id"]
+            isOneToOne: false
+            referencedRelation: "v_safety_equipment"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "ssoma_inspecciones_inspector_id_fkey"
+            columns: ["inspector_id"]
+            isOneToOne: false
+            referencedRelation: "profiles"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "ssoma_inspecciones_revisado_por_fkey"
+            columns: ["revisado_por"]
+            isOneToOne: false
+            referencedRelation: "profiles"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "ssoma_inspecciones_service_id_fkey"
+            columns: ["service_id"]
+            isOneToOne: false
+            referencedRelation: "services"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "ssoma_inspecciones_vehicle_id_fkey"
+            columns: ["vehicle_id"]
+            isOneToOne: false
+            referencedRelation: "v_vehicles"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "ssoma_inspecciones_vehicle_id_fkey"
+            columns: ["vehicle_id"]
+            isOneToOne: false
+            referencedRelation: "vehicles"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       v_stock_cuadrilla: {
         Row: {
           crew_code: string | null
@@ -9847,6 +10625,152 @@ export type Database = {
       sincronizacion_ambito: {
         Args: { p_dias?: number; p_service: string }
         Returns: Json
+      }
+      ssoma_documento_crear: {
+        Args: {
+          p_crew?: string
+          p_equipment?: string
+          p_nombre: string
+          p_service: string
+          p_tipo: string
+          p_titular?: string
+          p_vehicle?: string
+        }
+        Returns: string
+      }
+      ssoma_documento_version: {
+        Args: {
+          p_archivo_nombre: string
+          p_archivo_path: string
+          p_documento: string
+          p_nota?: string
+          p_vence: string
+        }
+        Returns: Json
+      }
+      ssoma_documentos_lista: {
+        Args: {
+          p_crew?: string
+          p_q?: string
+          p_revision?: string
+          p_service: string
+          p_tipo?: string
+          p_vigencia?: string
+        }
+        Returns: Json
+      }
+      ssoma_evento: {
+        Args: {
+          p_antes?: Json
+          p_despues?: Json
+          p_detalle?: string
+          p_documento?: string
+          p_evidencias?: string[]
+          p_hallazgo?: string
+          p_inspeccion?: string
+          p_resultado?: string
+          p_service: string
+          p_tipo: string
+          p_titulo: string
+          p_version?: number
+        }
+        Returns: string
+      }
+      ssoma_evidencia_registrar: {
+        Args: {
+          p_borrador?: boolean
+          p_bytes: number
+          p_descripcion: string
+          p_lat?: number
+          p_lng?: number
+          p_mime: string
+          p_nombre: string
+          p_objeto_id: string
+          p_objeto_tipo: string
+          p_origen?: string
+          p_path: string
+          p_service: string
+          p_tomada_at?: string
+        }
+        Returns: Json
+      }
+      ssoma_hallazgo_crear: {
+        Args: {
+          p_bloquea?: boolean
+          p_descripcion: string
+          p_documento?: string
+          p_fecha_limite: string
+          p_inspeccion: string
+          p_responsable?: string
+          p_responsable_texto?: string
+        }
+        Returns: Json
+      }
+      ssoma_hallazgo_responder: {
+        Args: { p_evidencias?: string[]; p_hallazgo: string; p_texto: string }
+        Returns: Json
+      }
+      ssoma_hallazgos_lista: {
+        Args: {
+          p_crew?: string
+          p_desde?: string
+          p_estado?: string
+          p_hasta?: string
+          p_q?: string
+          p_responsable?: string
+          p_service: string
+        }
+        Returns: Json
+      }
+      ssoma_historial: {
+        Args: {
+          p_documento?: string
+          p_hallazgo?: string
+          p_inspeccion?: string
+        }
+        Returns: Json
+      }
+      ssoma_inspeccion: { Args: { p_id: string }; Returns: Json }
+      ssoma_inspeccion_crear: {
+        Args: {
+          p_crew: string
+          p_equipment?: string
+          p_notas?: string
+          p_service: string
+          p_tipo: string
+          p_vehicle?: string
+        }
+        Returns: Json
+      }
+      ssoma_panel: {
+        Args: {
+          p_crew?: string
+          p_desde: string
+          p_desde_fila?: number
+          p_estado?: string
+          p_hasta: string
+          p_limite?: number
+          p_q?: string
+          p_service: string
+          p_tipo?: string
+        }
+        Returns: Json
+      }
+      ssoma_revisar: {
+        Args: {
+          p_borrador?: boolean
+          p_evidencias?: string[]
+          p_motivo: string
+          p_objeto_id: string
+          p_objeto_tipo: string
+          p_resultado: string
+          p_verificado?: boolean
+        }
+        Returns: Json
+      }
+      ssoma_siguiente: {
+        Args: { p_service: string; p_tabla: string }
+        Returns: number
       }
       ssoma_tablero: {
         Args: {

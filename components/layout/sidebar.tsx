@@ -38,9 +38,11 @@ export function Sidebar({
     ? menu.map((m) => permitidos.find((n) => n.href === m.href)).filter(Boolean) as NavItem[]
     : permitidos
   const mas: NavItem[] = menu ? permitidos.filter((n) => !menu.some((m) => m.href === n.href)) : []
+  // La entrada activa es la ruta más específica (/ssoma/hallazgos gana a /ssoma)
+  const activa = permitidos.filter((n) => pathname === n.href || pathname.startsWith(`${n.href}/`)).sort((a, b) => b.href.length - a.href.length)[0]?.href
   const [verMas, setVerMas] = React.useState(false)
   React.useEffect(() => {
-    if (mas.some((n) => pathname === n.href || pathname.startsWith(`${n.href}/`))) setVerMas(true)
+    if (mas.some((n) => n.href === activa)) setVerMas(true)
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [pathname])
 
@@ -90,7 +92,7 @@ export function Sidebar({
       <nav className="no-scrollbar flex-1 overflow-y-auto px-3 pb-4" aria-label="Navegación principal">
         <ul className="space-y-0.5">
           {[...items, ...(verMas ? mas : [])].map((item) => {
-            const active = pathname === item.href || pathname.startsWith(`${item.href}/`)
+            const active = item.href === activa
             const badge = badgeFor(item.badge)
             const link = (
               <Link

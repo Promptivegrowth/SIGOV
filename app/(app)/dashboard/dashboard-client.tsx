@@ -23,6 +23,7 @@ import { Badge } from '@/components/ui/badge'
 import { fmtNumber, fmtDate, fmtRelative, truncate, cn } from '@/lib/utils'
 import { PCI_PRIORITY, WORK_ORDER_STATUS } from '@/lib/constants'
 import { InicioUnico } from '@/components/inicio/inicio-unico'
+import { ControlSsoma } from '@/components/ssoma/control-ssoma'
 import { SupervisorDashboard } from './supervisor-dashboard'
 
 // ── Lazy: los gráficos y el mapa no deben pesar en el bundle inicial ──────
@@ -52,6 +53,7 @@ export function DashboardClient() {
   if (role === 'residente') return <InicioUnico rol="residente" titulo="Inicio · Avance del contrato" pestanaInicial="mr" />
   if (role === 'visor') return <InicioUnico rol="visor" titulo="Estado situacional" />
   if (role === 'admin') return <InicioUnico rol="admin" titulo="Inicio · Avance PCI y programación MR" />
+  if (role === 'ing_seguridad') return <ControlSsoma esInicio pestana="inspecciones" titulo="Control SSOMA" subtitulo="Seguridad, salud ocupacional y medio ambiente" />
 
   return <PanelGeneral />
 }

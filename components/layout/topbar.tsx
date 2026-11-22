@@ -38,7 +38,7 @@ export function Topbar({ onMenuClick }: { onMenuClick: () => void }) {
     return () => window.removeEventListener('keydown', onKey)
   }, [])
 
-  const current = NAV.find((n) => pathname === n.href || pathname.startsWith(`${n.href}/`))
+  const current = NAV.filter((n) => pathname === n.href || pathname.startsWith(`${n.href}/`)).sort((a, b) => b.href.length - a.href.length)[0]
 
   return (
     <>

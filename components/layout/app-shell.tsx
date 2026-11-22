@@ -38,7 +38,7 @@ export function AppShell({ children }: { children: React.ReactNode }) {
   // fuera del rol — no debe ser alcanzable escribiendo la URL a mano. Mientras
   // se redirige no se muestra nada: ni un instante de la página ajena.
   const bloqueada = React.useMemo(() => {
-    const item = NAV.find((n) => pathname === n.href || pathname.startsWith(`${n.href}/`))
+    const item = NAV.filter((n) => pathname === n.href || pathname.startsWith(`${n.href}/`)).sort((a, b) => b.href.length - a.href.length)[0]
     if (!item) return false
     return Boolean((item.module && !hasModule(item.module)) || !item.roles.includes(role))
   }, [pathname, hasModule, role])
