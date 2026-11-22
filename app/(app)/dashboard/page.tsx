@@ -1,4 +1,5 @@
 import type { Metadata } from 'next'
+import { Suspense } from 'react'
 import { DashboardClient } from './dashboard-client'
 
 export const metadata: Metadata = {
@@ -7,5 +8,10 @@ export const metadata: Metadata = {
 }
 
 export default function DashboardPage() {
-  return <DashboardClient />
+  // Los filtros del Inicio viven en la dirección (useSearchParams)
+  return (
+    <Suspense>
+      <DashboardClient />
+    </Suspense>
+  )
 }

@@ -9,7 +9,7 @@ import { ServiconMark } from '@/components/shared/logo'
 import { ServiceSwitcher } from './service-switcher'
 import { SyncIndicator } from './sync-indicator'
 import { useSession } from '@/lib/hooks/use-session'
-import { NAV, APP, ROLES, rotuloDeNav } from '@/lib/constants'
+import { NAV, APP, ROLES, MENU_POR_ROL, rotuloDeNav, type NavItem } from '@/lib/constants'
 import { cn } from '@/lib/utils'
 import { Tip } from '@/components/ui/primitives'
 import { usePendingCounts } from '@/lib/hooks/use-pending-counts'
@@ -29,9 +29,20 @@ export function Sidebar({
   const { role, hasModule, crew, service } = useSession()
   const counts = usePendingCounts()
 
-  const items = NAV.filter(
+  const permitidos = NAV.filter(
     (n) => n.roles.includes(role) && (!n.module || hasModule(n.module))
   )
+  // El menú del rol en el orden de su maqueta; el resto, en «Más»
+  const menu = MENU_POR_ROL[role]
+  const items: NavItem[] = menu
+    ? menu.map((m) => permitidos.find((n) => n.href === m.href)).filter(Boolean) as NavItem[]
+    : permitidos
+  const mas: NavItem[] = menu ? permitidos.filter((n) => !menu.some((m) => m.href === n.href)) : []
+  const [verMas, setVerMas] = React.useState(false)
+  React.useEffect(() => {
+    if (mas.some((n) => pathname === n.href || pathname.startsWith(`${n.href}/`))) setVerMas(true)
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [pathname])
 
   const badgeFor = (key?: string) => {
     if (key === 'pci') return counts.pciCritical
@@ -78,7 +89,7 @@ export function Sidebar({
       {/* Navegación */}
       <nav className="no-scrollbar flex-1 overflow-y-auto px-3 pb-4" aria-label="Navegación principal">
         <ul className="space-y-0.5">
-          {items.map((item) => {
+          {[...items, ...(verMas ? mas : [])].map((item) => {
             const active = pathname === item.href || pathname.startsWith(`${item.href}/`)
             const badge = badgeFor(item.badge)
             const link = (
@@ -132,6 +143,16 @@ export function Sidebar({
             )
           })}
         </ul>
+        {mas.length > 0 && (
+          <button
+            onClick={() => setVerMas((v) => !v)}
+            className={cn('mt-2 flex w-full items-center gap-3 rounded-lg px-3 py-2 text-[12.5px] font-medium text-white/55 transition-colors hover:bg-white/[0.07] hover:text-white',
+              collapsed && 'lg:justify-center lg:px-0')}
+          >
+            <span className="text-[16px] leading-none">{verMas ? '−' : '+'}</span>
+            {!collapsed && <span>{verMas ? 'Menos' : `Más (${mas.length})`}</span>}
+          </button>
+        )}
       </nav>
 
       {/* Pie: sincronización + colapsar */}

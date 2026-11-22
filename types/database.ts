@@ -2026,6 +2026,7 @@ export type Database = {
           pci_item_id: string | null
           phase: Database["public"]["Enums"]["evidence_phase"]
           progresiva_m: number | null
+          publicada_version: number | null
           revisada_at: string | null
           revisada_por: string | null
           revision: string | null
@@ -2076,6 +2077,7 @@ export type Database = {
           pci_item_id?: string | null
           phase?: Database["public"]["Enums"]["evidence_phase"]
           progresiva_m?: number | null
+          publicada_version?: number | null
           revisada_at?: string | null
           revisada_por?: string | null
           revision?: string | null
@@ -2126,6 +2128,7 @@ export type Database = {
           pci_item_id?: string | null
           phase?: Database["public"]["Enums"]["evidence_phase"]
           progresiva_m?: number | null
+          publicada_version?: number | null
           revisada_at?: string | null
           revisada_por?: string | null
           revision?: string | null
@@ -3120,6 +3123,85 @@ export type Database = {
           },
         ]
       }
+      pci_item_publicaciones: {
+        Row: {
+          cuando: string
+          evidencias: string[]
+          id: string
+          nota: string | null
+          pci_id: string
+          pci_item_id: string
+          quien: string | null
+          service_id: string
+          version: number
+        }
+        Insert: {
+          cuando?: string
+          evidencias?: string[]
+          id?: string
+          nota?: string | null
+          pci_id: string
+          pci_item_id: string
+          quien?: string | null
+          service_id: string
+          version: number
+        }
+        Update: {
+          cuando?: string
+          evidencias?: string[]
+          id?: string
+          nota?: string | null
+          pci_id?: string
+          pci_item_id?: string
+          quien?: string | null
+          service_id?: string
+          version?: number
+        }
+        Relationships: [
+          {
+            foreignKeyName: "pci_item_publicaciones_pci_id_fkey"
+            columns: ["pci_id"]
+            isOneToOne: false
+            referencedRelation: "pcis"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "pci_item_publicaciones_pci_id_fkey"
+            columns: ["pci_id"]
+            isOneToOne: false
+            referencedRelation: "v_pci_resumen"
+            referencedColumns: ["pci_id"]
+          },
+          {
+            foreignKeyName: "pci_item_publicaciones_pci_item_id_fkey"
+            columns: ["pci_item_id"]
+            isOneToOne: false
+            referencedRelation: "pci_items"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "pci_item_publicaciones_pci_item_id_fkey"
+            columns: ["pci_item_id"]
+            isOneToOne: false
+            referencedRelation: "v_pci_items"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "pci_item_publicaciones_quien_fkey"
+            columns: ["quien"]
+            isOneToOne: false
+            referencedRelation: "profiles"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "pci_item_publicaciones_service_id_fkey"
+            columns: ["service_id"]
+            isOneToOne: false
+            referencedRelation: "services"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       pci_item_revisiones: {
         Row: {
           cuando: string
@@ -3216,6 +3298,8 @@ export type Database = {
           client_id: string
           closed_at: string | null
           closed_by: string | null
+          covinca_estado: string
+          covinca_version: number | null
           created_at: string
           created_by: string | null
           deleted_at: string | null
@@ -3233,6 +3317,10 @@ export type Database = {
           pci_id: string
           prog_end_m: number | null
           prog_start_m: number | null
+          publicacion_pendiente: boolean
+          publicacion_version: number
+          publicado_at: string | null
+          publicado_por: string | null
           quantity: number | null
           reject_reason: string | null
           requires_evidence: boolean
@@ -3258,6 +3346,8 @@ export type Database = {
           client_id?: string
           closed_at?: string | null
           closed_by?: string | null
+          covinca_estado?: string
+          covinca_version?: number | null
           created_at?: string
           created_by?: string | null
           deleted_at?: string | null
@@ -3275,6 +3365,10 @@ export type Database = {
           pci_id: string
           prog_end_m?: number | null
           prog_start_m?: number | null
+          publicacion_pendiente?: boolean
+          publicacion_version?: number
+          publicado_at?: string | null
+          publicado_por?: string | null
           quantity?: number | null
           reject_reason?: string | null
           requires_evidence?: boolean
@@ -3300,6 +3394,8 @@ export type Database = {
           client_id?: string
           closed_at?: string | null
           closed_by?: string | null
+          covinca_estado?: string
+          covinca_version?: number | null
           created_at?: string
           created_by?: string | null
           deleted_at?: string | null
@@ -3317,6 +3413,10 @@ export type Database = {
           pci_id?: string
           prog_end_m?: number | null
           prog_start_m?: number | null
+          publicacion_pendiente?: boolean
+          publicacion_version?: number
+          publicado_at?: string | null
+          publicado_por?: string | null
           quantity?: number | null
           reject_reason?: string | null
           requires_evidence?: boolean
@@ -3405,6 +3505,13 @@ export type Database = {
             isOneToOne: false
             referencedRelation: "v_pci_resumen"
             referencedColumns: ["pci_id"]
+          },
+          {
+            foreignKeyName: "pci_items_publicado_por_fkey"
+            columns: ["publicado_por"]
+            isOneToOne: false
+            referencedRelation: "profiles"
+            referencedColumns: ["id"]
           },
           {
             foreignKeyName: "pci_items_section_id_fkey"
@@ -4133,6 +4240,289 @@ export type Database = {
             columns: ["updated_by"]
             isOneToOne: false
             referencedRelation: "profiles"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      rendimientos_jornada: {
+        Row: {
+          activity_id: string
+          cantidad: number
+          created_at: string
+          created_by: string | null
+          crew_id: string | null
+          deleted_at: string | null
+          id: string
+          metodo: string | null
+          nota: string | null
+          service_id: string
+          unit_id: string | null
+          updated_at: string
+          updated_by: string | null
+        }
+        Insert: {
+          activity_id: string
+          cantidad: number
+          created_at?: string
+          created_by?: string | null
+          crew_id?: string | null
+          deleted_at?: string | null
+          id?: string
+          metodo?: string | null
+          nota?: string | null
+          service_id: string
+          unit_id?: string | null
+          updated_at?: string
+          updated_by?: string | null
+        }
+        Update: {
+          activity_id?: string
+          cantidad?: number
+          created_at?: string
+          created_by?: string | null
+          crew_id?: string | null
+          deleted_at?: string | null
+          id?: string
+          metodo?: string | null
+          nota?: string | null
+          service_id?: string
+          unit_id?: string | null
+          updated_at?: string
+          updated_by?: string | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "rendimientos_jornada_activity_id_fkey"
+            columns: ["activity_id"]
+            isOneToOne: false
+            referencedRelation: "activities_catalog"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "rendimientos_jornada_created_by_fkey"
+            columns: ["created_by"]
+            isOneToOne: false
+            referencedRelation: "profiles"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "rendimientos_jornada_crew_id_fkey"
+            columns: ["crew_id"]
+            isOneToOne: false
+            referencedRelation: "crews"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "rendimientos_jornada_crew_id_fkey"
+            columns: ["crew_id"]
+            isOneToOne: false
+            referencedRelation: "v_hygiene_today"
+            referencedColumns: ["crew_id"]
+          },
+          {
+            foreignKeyName: "rendimientos_jornada_service_id_fkey"
+            columns: ["service_id"]
+            isOneToOne: false
+            referencedRelation: "services"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "rendimientos_jornada_unit_id_fkey"
+            columns: ["unit_id"]
+            isOneToOne: false
+            referencedRelation: "units"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "rendimientos_jornada_updated_by_fkey"
+            columns: ["updated_by"]
+            isOneToOne: false
+            referencedRelation: "profiles"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      revision_observacion_eventos: {
+        Row: {
+          autor: string | null
+          cuando: string
+          estado_anterior: string | null
+          estado_nuevo: string | null
+          evidencias: string[]
+          id: string
+          observacion_id: string
+          organizacion: string
+          texto: string | null
+          tipo: string
+          version: number | null
+        }
+        Insert: {
+          autor?: string | null
+          cuando?: string
+          estado_anterior?: string | null
+          estado_nuevo?: string | null
+          evidencias?: string[]
+          id?: string
+          observacion_id: string
+          organizacion?: string
+          texto?: string | null
+          tipo: string
+          version?: number | null
+        }
+        Update: {
+          autor?: string | null
+          cuando?: string
+          estado_anterior?: string | null
+          estado_nuevo?: string | null
+          evidencias?: string[]
+          id?: string
+          observacion_id?: string
+          organizacion?: string
+          texto?: string | null
+          tipo?: string
+          version?: number | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "revision_observacion_eventos_autor_fkey"
+            columns: ["autor"]
+            isOneToOne: false
+            referencedRelation: "profiles"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "revision_observacion_eventos_observacion_id_fkey"
+            columns: ["observacion_id"]
+            isOneToOne: false
+            referencedRelation: "revision_observaciones"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      revision_observaciones: {
+        Row: {
+          cerrada_at: string | null
+          cerrada_por: string | null
+          codigo: string
+          creada_at: string
+          creada_por: string | null
+          crew_id: string | null
+          estado: string
+          fase: string | null
+          id: string
+          motivo: string
+          origen: string
+          pci_id: string | null
+          pci_item_id: string | null
+          service_id: string
+          version_observada: number | null
+          work_order_id: string | null
+        }
+        Insert: {
+          cerrada_at?: string | null
+          cerrada_por?: string | null
+          codigo: string
+          creada_at?: string
+          creada_por?: string | null
+          crew_id?: string | null
+          estado?: string
+          fase?: string | null
+          id?: string
+          motivo: string
+          origen: string
+          pci_id?: string | null
+          pci_item_id?: string | null
+          service_id: string
+          version_observada?: number | null
+          work_order_id?: string | null
+        }
+        Update: {
+          cerrada_at?: string | null
+          cerrada_por?: string | null
+          codigo?: string
+          creada_at?: string
+          creada_por?: string | null
+          crew_id?: string | null
+          estado?: string
+          fase?: string | null
+          id?: string
+          motivo?: string
+          origen?: string
+          pci_id?: string | null
+          pci_item_id?: string | null
+          service_id?: string
+          version_observada?: number | null
+          work_order_id?: string | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "revision_observaciones_cerrada_por_fkey"
+            columns: ["cerrada_por"]
+            isOneToOne: false
+            referencedRelation: "profiles"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "revision_observaciones_creada_por_fkey"
+            columns: ["creada_por"]
+            isOneToOne: false
+            referencedRelation: "profiles"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "revision_observaciones_crew_id_fkey"
+            columns: ["crew_id"]
+            isOneToOne: false
+            referencedRelation: "crews"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "revision_observaciones_crew_id_fkey"
+            columns: ["crew_id"]
+            isOneToOne: false
+            referencedRelation: "v_hygiene_today"
+            referencedColumns: ["crew_id"]
+          },
+          {
+            foreignKeyName: "revision_observaciones_pci_id_fkey"
+            columns: ["pci_id"]
+            isOneToOne: false
+            referencedRelation: "pcis"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "revision_observaciones_pci_id_fkey"
+            columns: ["pci_id"]
+            isOneToOne: false
+            referencedRelation: "v_pci_resumen"
+            referencedColumns: ["pci_id"]
+          },
+          {
+            foreignKeyName: "revision_observaciones_pci_item_id_fkey"
+            columns: ["pci_item_id"]
+            isOneToOne: false
+            referencedRelation: "pci_items"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "revision_observaciones_pci_item_id_fkey"
+            columns: ["pci_item_id"]
+            isOneToOne: false
+            referencedRelation: "v_pci_items"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "revision_observaciones_service_id_fkey"
+            columns: ["service_id"]
+            isOneToOne: false
+            referencedRelation: "services"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "revision_observaciones_work_order_id_fkey"
+            columns: ["work_order_id"]
+            isOneToOne: false
+            referencedRelation: "work_orders"
             referencedColumns: ["id"]
           },
         ]
@@ -6157,6 +6547,9 @@ export type Database = {
           headcount: number | null
           id: string
           notes: string | null
+          publicacion_version: number
+          publicado_at: string | null
+          publicado_por: string | null
           review_notes: string | null
           reviewed_at: string | null
           reviewed_by: string | null
@@ -6180,6 +6573,9 @@ export type Database = {
           headcount?: number | null
           id?: string
           notes?: string | null
+          publicacion_version?: number
+          publicado_at?: string | null
+          publicado_por?: string | null
           review_notes?: string | null
           reviewed_at?: string | null
           reviewed_by?: string | null
@@ -6203,6 +6599,9 @@ export type Database = {
           headcount?: number | null
           id?: string
           notes?: string | null
+          publicacion_version?: number
+          publicado_at?: string | null
+          publicado_por?: string | null
           review_notes?: string | null
           reviewed_at?: string | null
           reviewed_by?: string | null
@@ -6236,6 +6635,13 @@ export type Database = {
             isOneToOne: false
             referencedRelation: "v_hygiene_today"
             referencedColumns: ["crew_id"]
+          },
+          {
+            foreignKeyName: "work_orders_publicado_por_fkey"
+            columns: ["publicado_por"]
+            isOneToOne: false
+            referencedRelation: "profiles"
+            referencedColumns: ["id"]
           },
           {
             foreignKeyName: "work_orders_reviewed_by_fkey"
@@ -6574,6 +6980,7 @@ export type Database = {
           pci_term_days: number | null
           phase: Database["public"]["Enums"]["evidence_phase"] | null
           progresiva_m: number | null
+          publicada_version: number | null
           revisada_at: string | null
           revision: string | null
           revision_nota: string | null
@@ -8039,6 +8446,22 @@ export type Database = {
         }
         Returns: undefined
       }
+      bandeja_observaciones: {
+        Args: {
+          p_crew?: string
+          p_desde?: string
+          p_desde_fila?: number
+          p_estado?: string
+          p_hasta?: string
+          p_limite?: number
+          p_origen?: string
+          p_pci?: string
+          p_plazo?: number
+          p_q?: string
+          p_service: string
+        }
+        Returns: Json
+      }
       buscar: {
         Args: { p_limit?: number; p_q: string; p_service_id: string }
         Returns: Json
@@ -8192,6 +8615,7 @@ export type Database = {
         Returns: boolean
       }
       es_admin: { Args: { sid: string }; Returns: boolean }
+      es_visor: { Args: { sid: string }; Returns: boolean }
       estoy_activo: { Args: never; Returns: boolean }
       evaluate_pci_deadlines: { Args: never; Returns: Json }
       evidence_gallery: {
@@ -8229,6 +8653,7 @@ export type Database = {
         }
         Returns: Json
       }
+      fase_legible: { Args: { p: string }; Returns: string }
       fijar_foto_referencial: {
         Args: { p_id: string; p_path: string; p_tabla: string }
         Returns: undefined
@@ -8250,6 +8675,41 @@ export type Database = {
         Returns: number
       }
       hoy_peru: { Args: never; Returns: string }
+      inicio_mr: {
+        Args: {
+          p_activity?: string
+          p_crew?: string
+          p_desde: string
+          p_hasta: string
+          p_service: string
+          p_supervisor?: string
+          p_unit?: string
+        }
+        Returns: Json
+      }
+      inicio_pci: {
+        Args: {
+          p_busqueda?: string
+          p_corte?: string
+          p_crew?: string
+          p_pci?: string
+          p_sector?: string
+          p_service: string
+        }
+        Returns: Json
+      }
+      inicio_pci_items: {
+        Args: {
+          p_cifra?: string
+          p_corte?: string
+          p_crew?: string
+          p_pci?: string
+          p_plazo?: number
+          p_sector?: string
+          p_service: string
+        }
+        Returns: Json
+      }
       inventario_para_campo: { Args: { p_service_id: string }; Returns: Json }
       inventario_resumen: {
         Args: { p_section_id?: string; p_service_id: string }
@@ -8282,6 +8742,35 @@ export type Database = {
       next_supply_request_code: {
         Args: { p_service_id: string }
         Returns: string
+      }
+      niveles_servicio: {
+        Args: {
+          p_activity?: string
+          p_crew?: string
+          p_desde: string
+          p_hasta: string
+          p_q?: string
+          p_sector?: string
+          p_service: string
+        }
+        Returns: Json
+      }
+      obs_codigo: {
+        Args: { p_item: string; p_numero: number }
+        Returns: string
+      }
+      observacion_accion: {
+        Args: {
+          p_accion: string
+          p_evidencias?: string[]
+          p_obs: string
+          p_texto?: string
+        }
+        Returns: Json
+      }
+      observaciones_de: {
+        Args: { p_item?: string; p_parte?: string }
+        Returns: Json
       }
       panel_cuadrillas: {
         Args: { p_from: string; p_service_id: string; p_to: string }
@@ -8334,6 +8823,9 @@ export type Database = {
           headcount: number | null
           id: string
           notes: string | null
+          publicacion_version: number
+          publicado_at: string | null
+          publicado_por: string | null
           review_notes: string | null
           reviewed_at: string | null
           reviewed_by: string | null
@@ -8353,6 +8845,7 @@ export type Database = {
           isSetofReturn: false
         }
       }
+      parte_publicar: { Args: { p_ids: string[] }; Returns: Json }
       parte_sin_metrado: {
         Args: { p_work_order_id: string }
         Returns: string[]
@@ -8379,6 +8872,11 @@ export type Database = {
       }
       pci_geojson: { Args: { p_service_id: string }; Returns: Json }
       pci_iniciar_atencion: { Args: { p_item: string }; Returns: Json }
+      pci_item_estado: { Args: { p_item: string }; Returns: Json }
+      pci_item_fases_faltantes: {
+        Args: { p_item: string; p_publicadas?: boolean }
+        Returns: string[]
+      }
       pci_item_historial: { Args: { p_item: string }; Returns: Json }
       pci_item_semaforo: {
         Args: {
@@ -8389,6 +8887,10 @@ export type Database = {
         Returns: string
       }
       pci_levantar: { Args: { p_item: string; p_nota?: string }; Returns: Json }
+      pci_publicar: {
+        Args: { p_items: string[]; p_nota?: string }
+        Returns: Json
+      }
       pci_situacion: { Args: { p_pci: string }; Returns: Json }
       pci_tablero: {
         Args: {
@@ -8403,7 +8905,13 @@ export type Database = {
         Returns: Json
       }
       pci_validar: {
-        Args: { p_conforme: boolean; p_item: string; p_nota?: string }
+        Args: {
+          p_conforme: boolean
+          p_fase?: string
+          p_item: string
+          p_nota?: string
+          p_version?: number
+        }
         Returns: Json
       }
       pcis_visibles: { Args: never; Returns: string[] }
@@ -8495,6 +9003,10 @@ export type Database = {
           p_titular: string
         }
         Returns: Json
+      }
+      rendimiento_referencia: {
+        Args: { p_activity: string; p_crew?: string; p_service: string }
+        Returns: number
       }
       renglon_de_campo_en_transicion: {
         Args: {

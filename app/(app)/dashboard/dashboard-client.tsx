@@ -22,6 +22,7 @@ import { SkeletonKpi, SkeletonChart, SkeletonList } from '@/components/ui/skelet
 import { Badge } from '@/components/ui/badge'
 import { fmtNumber, fmtDate, fmtRelative, truncate, cn } from '@/lib/utils'
 import { PCI_PRIORITY, WORK_ORDER_STATUS } from '@/lib/constants'
+import { InicioUnico } from '@/components/inicio/inicio-unico'
 import { SupervisorDashboard } from './supervisor-dashboard'
 
 // ── Lazy: los gráficos y el mapa no deben pesar en el bundle inicial ──────
@@ -45,13 +46,18 @@ const MiniMap = dynamic(() => import('@/components/dashboard/mini-map').then((m)
 export function DashboardClient() {
   const { role } = useSession()
 
-  // El supervisor de campo no dirige el contrato: dirige sus cuadrillas.
-  // Darle las cifras globales lo obliga a buscar las suyas dentro de un
-  // total que en su mayoría no le corresponde, así que tiene panel propio.
-  if (role === 'supervisor') return <SupervisorDashboard />
+  // Inicio único PCI / MR (guía de roles 3.1): la misma pantalla con el
+  // alcance de cada rol; la base recorta lo que cada uno ve.
+  if (role === 'supervisor') return <InicioUnico rol="supervisor" titulo="Inicio · Situación de mis cuadrillas" />
+  if (role === 'residente') return <InicioUnico rol="residente" titulo="Inicio · Avance del contrato" pestanaInicial="mr" />
+  if (role === 'visor') return <InicioUnico rol="visor" titulo="Estado situacional" />
+  if (role === 'admin') return <InicioUnico rol="admin" titulo="Inicio · Avance PCI y programación MR" />
 
   return <PanelGeneral />
 }
+
+/** El panel de cuadrillas del supervisor: ahora es su apartado «Mis cuadrillas». */
+export { SupervisorDashboard }
 
 function PanelGeneral() {
   const { service, profile, hasModule } = useSession()

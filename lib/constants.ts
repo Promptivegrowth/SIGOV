@@ -3,7 +3,7 @@ import {
   LayoutDashboard,
   Wallet, CalendarRange, TriangleAlert, HardHat, MapPinned,
   Boxes, Package, PackageCheck, CalendarClock, ShieldCheck, FileBarChart, Upload, Settings, Map, FolderOpen, Bell, FileSignature, History,
-  ClipboardList, Camera, BarChart3, RefreshCw,
+  ClipboardList, Camera, BarChart3, RefreshCw, Users, Layers, MessageSquareWarning, BellRing,
 } from 'lucide-react'
 
 export type Role = 'admin' | 'supervisor' | 'residente' | 'jefe_cuadrilla' | 'ing_seguridad' | 'visor'
@@ -108,7 +108,7 @@ export const NAV: NavItem[] = [
   { href: '/avance',       label: 'Mi Avance',     icon: BarChart3,
     roles: ['jefe_cuadrilla'], module: 'campo' },
   { href: '/sincronizacion', label: 'Sincronización', icon: RefreshCw,
-    roles: ['jefe_cuadrilla'], badge: 'sync' },
+    roles: ['jefe_cuadrilla', 'supervisor', 'residente', 'admin'], badge: 'sync' },
   { href: '/alertas',      label: 'Alertas',       icon: Bell,
     roles: ['admin','supervisor','residente','ing_seguridad'], badge: 'alertas' },
   { href: '/mapa',         label: 'Mapa',          icon: Map,
@@ -138,11 +138,60 @@ export const NAV: NavItem[] = [
     roles: ['admin','supervisor','residente'] },
   { href: '/configuracion',label: 'Configuración', icon: Settings,
     roles: ['admin','supervisor','residente'] },
+  // Revisión visual del 18/11 (Elvis): apartados propios de cada rol
+  { href: '/mis-cuadrillas', label: 'Mis cuadrillas', labelPorRol: { residente: 'Cuadrillas y recursos', admin: 'Cuadrillas y recursos' },
+    icon: Users, roles: ['supervisor', 'residente', 'admin'] },
+  { href: '/niveles-servicio', label: 'Niveles de servicio', icon: Layers,
+    roles: ['visor', 'supervisor', 'residente', 'admin'], module: 'campo' },
+  { href: '/revision', label: 'Observaciones de revisión', labelPorRol: { visor: 'Observaciones' },
+    icon: MessageSquareWarning, roles: ['visor', 'supervisor', 'residente', 'admin', 'jefe_cuadrilla'] },
+  { href: '/notificaciones', label: 'Notificaciones', icon: BellRing,
+    roles: ['visor', 'supervisor', 'residente', 'admin', 'ing_seguridad', 'jefe_cuadrilla'] },
 ]
+
+/**
+ * El menú principal de cada rol, en el orden y con los nombres de sus
+ * maquetas (revisión visual del 18/11). Lo demás que el rol puede abrir va
+ * en «Más»: el menú no quita módulos, los ordena.
+ */
+export const MENU_POR_ROL: Partial<Record<Role, { href: string; label: string }[]>> = {
+  visor: [
+    { href: '/dashboard', label: 'Inicio' },
+    { href: '/pci', label: 'PCI' },
+    { href: '/niveles-servicio', label: 'Niveles de servicio' },
+    { href: '/programacion', label: 'Programación' },
+    { href: '/revision', label: 'Observaciones' },
+    { href: '/reportes', label: 'Reportes' },
+    { href: '/notificaciones', label: 'Notificaciones' },
+  ],
+  supervisor: [
+    { href: '/dashboard', label: 'Inicio' },
+    { href: '/mis-cuadrillas', label: 'Mis cuadrillas' },
+    { href: '/programacion', label: 'Programación' },
+    { href: '/pci', label: 'PCI' },
+    { href: '/campo', label: 'Reportes diarios' },
+    { href: '/observaciones', label: 'Observaciones' },
+    { href: '/inventario', label: 'Inventario vial' },
+    { href: '/reportes', label: 'Reportes' },
+    { href: '/caja', label: 'Caja consulta' },
+    { href: '/sincronizacion', label: 'Sincronización' },
+  ],
+  residente: [
+    { href: '/dashboard', label: 'Inicio' },
+    { href: '/programacion', label: 'Programación' },
+    { href: '/pci', label: 'PCI' },
+    { href: '/mis-cuadrillas', label: 'Cuadrillas y recursos' },
+    { href: '/observaciones', label: 'Observaciones' },
+    { href: '/reportes', label: 'Reportes' },
+    { href: '/ssoma', label: 'SSOMA' },
+    { href: '/caja', label: 'Caja interna' },
+    { href: '/sincronizacion', label: 'Sincronización' },
+  ],
+}
 
 /** El rótulo que le toca a este rol. */
 export function rotuloDeNav(item: NavItem, role: Role): string {
-  return item.labelPorRol?.[role] ?? item.label
+  return MENU_POR_ROL[role]?.find((m) => m.href === item.href)?.label ?? item.labelPorRol?.[role] ?? item.label
 }
 
 

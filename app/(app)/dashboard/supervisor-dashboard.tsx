@@ -130,7 +130,7 @@ export function SupervisorDashboard() {
     <>
       <PageHeader
         icon={LayoutDashboard}
-        title={`${saludo}, ${profile.full_name.split(' ')[0]}`}
+        title="Mis cuadrillas"
         description={`${fmtNumber(r?.cuadrillas ?? 0)} cuadrillas a tu cargo en ${service.name}.`}
         actions={<SelectorDeSemana semana={semana} onMover={mover} onHoy={volverAHoy} />}
       />

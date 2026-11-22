@@ -1,12 +1,14 @@
 'use client'
 
 import * as React from 'react'
+import Link from 'next/link'
 import { useQuery } from '@tanstack/react-query'
 import { motion } from 'motion/react'
 import {
   FileBarChart, FileText, FileSpreadsheet, HardHat, TriangleAlert,
   ShieldCheck, Ruler, Boxes, Loader2, CircleCheck, Wallet, Package,
 } from 'lucide-react'
+import { PackageOpen, ChevronRight } from 'lucide-react'
 import { createClient, fetchAll } from '@/lib/supabase/client'
 import { useSession } from '@/lib/hooks/use-session'
 import { PageHeader, PageBody } from '@/components/shared/page-header'
@@ -427,6 +429,15 @@ export function ReportesClient() {
       />
 
       <PageBody>
+        {/* Expediente PCI: paquete con fotos oficiales, manifiesto y filtros (guía 9.9) */}
+        <Link href="/reportes/expediente" className="bg-card hover:border-primary/40 mb-4 flex items-center gap-4 rounded-xl border border-border p-4 transition-colors">
+          <span className="bg-primary/10 text-primary flex size-11 items-center justify-center rounded-lg"><PackageOpen className="size-5" /></span>
+          <span className="min-w-0 flex-1">
+            <strong className="block text-[14px]">Exportar expediente PCI</strong>
+            <span className="text-muted-foreground text-[12.5px]">PCI › plazo › ítems: fotos JPG ITEM_n(1)(2)(3), Excel con foto anclada, PDF, panel fotográfico, mapa e historial, con manifiesto de faltantes.</span>
+          </span>
+          <ChevronRight className="text-muted-foreground size-4" />
+        </Link>
         <div className="grid grid-cols-1 gap-3 md:grid-cols-2 xl:grid-cols-3">
           {available.map((r, i) => (
             <motion.div
