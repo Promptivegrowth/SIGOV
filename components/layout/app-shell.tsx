@@ -11,12 +11,13 @@ import { InstallPrompt } from './install-prompt'
 import { OfflineBanner } from './offline-banner'
 import { useSession } from '@/lib/hooks/use-session'
 import { NAV } from '@/lib/constants'
+import { useRutasOcultas, rutaOculta } from '@/lib/permisos'
 import { cn } from '@/lib/utils'
 
 export function AppShell({ children }: { children: React.ReactNode }) {
   const pathname = usePathname()
   const router = useRouter()
-  const { can, role, hasModule } = useSession()
+  const { can, role, hasModule, service } = useSession()
   const [collapsed, setCollapsed] = React.useState(false)
   const [mobileOpen, setMobileOpen] = React.useState(false)
 
@@ -37,11 +38,13 @@ export function AppShell({ children }: { children: React.ReactNode }) {
   // Guardia de acceso: un módulo apagado para el servicio activo — o un módulo
   // fuera del rol — no debe ser alcanzable escribiendo la URL a mano. Mientras
   // se redirige no se muestra nada: ni un instante de la página ajena.
+  const ocultas = useRutasOcultas(service.id, role)
   const bloqueada = React.useMemo(() => {
     const item = NAV.filter((n) => pathname === n.href || pathname.startsWith(`${n.href}/`)).sort((a, b) => b.href.length - a.href.length)[0]
+    if (rutaOculta(ocultas, pathname)) return true
     if (!item) return false
     return Boolean((item.module && !hasModule(item.module)) || !item.roles.includes(role))
-  }, [pathname, hasModule, role])
+  }, [pathname, hasModule, role, ocultas])
   React.useEffect(() => {
     if (bloqueada) router.replace('/dashboard')
   }, [bloqueada, router])

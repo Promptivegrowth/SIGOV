@@ -219,12 +219,20 @@ export async function PATCH(req: NextRequest) {
     if (error) return NextResponse.json({ error: error.message }, { status: 400 })
   }
 
+  // Desbloquear (bloqueo por intentos fallidos), sin tocar el estado activo
+  if (body.desbloquear) {
+    const { error } = await admin.auth.admin.updateUserById(body.id, { ban_duration: 'none' })
+    if (error) return NextResponse.json({ error: error.message }, { status: 400 })
+    await admin.from('accesos' as any).insert({ profile_id: body.id, evento: 'desbloqueo', resultado: 'exitoso', detalle: `Desbloqueado por el Administrador` } as any)
+  }
+
   if (body.new_password) {
     if (String(body.new_password).length < CLAVE_MINIMA) {
       return NextResponse.json({ error: `La contraseña debe tener al menos ${CLAVE_MINIMA} caracteres` }, { status: 400 })
     }
     const { error } = await admin.auth.admin.updateUserById(body.id, { password: body.new_password })
     if (error) return NextResponse.json({ error: error.message }, { status: 400 })
+    await admin.from('accesos' as any).insert({ profile_id: body.id, evento: 'restablecimiento', resultado: 'exitoso', detalle: 'Restablecimiento de contraseña' } as any)
   }
 
   return NextResponse.json({ ok: true })

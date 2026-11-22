@@ -103,6 +103,8 @@ export function SessionProvider({
     const sb = createClient()
     // Solo este equipo: la cuenta de una cuadrilla o del visor COVINCA la
     // usan varias personas a la vez, y salir no debe sacar a las demás.
+    // Historial de accesos: la salida se anota antes de cerrar la sesión
+    await fetch('/api/accesos', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ evento: 'salida', plataforma: 'web' }) }).catch(() => {})
     await sb.auth.signOut({ scope: 'local' })
     localStorage.removeItem(STORAGE_KEY)
     router.push('/login')

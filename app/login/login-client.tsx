@@ -48,14 +48,20 @@ export function LoginClient() {
       setError(null)
       const { error } = await supabase.auth.signInWithPassword({ email: correoDeUsuario(mail), password: pass })
       if (error) {
+        // Historial de accesos: el servidor verifica y anota el intento; 5 fallos bloquean 30 minutos
+        const r = await fetch('/api/accesos', { method: 'POST', headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ evento: 'fallido', usuario: mail, password: pass, plataforma: 'web' }) }).then((x) => x.json()).catch(() => ({}))
         setError(
-          error.message === 'Invalid login credentials'
+          r?.bloqueado || /banned/i.test(error.message)
+            ? 'La cuenta está bloqueada por intentos fallidos. Espera 30 minutos o pide al Administrador que la desbloquee.'
+            : error.message === 'Invalid login credentials'
             ? 'Credenciales incorrectas. Verifica el usuario y la contraseña.'
             : mensajeAmigable(error, 'No se pudo iniciar sesión. Inténtalo de nuevo.')
         )
         setLoading(null)
         return
       }
+      void fetch('/api/accesos', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ evento: 'ingreso', plataforma: 'web' }) }).catch(() => {})
       toast.success('Bienvenido a SIGOV')
       router.push(next)
       router.refresh()

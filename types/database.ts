@@ -14,6 +14,56 @@ export type Database = {
   }
   public: {
     Tables: {
+      accesos: {
+        Row: {
+          cuando: string
+          detalle: string | null
+          dispositivo: string | null
+          evento: string
+          id: string
+          ip: string | null
+          plataforma: string | null
+          profile_id: string | null
+          resultado: string
+          user_agent: string | null
+          usuario: string | null
+        }
+        Insert: {
+          cuando?: string
+          detalle?: string | null
+          dispositivo?: string | null
+          evento: string
+          id?: string
+          ip?: string | null
+          plataforma?: string | null
+          profile_id?: string | null
+          resultado: string
+          user_agent?: string | null
+          usuario?: string | null
+        }
+        Update: {
+          cuando?: string
+          detalle?: string | null
+          dispositivo?: string | null
+          evento?: string
+          id?: string
+          ip?: string | null
+          plataforma?: string | null
+          profile_id?: string | null
+          resultado?: string
+          user_agent?: string | null
+          usuario?: string | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "accesos_profile_id_fkey"
+            columns: ["profile_id"]
+            isOneToOne: false
+            referencedRelation: "profiles"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       activities_catalog: {
         Row: {
           carpeta_ns: string | null
@@ -25,12 +75,15 @@ export type Database = {
           created_by: string | null
           deleted_at: string | null
           description: string | null
+          fuente: string | null
           icon: string | null
           id: string
           is_active: boolean
+          metodo: string
           min_photos: number
           name: string
           numero_covinca: number | null
+          oficial: boolean
           requires_photo: boolean
           service_id: string
           unit_id: string | null
@@ -47,12 +100,15 @@ export type Database = {
           created_by?: string | null
           deleted_at?: string | null
           description?: string | null
+          fuente?: string | null
           icon?: string | null
           id?: string
           is_active?: boolean
+          metodo?: string
           min_photos?: number
           name: string
           numero_covinca?: number | null
+          oficial?: boolean
           requires_photo?: boolean
           service_id: string
           unit_id?: string | null
@@ -69,12 +125,15 @@ export type Database = {
           created_by?: string | null
           deleted_at?: string | null
           description?: string | null
+          fuente?: string | null
           icon?: string | null
           id?: string
           is_active?: boolean
+          metodo?: string
           min_photos?: number
           name?: string
           numero_covinca?: number | null
+          oficial?: boolean
           requires_photo?: boolean
           service_id?: string
           unit_id?: string | null
@@ -719,6 +778,7 @@ export type Database = {
           created_at: string
           id: number
           ip_address: string | null
+          motivo: string | null
           record_id: string | null
           service_id: string | null
           table_name: string
@@ -733,6 +793,7 @@ export type Database = {
           created_at?: string
           id?: number
           ip_address?: string | null
+          motivo?: string | null
           record_id?: string | null
           service_id?: string | null
           table_name: string
@@ -747,6 +808,7 @@ export type Database = {
           created_at?: string
           id?: number
           ip_address?: string | null
+          motivo?: string | null
           record_id?: string | null
           service_id?: string | null
           table_name?: string
@@ -1332,30 +1394,39 @@ export type Database = {
         Row: {
           created_at: string
           crew_id: string
+          desde: string | null
           dni: string | null
           full_name: string
+          hasta: string | null
           id: string
           is_active: boolean
+          motivo: string | null
           position: string | null
           profile_id: string | null
         }
         Insert: {
           created_at?: string
           crew_id: string
+          desde?: string | null
           dni?: string | null
           full_name: string
+          hasta?: string | null
           id?: string
           is_active?: boolean
+          motivo?: string | null
           position?: string | null
           profile_id?: string | null
         }
         Update: {
           created_at?: string
           crew_id?: string
+          desde?: string | null
           dni?: string | null
           full_name?: string
+          hasta?: string | null
           id?: string
           is_active?: boolean
+          motivo?: string | null
           position?: string | null
           profile_id?: string | null
         }
@@ -1595,6 +1666,7 @@ export type Database = {
           numero: number | null
           plate: string | null
           section_id: string | null
+          sectores: string[]
           sede: string | null
           service_id: string
           subjefe_nombre: string | null
@@ -1603,6 +1675,8 @@ export type Database = {
           updated_at: string
           vehicle: string | null
           version: number
+          vigencia_desde: string | null
+          vigencia_hasta: string | null
         }
         Insert: {
           code: string
@@ -1618,6 +1692,7 @@ export type Database = {
           numero?: number | null
           plate?: string | null
           section_id?: string | null
+          sectores?: string[]
           sede?: string | null
           service_id: string
           subjefe_nombre?: string | null
@@ -1626,6 +1701,8 @@ export type Database = {
           updated_at?: string
           vehicle?: string | null
           version?: number
+          vigencia_desde?: string | null
+          vigencia_hasta?: string | null
         }
         Update: {
           code?: string
@@ -1641,6 +1718,7 @@ export type Database = {
           numero?: number | null
           plate?: string | null
           section_id?: string | null
+          sectores?: string[]
           sede?: string | null
           service_id?: string
           subjefe_nombre?: string | null
@@ -1649,6 +1727,8 @@ export type Database = {
           updated_at?: string
           vehicle?: string | null
           version?: number
+          vigencia_desde?: string | null
+          vigencia_hasta?: string | null
         }
         Relationships: [
           {
@@ -4111,6 +4191,99 @@ export type Database = {
           },
           {
             foreignKeyName: "pcis_service_id_fkey"
+            columns: ["service_id"]
+            isOneToOne: false
+            referencedRelation: "services"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      permisos_cambios: {
+        Row: {
+          cambios: Json
+          cuando: string
+          id: string
+          motivo: string
+          quien: string | null
+          rol: Database["public"]["Enums"]["user_role"]
+          service_id: string
+          version: number
+        }
+        Insert: {
+          cambios: Json
+          cuando?: string
+          id?: string
+          motivo: string
+          quien?: string | null
+          rol: Database["public"]["Enums"]["user_role"]
+          service_id: string
+          version: number
+        }
+        Update: {
+          cambios?: Json
+          cuando?: string
+          id?: string
+          motivo?: string
+          quien?: string | null
+          rol?: Database["public"]["Enums"]["user_role"]
+          service_id?: string
+          version?: number
+        }
+        Relationships: [
+          {
+            foreignKeyName: "permisos_cambios_quien_fkey"
+            columns: ["quien"]
+            isOneToOne: false
+            referencedRelation: "profiles"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "permisos_cambios_service_id_fkey"
+            columns: ["service_id"]
+            isOneToOne: false
+            referencedRelation: "services"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      permisos_rol: {
+        Row: {
+          actualizado_at: string
+          actualizado_por: string | null
+          modulo: string
+          rol: Database["public"]["Enums"]["user_role"]
+          service_id: string
+          ver: boolean
+          version: number
+        }
+        Insert: {
+          actualizado_at?: string
+          actualizado_por?: string | null
+          modulo: string
+          rol: Database["public"]["Enums"]["user_role"]
+          service_id: string
+          ver: boolean
+          version?: number
+        }
+        Update: {
+          actualizado_at?: string
+          actualizado_por?: string | null
+          modulo?: string
+          rol?: Database["public"]["Enums"]["user_role"]
+          service_id?: string
+          ver?: boolean
+          version?: number
+        }
+        Relationships: [
+          {
+            foreignKeyName: "permisos_rol_actualizado_por_fkey"
+            columns: ["actualizado_por"]
+            isOneToOne: false
+            referencedRelation: "profiles"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "permisos_rol_service_id_fkey"
             columns: ["service_id"]
             isOneToOne: false
             referencedRelation: "services"
@@ -9728,6 +9901,17 @@ export type Database = {
     }
     Functions: {
       _campos_comunes_mtc: { Args: never; Returns: Json }
+      actividad_guardar: {
+        Args: {
+          p_activa: boolean
+          p_fuente: string
+          p_id: string
+          p_metodo: string
+          p_motivo: string
+          p_unit: string
+        }
+        Returns: Json
+      }
       actualizar_parte: {
         Args: {
           p_clima?: string
@@ -9986,6 +10170,20 @@ export type Database = {
         Returns: boolean
       }
       cuadrilla_de_evidencia: { Args: { p_evidencia: string }; Returns: string }
+      cuadrilla_guardar: {
+        Args: {
+          p_crew: string
+          p_desde: string
+          p_hasta: string
+          p_leader: string
+          p_motivo: string
+          p_nombre?: string
+          p_sectores: string[]
+          p_supervisor: string
+        }
+        Returns: Json
+      }
+      cuadrilla_historial: { Args: { p_crew: string }; Returns: Json }
       cuadrillas_visibles: { Args: never; Returns: string[] }
       dar_de_baja_evidencia: {
         Args: { p_client_id: string }
@@ -10161,6 +10359,26 @@ export type Database = {
           p_plazo?: number
           p_sector?: string
           p_service: string
+        }
+        Returns: Json
+      }
+      integrante_agregar: {
+        Args: {
+          p_crew: string
+          p_desde: string
+          p_hasta: string
+          p_motivo: string
+          p_profile: string
+        }
+        Returns: Json
+      }
+      integrante_vigencia: {
+        Args: {
+          p_desde: string
+          p_finalizar?: boolean
+          p_hasta: string
+          p_id: string
+          p_motivo: string
         }
         Returns: Json
       }
@@ -10425,6 +10643,15 @@ export type Database = {
         }
         Returns: boolean
       }
+      permisos_guardar: {
+        Args: {
+          p_cambios: Json
+          p_motivo: string
+          p_rol: Database["public"]["Enums"]["user_role"]
+          p_service: string
+        }
+        Returns: Json
+      }
       preview_pci_suspension: { Args: { p_pci_id: string }; Returns: Json }
       programar_observacion: {
         Args: {
@@ -10504,6 +10731,14 @@ export type Database = {
           p_tipo?: string
           p_titular: string
         }
+        Returns: Json
+      }
+      registro_historial: {
+        Args: { p_id: string; p_tabla: string }
+        Returns: Json
+      }
+      reglas_evidencia_guardar: {
+        Args: { p_motivo: string; p_reglas: Json; p_service: string }
         Returns: Json
       }
       rendimiento_referencia: {
@@ -10797,6 +11032,7 @@ export type Database = {
         }[]
       }
       storage_service_id: { Args: { p_name: string }; Returns: string }
+      usuarios_contrato: { Args: { p_service: string }; Returns: Json }
       validar_vehiculo: {
         Args: { p_aceptar: boolean; p_vehiculo: string }
         Returns: Json

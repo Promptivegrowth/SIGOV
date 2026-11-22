@@ -10,6 +10,7 @@ import { ServiceSwitcher } from './service-switcher'
 import { SyncIndicator } from './sync-indicator'
 import { useSession } from '@/lib/hooks/use-session'
 import { NAV, APP, ROLES, MENU_POR_ROL, rotuloDeNav, type NavItem } from '@/lib/constants'
+import { useRutasOcultas, rutaOculta } from '@/lib/permisos'
 import { cn } from '@/lib/utils'
 import { Tip } from '@/components/ui/primitives'
 import { usePendingCounts } from '@/lib/hooks/use-pending-counts'
@@ -29,8 +30,10 @@ export function Sidebar({
   const { role, hasModule, crew, service } = useSession()
   const counts = usePendingCounts()
 
+  // «Ver» por módulo (Roles y permisos) oculta del menú lo apagado para el rol
+  const ocultas = useRutasOcultas(service.id, role)
   const permitidos = NAV.filter(
-    (n) => n.roles.includes(role) && (!n.module || hasModule(n.module))
+    (n) => n.roles.includes(role) && (!n.module || hasModule(n.module)) && !rutaOculta(ocultas, n.href)
   )
   // El menú del rol en el orden de su maqueta; el resto, en «Más»
   const menu = MENU_POR_ROL[role]
