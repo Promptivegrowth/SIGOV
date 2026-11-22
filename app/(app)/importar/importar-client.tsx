@@ -26,6 +26,8 @@ import { toast } from 'sonner'
 import Link from 'next/link'
 import { usePlazosPci, etiquetaPlazo } from '@/lib/hooks/use-plazos-pci'
 import { SINONIMOS_DE_LADO, ladoDesdeTexto } from '@/lib/lados'
+import { mensajeAmigable } from '@/lib/errores'
+import { FormularioPlazos, faltaEnPlazos, guardarPlazos, type ValorPlazos, type PlazoItems } from '@/components/pci/configurar-plazos'
 
 /** «Detectar el PCI desde la columna del Excel» en vez de elegir uno. */
 const PCI_DESDE_EXCEL = '__excel__'
@@ -57,6 +59,12 @@ export function ImportarClient() {
   const { plazos } = usePlazosPci()
 
   const schema = kind ? IMPORT_KINDS[kind] : null
+
+  // ── Paso «Plazos» (maquetas 06/07): fechas oficiales del oficio o cálculo ──
+  const [valorPlazos, setValorPlazos] = React.useState<ValorPlazos>({
+    modo: 'oficiales', fechas: {}, fechaBase: toISODate(new Date()), contrastado: false, motivo: '',
+  })
+  const [cambiarPlazos, setCambiarPlazos] = React.useState(true)
 
   // ── Catálogos para resolver lookups ───────────────────────────────────
   const lookups = useQuery({
@@ -109,7 +117,7 @@ export function ImportarClient() {
     queryFn: async () => {
       const { data } = await sb
         .from('pcis')
-        .select('id, code, title, notified_on, received_on, default_days, published_at')
+        .select('id, code, title, notified_on, received_on, default_days, published_at, plazos_version')
         .eq('service_id', service.id)
         .is('deleted_at', null)
         .order('notified_on', { ascending: false })
@@ -303,7 +311,7 @@ export function ImportarClient() {
                 default_days: plazos.includes(7) ? 7 : plazos[plazos.length - 1],
                 status: 'abierto',
                 created_by: profile.id,
-              }).select('id, code, title, notified_on, received_on, default_days, published_at').single()
+              }).select('id, code, title, notified_on, received_on, default_days, published_at, plazos_version').single()
               if (error) throw new Error(`No se pudo crear el PCI ${code}: ${error.message}`)
               pci = data
             }
@@ -396,6 +404,16 @@ export function ImportarClient() {
           }
         }
       }
+      // Plazos del oficio (o calculados) sobre el PCI destino, como versión
+      if (aplicaPlazos && pcisTocados.length === 1 && !failed) {
+        try {
+          const x = await guardarPlazos(sb, pcisTocados[0].id, valorPlazos)
+          toast.success(`Plazos ${valorPlazos.modo === 'oficiales' ? 'oficiales' : 'calculados'} guardados (v${x.version})`)
+        } catch (e: any) {
+          errors.push({ error: `Plazos: ${mensajeAmigable(e)}` })
+          toast.error('Los ítems se importaron, pero los plazos no se guardaron', { description: mensajeAmigable(e) })
+        }
+      }
     } catch (e: any) {
       // Fallo antes o fuera de los lotes (p. ej. al leer los ítems que ya
       // existen): lo que no se llegó a escribir cuenta como fallido.
@@ -443,6 +461,42 @@ export function ImportarClient() {
     setFile(null); setHeaders([]); setRows([]); setMapping({})
     setIssues([]); setAvisos([]); setValid([]); setResult(null); setStep(kind ? 'archivo' : 'tipo')
   }
+
+  // Un solo PCI destino: el oficio es por PCI. Con varios, cada uno se ajusta en su ficha.
+  const codigosPci: string[] = schema?.key === 'pci'
+    ? (pciId === PCI_DESDE_EXCEL ? [...new Set(valid.map((v) => String(v.pci_code ?? '').trim()).filter(Boolean))]
+      : [(pcis.data ?? []).find((p: any) => p.id === pciId)?.code].filter((x): x is string => !!x))
+    : []
+  const pciUnico: any = codigosPci.length === 1 ? (pcis.data ?? []).find((p: any) => normKey(p.code) === normKey(String(codigosPci[0]))) ?? null : null
+  const pciExistente = !!pciUnico
+  const plazosExistentes = useQuery({
+    queryKey: ['pci-plazos', pciUnico?.id],
+    enabled: !!pciUnico?.id,
+    queryFn: async () => ((await sb.rpc('pci_plazos_resumen' as any, { p_pci: pciUnico.id } as any)).data as any) ?? null,
+  })
+  const plazosImport: PlazoItems[] = React.useMemo(() => {
+    const n = new Map<number, number>()
+    const porDefecto = Number(pciUnico?.default_days ?? (plazos.includes(7) ? 7 : plazos[plazos.length - 1]))
+    for (const v of valid) { const t = Number(v.term_days ?? porDefecto); n.set(t, (n.get(t) ?? 0) + 1) }
+    // Si el PCI ya existe, sus plazos vigentes también necesitan fecha
+    for (const x of (plazosExistentes.data?.plazos ?? []) as any[]) if (!n.has(Number(x.plazo))) n.set(Number(x.plazo), 0)
+    return [...n.entries()].sort(([a], [b]) => a - b).map(([plazo, items]) => ({ plazo, items }))
+  }, [valid, pciUnico, plazos, plazosExistentes.data])
+  React.useEffect(() => {
+    // Al entrar a la validación: un PCI que ya existe conserva sus plazos salvo que se pida cambiarlos
+    if (step !== 'validacion') return
+    setCambiarPlazos(!pciExistente)
+    const vig = (plazosExistentes.data?.plazos ?? []) as any[]
+    setValorPlazos((v) => ({
+      ...v, contrastado: false, motivo: '',
+      modo: plazosExistentes.data?.modo ?? v.modo,
+      fechaBase: plazosExistentes.data?.fecha_base ?? (valid.find((x) => x.received_on)?.received_on ?? v.fechaBase),
+      fechas: Object.fromEntries(vig.map((x) => [String(x.plazo), x.vencimiento ?? ''])),
+    }))
+  }, [step, pciExistente, plazosExistentes.data]) // eslint-disable-line react-hooks/exhaustive-deps
+  const aplicaPlazos = schema?.key === 'pci' && codigosPci.length === 1 && cambiarPlazos
+  const pideMotivoPlazos = pciExistente && Number(pciUnico?.plazos_version ?? 0) >= 1
+  const faltaPlazos = aplicaPlazos ? faltaEnPlazos(valorPlazos, plazosImport, pideMotivoPlazos) : null
 
   const requiredMissing = schema?.fields.filter(
     (f) => (f.required || (f.key === 'pci_code' && pciId === PCI_DESDE_EXCEL)) && !mapping[f.key]
@@ -743,6 +797,32 @@ export function ImportarClient() {
                 </Card>
               )}
 
+              {/* Plazos (paso 2 de la maqueta) */}
+              {schema?.key === 'pci' && valid.length > 0 && (
+                <Card>
+                  <CardContent className="space-y-3 p-4">
+                    <p className="text-[13.5px] font-semibold">Configuración de plazos</p>
+                    {codigosPci.length !== 1 ? (
+                      <p className="text-muted-foreground text-[12.5px]">
+                        El Excel trae {codigosPci.length} PCI. Los plazos van por oficio: configúralos en la ficha de cada PCI después de importar.
+                      </p>
+                    ) : (
+                      <>
+                        {pciExistente && (
+                          <label className="flex items-center gap-2 text-[12.5px]">
+                            <input type="checkbox" className="size-4" checked={cambiarPlazos} onChange={(e) => setCambiarPlazos(e.target.checked)} />
+                            Cambiar los plazos de {pciUnico.code} con esta importación (si no, conserva la versión vigente v{pciUnico.plazos_version ?? 1})
+                          </label>
+                        )}
+                        {aplicaPlazos && (
+                          <FormularioPlazos valor={valorPlazos} cambiar={setValorPlazos} plazos={plazosImport} pideMotivo={pideMotivoPlazos} />
+                        )}
+                      </>
+                    )}
+                  </CardContent>
+                </Card>
+              )}
+
               {/* Previsualización */}
               {valid.length > 0 && (
                 <Card>
@@ -783,9 +863,16 @@ export function ImportarClient() {
                   <ArrowLeft className="size-4" />
                   Ajustar mapeo
                 </Button>
-                <Button onClick={() => void prepararImportacion()} loading={importing} disabled={!valid.length} className="ml-auto">
+                {schema?.key === 'pci' && (
+                  <span className="text-warning ml-auto flex items-center gap-1.5 text-[12px]">
+                    <TriangleAlert className="size-3.5" />No sobrescribir ítems existentes sin revisar diferencias.
+                  </span>
+                )}
+                {faltaPlazos && <span className="text-muted-foreground text-[12px]">{faltaPlazos}</span>}
+                <Button onClick={() => void prepararImportacion()} loading={importing} disabled={!valid.length || !!faltaPlazos}
+                  className={schema?.key === 'pci' ? '' : 'ml-auto'}>
                   <Database className="size-4" />
-                  Importar {fmtNumber(valid.length)} registros
+                  {schema?.key === 'pci' ? `Confirmar importación (${fmtNumber(valid.length)})` : `Importar ${fmtNumber(valid.length)} registros`}
                 </Button>
               </div>
             </motion.div>

@@ -8,7 +8,7 @@ import { useQuery, useQueryClient } from '@tanstack/react-query'
 import { useVirtualizer } from '@tanstack/react-virtual'
 import {
   ArrowLeft, TriangleAlert, Zap, Search, Camera, CircleCheck,
-  Download, Users, RotateCcw, ChevronDown, Send, Image as ImageIcon, ArrowUpDown, Gauge,
+  Download, Users, RotateCcw, ChevronDown, Send, Image as ImageIcon, ArrowUpDown, Gauge, UserCheck, Handshake,
 } from 'lucide-react'
 import { createClient, fetchAll } from '@/lib/supabase/client'
 import { useSession } from '@/lib/hooks/use-session'
@@ -25,7 +25,7 @@ import { SuspensionDialog } from '@/components/pci/suspension-dialog'
 import { PciItemSheet } from '@/components/pci/pci-item-sheet'
 import { FormDialog } from '@/components/forms/form-dialog'
 import { FotosReferencialesLote } from '@/components/pci/fotos-referenciales-lote'
-import { VencimientosPorPlazo } from '@/components/pci/vencimientos-por-plazo'
+import { PlazosDelPci } from '@/components/pci/configurar-plazos'
 import { CuadrillasDelPci } from '@/components/pci/cuadrillas-del-pci'
 import { descargarPdf, descargarExcel, type ReportMeta } from '@/lib/reports'
 import { PCI_PRIORITY, SEMAFORO, estadoPci, type Semaforo } from '@/lib/constants'
@@ -326,6 +326,16 @@ export function PciDetailClient({ pciId }: { pciId: string }) {
                 Estado situacional
               </Link>
             </Button>
+            {['supervisor', 'admin'].includes(role) && p && (
+              <Button variant="outline" asChild>
+                <Link href={`/asignacion-pci?pci=${pciId}`}><UserCheck className="size-4" />Asignar PCI completo</Link>
+              </Button>
+            )}
+            {['supervisor', 'admin'].includes(role) && p?.published_at && (
+              <Button variant="outline" asChild>
+                <Link href={`/apoyo-temporal?pci=${pciId}`}><Handshake className="size-4" />Apoyo temporal</Link>
+              </Button>
+            )}
             {can.manage && p && (
               <Button
                 variant={p.published_at ? 'outline' : 'default'}
@@ -405,11 +415,10 @@ export function PciDetailClient({ pciId }: { pciId: string }) {
 
       <PageBody className="space-y-4">
         {p && (
-          <VencimientosPorPlazo
-            pci={{ id: p.id, registered_on: p.registered_on, vencimientos: (p.vencimientos ?? {}) as Record<string, string> }}
-            porPlazo={porPlazo}
-            editable={can.manage}
-            onGuardado={() => {
+          <PlazosDelPci
+            pciId={p.id}
+            editable={['admin', 'supervisor', 'residente'].includes(role)}
+            alGuardar={() => {
               qc.invalidateQueries({ queryKey: ['pci', pciId] })
               qc.invalidateQueries({ queryKey: ['pci-items', pciId] })
             }}

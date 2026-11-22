@@ -163,6 +163,133 @@ export type Database = {
           },
         ]
       }
+      apoyos_temporales: {
+        Row: {
+          alcance: string
+          creado_at: string
+          creado_por: string | null
+          crew_destino: string
+          crew_origen: string
+          desde: string
+          estado: string
+          hasta: string
+          id: string
+          items: string[]
+          motivo: string
+          motivo_revocacion: string | null
+          pci_id: string
+          permiso_consultar: boolean
+          permiso_evidencias: boolean
+          revocado_at: string | null
+          revocado_por: string | null
+          service_id: string
+        }
+        Insert: {
+          alcance?: string
+          creado_at?: string
+          creado_por?: string | null
+          crew_destino: string
+          crew_origen: string
+          desde: string
+          estado?: string
+          hasta: string
+          id?: string
+          items?: string[]
+          motivo: string
+          motivo_revocacion?: string | null
+          pci_id: string
+          permiso_consultar?: boolean
+          permiso_evidencias?: boolean
+          revocado_at?: string | null
+          revocado_por?: string | null
+          service_id: string
+        }
+        Update: {
+          alcance?: string
+          creado_at?: string
+          creado_por?: string | null
+          crew_destino?: string
+          crew_origen?: string
+          desde?: string
+          estado?: string
+          hasta?: string
+          id?: string
+          items?: string[]
+          motivo?: string
+          motivo_revocacion?: string | null
+          pci_id?: string
+          permiso_consultar?: boolean
+          permiso_evidencias?: boolean
+          revocado_at?: string | null
+          revocado_por?: string | null
+          service_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "apoyos_temporales_creado_por_fkey"
+            columns: ["creado_por"]
+            isOneToOne: false
+            referencedRelation: "profiles"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "apoyos_temporales_crew_destino_fkey"
+            columns: ["crew_destino"]
+            isOneToOne: false
+            referencedRelation: "crews"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "apoyos_temporales_crew_destino_fkey"
+            columns: ["crew_destino"]
+            isOneToOne: false
+            referencedRelation: "v_hygiene_today"
+            referencedColumns: ["crew_id"]
+          },
+          {
+            foreignKeyName: "apoyos_temporales_crew_origen_fkey"
+            columns: ["crew_origen"]
+            isOneToOne: false
+            referencedRelation: "crews"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "apoyos_temporales_crew_origen_fkey"
+            columns: ["crew_origen"]
+            isOneToOne: false
+            referencedRelation: "v_hygiene_today"
+            referencedColumns: ["crew_id"]
+          },
+          {
+            foreignKeyName: "apoyos_temporales_pci_id_fkey"
+            columns: ["pci_id"]
+            isOneToOne: false
+            referencedRelation: "pcis"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "apoyos_temporales_pci_id_fkey"
+            columns: ["pci_id"]
+            isOneToOne: false
+            referencedRelation: "v_pci_resumen"
+            referencedColumns: ["pci_id"]
+          },
+          {
+            foreignKeyName: "apoyos_temporales_revocado_por_fkey"
+            columns: ["revocado_por"]
+            isOneToOne: false
+            referencedRelation: "profiles"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "apoyos_temporales_service_id_fkey"
+            columns: ["service_id"]
+            isOneToOne: false
+            referencedRelation: "services"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       asset_interventions: {
         Row: {
           action: string
@@ -1997,7 +2124,9 @@ export type Database = {
         Row: {
           accuracy_m: number | null
           altitude_m: number | null
+          apoyo_id: string | null
           asset_id: string | null
+          autorizacion_pendiente: boolean
           caption: string | null
           cargada_at: string | null
           client_id: string
@@ -2048,7 +2177,9 @@ export type Database = {
         Insert: {
           accuracy_m?: number | null
           altitude_m?: number | null
+          apoyo_id?: string | null
           asset_id?: string | null
+          autorizacion_pendiente?: boolean
           caption?: string | null
           cargada_at?: string | null
           client_id?: string
@@ -2099,7 +2230,9 @@ export type Database = {
         Update: {
           accuracy_m?: number | null
           altitude_m?: number | null
+          apoyo_id?: string | null
           asset_id?: string | null
+          autorizacion_pendiente?: boolean
           caption?: string | null
           cargada_at?: string | null
           client_id?: string
@@ -2148,6 +2281,13 @@ export type Database = {
           work_entry_id?: string | null
         }
         Relationships: [
+          {
+            foreignKeyName: "evidences_apoyo_id_fkey"
+            columns: ["apoyo_id"]
+            isOneToOne: false
+            referencedRelation: "apoyos_temporales"
+            referencedColumns: ["id"]
+          },
           {
             foreignKeyName: "evidences_asset_id_fkey"
             columns: ["asset_id"]
@@ -3061,6 +3201,123 @@ export type Database = {
           },
         ]
       }
+      pci_designaciones: {
+        Row: {
+          creada_at: string
+          creada_por: string | null
+          crew_id: string
+          desde: string
+          estado: string
+          hasta: string
+          id: string
+          items_asignados: number
+          items_conservados: number
+          items_liberados: number | null
+          jefe_id: string | null
+          motivo: string
+          motivo_retiro: string | null
+          pci_id: string
+          retirada_at: string | null
+          retirada_por: string | null
+          service_id: string
+        }
+        Insert: {
+          creada_at?: string
+          creada_por?: string | null
+          crew_id: string
+          desde: string
+          estado?: string
+          hasta: string
+          id?: string
+          items_asignados?: number
+          items_conservados?: number
+          items_liberados?: number | null
+          jefe_id?: string | null
+          motivo: string
+          motivo_retiro?: string | null
+          pci_id: string
+          retirada_at?: string | null
+          retirada_por?: string | null
+          service_id: string
+        }
+        Update: {
+          creada_at?: string
+          creada_por?: string | null
+          crew_id?: string
+          desde?: string
+          estado?: string
+          hasta?: string
+          id?: string
+          items_asignados?: number
+          items_conservados?: number
+          items_liberados?: number | null
+          jefe_id?: string | null
+          motivo?: string
+          motivo_retiro?: string | null
+          pci_id?: string
+          retirada_at?: string | null
+          retirada_por?: string | null
+          service_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "pci_designaciones_creada_por_fkey"
+            columns: ["creada_por"]
+            isOneToOne: false
+            referencedRelation: "profiles"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "pci_designaciones_crew_id_fkey"
+            columns: ["crew_id"]
+            isOneToOne: false
+            referencedRelation: "crews"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "pci_designaciones_crew_id_fkey"
+            columns: ["crew_id"]
+            isOneToOne: false
+            referencedRelation: "v_hygiene_today"
+            referencedColumns: ["crew_id"]
+          },
+          {
+            foreignKeyName: "pci_designaciones_jefe_id_fkey"
+            columns: ["jefe_id"]
+            isOneToOne: false
+            referencedRelation: "profiles"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "pci_designaciones_pci_id_fkey"
+            columns: ["pci_id"]
+            isOneToOne: false
+            referencedRelation: "pcis"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "pci_designaciones_pci_id_fkey"
+            columns: ["pci_id"]
+            isOneToOne: false
+            referencedRelation: "v_pci_resumen"
+            referencedColumns: ["pci_id"]
+          },
+          {
+            foreignKeyName: "pci_designaciones_retirada_por_fkey"
+            columns: ["retirada_por"]
+            isOneToOne: false
+            referencedRelation: "profiles"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "pci_designaciones_service_id_fkey"
+            columns: ["service_id"]
+            isOneToOne: false
+            referencedRelation: "services"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       pci_item_eventos: {
         Row: {
           a: Database["public"]["Enums"]["pci_item_status"]
@@ -3557,6 +3814,77 @@ export type Database = {
           },
         ]
       }
+      pci_plazos_versiones: {
+        Row: {
+          cuando: string
+          fecha_base: string | null
+          id: string
+          items_actualizados: number
+          modo: string
+          motivo: string | null
+          pci_id: string
+          quien: string | null
+          service_id: string
+          vencimientos: Json
+          version: number
+        }
+        Insert: {
+          cuando?: string
+          fecha_base?: string | null
+          id?: string
+          items_actualizados?: number
+          modo: string
+          motivo?: string | null
+          pci_id: string
+          quien?: string | null
+          service_id: string
+          vencimientos?: Json
+          version: number
+        }
+        Update: {
+          cuando?: string
+          fecha_base?: string | null
+          id?: string
+          items_actualizados?: number
+          modo?: string
+          motivo?: string | null
+          pci_id?: string
+          quien?: string | null
+          service_id?: string
+          vencimientos?: Json
+          version?: number
+        }
+        Relationships: [
+          {
+            foreignKeyName: "pci_plazos_versiones_pci_id_fkey"
+            columns: ["pci_id"]
+            isOneToOne: false
+            referencedRelation: "pcis"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "pci_plazos_versiones_pci_id_fkey"
+            columns: ["pci_id"]
+            isOneToOne: false
+            referencedRelation: "v_pci_resumen"
+            referencedColumns: ["pci_id"]
+          },
+          {
+            foreignKeyName: "pci_plazos_versiones_quien_fkey"
+            columns: ["quien"]
+            isOneToOne: false
+            referencedRelation: "profiles"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "pci_plazos_versiones_service_id_fkey"
+            columns: ["service_id"]
+            isOneToOne: false
+            referencedRelation: "services"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       pcis: {
         Row: {
           code: string
@@ -3569,7 +3897,11 @@ export type Database = {
           id: string
           items_done: number
           items_total: number
+          modo_plazos: string
           notified_on: string
+          oficio_contrastado_at: string | null
+          oficio_contrastado_por: string | null
+          plazos_version: number
           priority: Database["public"]["Enums"]["pci_priority"]
           published_at: string | null
           published_by: string | null
@@ -3595,7 +3927,11 @@ export type Database = {
           id?: string
           items_done?: number
           items_total?: number
+          modo_plazos?: string
           notified_on: string
+          oficio_contrastado_at?: string | null
+          oficio_contrastado_por?: string | null
+          plazos_version?: number
           priority?: Database["public"]["Enums"]["pci_priority"]
           published_at?: string | null
           published_by?: string | null
@@ -3621,7 +3957,11 @@ export type Database = {
           id?: string
           items_done?: number
           items_total?: number
+          modo_plazos?: string
           notified_on?: string
+          oficio_contrastado_at?: string | null
+          oficio_contrastado_por?: string | null
+          plazos_version?: number
           priority?: Database["public"]["Enums"]["pci_priority"]
           published_at?: string | null
           published_by?: string | null
@@ -3640,6 +3980,13 @@ export type Database = {
           {
             foreignKeyName: "pcis_created_by_fkey"
             columns: ["created_by"]
+            isOneToOne: false
+            referencedRelation: "profiles"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "pcis_oficio_contrastado_por_fkey"
+            columns: ["oficio_contrastado_por"]
             isOneToOne: false
             referencedRelation: "profiles"
             referencedColumns: ["id"]
@@ -6948,6 +7295,8 @@ export type Database = {
           activity_id: string | null
           activity_name: string | null
           altitude_m: number | null
+          apoyo_id: string | null
+          autorizacion_pendiente: boolean | null
           caption: string | null
           cargada_at: string | null
           client_id: string | null
@@ -7005,6 +7354,13 @@ export type Database = {
           work_order_id: string | null
         }
         Relationships: [
+          {
+            foreignKeyName: "evidences_apoyo_id_fkey"
+            columns: ["apoyo_id"]
+            isOneToOne: false
+            referencedRelation: "apoyos_temporales"
+            referencedColumns: ["id"]
+          },
           {
             foreignKeyName: "evidences_created_by_fkey"
             columns: ["created_by"]
@@ -8397,6 +8753,45 @@ export type Database = {
         }
         Returns: Json
       }
+      apoyo_autorizar: {
+        Args: {
+          p_alcance: string
+          p_desde: string
+          p_destino: string
+          p_hasta: string
+          p_items: string[]
+          p_motivo: string
+          p_origen: string
+          p_pci: string
+        }
+        Returns: Json
+      }
+      apoyo_items: {
+        Args: { a: Database["public"]["Tables"]["apoyos_temporales"]["Row"] }
+        Returns: string[]
+      }
+      apoyo_items_activos: { Args: never; Returns: string[] }
+      apoyo_items_para_carga: { Args: never; Returns: string[] }
+      apoyo_revocar: {
+        Args: { p_apoyo: string; p_motivo: string }
+        Returns: Json
+      }
+      apoyo_verificar: {
+        Args: {
+          p_alcance?: string
+          p_desde?: string
+          p_destino: string
+          p_hasta?: string
+          p_items?: string[]
+          p_origen: string
+          p_pci: string
+        }
+        Returns: Json
+      }
+      apoyos_lista: {
+        Args: { p_pci?: string; p_service: string }
+        Returns: Json
+      }
       apply_pci_suspension: { Args: { p_pci_id: string }; Returns: Json }
       apply_pci_suspension_sin_permiso: {
         Args: { p_pci_id: string }
@@ -8667,6 +9062,10 @@ export type Database = {
         }
         Returns: Json
       }
+      evidencia_autorizar: {
+        Args: { p_aceptar: boolean; p_ev: string; p_motivo?: string }
+        Returns: Json
+      }
       fase_legible: { Args: { p: string }; Returns: string }
       fijar_foto_referencial: {
         Args: { p_id: string; p_path: string; p_tabla: string }
@@ -8875,7 +9274,33 @@ export type Database = {
         Returns: Json
       }
       pci_avisos: { Args: { p_pci: string }; Returns: undefined }
+      pci_configurar_plazos: {
+        Args: {
+          p_contrastado?: boolean
+          p_fecha_base?: string
+          p_fechas?: Json
+          p_modo: string
+          p_motivo?: string
+          p_pci: string
+        }
+        Returns: Json
+      }
       pci_corto: { Args: { p_codigo: string }; Returns: string }
+      pci_designacion_resumen: {
+        Args: { p_crew?: string; p_pci: string }
+        Returns: Json
+      }
+      pci_designar: {
+        Args: {
+          p_crew: string
+          p_desde: string
+          p_hasta: string
+          p_jefe: string
+          p_motivo: string
+          p_pci: string
+        }
+        Returns: Json
+      }
       pci_fijar_plazo: {
         Args: { p_items: string[]; p_motivo?: string; p_plazo: number }
         Returns: Json
@@ -8902,8 +9327,14 @@ export type Database = {
         Returns: string
       }
       pci_levantar: { Args: { p_item: string; p_nota?: string }; Returns: Json }
+      pci_plazos_resueltos: { Args: { p_pci: string }; Returns: Json }
+      pci_plazos_resumen: { Args: { p_pci: string }; Returns: Json }
       pci_publicar: {
         Args: { p_items: string[]; p_nota?: string }
+        Returns: Json
+      }
+      pci_retirar_designacion: {
+        Args: { p_motivo: string; p_pci: string }
         Returns: Json
       }
       pci_situacion: { Args: { p_pci: string }; Returns: Json }

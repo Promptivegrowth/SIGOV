@@ -78,7 +78,7 @@ export function useRevisionDatos(itemId: string) {
     queryKey: ['rev-fotos', itemId],
     queryFn: async () => {
       const { data } = await sb.from('v_evidences')
-        .select('id, phase, storage_path, thumb_path, master_path, taken_at, cargada_at, created_at, origen_captura, created_by_name, publicada_version, sello_aplicado, lat, lng')
+        .select('id, phase, storage_path, thumb_path, master_path, taken_at, cargada_at, created_at, origen_captura, created_by_name, publicada_version, sello_aplicado, lat, lng, apoyo_id, autorizacion_pendiente')
         .eq('pci_item_id', itemId).order('taken_at')
       const filas = (data ?? []) as any[]
       const rutas = [...new Set(filas.flatMap((f) => [f.thumb_path, f.storage_path]).filter(Boolean))] as string[]
@@ -112,7 +112,10 @@ export function useRevisionDatos(itemId: string) {
     qc.invalidateQueries({ queryKey: ['inicio-pci'] })
   }
 
-  return { item, estado, fotos, obs, historial, publicaciones, refrescar }
+  // Lo cargado en apoyo fuera de la vigencia no cuenta hasta que el Supervisor lo autoriza
+  const autorizadas = React.useMemo(() => (fotos.data ?? []).filter((f: any) => !f.autorizacion_pendiente), [fotos.data])
+  const pendientes = React.useMemo(() => (fotos.data ?? []).filter((f: any) => f.autorizacion_pendiente), [fotos.data])
+  return { item, estado, fotos, autorizadas, pendientes, obs, historial, publicaciones, refrescar }
 }
 
 export function RevisionItem({ pciId, itemId }: { pciId: string; itemId: string }) {
@@ -127,7 +130,7 @@ export function RevisionItem({ pciId, itemId }: { pciId: string; itemId: string 
   }
   const esVisor = role === 'visor'
 
-  const { item, estado, fotos, obs, historial, publicaciones, refrescar } = useRevisionDatos(itemId)
+  const { item, estado, fotos, autorizadas, pendientes, obs, historial, publicaciones, refrescar } = useRevisionDatos(itemId)
 
   const i = item.data
   const e = estado.data
@@ -188,11 +191,11 @@ export function RevisionItem({ pciId, itemId }: { pciId: string; itemId: string 
               ))}
             </div>
 
-            {tab === 'evidencia' && <TabEvidencia item={i} fotos={fotos.data ?? []} cargando={fotos.isLoading} historial={historial.data ?? []} />}
-            {tab === 'observaciones' && <TabObservaciones item={i} obs={obs.data ?? []} fotos={fotos.data ?? []} rol={role} alCambiar={refrescar} />}
+            {tab === 'evidencia' && <TabEvidencia item={i} fotos={autorizadas} pendientes={pendientes} cargando={fotos.isLoading} historial={historial.data ?? []} />}
+            {tab === 'observaciones' && <TabObservaciones item={i} obs={obs.data ?? []} fotos={autorizadas} rol={role} alCambiar={refrescar} />}
             {tab === 'historial' && <TabHistorial historial={historial.data ?? []} item={i} />}
             {tab === 'documentos' && (
-              <TabDocumentos item={i} fotos={fotos.data ?? []} historial={historial.data ?? []} publicaciones={publicaciones.data ?? []}
+              <TabDocumentos item={i} fotos={autorizadas} historial={historial.data ?? []} publicaciones={publicaciones.data ?? []}
                 esVisor={esVisor} meta={{
                   titulo: `${pciCorto} · Ítem ${i.item_number}`, servicio: service.name, cliente: nombreCliente((service as any).client_name),
                   periodo: `Al ${fmtDate(new Date())}`, generadoPor: profile.full_name, cuadrilla: i.crew_name,
@@ -200,7 +203,7 @@ export function RevisionItem({ pciId, itemId }: { pciId: string; itemId: string 
             )}
           </div>
 
-          <PanelDecision item={i} estado={e} fotos={fotos.data ?? []} rol={role} alCambiar={refrescar} />
+          <PanelDecision item={i} estado={e} fotos={autorizadas} rol={role} alCambiar={refrescar} />
         </div>
       </PageBody>
     </>
@@ -208,7 +211,7 @@ export function RevisionItem({ pciId, itemId }: { pciId: string; itemId: string 
 }
 
 // ═══════════════════════════════════════════════════════════════════════════
-function TabEvidencia({ item, fotos, cargando, historial }: { item: any; fotos: any[]; cargando: boolean; historial: any[] }) {
+function TabEvidencia({ item, fotos, pendientes = [], cargando, historial }: { item: any; fotos: any[]; pendientes?: any[]; cargando: boolean; historial: any[] }) {
   const [grande, setGrande] = React.useState<any | null>(null)
   const generales = fotos.filter((f) => !['antes', 'durante', 'despues'].includes(f.phase))
   return (
@@ -236,7 +239,7 @@ function TabEvidencia({ item, fotos, cargando, historial }: { item: any; fotos: 
               <div className="text-muted-foreground space-y-0.5 px-3 py-2 text-[11.5px]">
                 <p className="flex items-center gap-1.5"><Calendar className="size-3" />Captura: {primera ? fmtDateTime(primera.taken_at) : '—'}</p>
                 <p className="flex items-center gap-1.5"><Upload className="size-3" />Origen: {primera ? ORIGEN[primera.origen_captura] ?? 'Cámara SIGOV' : '—'}</p>
-                <p className="flex items-center gap-1.5"><User className="size-3" />{primera?.created_by_name ?? '—'}{primera?.publicada_version ? ` · v${primera.publicada_version}` : ''}</p>
+                <p className="flex items-center gap-1.5"><User className="size-3" />{primera?.created_by_name ?? '—'}{primera?.apoyo_id ? ' · apoyo temporal' : ''}{primera?.publicada_version ? ` · v${primera.publicada_version}` : ''}</p>
                 {de.length > 1 && (
                   <div className="flex gap-1 pt-1">
                     {de.slice(1, 5).map((x) => (
@@ -252,6 +255,21 @@ function TabEvidencia({ item, fotos, cargando, historial }: { item: any; fotos: 
           )
         })}
       </div>
+      {pendientes.length > 0 && (
+        <Card className="border-warning/50">
+          <CardHeader><CardTitle className="text-warning text-[14px]">Pendientes de autorización ({pendientes.length})</CardTitle>
+            <CardDescription>Cargadas en apoyo temporal fuera de su vigencia (sin conexión). No cuentan como evidencia hasta que el Supervisor las autoriza en «Apoyo temporal › Historial»; no se eliminan solas.</CardDescription></CardHeader>
+          <CardContent className="flex flex-wrap gap-2">
+            {pendientes.map((x) => (
+              <button key={x.id} onClick={() => setGrande(x)} className="bg-muted relative size-20 overflow-hidden rounded-md ring-2 ring-warning/60">
+                {/* eslint-disable-next-line @next/next/no-img-element */}
+                {x.mini && <img src={x.mini} alt="" className="size-full object-cover opacity-80" />}
+                <span className="bg-warning absolute right-0 bottom-0 left-0 text-center text-[10px] font-semibold text-white">{faseLegible(x.phase)}</span>
+              </button>
+            ))}
+          </CardContent>
+        </Card>
+      )}
       {generales.length > 0 && (
         <Card>
           <CardHeader><CardTitle className="text-[14px]">Evidencia general / complementaria</CardTitle>
@@ -796,7 +814,7 @@ function TabDocumentos({ item, fotos, historial, publicaciones, esVisor, meta }:
 export function RevisionRapida({ itemId }: { itemId: string }) {
   const { role } = useSession()
   const sb = React.useMemo(() => createClient(), [])
-  const { item, estado, fotos, historial, refrescar } = useRevisionDatos(itemId)
+  const { item, estado, autorizadas, historial, refrescar } = useRevisionDatos(itemId)
   const parte = useQuery({
     queryKey: ['rev-parte', itemId],
     queryFn: async () => ((await sb.from('work_entries').select('work_order_id').eq('pci_item_id', itemId).is('deleted_at', null)
@@ -806,7 +824,7 @@ export function RevisionRapida({ itemId }: { itemId: string }) {
   if (item.isLoading) return <Card><CardContent className="p-4"><SkeletonList rows={4} /></CardContent></Card>
   if (!i) return <Card><CardContent className="text-muted-foreground p-4 text-[13px]">No tienes acceso a este ítem o ya no existe.</CardContent></Card>
   const pciCorto = String(i.pci_code ?? '').replace(/^PCI-\d{4}-0*/, 'PCI ')
-  const n = (f: string) => (fotos.data ?? []).filter((x) => x.phase === f).length
+  const n = (f: string) => autorizadas.filter((x: any) => x.phase === f).length
   const hitos = (historial.data ?? []).slice(-4)
   return (
     <div className="space-y-3">
@@ -854,7 +872,7 @@ export function RevisionRapida({ itemId }: { itemId: string }) {
           {!hitos.length && parte.data && <Link href={`/campo/${parte.data}`} className="text-primary inline-flex items-center gap-1 text-[12.5px] underline"><ExternalLink className="size-3" />Ver reporte diario digital</Link>}
         </CardContent>
       </Card>
-      <PanelDecision item={i} estado={estado.data} fotos={fotos.data ?? []} rol={role} alCambiar={refrescar} />
+      <PanelDecision item={i} estado={estado.data} fotos={autorizadas} rol={role} alCambiar={refrescar} />
       <p className="text-muted-foreground flex items-center gap-1.5 text-[12px]"><Info className="size-3.5" />Acción según permisos. Conserva historial y originales.
         <Link href={`/pci/${i.pci_id}/item/${i.id}?tab=historial`} className="text-primary underline">Historial del ítem</Link></p>
     </div>

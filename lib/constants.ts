@@ -3,7 +3,7 @@ import {
   LayoutDashboard,
   Wallet, CalendarRange, TriangleAlert, HardHat, MapPinned,
   Boxes, Package, PackageCheck, CalendarClock, ShieldCheck, FileBarChart, Upload, Settings, Map, FolderOpen, Bell, FileSignature, History,
-  ClipboardList, Camera, BarChart3, RefreshCw, Users, Layers, MessageSquareWarning, BellRing, ClipboardCheck,
+  ClipboardList, Camera, BarChart3, RefreshCw, Users, Layers, MessageSquareWarning, BellRing, ClipboardCheck, UserCheck, Handshake,
 } from 'lucide-react'
 
 export type Role = 'admin' | 'supervisor' | 'residente' | 'jefe_cuadrilla' | 'ing_seguridad' | 'visor'
@@ -147,6 +147,8 @@ export const NAV: NavItem[] = [
     icon: MessageSquareWarning, roles: ['visor', 'supervisor', 'residente', 'admin', 'jefe_cuadrilla'] },
   { href: '/revision-reportes', label: 'Revisión de reportes', labelPorRol: { residente: 'Revisión del contrato', admin: 'Revisión del contrato' },
     icon: ClipboardCheck, roles: ['supervisor', 'residente', 'admin'] },
+  { href: '/asignacion-pci', label: 'Asignar PCI completo', icon: UserCheck, roles: ['supervisor', 'residente', 'admin'] },
+  { href: '/apoyo-temporal', label: 'Apoyo temporal', icon: Handshake, roles: ['supervisor', 'residente', 'admin'] },
   { href: '/notificaciones', label: 'Notificaciones', icon: BellRing,
     roles: ['visor', 'supervisor', 'residente', 'admin', 'ing_seguridad', 'jefe_cuadrilla'] },
 ]
