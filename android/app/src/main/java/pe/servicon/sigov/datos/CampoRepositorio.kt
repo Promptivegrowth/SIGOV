@@ -238,8 +238,16 @@ class CampoRepositorio @Inject constructor(
                     }
                     .decodeList<JsonObject>()
             }
-            espejar("pci_items", servicioId, filas)
-            filas.map { fila -> json.decodeFromString<ItemPci>(fila.toString()) }
+            // Apoyo temporal (T5): ítems de otra cuadrilla que esta puede consultar y fotografiar hasta que caduque
+            val deApoyo = if (cuadrillaId == null) emptyList() else runCatching {
+                val ids = supabase.postgrest.rpc("apoyo_items_ids").decodeList<String>()
+                if (ids.isEmpty()) emptyList() else supabase.postgrest.from("v_pci_items").select {
+                    filter { isIn("id", ids); isIn("status", listOf("pendiente", "en_atencion", "observado")) }
+                }.decodeList<JsonObject>()
+            }.getOrDefault(emptyList())
+            val todas = filas + deApoyo.filter { a -> filas.none { it["id"] == a["id"] } }
+            espejar("pci_items", servicioId, todas)
+            todas.map { fila -> json.decodeFromString<ItemPci>(fila.toString()) }
         }.getOrElse {
             deLaCopia<ItemPci>("pci_items", servicioId)
                 .filter { it.estaAbierto }

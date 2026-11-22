@@ -1,5 +1,7 @@
 package pe.servicon.sigov.datos
 
+import kotlinx.coroutines.withContext
+import kotlinx.coroutines.Dispatchers
 import android.content.Context
 import dagger.hilt.android.qualifiers.ApplicationContext
 import io.github.jan.supabase.SupabaseClient
@@ -172,15 +174,49 @@ class SesionRepositorio @Inject constructor(
     }
 
     suspend fun entrar(correo: String, contrasena: String) {
-        supabase.auth.signInWith(Email) {
-            this.email = Usuario.correo(correo)
-            this.password = contrasena
+        try {
+            supabase.auth.signInWith(Email) {
+                this.email = Usuario.correo(correo)
+                this.password = contrasena
+            }
+        } catch (e: Exception) {
+            // Historial de accesos: el servidor verifica el intento y bloquea tras 5 fallos en 15 minutos
+            reportarAcceso(org.json.JSONObject().put("evento", "fallido").put("usuario", correo.trim()).put("password", contrasena)
+                .put("plataforma", "android").put("dispositivo", dispositivo()), null)
+            throw e
         }
         supabase.auth.currentUserOrNull()?.id?.let { usuarioRecordado = it }
         recuerdo.edit().putString("correo", correo.trim()).apply()
+        reportarAcceso(org.json.JSONObject().put("evento", "ingreso").put("plataforma", "android").put("dispositivo", dispositivo()),
+            supabase.auth.currentSessionOrNull()?.accessToken)
+    }
+
+    /** Las llaves de la sesión para abrir los módulos web dentro de la app (T9). */
+    suspend fun llavesDeSesion(): Pair<String, String>? {
+        withTimeoutOrNull(6_000) { supabase.auth.awaitInitialization() }
+        val s = supabase.auth.currentSessionOrNull() ?: return null
+        return s.accessToken to s.refreshToken
+    }
+
+    private fun dispositivo(): String =
+        if (android.os.Build.FINGERPRINT.contains("generic") || android.os.Build.MODEL.contains("sdk", true)) "Android (emulador)"
+        else "Android físico · " + android.os.Build.MODEL
+
+    /** Anota el acceso en /api/accesos; si no hay señal, no bloquea el ingreso. */
+    private suspend fun reportarAcceso(cuerpo: org.json.JSONObject, token: String?) = withContext(Dispatchers.IO) {
+        runCatching {
+            val c = java.net.URL(pe.servicon.sigov.BuildConfig.WEB_URL + "/api/accesos").openConnection() as java.net.HttpURLConnection
+            c.requestMethod = "POST"; c.connectTimeout = 5000; c.readTimeout = 8000; c.doOutput = true
+            c.setRequestProperty("Content-Type", "application/json")
+            if (token != null) c.setRequestProperty("Authorization", "Bearer " + token)
+            c.outputStream.use { it.write(cuerpo.toString().toByteArray()) }
+            c.responseCode; c.disconnect()
+        }
     }
 
     suspend fun salir() {
+        reportarAcceso(org.json.JSONObject().put("evento", "salida").put("plataforma", "android").put("dispositivo", dispositivo()),
+            supabase.auth.currentSessionOrNull()?.accessToken)
         olvidar()
         // Solo este celular: el jefe y el subjefe comparten la cuenta
         supabase.auth.signOut(SignOutScope.LOCAL)

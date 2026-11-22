@@ -71,6 +71,8 @@ android {
         debug {
             applicationIdSuffix = ".debug"
             versionNameSuffix = "-debug"
+            // En el emulador, los módulos web se prueban contra el servidor local
+            buildConfigField("String", "WEB_URL", "\"http://10.0.2.2:3100\"")
         }
         release {
             isMinifyEnabled = true

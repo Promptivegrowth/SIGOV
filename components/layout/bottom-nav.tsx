@@ -1,5 +1,7 @@
 'use client'
 
+import * as React from 'react'
+
 import Link from 'next/link'
 import { usePathname } from 'next/navigation'
 import { motion } from 'motion/react'
@@ -17,6 +19,9 @@ export function BottomNav() {
   const pathname = usePathname()
   const { role, hasModule } = useSession()
   const counts = usePendingCounts()
+  // Dentro de la app (T9) la barra inferior es la nativa del rol: no se duplica
+  const [enApp, setEnApp] = React.useState(false)
+  React.useEffect(() => { setEnApp(/SIGOV-App/.test(navigator.userAgent)) }, [])
 
   const dashboard: NavItem = {
     href: '/dashboard', label: 'Inicio', icon: LayoutDashboard, roles: [], field: true,
@@ -29,6 +34,8 @@ export function BottomNav() {
 
   const badgeFor = (key?: string) =>
     key === 'pci' ? counts.pciCritical : key === 'sync' ? counts.pendingSync : 0
+
+  if (enApp) return null
 
   return (
     <nav

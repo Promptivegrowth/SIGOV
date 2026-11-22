@@ -100,11 +100,9 @@ class MainActivity : ComponentActivity() {
                 // Trabajos es de la cuadrilla; el Visor COVINCA tiene sus fotos
                 // y los demás roles, solo Inicio y Perfil (Elvis, 17/11)
                 val rol by androidx.compose.runtime.produceState<String?>(null, ruta) { value = barra.rol() }
-                val secciones = when (rol) {
-                    null, "jefe_cuadrilla" -> SeccionInferior.entries
-                    "visor" -> listOf(SeccionInferior.INICIO, SeccionInferior.FOTOS, SeccionInferior.PERFIL)
-                    else -> listOf(SeccionInferior.INICIO, SeccionInferior.PERFIL)
-                }
+                // Cada rol con la barra de su maqueta móvil (revisión visual 18/11)
+                val secciones = pe.servicon.sigov.ui.componentes.seccionesDelRol(rol)
+                val conPortal = rol != null && rol != "jefe_cuadrilla"
 
                 // La barra inferior solo aparece en las cuatro secciones que
                 // dibujó Elvis; en las pantallas de detalle estorba, porque
@@ -161,8 +159,13 @@ class MainActivity : ComponentActivity() {
                             },
                         )
                     }
+                    // Módulos web de cada rol dentro de la app (T9: paridad web/móvil)
+                    listOf(SeccionInferior.GESTION, SeccionInferior.ALERTAS, SeccionInferior.REPORTES, SeccionInferior.PCI,
+                        SeccionInferior.OBSERVACIONES, SeccionInferior.INSPECCIONES, SeccionInferior.HALLAZGOS).forEach { sec ->
+                        composable(sec.ruta) { pe.servicon.sigov.ui.portal.PantallaPortal(pe.servicon.sigov.ui.componentes.rutaWeb(sec, rol)) }
+                    }
                     composable("jornada") {
-                        PantallaJornada(
+                        if (conPortal) pe.servicon.sigov.ui.portal.PantallaPortal("/dashboard") else PantallaJornada(
                             alSalir = {
                                 nav.navigate("acceso") {
                                     popUpTo("jornada") { inclusive = true }

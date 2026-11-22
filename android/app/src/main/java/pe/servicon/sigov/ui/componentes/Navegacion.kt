@@ -7,6 +7,13 @@ import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.outlined.CameraAlt
+import androidx.compose.material.icons.outlined.Layers
+import androidx.compose.material.icons.outlined.Notifications
+import androidx.compose.material.icons.outlined.BarChart
+import androidx.compose.material.icons.outlined.Flag
+import androidx.compose.material.icons.outlined.ChatBubbleOutline
+import androidx.compose.material.icons.outlined.Assignment
+import androidx.compose.material.icons.outlined.WarningAmber
 import androidx.compose.material.icons.outlined.Home
 import androidx.compose.material.icons.outlined.Person
 import androidx.compose.material.icons.outlined.Work
@@ -38,6 +45,34 @@ enum class SeccionInferior(
     TRABAJOS("trabajos", "Trabajos", Icons.Outlined.Work),
     FOTOS("evidencias", "Fotos", Icons.Outlined.CameraAlt),
     PERFIL("perfil", "Perfil", Icons.Outlined.Person),
+    // Roles de gestión y consulta (revisión visual 18/11): módulos web dentro de la app
+    GESTION("portal/gestion", "Gestión", Icons.Outlined.Layers),
+    ALERTAS("portal/alertas", "Alertas", Icons.Outlined.Notifications),
+    REPORTES("portal/reportes", "Reportes", Icons.Outlined.BarChart),
+    PCI("portal/pci", "PCI", Icons.Outlined.Flag),
+    OBSERVACIONES("portal/observaciones", "Observaciones", Icons.Outlined.ChatBubbleOutline),
+    INSPECCIONES("portal/inspecciones", "Inspecciones", Icons.Outlined.Assignment),
+    HALLAZGOS("portal/hallazgos", "Hallazgos", Icons.Outlined.WarningAmber),
+}
+
+/** La barra de cada rol, como en sus maquetas móviles. */
+fun seccionesDelRol(rol: String?): List<SeccionInferior> = when (rol) {
+    null, "jefe_cuadrilla" -> listOf(SeccionInferior.INICIO, SeccionInferior.TRABAJOS, SeccionInferior.FOTOS, SeccionInferior.PERFIL)
+    "visor" -> listOf(SeccionInferior.INICIO, SeccionInferior.PCI, SeccionInferior.OBSERVACIONES, SeccionInferior.REPORTES, SeccionInferior.PERFIL)
+    "ing_seguridad" -> listOf(SeccionInferior.INICIO, SeccionInferior.INSPECCIONES, SeccionInferior.HALLAZGOS, SeccionInferior.REPORTES, SeccionInferior.PERFIL)
+    else -> listOf(SeccionInferior.INICIO, SeccionInferior.GESTION, SeccionInferior.ALERTAS, SeccionInferior.REPORTES, SeccionInferior.PERFIL)
+}
+
+/** La pantalla web que abre cada sección para ese rol. */
+fun rutaWeb(seccion: SeccionInferior, rol: String?): String = when (seccion) {
+    SeccionInferior.GESTION -> if (rol == "admin") "/gestion/usuarios" else "/revision-reportes"
+    SeccionInferior.ALERTAS -> if (rol == "admin") "/alertas" else "/notificaciones"
+    SeccionInferior.REPORTES -> "/reportes"
+    SeccionInferior.PCI -> "/pci"
+    SeccionInferior.OBSERVACIONES -> "/revision"
+    SeccionInferior.INSPECCIONES -> "/ssoma/inspecciones"
+    SeccionInferior.HALLAZGOS -> "/ssoma/hallazgos"
+    else -> "/dashboard"
 }
 
 /**
