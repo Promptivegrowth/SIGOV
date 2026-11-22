@@ -1217,6 +1217,117 @@ export type Database = {
           },
         ]
       }
+      conteos_fisicos: {
+        Row: {
+          contado: number
+          contado_at: string
+          crew_id: string
+          decidido_at: string | null
+          decidido_por: string | null
+          diferencia: number
+          estado: string
+          id: string
+          motivo_decision: string | null
+          movimiento_id: string | null
+          nota: string | null
+          registrado_por: string | null
+          service_id: string
+          supply_id: string
+          teorico: number
+        }
+        Insert: {
+          contado: number
+          contado_at?: string
+          crew_id: string
+          decidido_at?: string | null
+          decidido_por?: string | null
+          diferencia: number
+          estado?: string
+          id?: string
+          motivo_decision?: string | null
+          movimiento_id?: string | null
+          nota?: string | null
+          registrado_por?: string | null
+          service_id: string
+          supply_id: string
+          teorico: number
+        }
+        Update: {
+          contado?: number
+          contado_at?: string
+          crew_id?: string
+          decidido_at?: string | null
+          decidido_por?: string | null
+          diferencia?: number
+          estado?: string
+          id?: string
+          motivo_decision?: string | null
+          movimiento_id?: string | null
+          nota?: string | null
+          registrado_por?: string | null
+          service_id?: string
+          supply_id?: string
+          teorico?: number
+        }
+        Relationships: [
+          {
+            foreignKeyName: "conteos_fisicos_crew_id_fkey"
+            columns: ["crew_id"]
+            isOneToOne: false
+            referencedRelation: "crews"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "conteos_fisicos_crew_id_fkey"
+            columns: ["crew_id"]
+            isOneToOne: false
+            referencedRelation: "v_hygiene_today"
+            referencedColumns: ["crew_id"]
+          },
+          {
+            foreignKeyName: "conteos_fisicos_decidido_por_fkey"
+            columns: ["decidido_por"]
+            isOneToOne: false
+            referencedRelation: "profiles"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "conteos_fisicos_movimiento_id_fkey"
+            columns: ["movimiento_id"]
+            isOneToOne: false
+            referencedRelation: "movimientos_cuadrilla"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "conteos_fisicos_registrado_por_fkey"
+            columns: ["registrado_por"]
+            isOneToOne: false
+            referencedRelation: "profiles"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "conteos_fisicos_service_id_fkey"
+            columns: ["service_id"]
+            isOneToOne: false
+            referencedRelation: "services"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "conteos_fisicos_supply_id_fkey"
+            columns: ["supply_id"]
+            isOneToOne: false
+            referencedRelation: "supplies"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "conteos_fisicos_supply_id_fkey"
+            columns: ["supply_id"]
+            isOneToOne: false
+            referencedRelation: "v_supplies"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       crew_members: {
         Row: {
           created_at: string
@@ -4689,6 +4800,78 @@ export type Database = {
           },
         ]
       }
+      requerimientos_insumos: {
+        Row: {
+          crew_id: string
+          cuando: string
+          id: string
+          lineas: Json
+          nota: string | null
+          plan_id: string
+          quien: string | null
+          service_id: string
+          version: number
+        }
+        Insert: {
+          crew_id: string
+          cuando?: string
+          id?: string
+          lineas?: Json
+          nota?: string | null
+          plan_id: string
+          quien?: string | null
+          service_id: string
+          version: number
+        }
+        Update: {
+          crew_id?: string
+          cuando?: string
+          id?: string
+          lineas?: Json
+          nota?: string | null
+          plan_id?: string
+          quien?: string | null
+          service_id?: string
+          version?: number
+        }
+        Relationships: [
+          {
+            foreignKeyName: "requerimientos_insumos_crew_id_fkey"
+            columns: ["crew_id"]
+            isOneToOne: false
+            referencedRelation: "crews"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "requerimientos_insumos_crew_id_fkey"
+            columns: ["crew_id"]
+            isOneToOne: false
+            referencedRelation: "v_hygiene_today"
+            referencedColumns: ["crew_id"]
+          },
+          {
+            foreignKeyName: "requerimientos_insumos_plan_id_fkey"
+            columns: ["plan_id"]
+            isOneToOne: false
+            referencedRelation: "weekly_plans"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "requerimientos_insumos_quien_fkey"
+            columns: ["quien"]
+            isOneToOne: false
+            referencedRelation: "profiles"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "requerimientos_insumos_service_id_fkey"
+            columns: ["service_id"]
+            isOneToOne: false
+            referencedRelation: "services"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       revision_observacion_eventos: {
         Row: {
           autor: string | null
@@ -6576,8 +6759,70 @@ export type Database = {
           },
         ]
       }
+      weekly_plan_versiones: {
+        Row: {
+          cuando: string
+          filas: Json
+          id: string
+          motivo: string | null
+          n_filas: number
+          plan_id: string
+          quien: string | null
+          service_id: string
+          tipo: string
+          version: number
+        }
+        Insert: {
+          cuando?: string
+          filas?: Json
+          id?: string
+          motivo?: string | null
+          n_filas?: number
+          plan_id: string
+          quien?: string | null
+          service_id: string
+          tipo: string
+          version: number
+        }
+        Update: {
+          cuando?: string
+          filas?: Json
+          id?: string
+          motivo?: string | null
+          n_filas?: number
+          plan_id?: string
+          quien?: string | null
+          service_id?: string
+          tipo?: string
+          version?: number
+        }
+        Relationships: [
+          {
+            foreignKeyName: "weekly_plan_versiones_plan_id_fkey"
+            columns: ["plan_id"]
+            isOneToOne: false
+            referencedRelation: "weekly_plans"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "weekly_plan_versiones_quien_fkey"
+            columns: ["quien"]
+            isOneToOne: false
+            referencedRelation: "profiles"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "weekly_plan_versiones_service_id_fkey"
+            columns: ["service_id"]
+            isOneToOne: false
+            referencedRelation: "services"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       weekly_plans: {
         Row: {
+          cambios_sin_publicar: boolean
           created_at: string
           created_by: string | null
           deleted_at: string | null
@@ -6595,10 +6840,12 @@ export type Database = {
           status: Database["public"]["Enums"]["plan_status"]
           supervisor: string | null
           updated_at: string
+          version_publicada: number
           week: number
           year: number
         }
         Insert: {
+          cambios_sin_publicar?: boolean
           created_at?: string
           created_by?: string | null
           deleted_at?: string | null
@@ -6616,10 +6863,12 @@ export type Database = {
           status?: Database["public"]["Enums"]["plan_status"]
           supervisor?: string | null
           updated_at?: string
+          version_publicada?: number
           week: number
           year: number
         }
         Update: {
+          cambios_sin_publicar?: boolean
           created_at?: string
           created_by?: string | null
           deleted_at?: string | null
@@ -6637,6 +6886,7 @@ export type Database = {
           status?: Database["public"]["Enums"]["plan_status"]
           supervisor?: string | null
           updated_at?: string
+          version_publicada?: number
           week?: number
           year?: number
         }
@@ -8904,6 +9154,19 @@ export type Database = {
       }
       clear_section_geometry: { Args: { p_section_id: string }; Returns: Json }
       conductor_apto: { Args: { p_respuestas: Json }; Returns: boolean }
+      conteo_decidir: {
+        Args: { p_ajustar: boolean; p_conteo: string; p_motivo: string }
+        Returns: Json
+      }
+      conteo_registrar: {
+        Args: {
+          p_contado: number
+          p_crew: string
+          p_nota?: string
+          p_supply: string
+        }
+        Returns: Json
+      }
       corregir_solicitud_deposito: {
         Args: {
           p_id: string
@@ -9147,6 +9410,21 @@ export type Database = {
       }
       mis_cuadrillas: { Args: { p_service_id: string }; Returns: string[] }
       mis_servicios: { Args: never; Returns: string[] }
+      movimientos_confirmados: {
+        Args: { p_crew: string; p_service: string }
+        Returns: {
+          confirmado: boolean
+          documento: string
+          entrada: number
+          fecha: string
+          id: string
+          notas: string
+          salida: number
+          supply_id: string
+          tipo: string
+          work_order_id: string
+        }[]
+      }
       my_service_ids: { Args: never; Returns: string[] }
       next_asset_code: {
         Args: { p_section_id: string; p_service_id: string; p_type_id: string }
@@ -9462,6 +9740,19 @@ export type Database = {
         }
         Returns: boolean
       }
+      requerimiento_calcular: {
+        Args: { p_crew: string; p_plan: string }
+        Returns: Json
+      }
+      requerimiento_guardar: {
+        Args: {
+          p_crew: string
+          p_lineas: Json
+          p_nota?: string
+          p_plan: string
+        }
+        Returns: Json
+      }
       revert_pci_suspension: {
         Args: { p_suspension_id: string }
         Returns: Json
@@ -9523,6 +9814,25 @@ export type Database = {
           isOneToOne: true
           isSetofReturn: false
         }
+      }
+      seguimiento_materiales: {
+        Args: {
+          p_crew: string
+          p_desde: string
+          p_hasta: string
+          p_service: string
+        }
+        Returns: Json
+      }
+      semana_filas: { Args: { p_plan: string }; Returns: Json }
+      semana_guardar_borrador: {
+        Args: { p_nota?: string; p_plan: string }
+        Returns: Json
+      }
+      semana_historial: { Args: { p_plan: string }; Returns: Json }
+      semana_publicar: {
+        Args: { p_motivo?: string; p_plan: string }
+        Returns: Json
       }
       set_section_geometry: {
         Args: { p_coords: Json; p_section_id: string }

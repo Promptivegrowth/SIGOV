@@ -14,6 +14,9 @@ import {
 import { createClient } from '@/lib/supabase/client'
 import { useSession } from '@/lib/hooks/use-session'
 import { PageHeader, PageBody } from '@/components/shared/page-header'
+import { GrillaSemanal, metaSemana } from '@/components/programacion/grilla-semanal'
+import { InsumosSemana } from '@/components/programacion/insumos-semana'
+import { SeguimientoMateriales } from '@/components/programacion/seguimiento-materiales'
 import { Button } from '@/components/ui/button'
 import { Badge } from '@/components/ui/badge'
 import { Card, CardContent } from '@/components/ui/card'
@@ -39,7 +42,10 @@ export function ProgramacionClient() {
   const qc = useQueryClient()
   const sb = React.useMemo(() => createClient(), [])
   const [offset, setOffset] = React.useState(0)
-  const [view, setView] = React.useState<'tablero' | 'calendario' | 'lista'>('tablero')
+  const [view, setView] = React.useState<'grilla' | 'tablero' | 'calendario' | 'lista'>('grilla')
+  // Programación MR + PCI (MRPCI_01–03): Semana · Insumos · Seguimiento, con los mismos filtros
+  const [seccion, setSeccion] = React.useState<'semana' | 'insumos' | 'seguimiento'>('semana')
+  const [guardandoBorrador, setGuardandoBorrador] = React.useState(false)
   const [pagina, setPagina] = React.useState(0)
   const [duplicando, setDuplicando] = React.useState(false)
   const [formato, setFormato] = React.useState(false)
@@ -267,13 +273,15 @@ export function ProgramacionClient() {
   const publish = async () => {
     try {
       const planId = await ensurePlan()
-      const { error } = await sb.from('weekly_plans').update({
-        status: 'publicado',
-        published_at: new Date().toISOString(),
-        published_by: profile.id,
-      }).eq('id', planId)
+      // Cada publicación es una versión; desde la segunda se pide el motivo (queda en el historial)
+      let motivo: string | null = null
+      if (Number((p as any)?.version_publicada ?? 0) > 0) {
+        motivo = prompt(`Motivo de la versión v${Number((p as any).version_publicada) + 1} (obligatorio):`)?.trim() || null
+        if (!motivo) return
+      }
+      const { data, error } = await sb.rpc('semana_publicar' as any, { p_plan: planId, p_motivo: motivo } as any)
       if (error) { toast.error(mensajeAmigable(error)); return }
-      toast.success('Programación publicada', { description: 'Las cuadrillas ya la ven en sus celulares.' })
+      toast.success(`Semana publicada · versión v${(data as any).version}`, { description: 'Las cuadrillas ya la ven en sus celulares.' })
       qc.invalidateQueries()
     } catch (e: any) {
       toast.error(mensajeAmigable(e, 'No se pudo publicar'))
@@ -316,6 +324,19 @@ export function ProgramacionClient() {
     }
   }
 
+  const guardarBorrador = async () => {
+    setGuardandoBorrador(true)
+    try {
+      const planId = await ensurePlan()
+      const { data, error } = await sb.rpc('semana_guardar_borrador' as any, { p_plan: planId, p_nota: null } as any)
+      if (error) { toast.error(mensajeAmigable(error)); return }
+      toast.success('Borrador guardado', { description: `${(data as any).filas} actividades. No se publica a las cuadrillas hasta «Publicar semana».` })
+      qc.invalidateQueries({ queryKey: ['semana-historial'] })
+    } catch (e: any) {
+      toast.error(mensajeAmigable(e, 'No se pudo guardar'))
+    } finally { setGuardandoBorrador(false) }
+  }
+
   const stats = React.useMemo(() => {
     // Nada de metrado total: la semana mezcla metros, metros cuadrados y
     // unidades, y sumarlos da una cifra que no significa nada. Lo que sí
@@ -333,17 +354,22 @@ export function ProgramacionClient() {
   }, [rows])
 
   const p = plan.data
+  // Insumos y Seguimiento son por cuadrilla: la del filtro (o la del jefe)
+  const crewSel = role === 'jefe_cuadrilla' ? (crew?.id ?? '') : crewFilter !== 'todas' ? crewFilter : ''
+  const crewNombre = (crews.data ?? []).find((c: any) => c.id === (crewSel || crewFilter))?.name ?? ''
 
   return (
     <>
       <PageHeader
         icon={CalendarRange}
-        title="Programación semanal"
-        description="Asignación de actividades por tramo, progresiva, cuadrilla y fecha. Se reordena automáticamente ante un PCI prioritario."
+        title="Programación MR + PCI"
+        description={seccion === 'insumos' ? `Derivado de la programación semanal · Semana ${semanaVisible}`
+          : seccion === 'seguimiento' ? `Seguimiento de materiales · Semana ${semanaVisible}`
+          : `Semana ${semanaVisible} · ${fmtDate(monday)} al ${fmtDate(addDays(monday, 5))}${crewFilter !== 'todas' ? ' · ' + ((crews.data ?? []).find((c: any) => c.id === crewFilter)?.name ?? '') : ''}`}
         actions={
-          can.manage && (
+          can.manage && seccion === 'semana' && (
             <>
-              <ObservacionesPorProgramar lunes={toISODate(monday)} />
+              {view !== 'grilla' && <ObservacionesPorProgramar lunes={toISODate(monday)} />}
               <Button variant="outline" asChild>
                 <Link href="/importar?kind=programacion">
                   <Upload className="size-4" />
@@ -363,16 +389,15 @@ export function ProgramacionClient() {
                 <CopyPlus className="size-4" />
                 Duplicar semana
               </Button>
-              {p?.status !== 'publicado' && p?.status !== 'cerrado' && (
-                <Button variant="outline" onClick={publish} disabled={!rows.length}>
+              <Button variant="outline" onClick={guardarBorrador} loading={guardandoBorrador} disabled={!rows.length}>
+                Guardar borrador
+              </Button>
+              {p?.status !== 'cerrado' && (p?.status !== 'publicado' || (p as any)?.cambios_sin_publicar) && (
+                <Button onClick={publish} disabled={!rows.length}>
                   <Send className="size-4" />
-                  Publicar a campo
+                  Publicar semana
                 </Button>
               )}
-              <Button onClick={() => setItemForm({ open: true })}>
-                <Plus className="size-4" />
-                Nueva actividad
-              </Button>
             </>
           )
         }
@@ -410,12 +435,22 @@ export function ProgramacionClient() {
               )}
             >
               {p.status === 'suspendido' && <Zap className="size-2.5" />}
-              {p.status === 'publicado' ? 'Publicado' : p.status === 'suspendido' ? 'Suspendido por PCI' : p.status === 'cerrado' ? 'Cerrado' : 'Borrador'}
+              {p.status === 'publicado' ? `Publicada v${(p as any).version_publicada ?? 1}` : p.status === 'suspendido' ? 'Suspendido por PCI' : p.status === 'cerrado' ? 'Cerrado' : 'Borrador'}
             </Badge>
           )}
+          {(p as any)?.cambios_sin_publicar && <Badge variant="warning">Cambios sin publicar</Badge>}
 
-          <div className="bg-muted ml-auto inline-flex rounded-lg p-0.5">
+          <div className="bg-secondary inline-flex rounded-lg p-1">
+            {([['semana', 'Semana'], ['insumos', 'Insumos'], ['seguimiento', 'Seguimiento']] as const).map(([k, t]) => (
+              <button key={k} onClick={() => setSeccion(k)}
+                className={cn('rounded-md px-3.5 py-1.5 text-[13px] font-semibold transition-colors',
+                  seccion === k ? 'bg-primary text-primary-foreground shadow-sm' : 'text-muted-foreground hover:text-foreground')}>{t}</button>
+            ))}
+          </div>
+
+          <div className={cn('bg-muted ml-auto inline-flex rounded-lg p-0.5', seccion !== 'semana' && 'hidden')}>
             {[
+              { k: 'grilla' as const, icon: List, label: 'Grilla semanal' },
               { k: 'tablero' as const, icon: LayoutGrid, label: 'Por cuadrilla' },
               { k: 'calendario' as const, icon: CalendarDays, label: 'Calendario' },
               { k: 'lista' as const, icon: List, label: 'Lista' },
@@ -488,7 +523,7 @@ export function ProgramacionClient() {
         </div>
 
         {/* Resumen de la semana */}
-        <div className="grid grid-cols-1 gap-3 sm:grid-cols-2 lg:grid-cols-4">
+        <div className={cn('grid grid-cols-1 gap-3 sm:grid-cols-2 lg:grid-cols-4', (seccion !== 'semana' || view === 'grilla') && 'hidden')}>
           {[
             { label: 'Actividades programadas', value: fmtNumber(stats.items), sub: `${stats.ejecutados} ejecutadas` },
             { label: 'Avance medio', value: `${stats.avanceMedio.toFixed(1)}%`, sub: 'promedio por partida' },
@@ -509,8 +544,18 @@ export function ProgramacionClient() {
           ))}
         </div>
 
-        {items.isLoading ? (
+        {seccion === 'insumos' ? (
+          <InsumosSemana plan={p} crewId={crewSel} crewNombre={crewNombre} semana={semanaVisible} rows={items.data ?? []} canEdit={can.manage} />
+        ) : seccion === 'seguimiento' ? (
+          <SeguimientoMateriales serviceId={service.id} crewId={crewSel} crewNombre={crewNombre} desde={monday} hasta={sunday}
+            semana={semanaVisible} canEdit={['admin', 'supervisor', 'residente'].includes(role)} />
+        ) : items.isLoading ? (
           <SkeletonTable rows={8} cols={6} />
+        ) : view === 'grilla' ? (
+          <GrillaSemanal rows={rows} monday={monday} semana={semanaVisible} plan={p} cuadrilla={crewNombre}
+            canEdit={can.manage} onEdit={(row) => setItemForm({ open: true, row })} onAgregar={() => setItemForm({ open: true })}
+            onInsumos={() => setSeccion('insumos')}
+            meta={metaSemana({ semana: semanaVisible, cuadrilla: crewNombre, fecha: monday })} />
         ) : !rows.length ? (
           <Card>
             <CardContent className="p-0">

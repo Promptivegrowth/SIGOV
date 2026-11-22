@@ -413,6 +413,8 @@ export function ParteDetailClient({ orderId }: { orderId: string }) {
             ))}
           </ul>
         )}
+
+        {o && <MovimientosDelParte orderId={orderId} validado={o.status === 'validado'} />}
       </PageBody>
 
       {/* ── Diálogo: nueva actividad ─────────────────────────────────── */}
@@ -849,5 +851,47 @@ function ReviewDialog({
         </DialogFooter>
       </DialogContent>
     </Dialog>
+  )
+}
+
+/**
+ * Movimientos de materiales del parte (MRPCI_04): lo que la cuadrilla
+ * registró como consumo en su reporte. Entra al saldo oficial cuando el
+ * Supervisor valida el parte; un reintento sin conexión no lo duplica.
+ */
+function MovimientosDelParte({ orderId, validado }: { orderId: string; validado: boolean }) {
+  const sb = React.useMemo(() => createClient(), [])
+  const movs = useQuery({
+    queryKey: ['parte-materiales', orderId],
+    queryFn: async () => ((await sb.from('movimientos_cuadrilla')
+      .select('id, tipo, qty, occurred_on, notes, supplies(code, name, units(symbol))')
+      .eq('work_order_id', orderId).is('deleted_at', null).order('created_at')).data ?? []) as any[],
+  })
+  if (!movs.data?.length) return null
+  return (
+    <Card>
+      <CardContent className="space-y-2 p-4">
+        <div className="flex flex-wrap items-center justify-between gap-2">
+          <p className="text-[14px] font-semibold">Movimientos de materiales</p>
+          <Badge variant={validado ? 'success' : 'warning'}>{validado ? 'Confirmados: cuentan en el saldo' : 'Por validar: entran al saldo cuando el Supervisor valide el parte'}</Badge>
+        </div>
+        <table className="w-full text-[12.5px]">
+          <thead className="text-muted-foreground text-[11.5px]"><tr>
+            <th className="py-1 text-left font-medium">Material</th><th className="text-left font-medium">Tipo</th>
+            <th className="text-right font-medium">Cantidad</th><th className="pl-3 text-left font-medium">Nota</th>
+          </tr></thead>
+          <tbody>
+            {movs.data.map((m) => (
+              <tr key={m.id} className="border-t border-border">
+                <td className="py-1">{m.supplies?.name ?? '—'}</td>
+                <td>{m.tipo === 'consumo' ? 'Salida por consumo' : m.tipo === 'merma' ? 'Merma' : m.tipo === 'traslado' ? 'Traslado' : m.tipo === 'ajuste' ? 'Ajuste' : m.tipo}</td>
+                <td className="text-right tabular-nums">{fmtNumber(Math.abs(Number(m.qty)), 2)} {m.supplies?.units?.symbol ?? ''}</td>
+                <td className="text-muted-foreground pl-3">{m.notes ?? ''}</td>
+              </tr>
+            ))}
+          </tbody>
+        </table>
+      </CardContent>
+    </Card>
   )
 }
