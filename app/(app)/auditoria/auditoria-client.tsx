@@ -1,5 +1,7 @@
 'use client'
 
+import { descargarExcel } from '@/lib/reports'
+
 import * as React from 'react'
 import { useQuery } from '@tanstack/react-query'
 import { History, Search, X, Plus, Pencil, Trash2, ChevronDown } from 'lucide-react'
@@ -116,12 +118,25 @@ export function AuditoriaClient() {
     <>
       <PageHeader
         icon={History}
-        title="Auditoría"
-        description="Quién cambió qué, cuándo y desde dónde. Solo lectura: una bitácora que se puede tocar no es una bitácora."
-        actions={<DateRangeTabs value={preset} onChange={(v) => { setPreset(v); setPagina(0) }} />}
+        title="Bitácora del sistema"
+        description="Registro inalterable de eventos, acciones y accesos del SIGOV. Solo lectura: no se edita ni se borra."
+        actions={<>
+          <Button variant="outline" size="sm" disabled={!filas.length} onClick={() => descargarExcel('Bitacora_filtrada', { titulo: 'Bitácora del sistema', servicio: service.name, periodo: `${range.from} – ${range.to}`, generadoPor: '' },
+            [{ name: 'Bitácora', columns: [{ header: 'Fecha y hora', key: 'f', width: 20 }, { header: 'Usuario', key: 'actor_email', width: 28 }, { header: 'Módulo', key: 'table_name', width: 22 },
+              { header: 'Acción', key: 'action', width: 10 }, { header: 'Registro', key: 'record_id', width: 38 }, { header: 'Motivo', key: 'motivo', width: 40 }],
+              rows: filas.map((x: any) => ({ ...x, f: fmtDateTime(x.created_at) })) }])}>Exportar filtrado</Button>
+          <DateRangeTabs value={preset} onChange={(v) => { setPreset(v); setPagina(0) }} />
+        </>}
       />
 
       <PageBody className="space-y-4">
+        {/* KPIs de la bitácora: eventos del periodo y accesos fallidos (Historial de accesos) */}
+        <div className="grid grid-cols-2 gap-3 lg:grid-cols-4">
+          {[['Eventos', registros.data?.total ?? 0, 'text-info'], ['Altas', (registros.data?.filas ?? []).filter((x: any) => x.action === 'INSERT').length, 'text-success'],
+            ['Cambios', (registros.data?.filas ?? []).filter((x: any) => x.action === 'UPDATE').length, 'text-warning'], ['Bajas', (registros.data?.filas ?? []).filter((x: any) => x.action === 'DELETE').length, 'text-destructive']].map(([t, v, c]: any) => (
+            <div key={t} className="bg-card rounded-xl border border-border px-4 py-3"><p className={'text-2xl font-bold tabular-nums ' + c}>{v}</p><p className="text-[12px]">{t}</p></div>
+          ))}
+        </div>
         {/* ═══ Filtros ══════════════════════════════════════════════════ */}
         <div className="flex flex-wrap items-center gap-2">
           <div className="relative min-w-52 flex-1 sm:max-w-sm">

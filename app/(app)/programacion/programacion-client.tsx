@@ -441,7 +441,7 @@ export function ProgramacionClient() {
           {(p as any)?.cambios_sin_publicar && <Badge variant="warning">Cambios sin publicar</Badge>}
 
           <div className="bg-secondary inline-flex rounded-lg p-1">
-            {([['semana', 'Semana'], ['insumos', 'Insumos'], ['seguimiento', 'Seguimiento']] as const).map(([k, t]) => (
+            {([['semana', 'Semana'], ['insumos', 'Insumos'], ['seguimiento', 'Seguimiento']] as const).filter(([k]) => k === 'semana' || !['visor', 'jefe_cuadrilla'].includes(role)).map(([k, t]) => (
               <button key={k} onClick={() => setSeccion(k)}
                 className={cn('rounded-md px-3.5 py-1.5 text-[13px] font-semibold transition-colors',
                   seccion === k ? 'bg-primary text-primary-foreground shadow-sm' : 'text-muted-foreground hover:text-foreground')}>{t}</button>

@@ -50,7 +50,7 @@ export function DashboardClient() {
   // Inicio único PCI / MR (guía de roles 3.1): la misma pantalla con el
   // alcance de cada rol; la base recorta lo que cada uno ve.
   if (role === 'supervisor') return <InicioUnico rol="supervisor" titulo="Inicio · Situación de mis cuadrillas" />
-  if (role === 'residente') return <InicioUnico rol="residente" titulo="Inicio · Avance del contrato" pestanaInicial="mr" />
+  if (role === 'residente') return <InicioUnico rol="residente" titulo="Inicio · Avance de programación MR" pestanaInicial="mr" />
   if (role === 'visor') return <InicioUnico rol="visor" titulo="Estado situacional" />
   if (role === 'admin') return <InicioUnico rol="admin" titulo="Inicio · Avance PCI y programación MR" />
   if (role === 'ing_seguridad') return <ControlSsoma esInicio pestana="inspecciones" titulo="Control SSOMA" subtitulo="Seguridad, salud ocupacional y medio ambiente" />
