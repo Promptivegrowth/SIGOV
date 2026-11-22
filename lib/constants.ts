@@ -3,7 +3,7 @@ import {
   LayoutDashboard,
   Wallet, CalendarRange, TriangleAlert, HardHat, MapPinned,
   Boxes, Package, PackageCheck, CalendarClock, ShieldCheck, FileBarChart, Upload, Settings, Map, FolderOpen, Bell, FileSignature, History,
-  ClipboardList, Camera, BarChart3, RefreshCw, Users, Layers, MessageSquareWarning, BellRing, ClipboardCheck, UserCheck, Handshake,
+  ClipboardList, Camera, BarChart3, RefreshCw, Users, Layers, MessageSquareWarning, BellRing, ClipboardCheck, UserCheck, Handshake, Truck,
 } from 'lucide-react'
 
 export type Role = 'admin' | 'supervisor' | 'residente' | 'jefe_cuadrilla' | 'ing_seguridad' | 'visor'
@@ -148,6 +148,7 @@ export const NAV: NavItem[] = [
   { href: '/revision-reportes', label: 'Revisión de reportes', labelPorRol: { residente: 'Revisión del contrato', admin: 'Revisión del contrato' },
     icon: ClipboardCheck, roles: ['supervisor', 'residente', 'admin'] },
   { href: '/gestion/usuarios', label: 'Gestión', icon: Layers, roles: ['admin'] },
+  { href: '/recursos', label: 'Recursos', icon: Truck, roles: ['admin'] },
   { href: '/ssoma/inspecciones', label: 'Inspecciones', icon: ClipboardCheck, roles: ['ing_seguridad', 'admin', 'residente', 'supervisor'], module: 'ssoma' },
   { href: '/ssoma/hallazgos', label: 'Hallazgos', icon: TriangleAlert, roles: ['ing_seguridad', 'admin', 'residente', 'supervisor', 'jefe_cuadrilla'], module: 'ssoma' },
   { href: '/ssoma/documentos', label: 'Documentos SSOMA', icon: FolderOpen, roles: ['ing_seguridad', 'admin', 'residente', 'supervisor'], module: 'ssoma' },
@@ -189,7 +190,7 @@ export const MENU_POR_ROL: Partial<Record<Role, { href: string; label: string }[
     { href: '/gestion/usuarios', label: 'Gestión' },
     { href: '/programacion', label: 'Programación' },
     { href: '/pci', label: 'PCI' },
-    { href: '/vencimientos', label: 'Recursos' },
+    { href: '/recursos', label: 'Recursos' },
     { href: '/caja', label: 'Caja' },
     { href: '/reportes', label: 'Reportes' },
     { href: '/auditoria', label: 'Auditoría' },

@@ -205,8 +205,9 @@ export function AuditoriaClient() {
                         <div className="bg-secondary/30 grid grid-cols-1 gap-3 px-4 py-3 lg:grid-cols-2">
                           <Bloque titulo="Antes" datos={f.before_data} />
                           <Bloque titulo="Después" datos={f.after_data} />
+                          {f.motivo && <p className="col-span-full text-[12px]"><strong>Motivo:</strong> {f.motivo}</p>}
                           <p className="text-muted-foreground col-span-full text-[10.5px]">
-                            Registro {f.record_id}
+                            Solo lectura · la bitácora no se edita ni se borra · Registro {f.record_id}
                             {f.ip_address ? ` · desde ${f.ip_address}` : ''}
                           </p>
                         </div>

@@ -68,8 +68,10 @@ interface Alerta {
   orden: number
 }
 
+import { AlertasSistema } from '@/components/gestion/alertas-sistema'
+
 export function AlertasClient() {
-  const { service, profile } = useSession()
+  const { service, profile, role } = useSession()
   const sb = React.useMemo(() => createClient(), [])
   const qc = useQueryClient()
 
@@ -129,6 +131,7 @@ export function AlertasClient() {
       />
 
       <PageBody className="space-y-6">
+        {role === 'admin' && <section aria-label="Alertas del sistema"><h2 className="mb-2 text-[15px] font-bold">Alertas del sistema</h2><AlertasSistema /></section>}
         {/* ═══ Lo que está abierto ══════════════════════════════════════ */}
         <section aria-label="Alertas de la operación">
           <div className="mb-2 flex items-center justify-between gap-3">

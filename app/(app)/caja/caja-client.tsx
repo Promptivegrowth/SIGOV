@@ -13,6 +13,7 @@ import { Badge } from '@/components/ui/badge'
 import { Card, CardContent } from '@/components/ui/card'
 import { Input, Textarea, Field } from '@/components/ui/input'
 import { Tabs, TabsList, TabsTrigger, TabsContent } from '@/components/ui/primitives'
+import { KpisCaja, Rendiciones, Conciliacion } from '@/components/caja/caja-presupuestal'
 import {
   Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription, DialogFooter,
 } from '@/components/ui/dialog'
@@ -60,11 +61,13 @@ const soles = (n: number) =>
  * depósito. Sin esta pantalla el dinero entra al sistema pero nunca se cierra.
  */
 export function CajaClient() {
-  const { service, profile, can } = useSession()
+  const { service, profile, can, role } = useSession()
   const qc = useQueryClient()
   const sb = React.useMemo(() => createClient(), [])
 
   const [preset, setPreset] = React.useState<DatePresetKey>('30d')
+  // Caja presupuestal (admin y residente): KPIs, rendiciones y conciliación
+  const presupuestal = ['admin', 'residente'].includes(role)
   const [caja, setCaja] = React.useState<string>('todas')
   const [revisando, setRevisando] = React.useState<any>(null)
   const [resolviendo, setResolviendo] = React.useState<any>(null)
@@ -162,13 +165,14 @@ export function CajaClient() {
   return (
     <>
       <PageHeader
-        title="Caja chica"
-        description="Saldos por cuadrilla, revisión de gastos y solicitudes de depósito"
+        title={presupuestal ? 'Caja presupuestal' : 'Caja chica'}
+        description={presupuestal ? 'Uso interno SERVICON · No visible para COVINCA.' : 'Saldos por cuadrilla, revisión de gastos y solicitudes de depósito'}
         icon={Wallet}
         actions={<DateRangeTabs value={preset} onChange={setPreset} />}
       />
 
       <PageBody>
+        {presupuestal && <div className="mb-4"><KpisCaja desde={rango.from} hasta={rango.to} caja={caja === 'todas' ? null : caja} /></div>}
         {/* Los saldos: lo primero que administración necesita ver */}
         <div className="grid gap-3 sm:grid-cols-2 xl:grid-cols-3">
           {cajas.isLoading && <SkeletonList rows={3} />}
@@ -228,6 +232,8 @@ export function CajaClient() {
                 <Badge variant="warning" className="ml-1.5">{solicitudesAbiertas.length}</Badge>
               )}
             </TabsTrigger>
+            {presupuestal && <TabsTrigger value="rendiciones">Rendiciones</TabsTrigger>}
+            {presupuestal && <TabsTrigger value="conciliacion">Conciliación</TabsTrigger>}
           </TabsList>
 
           {/* ─── Gastos ───────────────────────────────────────────────── */}
@@ -357,6 +363,8 @@ export function CajaClient() {
               )
             })}
           </TabsContent>
+          {presupuestal && <TabsContent value="rendiciones" className="mt-4"><Rendiciones cajas={cajas.data ?? []} /></TabsContent>}
+          {presupuestal && <TabsContent value="conciliacion" className="mt-4"><Conciliacion cajas={cajas.data ?? []} /></TabsContent>}
         </Tabs>
       </PageBody>
 

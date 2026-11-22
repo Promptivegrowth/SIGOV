@@ -164,6 +164,45 @@ export type Database = {
           },
         ]
       }
+      alertas_atendidas: {
+        Row: {
+          clave: string
+          cuando: string
+          nota: string | null
+          quien: string | null
+          service_id: string
+        }
+        Insert: {
+          clave: string
+          cuando?: string
+          nota?: string | null
+          quien?: string | null
+          service_id: string
+        }
+        Update: {
+          clave?: string
+          cuando?: string
+          nota?: string | null
+          quien?: string | null
+          service_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "alertas_atendidas_quien_fkey"
+            columns: ["quien"]
+            isOneToOne: false
+            referencedRelation: "profiles"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "alertas_atendidas_service_id_fkey"
+            columns: ["service_id"]
+            isOneToOne: false
+            referencedRelation: "services"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       almacenes: {
         Row: {
           codigo: string
@@ -973,6 +1012,7 @@ export type Database = {
           occurred_on: string
           receipt_kind: Database["public"]["Enums"]["receipt_kind"]
           receipt_number: string | null
+          rendicion_id: string | null
           review_note: string | null
           reviewed_at: string | null
           reviewed_by: string | null
@@ -1002,6 +1042,7 @@ export type Database = {
           occurred_on?: string
           receipt_kind?: Database["public"]["Enums"]["receipt_kind"]
           receipt_number?: string | null
+          rendicion_id?: string | null
           review_note?: string | null
           reviewed_at?: string | null
           reviewed_by?: string | null
@@ -1031,6 +1072,7 @@ export type Database = {
           occurred_on?: string
           receipt_kind?: Database["public"]["Enums"]["receipt_kind"]
           receipt_number?: string | null
+          rendicion_id?: string | null
           review_note?: string | null
           reviewed_at?: string | null
           reviewed_by?: string | null
@@ -1079,6 +1121,13 @@ export type Database = {
             isOneToOne: false
             referencedRelation: "v_hygiene_today"
             referencedColumns: ["crew_id"]
+          },
+          {
+            foreignKeyName: "cash_movements_rendicion_id_fkey"
+            columns: ["rendicion_id"]
+            isOneToOne: false
+            referencedRelation: "rendiciones"
+            referencedColumns: ["id"]
           },
           {
             foreignKeyName: "cash_movements_reviewed_by_fkey"
@@ -1279,6 +1328,92 @@ export type Database = {
           },
         ]
       }
+      conciliaciones: {
+        Row: {
+          cash_box_id: string | null
+          codigo: string | null
+          cuando: string
+          declarado: number
+          desde: string
+          diferencia: number
+          fondo: number
+          hasta: string
+          id: string
+          items: Json
+          motivo: string | null
+          numero: number
+          pendiente: number
+          quien: string | null
+          service_id: string
+          sustentado: number
+        }
+        Insert: {
+          cash_box_id?: string | null
+          codigo?: string | null
+          cuando?: string
+          declarado?: number
+          desde: string
+          diferencia?: number
+          fondo?: number
+          hasta: string
+          id?: string
+          items?: Json
+          motivo?: string | null
+          numero: number
+          pendiente?: number
+          quien?: string | null
+          service_id: string
+          sustentado?: number
+        }
+        Update: {
+          cash_box_id?: string | null
+          codigo?: string | null
+          cuando?: string
+          declarado?: number
+          desde?: string
+          diferencia?: number
+          fondo?: number
+          hasta?: string
+          id?: string
+          items?: Json
+          motivo?: string | null
+          numero?: number
+          pendiente?: number
+          quien?: string | null
+          service_id?: string
+          sustentado?: number
+        }
+        Relationships: [
+          {
+            foreignKeyName: "conciliaciones_cash_box_id_fkey"
+            columns: ["cash_box_id"]
+            isOneToOne: false
+            referencedRelation: "cash_boxes"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "conciliaciones_cash_box_id_fkey"
+            columns: ["cash_box_id"]
+            isOneToOne: false
+            referencedRelation: "v_cash_boxes"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "conciliaciones_quien_fkey"
+            columns: ["quien"]
+            isOneToOne: false
+            referencedRelation: "profiles"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "conciliaciones_service_id_fkey"
+            columns: ["service_id"]
+            isOneToOne: false
+            referencedRelation: "services"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       conteos_fisicos: {
         Row: {
           contado: number
@@ -1386,6 +1521,51 @@ export type Database = {
             columns: ["supply_id"]
             isOneToOne: false
             referencedRelation: "v_supplies"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      contrato_versiones: {
+        Row: {
+          cuando: string
+          datos: Json
+          id: string
+          motivo: string
+          quien: string | null
+          service_id: string
+          version: number
+        }
+        Insert: {
+          cuando?: string
+          datos: Json
+          id?: string
+          motivo: string
+          quien?: string | null
+          service_id: string
+          version: number
+        }
+        Update: {
+          cuando?: string
+          datos?: Json
+          id?: string
+          motivo?: string
+          quien?: string | null
+          service_id?: string
+          version?: number
+        }
+        Relationships: [
+          {
+            foreignKeyName: "contrato_versiones_quien_fkey"
+            columns: ["quien"]
+            isOneToOne: false
+            referencedRelation: "profiles"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "contrato_versiones_service_id_fkey"
+            columns: ["service_id"]
+            isOneToOne: false
+            referencedRelation: "services"
             referencedColumns: ["id"]
           },
         ]
@@ -4796,6 +4976,120 @@ export type Database = {
           },
           {
             foreignKeyName: "reasignaciones_service_id_fkey"
+            columns: ["service_id"]
+            isOneToOne: false
+            referencedRelation: "services"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      rendiciones: {
+        Row: {
+          cash_box_id: string
+          codigo: string | null
+          creado_at: string
+          creado_por: string | null
+          crew_id: string | null
+          desde: string
+          estado: string
+          hasta: string
+          id: string
+          motivo: string | null
+          nota: string | null
+          numero: number
+          responsable_id: string | null
+          revisado_at: string | null
+          revisado_por: string | null
+          service_id: string
+        }
+        Insert: {
+          cash_box_id: string
+          codigo?: string | null
+          creado_at?: string
+          creado_por?: string | null
+          crew_id?: string | null
+          desde: string
+          estado?: string
+          hasta: string
+          id?: string
+          motivo?: string | null
+          nota?: string | null
+          numero: number
+          responsable_id?: string | null
+          revisado_at?: string | null
+          revisado_por?: string | null
+          service_id: string
+        }
+        Update: {
+          cash_box_id?: string
+          codigo?: string | null
+          creado_at?: string
+          creado_por?: string | null
+          crew_id?: string | null
+          desde?: string
+          estado?: string
+          hasta?: string
+          id?: string
+          motivo?: string | null
+          nota?: string | null
+          numero?: number
+          responsable_id?: string | null
+          revisado_at?: string | null
+          revisado_por?: string | null
+          service_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "rendiciones_cash_box_id_fkey"
+            columns: ["cash_box_id"]
+            isOneToOne: false
+            referencedRelation: "cash_boxes"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "rendiciones_cash_box_id_fkey"
+            columns: ["cash_box_id"]
+            isOneToOne: false
+            referencedRelation: "v_cash_boxes"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "rendiciones_creado_por_fkey"
+            columns: ["creado_por"]
+            isOneToOne: false
+            referencedRelation: "profiles"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "rendiciones_crew_id_fkey"
+            columns: ["crew_id"]
+            isOneToOne: false
+            referencedRelation: "crews"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "rendiciones_crew_id_fkey"
+            columns: ["crew_id"]
+            isOneToOne: false
+            referencedRelation: "v_hygiene_today"
+            referencedColumns: ["crew_id"]
+          },
+          {
+            foreignKeyName: "rendiciones_responsable_id_fkey"
+            columns: ["responsable_id"]
+            isOneToOne: false
+            referencedRelation: "profiles"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "rendiciones_revisado_por_fkey"
+            columns: ["revisado_por"]
+            isOneToOne: false
+            referencedRelation: "profiles"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "rendiciones_service_id_fkey"
             columns: ["service_id"]
             isOneToOne: false
             referencedRelation: "services"
@@ -9941,6 +10235,10 @@ export type Database = {
         Returns: number
       }
       ajustes_del_servicio: { Args: { p_service_id: string }; Returns: Json }
+      alerta_atender: {
+        Args: { p_clave: string; p_nota?: string; p_service: string }
+        Returns: Json
+      }
       alertas_operativas: {
         Args: { p_service_id: string }
         Returns: {
@@ -9953,6 +10251,7 @@ export type Database = {
           url: string
         }[]
       }
+      alertas_sistema: { Args: { p_service: string }; Returns: Json }
       alta_vehiculo_temporal: {
         Args: {
           p_crew: string
@@ -10007,6 +10306,26 @@ export type Database = {
       apply_pci_suspension: { Args: { p_pci_id: string }; Returns: Json }
       apply_pci_suspension_sin_permiso: {
         Args: { p_pci_id: string }
+        Returns: Json
+      }
+      asignacion_guardar: {
+        Args: {
+          p_crew: string
+          p_desde: string
+          p_hasta: string
+          p_kind: string
+          p_motivo: string
+          p_vehicle: string
+        }
+        Returns: Json
+      }
+      asignacion_verificar: {
+        Args: {
+          p_crew: string
+          p_desde: string
+          p_hasta: string
+          p_vehicle: string
+        }
         Returns: Json
       }
       asset_semaforo: {
@@ -10087,6 +10406,15 @@ export type Database = {
         Args: { p_limit?: number; p_q: string; p_service_id: string }
         Returns: Json
       }
+      caja_periodo: {
+        Args: {
+          p_box: string
+          p_desde: string
+          p_hasta: string
+          p_service: string
+        }
+        Returns: Json
+      }
       calibrar_tramo: { Args: { p_section_id: string }; Returns: number }
       cambiar_supervisor: {
         Args: { p_crew: string; p_motivo?: string; p_supervisor: string }
@@ -10115,6 +10443,17 @@ export type Database = {
         Returns: Json
       }
       clear_section_geometry: { Args: { p_section_id: string }; Returns: Json }
+      conciliacion_guardar: {
+        Args: {
+          p_box: string
+          p_desde: string
+          p_hasta: string
+          p_items: Json
+          p_motivo: string
+          p_service: string
+        }
+        Returns: Json
+      }
       conductor_apto: { Args: { p_respuestas: Json }; Returns: boolean }
       conteo_decidir: {
         Args: { p_ajustar: boolean; p_conteo: string; p_motivo: string }
@@ -10127,6 +10466,10 @@ export type Database = {
           p_nota?: string
           p_supply: string
         }
+        Returns: Json
+      }
+      contrato_guardar: {
+        Args: { p_datos: Json; p_motivo: string; p_service: string }
         Returns: Json
       }
       corregir_solicitud_deposito: {
@@ -10739,6 +11082,19 @@ export type Database = {
       }
       reglas_evidencia_guardar: {
         Args: { p_motivo: string; p_reglas: Json; p_service: string }
+        Returns: Json
+      }
+      rendicion_generar: {
+        Args: {
+          p_box: string
+          p_desde: string
+          p_hasta: string
+          p_nota?: string
+        }
+        Returns: Json
+      }
+      rendicion_revisar: {
+        Args: { p_aprobar: boolean; p_motivo: string; p_rend: string }
         Returns: Json
       }
       rendimiento_referencia: {

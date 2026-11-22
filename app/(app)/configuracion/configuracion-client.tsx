@@ -29,6 +29,8 @@ import { mensajeAmigable } from '@/lib/errores'
 import { RendimientosForm } from '@/components/config/rendimientos-form'
 import { CLAVE_MINIMA, correoDeUsuario, usuarioDeCorreo, usuarioValido } from '@/lib/usuario'
 
+import { ConfigContrato } from '@/components/gestion/contrato'
+
 export function ConfiguracionClient() {
   const { service, services, can, profile, switchService } = useSession()
   const qc = useQueryClient()
@@ -356,6 +358,7 @@ export function ConfiguracionClient() {
       <PageBody>
         <Tabs value={tab} onValueChange={setTab}>
           <TabsList className="flex-wrap">
+            {can.admin && <TabsTrigger value="contrato"><Settings className="size-3.5" />Contrato</TabsTrigger>}
             <TabsTrigger value="usuarios"><Users className="size-3.5" />Usuarios</TabsTrigger>
             <TabsTrigger value="cuadrillas"><Truck className="size-3.5" />Cuadrillas</TabsTrigger>
             <TabsTrigger value="tramos"><Route className="size-3.5" />Tramos</TabsTrigger>
@@ -368,6 +371,7 @@ export function ConfiguracionClient() {
           </TabsList>
 
           {/* ═══ USUARIOS ══════════════════════════════════════════════════ */}
+          {can.admin && <TabsContent value="contrato" className="mt-4"><ConfigContrato /></TabsContent>}
           <TabsContent value="usuarios" className="mt-4 space-y-4">
             <div className="flex flex-wrap items-center justify-between gap-3">
               <div>
