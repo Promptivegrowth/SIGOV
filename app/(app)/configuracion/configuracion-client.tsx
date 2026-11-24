@@ -353,7 +353,7 @@ export function ConfiguracionClient() {
     <>
       <PageHeader
         icon={Settings}
-        title="Configuración"
+        title="Configuración del sistema"
         description="Usuarios y roles, catálogo de actividades, tramos y progresivas, cuadrillas, módulos por servicio y trazabilidad del sistema."
       />
 

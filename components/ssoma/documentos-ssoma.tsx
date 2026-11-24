@@ -104,7 +104,7 @@ export function DocumentosSsoma({ filtroObjeto }: { filtroObjeto?: { vehicle_id?
                           <Button size="sm" variant="outline" disabled={!x.ultima?.archivo_path} onClick={() => abrirArchivoSsoma(x.ultima.archivo_path).catch((e) => toast.error(mensajeAmigable(e)))}><Eye className="size-3.5" />Ver archivo</Button>
                           <Button size="sm" variant="outline" onClick={() => setAbierto(x.id)}><Layers className="size-3.5" />Ver versiones</Button>
                           {puedeRevisar && <Button size="sm" variant="outline" onClick={() => setAbierto(x.id)}><Pencil className="size-3.5" />Revisar</Button>}
-                          <Button size="sm" variant="outline" onClick={() => setNueva(x)}><Upload className="size-3.5" />Nueva versión</Button>
+                          {['jefe_cuadrilla', 'admin', 'residente'].includes(role) && <Button size="sm" variant="outline" onClick={() => setNueva(x)}><Upload className="size-3.5" />Nueva versión</Button>}
                         </span>
                       </td>
                     </tr>

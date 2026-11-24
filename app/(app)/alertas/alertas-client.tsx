@@ -118,7 +118,7 @@ export function AlertasClient() {
     <>
       <PageHeader
         icon={Bell}
-        title="Alertas"
+        title={role === 'admin' ? 'Alertas del sistema' : 'Alertas'}
         description="Lo que está abierto en la operación y los avisos dirigidos a ti."
         actions={
           sinLeer > 0 && (

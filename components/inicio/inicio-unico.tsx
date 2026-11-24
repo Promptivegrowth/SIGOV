@@ -141,6 +141,7 @@ export function InicioUnico({
   const ultimaSync = (actual.data as any)?.ultima_sincronizacion as string | undefined
 
   // ── Los ítems detrás de una cifra ─────────────────────────────────────
+  const [buscarMr, setBuscarMr] = React.useState('')
   const [cifra, setCifra] = React.useState<{ cifra: string; plazo?: number; titulo: string } | null>(null)
   const detalle = useQuery({
     queryKey: ['inicio-pci-items', service.id, f.pci, f.corte, f.crew, f.sector, cifra?.cifra, cifra?.plazo, f.pdesde, f.estado],
@@ -273,10 +274,15 @@ export function InicioUnico({
               </button>
             ))}
           </div>
-          {f.tab === 'pci' && (
+          {f.tab === 'pci' ? (
             <div className="relative min-w-60 flex-1">
               <Search className="text-muted-foreground absolute top-1/2 left-2.5 size-4 -translate-y-1/2" />
               <Input value={busqueda} onChange={(e) => setBusqueda(e.target.value)} placeholder="Buscar PCI, ítem o actividad" className="pl-8" />
+            </div>
+          ) : (
+            <div className="relative min-w-60 flex-1">
+              <Search className="text-muted-foreground absolute top-1/2 left-2.5 size-4 -translate-y-1/2" />
+              <Input value={buscarMr} onChange={(e) => setBuscarMr(e.target.value)} placeholder="Buscar actividad o progresiva" className="pl-8" />
             </div>
           )}
         </div>
@@ -289,7 +295,7 @@ export function InicioUnico({
         ) : (
           <PestanaMr
             rol={rol} f={f} fijar={fijar} datos={mr.data} cargando={mr.isLoading} error={mr.error}
-            cuadrillas={cuadrillas.data ?? []} supervisores={supervisores.data ?? []} actividades={actividades.data ?? []}
+            cuadrillas={cuadrillas.data ?? []} supervisores={supervisores.data ?? []} actividades={actividades.data ?? []} buscar={buscarMr}
             contrato={(service as any).contract_code ? `${(service as any).contract_code} · ${service.name}` : service.name}
           />
         )}
@@ -620,10 +626,13 @@ const ESTADO_PLAN: Record<string, [string, string]> = {
   ejecutado: ['Ejecutado', 'bg-success/12 text-success'], suspendido: ['Suspendido', 'bg-destructive/10 text-destructive'],
 }
 
-function PestanaMr({ rol, f, fijar, datos: d, cargando, error, cuadrillas, supervisores, actividades, contrato }: {
+function PestanaMr({ rol, f, fijar, datos: d, cargando, error, cuadrillas, supervisores, actividades, contrato, buscar = '' }: {
   rol: Rol; f: any; fijar: (c: any) => void; datos: any; cargando: boolean; error: unknown
-  cuadrillas: any[]; supervisores: { id: string; nombre: string }[]; actividades: any[]; contrato: string
+  cuadrillas: any[]; supervisores: { id: string; nombre: string }[]; actividades: any[]; contrato: string; buscar?: string
 }) {
+  // Búsqueda de actividad o progresiva: acota las tablas, no los totales del período
+  const b = buscar.trim().toLowerCase()
+  const coincide = (...t: any[]) => !b || t.filter((x) => x != null).join(' ').toLowerCase().includes(b)
   const u = d?.unidad ? ` ${d.unidad}` : ''
   const homogeneo = !!d?.homogeneo
   const programado = Number(d?.programado ?? 0)
@@ -781,7 +790,7 @@ function PestanaMr({ rol, f, fijar, datos: d, cargando, error, cuadrillas, super
                   </tr>
                 </thead>
                 <tbody>
-                  {(d.detalle as any[]).map((x) => (
+                  {(d.detalle as any[]).filter((x) => coincide(x.cuadrilla, x.sector, fmtProgresiva(x.prog_inicio), fmtProgresiva(x.prog_fin), x.prog_inicio)).map((x) => (
                     <tr key={x.plan_item_id} className="even:bg-secondary/40 border-b border-border/60">
                       <td className="py-2">{fmtDate(x.fecha)}</td><td>{x.cuadrilla}</td><td>{x.sector ?? '—'}</td>
                       <td>{fmtProgresiva(x.prog_inicio)} – {fmtProgresiva(x.prog_fin)}</td>
@@ -831,7 +840,7 @@ function PestanaMr({ rol, f, fijar, datos: d, cargando, error, cuadrillas, super
                   </tr>
                 </thead>
                 <tbody>
-                  {(d.por_actividad as any[]).map((x) => (
+                  {(d.por_actividad as any[]).filter((x) => coincide(x.actividad, x.codigo, x.unidad)).map((x) => (
                     <tr key={`${x.activity_id}-${x.unidad}`} onClick={() => fijar({ act: x.activity_id })}
                       className="even:bg-secondary/40 hover:bg-primary/[0.06] cursor-pointer border-b border-border/60">
                       <td className="py-2">{x.actividad}</td><td>{x.unidad ?? '—'}</td>

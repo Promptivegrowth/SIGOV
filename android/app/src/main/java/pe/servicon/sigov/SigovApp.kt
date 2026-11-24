@@ -29,6 +29,8 @@ class SigovApp : Application(), Configuration.Provider {
         super.onCreate()
         // Un repaso cada cuarto de hora, por si algo quedó sin subir
         programarSincronizacionPeriodica(this)
+        // Al abrir: empuja la cola y envía el latido del equipo (Sincronización del Administrador)
+        pe.servicon.sigov.datos.sync.pedirSincronizacion(this)
         // Y los avisos (PCI por vencer, observaciones), aunque la app esté cerrada
         programarAvisos(this)
     }

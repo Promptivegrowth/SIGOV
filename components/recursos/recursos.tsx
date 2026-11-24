@@ -165,9 +165,12 @@ function AsignarVehiculo({ inicial, vehiculos, cuadrillas, cerrar, alGuardar }: 
           {conflictos.length > 0 && (
             <p className="bg-destructive/10 text-destructive rounded-md px-2.5 py-2 text-[12.5px] font-semibold"><TriangleAlert className="mr-1 inline size-3.5" />Asignación en conflicto: {conflictos.map((c) => `${c.cuadrilla} (${fmtDate(c.desde)} – ${c.hasta ? fmtDate(c.hasta) : 'vigente'})`).join(', ')}. Finaliza esa asignación o cambia las fechas.</p>
           )}
-          {ver.data && conflictos.length === 0 && <p className="bg-success/10 text-success rounded-md px-2.5 py-2 text-[12.5px]">Disponible en esas fechas. La cuadrilla tiene {ver.data.de_la_cuadrilla} vehículo(s) vigente(s) (máximo 2).</p>}
+          {ver.data?.vehiculo && ver.data.vehiculo.apto === false && (
+            <p className="bg-destructive/10 text-destructive rounded-md px-2.5 py-2 text-[12.5px] font-semibold"><TriangleAlert className="mr-1 inline size-3.5" />No apto para circular: {ver.data.vehiculo.motivo_no_apto}. Operativo mecánico no equivale a apto; renueva el documento antes de asignarlo.</p>
+          )}
+          {ver.data && conflictos.length === 0 && ver.data.vehiculo?.apto !== false && <p className="bg-success/10 text-success rounded-md px-2.5 py-2 text-[12.5px]">Disponible en esas fechas. La cuadrilla tiene {ver.data.de_la_cuadrilla} vehículo(s) vigente(s) (máximo 2).</p>}
           <Textarea rows={2} value={f.motivo} onChange={(e) => setF({ ...f, motivo: e.target.value })} placeholder="Motivo de la asignación (obligatorio)" />
-          <div className="flex justify-end gap-2"><Button variant="outline" onClick={cerrar}>Cancelar</Button><Button onClick={guardar} disabled={!f.vehicle || !f.crew || !f.motivo.trim() || conflictos.length > 0}><Save className="size-4" />Guardar asignación</Button></div>
+          <div className="flex justify-end gap-2"><Button variant="outline" onClick={cerrar}>Cancelar</Button><Button onClick={guardar} disabled={!f.vehicle || !f.crew || !f.motivo.trim() || conflictos.length > 0 || ver.data?.vehiculo?.apto === false}><Save className="size-4" />Guardar asignación</Button></div>
         </div>
       </DialogContent>
     </Dialog>

@@ -93,7 +93,7 @@ class SesionRepositorio @Inject constructor(
     private val supabase: SupabaseClient,
     private val catalogo: CatalogoDao,
     private val conexion: Conexion,
-    @ApplicationContext contexto: Context,
+    @ApplicationContext private val contextoApp: Context,
 ) {
 
     private val json = Json { ignoreUnknownKeys = true }
@@ -103,7 +103,7 @@ class SesionRepositorio @Inject constructor(
 
     /** Lo que sobrevive a quedarse sin señal: quién entró la última vez. */
     private val recuerdo =
-        contexto.getSharedPreferences("sesion", Context.MODE_PRIVATE)
+        contextoApp.getSharedPreferences("sesion", Context.MODE_PRIVATE)
 
     private var usuarioRecordado: String?
         get() = recuerdo.getString("usuario_id", null)
@@ -189,6 +189,8 @@ class SesionRepositorio @Inject constructor(
         recuerdo.edit().putString("correo", correo.trim()).apply()
         reportarAcceso(org.json.JSONObject().put("evento", "ingreso").put("plataforma", "android").put("dispositivo", dispositivo()),
             supabase.auth.currentSessionOrNull()?.accessToken)
+        // El latido del equipo al entrar: el panel de sincronización lo ve desde el primer momento
+        pe.servicon.sigov.datos.sync.pedirSincronizacion(contextoApp, ahora = true)
     }
 
     /** Las llaves de la sesión para abrir los módulos web dentro de la app (T9). */

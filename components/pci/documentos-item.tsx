@@ -213,10 +213,6 @@ export function DocumentosItem({ item, fotos, historial, publicaciones, esVisor,
                   <p className="text-muted-foreground">{d.nota ?? d.p?.nota ?? (d.version === 1 ? 'Publicado' : 'Nueva versión publicada')}</p>
                 </div>
               ))}
-              <div className="border-border bg-secondary/50 rounded-md border px-2.5 py-1.5">
-                <strong>○ v0 · (sin fecha)</strong> <span className="bg-secondary text-muted-foreground ml-1 rounded-full px-2 py-0.5 text-[11px]">Histórica</span>
-                <p className="text-muted-foreground">Versión inicial del documento</p>
-              </div>
             </div>
           </CardContent>
         </Card>
