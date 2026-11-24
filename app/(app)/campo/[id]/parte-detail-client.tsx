@@ -847,20 +847,20 @@ function ReviewDialog({
         <DialogHeader>
           <DialogTitle>Revisar parte diario</DialogTitle>
           <DialogDescription>
-            Valida el parte si la ejecución y la evidencia son conformes, u obsérvalo indicando qué debe corregirse.
+            Valida la revisión interna si la ejecución y la evidencia son conformes, o pide subsanación indicando qué corregir. Validar no publica a COVINCA.
           </DialogDescription>
         </DialogHeader>
-        <Field label="Observaciones" hint="Obligatorio si vas a observar el parte">
+        <Field label="Motivo" hint="Obligatorio si pides subsanación">
           <Textarea value={notes} onChange={(e) => setNotes(e.target.value)} rows={3} placeholder="Ej. faltan fotos del después en el registro 2…" />
         </Field>
         <DialogFooter>
           <Button variant="outline" onClick={() => onReview(false, notes)} disabled={!notes.trim()}>
             <CircleX className="size-4" />
-            Observar
+            Pedir subsanación
           </Button>
           <Button variant="success" onClick={() => onReview(true)}>
             <CircleCheck className="size-4" />
-            Validar
+            Validar revisión
           </Button>
         </DialogFooter>
       </DialogContent>

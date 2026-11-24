@@ -17,6 +17,7 @@ import { Badge } from '@/components/ui/badge'
 import { Card, CardContent } from '@/components/ui/card'
 import { Input } from '@/components/ui/input'
 import { SkeletonList, SkeletonKpi } from '@/components/ui/skeleton'
+import { BandejaPartes } from '@/components/campo/bandeja-partes'
 import { EmptyState, DateRangeTabs, rangeFromPreset, type DatePresetKey } from '@/components/shared/misc'
 import { StatCard } from '@/components/shared/stat-card'
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select'
@@ -36,12 +37,14 @@ export function CampoClient() {
   const range = React.useMemo(() => rangeFromPreset(preset), [preset])
 
   const isField = role === 'jefe_cuadrilla'
+  // ROL02: Supervisor, Residente y Administrador trabajan desde la bandeja de revisión
+  const esBandeja = ['supervisor', 'residente', 'admin'].includes(role)
   const today = toISODate(new Date())
 
   const crews = useQuery({
     queryKey: ['crews', service.id],
     enabled: !isField,
-    queryFn: async () => (await sb.from('crews').select('id, code, name, color')
+    queryFn: async () => (await sb.from('crews').select('id, code, name, color, supervisor_id, sectores, profiles:supervisor_id(full_name)')
       .eq('service_id', service.id).is('deleted_at', null).order('code')).data ?? [],
     staleTime: 5 * 60_000,
   })
@@ -121,11 +124,11 @@ export function CampoClient() {
     <>
       <PageHeader
         icon={HardHat}
-        title={isField ? 'Mi trabajo en campo' : 'Ejecución en campo'}
+        title={isField ? 'Mi trabajo en campo' : esBandeja ? 'Reporte Diario' : 'Ejecución en campo'}
         description={
           isField
             ? 'Registra actividades, metrados y evidencia fotográfica. Funciona sin conexión: todo se guarda en el dispositivo y se envía al recuperar señal.'
-            : 'Partes diarios enviados por las cuadrillas, con su ejecución y evidencia georreferenciada.'
+            : esBandeja ? 'Revisar la ejecución y las fotos sin volver a registrar el trabajo.' : 'Partes diarios enviados por las cuadrillas, con su ejecución y evidencia georreferenciada.'
         }
         actions={
           isField && (
@@ -208,7 +211,7 @@ export function CampoClient() {
             <Search className="text-muted-foreground absolute top-1/2 left-3 size-3.5 -translate-y-1/2" />
             <Input placeholder="Buscar cuadrilla o fecha…" value={q} onChange={(e) => setQ(e.target.value)} className="pl-9" />
           </div>
-          <Select value={status} onValueChange={setStatus}>
+          {!esBandeja && <Select value={status} onValueChange={setStatus}>
             <SelectTrigger className="w-44">
               <SelectValue />
             </SelectTrigger>
@@ -218,7 +221,7 @@ export function CampoClient() {
                 <SelectItem key={k} value={k}>{v.label}</SelectItem>
               ))}
             </SelectContent>
-          </Select>
+          </Select>}
           {!isField && (
             <Select value={crewFilter} onValueChange={setCrewFilter}>
               <SelectTrigger className="w-48"><SelectValue placeholder="Cuadrilla" /></SelectTrigger>
@@ -236,13 +239,15 @@ export function CampoClient() {
             </Select>
           )}
           <DateRangeTabs value={preset} onChange={setPreset} />
-          <span className="text-muted-foreground ml-auto text-[12px] tabular-nums">
+          {!esBandeja && <span className="text-muted-foreground ml-auto text-[12px] tabular-nums">
             {filtered.length} de {orders.data?.length ?? 0} partes
-          </span>
+          </span>}
         </div>
 
         {/* Lista de partes */}
-        {orders.isLoading ? (
+        {esBandeja ? (
+          <BandejaPartes desde={range.from} hasta={range.to} crewFilter={crewFilter} crews={crews.data ?? []} />
+        ) : orders.isLoading ? (
           <SkeletonList rows={6} />
         ) : !filtered.length ? (
           <Card>
