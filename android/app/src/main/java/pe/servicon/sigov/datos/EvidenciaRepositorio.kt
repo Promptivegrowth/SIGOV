@@ -274,9 +274,10 @@ class EvidenciaRepositorio @Inject constructor(
                 put("size_bytes", evidencia.pesoBytes)
                 put("width", evidencia.ancho)
                 put("height", evidencia.alto)
-                put("lat", punto?.latitud ?: 0.0)
-                put("lng", punto?.longitud ?: 0.0)
+                // Sin señal no se inventa ubicación (J06): la foto va sin coordenadas, con su fecha y hora
                 punto?.let { p ->
+                    put("lat", p.latitud)
+                    put("lng", p.longitud)
                     put("accuracy_m", p.precision.toDouble())
                     p.altitud?.let { put("altitude_m", it) }
                 }

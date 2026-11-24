@@ -52,6 +52,8 @@ data class EstadoJornada(
     val error: String? = null,
     /** Mientras no se sepa la cuadrilla, no se afirma nada sobre ella */
     val cargando: Boolean = true,
+    /** La semana publicada que rige hoy (null: sin semana publicada) */
+    val semana: pe.servicon.sigov.datos.SemanaPublicada? = null,
 )
 
 @HiltViewModel
@@ -148,6 +150,7 @@ class JornadaViewModel @Inject constructor(
                 runCatching { materialRepo.rendimientos(cuadrilla.servicioId) }
 
                 val programado = campo.programacionDelDia(cuadrilla.servicioId, cuadrilla.id)
+                val semana = runCatching { campo.semanaPublicada(cuadrilla.servicioId, cuadrilla.id) }.getOrNull()
                 val pci = campo.pciAsignados(cuadrilla.servicioId, cuadrilla.id)
                 val miCaja = runCatching { caja.miCaja(cuadrilla.servicioId, cuadrilla.id) }.getOrNull()
                 val jefe = runCatching { sesion.supervisor(cuadrilla.servicioId, cuadrilla.id) }.getOrNull()
@@ -165,6 +168,7 @@ class JornadaViewModel @Inject constructor(
                     it.copy(
                         programadas = programado.size,
                         pci = pci.size,
+                        semana = semana,
                         // El sector sale de lo que hoy toca; si no hay nada
                         // programado, el tramo de la cuadrilla.
                         sector = (programado.firstOrNull()?.tramo

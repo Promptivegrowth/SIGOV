@@ -101,7 +101,7 @@ export function CameraCapture({
   const accuracyOk = gps && gps.accuracy <= MAX_ACCURACY_M
 
   const capture = async () => {
-    if (!videoRef.current || !gps) return
+    if (!videoRef.current) return
     setBusy(true)
     haptic(45)
     try {
@@ -128,12 +128,10 @@ export function CameraCapture({
   // Un archivo elegido espera la decisión del sello (OBS 2)
   const [archivo, setArchivo] = React.useState<File | null>(null)
   const fromFile = (file: File) => {
-    if (!gps) return toast.error('Esperando señal GPS')
     setArchivo(file)
   }
   const procesarArchivo = async (file: File, sellar: boolean) => {
     setArchivo(null)
-    if (!gps) return toast.error('Esperando señal GPS')
     setBusy(true)
     try {
       const sealed = await sealPhoto(file, {
@@ -313,7 +311,7 @@ export function CameraCapture({
 
           <button
             onClick={capture}
-            disabled={!gps || busy || !!error}
+            disabled={busy || !!error}
             className={cn(
               'relative flex size-[74px] items-center justify-center rounded-full transition-all active:scale-95',
               'disabled:opacity-40',
@@ -333,7 +331,7 @@ export function CameraCapture({
 
         {!gps && (
           <p className="mt-3 text-center text-[11.5px] text-white/60">
-            Esperando señal GPS. Sal a cielo abierto para mejorar la precisión.
+            Sin GPS por ahora: la foto se guarda igual con su fecha y hora. Sal a cielo abierto si necesitas coordenadas.
           </p>
         )}
         {gps && !accuracyOk && (

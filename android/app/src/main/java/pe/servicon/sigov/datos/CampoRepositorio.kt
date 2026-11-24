@@ -209,6 +209,60 @@ class CampoRepositorio @Inject constructor(
     }
 
     /**
+     * La semana publicada que rige hoy (revisión visual 18/11, MRPCI_04 y
+     * T6): su versión, cuándo se publicó, cuántas partidas tiene la
+     * cuadrilla y el motivo del último cambio. Solo lo publicado: un
+     * borrador no se ve desde el teléfono del jefe.
+     */
+    suspend fun semanaPublicada(servicioId: String, cuadrillaId: String?): SemanaPublicada? = withContext(Dispatchers.IO) {
+        runCatching {
+            val hoy = Peru.hoy().toString()
+            val plan = supabase.postgrest.from("weekly_plans")
+                .select(Columns.list("id", "week", "year", "semana_contrato", "version_publicada", "published_at", "starts_on", "ends_on")) {
+                    filter {
+                        eq("service_id", servicioId)
+                        lte("starts_on", hoy)
+                        gte("ends_on", hoy)
+                        isIn("status", listOf("publicado", "cerrado"))
+                        exact("deleted_at", null)
+                    }
+                    limit(1)
+                }
+                .decodeList<JsonObject>().firstOrNull() ?: return@runCatching null
+            val planId = plan["id"]?.jsonPrimitive?.contentOrNull ?: return@runCatching null
+            val partidas = supabase.postgrest.from("plan_items")
+                .select(Columns.list("id")) {
+                    filter {
+                        eq("plan_id", planId)
+                        cuadrillaId?.let { eq("crew_id", it) }
+                        exact("deleted_at", null)
+                    }
+                }
+                .decodeList<JsonObject>().size
+            val ultima = runCatching {
+                supabase.postgrest.from("weekly_plan_versiones")
+                    .select(Columns.list("version", "motivo", "cuando")) {
+                        filter { eq("plan_id", planId); eq("tipo", "publicada") }
+                        order("version", Order.DESCENDING)
+                        limit(1)
+                    }
+                    .decodeList<JsonObject>().firstOrNull()
+            }.getOrNull()
+            val n = plan["semana_contrato"]?.jsonPrimitive?.contentOrNull?.toIntOrNull()
+                ?: plan["week"]?.jsonPrimitive?.contentOrNull?.toIntOrNull() ?: 0
+            SemanaPublicada(
+                semana = n,
+                version = plan["version_publicada"]?.jsonPrimitive?.contentOrNull?.toIntOrNull() ?: 1,
+                publicadaEl = plan["published_at"]?.jsonPrimitive?.contentOrNull,
+                desde = plan["starts_on"]?.jsonPrimitive?.contentOrNull,
+                hasta = plan["ends_on"]?.jsonPrimitive?.contentOrNull,
+                partidas = partidas,
+                motivo = ultima?.get("motivo")?.jsonPrimitive?.contentOrNull,
+            )
+        }.getOrNull()
+    }
+
+    /**
      * Los requerimientos con plazo que tiene encima la cuadrilla.
      *
      * Van ordenados por vencimiento: lo que primero se vence es lo primero
@@ -875,3 +929,14 @@ class CampoRepositorio @Inject constructor(
         registro
     }
 }
+
+/** La semana publicada que rige hoy, como la ve el jefe en su jornada. */
+data class SemanaPublicada(
+    val semana: Int,
+    val version: Int,
+    val publicadaEl: String?,
+    val desde: String?,
+    val hasta: String?,
+    val partidas: Int,
+    val motivo: String?,
+)

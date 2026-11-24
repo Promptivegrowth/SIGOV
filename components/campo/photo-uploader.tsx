@@ -148,12 +148,10 @@ export function PhotoUploader({
       })
       return
     }
+    // El GPS no es obligatorio (J06): sin señal, la foto se guarda con su fecha y hora, sin coordenadas
     const fix = gps ?? (await getGpsFix().catch(() => null))
-    if (!fix) {
-      toast.error('Sin ubicación', {
-        description: 'La evidencia exige coordenadas. Habilita el permiso de ubicación e inténtalo de nuevo.',
-      })
-      return
+    if (!fix && !items.some((x) => x.exifGps)) {
+      toast.info('Sin GPS', { description: 'Las fotos se guardan con su fecha y hora, sin coordenadas.' })
     }
 
     setBusy(true)

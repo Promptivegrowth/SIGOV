@@ -230,6 +230,36 @@ fun PantallaJornada(
                     )
                 }
 
+                // ── La semana publicada que rige hoy (consulta) ─────────────
+                if (!estado.cargando) {
+                    val s = estado.semana
+                    Surface(
+                        onClick = alAbrirProgramacion,
+                        color = if (s != null) Marca.Azul.copy(alpha = 0.08f) else Marca.Naranja.copy(alpha = 0.10f),
+                        shape = RoundedCornerShape(12.dp),
+                        modifier = Modifier.fillMaxWidth(),
+                    ) {
+                        Column(Modifier.padding(horizontal = 14.dp, vertical = 10.dp)) {
+                            Text(
+                                if (s != null) "Semana ${s.semana.toString().padStart(2, '0')} publicada · versión ${s.version}"
+                                else "Semana sin publicar",
+                                style = MaterialTheme.typography.titleSmall, fontWeight = FontWeight.Bold,
+                                color = if (s != null) Marca.Azul else Marca.Naranja,
+                            )
+                            Text(
+                                if (s != null) buildString {
+                                    s.publicadaEl?.let { append("Publicada el " + it.take(10).split("-").reversed().joinToString("/") + " · ") }
+                                    append("${s.partidas} ${if (s.partidas == 1) "partida" else "partidas"} de tu cuadrilla")
+                                } else "La programación aparece aquí cuando el supervisor la publica. Un borrador no se muestra.",
+                                style = MaterialTheme.typography.bodySmall, color = TintaSuave,
+                            )
+                            if (s != null && s.version > 1 && !s.motivo.isNullOrBlank()) {
+                                Text("Último cambio: ${s.motivo}", style = MaterialTheme.typography.bodySmall, color = Marca.Naranja)
+                            }
+                        }
+                    }
+                }
+
                 // ── Los documentos del día: lo que falta, en rojo ───────────
                 if (estado.diaDocumentos != pe.servicon.sigov.datos.Peru.hoy()) {
                     Surface(

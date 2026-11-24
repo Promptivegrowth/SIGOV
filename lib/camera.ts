@@ -112,7 +112,8 @@ export interface WatermarkData {
   tramo?: string | null
   progresivaM?: number | null
   fase?: string
-  gps: GpsFix
+  /** Sin señal: null (el GPS no es obligatorio; la fecha y hora sí) */
+  gps: GpsFix | null
   takenAt: Date
   usuario?: string
   /** Subida de un archivo sin el sello SIGOV: ya trae el suyo (OBS 2). */
@@ -130,7 +131,7 @@ export interface SealedPhoto {
   width: number
   height: number
   takenAt: Date
-  gps: GpsFix
+  gps: GpsFix | null
   origen: 'camara_sigov' | 'archivo_web'
   selloAplicado: boolean
   fechaOriginal: Date | null
@@ -355,7 +356,7 @@ function drawWatermark(
     [s.pci ? d.pci : null, s.actividad ? d.actividad : null].filter(Boolean).join(' · ') || null,
     lugar || null,
     s.geo
-      ? `${d.gps.lat.toFixed(6)}, ${d.gps.lng.toFixed(6)}${s.precision ? `  ±${d.gps.accuracy.toFixed(0)} m` : ''}`
+      ? (d.gps ? `${d.gps.lat.toFixed(6)}, ${d.gps.lng.toFixed(6)}${s.precision ? `  ±${d.gps.accuracy.toFixed(0)} m` : ''}` : 'Sin GPS')
       : null,
   ].filter(Boolean) as string[]
 
