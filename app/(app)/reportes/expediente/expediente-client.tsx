@@ -44,6 +44,9 @@ export function ExpedienteClient() {
   const [crew, setCrew] = React.useState('')
   const [estado, setEstado] = React.useState('')
   const [q, setQ] = React.useState('')
+  // Desde / Hasta (V04/V08): por fecha de vencimiento del ítem
+  const [desde, setDesde] = React.useState('')
+  const [hasta, setHasta] = React.useState('')
   const [sel, setSel] = React.useState<Set<string>>(new Set())
   const [formatos, setFormatos] = React.useState({ excel: true, pdf: true, panel: true, jpg: true, mapa: false })
   const [historial, setHistorial] = React.useState(true)
@@ -78,6 +81,8 @@ export function ExpedienteClient() {
 
   const visibles = (items.data ?? []).filter((i) => {
     if (plazo && String(i.term_days) !== plazo) return false
+    if (desde && String(i.due_date) < desde) return false
+    if (hasta && String(i.due_date) > hasta) return false
     if (crew && i.crew_name !== crew) return false
     if (q && !String(i.item_number).includes(q.trim())) return false
     const { faltan } = fotosOficiales(i.item_number, i.fotos)
@@ -245,6 +250,10 @@ export function ExpedienteClient() {
                 <Select value={estado || '__t'} onValueChange={(v) => setEstado(v === '__t' ? '' : v)}><SelectTrigger className="h-9"><SelectValue /></SelectTrigger>
                   <SelectContent><SelectItem value="__t">Estado: Todos</SelectItem><SelectItem value="completo">Completo</SelectItem>
                     <SelectItem value="incompleto">Con faltantes</SelectItem><SelectItem value="observado">Observado</SelectItem></SelectContent></Select>
+              </div>
+              <div className="grid grid-cols-2 gap-2 text-[12px]">
+                <label><span className="text-muted-foreground block">Desde</span><Input type="date" value={desde} max={hasta || undefined} onChange={(e) => setDesde(e.target.value)} className="h-9" /></label>
+                <label><span className="text-muted-foreground block">Hasta</span><Input type="date" value={hasta} min={desde || undefined} onChange={(e) => setHasta(e.target.value)} className="h-9" /></label>
               </div>
               <div className="relative"><Search className="text-muted-foreground absolute top-1/2 left-2.5 size-4 -translate-y-1/2" />
                 <Input value={q} onChange={(e) => setQ(e.target.value)} placeholder="Buscar ítem..." className="pl-8" /></div>

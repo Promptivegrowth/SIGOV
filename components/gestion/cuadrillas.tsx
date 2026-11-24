@@ -1,5 +1,6 @@
 'use client'
 
+import { descargarExcel } from '@/lib/reports'
 import * as React from 'react'
 import Link from 'next/link'
 import { useQuery, useQueryClient } from '@tanstack/react-query'
@@ -291,34 +292,80 @@ function Asignaciones({ crew }: { crew: any }) {
 }
 
 function HistorialCuadrilla({ crew, corto }: { crew: any; corto?: boolean }) {
+  const { service, profile } = useSession()
   const sb = React.useMemo(() => createClient(), [])
   const [sel, setSel] = React.useState<any | null>(null)
+  const vacio = { desde: '', hasta: '', actor: '', accion: '' }
+  const [borrador, setBorrador] = React.useState(vacio)
+  const [f, setF] = React.useState(vacio)
   const h = useQuery({
     queryKey: ['crew-hist', crew.id],
     queryFn: async () => ((await sb.rpc('cuadrilla_historial' as any, { p_crew: crew.id } as any)).data ?? []) as any[],
   })
-  const ev = (h.data ?? []).slice(0, corto ? 3 : 100)
+  const todos = (h.data ?? []) as any[]
   const txt = (o: any) => !o ? '—' : Object.entries(o).filter(([, v]) => v != null && !(Array.isArray(v) && !v.length)).map(([k, v]) => `${k}: ${Array.isArray(v) ? v.join(', ') : k === 'desde' || k === 'hasta' ? fmtDate(String(v)) : v}`).join(' · ') || '—'
+  if (corto) {
+    return (
+      <div className="space-y-2 text-[12.5px]">
+        <p className="font-semibold">Historial de cambios</p>
+        {todos.length === 0 && <p className="text-muted-foreground">Sin cambios registrados.</p>}
+        <ul className="space-y-1.5 border-l-2 border-success/40 pl-3">
+          {todos.slice(0, 3).map((e: any) => (
+            <li key={e.id}><p><strong>{e.accion}</strong> · {e.entidad}</p><p className="text-muted-foreground text-[11.5px]">{fmtDateTime(e.cuando)} · por {e.actor}{e.motivo ? ` · ${e.motivo}` : ''}</p></li>
+          ))}
+        </ul>
+      </div>
+    )
+  }
+  // SUB_A05: filtros, tabla y detalle del evento (solo lectura)
+  const ev = todos.filter((e) => (!f.desde || String(e.cuando).slice(0, 10) >= f.desde) && (!f.hasta || String(e.cuando).slice(0, 10) <= f.hasta)
+    && (!f.actor || e.actor === f.actor) && (!f.accion || e.accion === f.accion))
+  const opts = (k: string) => [...new Set(todos.map((e) => e[k]).filter(Boolean))].sort() as string[]
+  const exportar = () => descargarExcel(`Historial_${crew.code}`, { titulo: `Historial de cuadrilla ${crew.code}`, servicio: service.name, periodo: `${f.desde || 'inicio'} – ${f.hasta || 'hoy'}`, generadoPor: profile.full_name },
+    [{ name: 'Historial', columns: [{ header: 'Evento', key: 'cod', width: 12 }, { header: 'Fecha y hora', key: 'fh', width: 18 }, { header: 'Actor', key: 'actor', width: 16 }, { header: 'Acción', key: 'accion', width: 26 },
+      { header: 'Entidad', key: 'entidad', width: 30 }, { header: 'Antes', key: 'a', width: 40 }, { header: 'Después', key: 'd', width: 40 }, { header: 'Motivo', key: 'motivo', width: 30 }],
+      rows: ev.map((e) => ({ ...e, cod: 'EVT' + String(e.id).padStart(6, '0'), fh: fmtDateTime(e.cuando), a: txt(e.antes), d: txt(e.despues) })) }])
   return (
-    <div className="space-y-2 text-[12.5px]">
-      <p className="font-semibold">Historial de cambios</p>
-      {ev.length === 0 && <p className="text-muted-foreground">Sin cambios registrados.</p>}
-      <ul className="space-y-1.5 border-l-2 border-success/40 pl-3">
-        {ev.map((e: any) => (
-          <li key={e.id} className="relative cursor-pointer" onClick={() => setSel(sel?.id === e.id ? null : e)}>
-            <span className="bg-success absolute top-1.5 -left-[17px] size-2.5 rounded-full" />
-            <p><strong>{e.accion}</strong> · {e.entidad}</p>
-            <p className="text-muted-foreground text-[11.5px]">{fmtDateTime(e.cuando)} · por {e.actor}{e.motivo ? ` · ${e.motivo}` : ''}</p>
-            {sel?.id === e.id && (
-              <div className="bg-secondary/60 mt-1 rounded-md p-2 text-[12px]">
-                <p><span className="text-muted-foreground">Antes:</span> {txt(e.antes)}</p>
-                <p className="text-success"><span className="text-muted-foreground">Después:</span> {txt(e.despues)}</p>
-                <p className="text-muted-foreground">Solo lectura · no se edita ni se borra.</p>
-              </div>
-            )}
-          </li>
-        ))}
-      </ul>
+    <div className="space-y-3 text-[12.5px]">
+      <div className="flex flex-wrap items-end gap-2">
+        <label><span className="text-muted-foreground block">Desde</span><Input type="date" value={borrador.desde} onChange={(e) => setBorrador({ ...borrador, desde: e.target.value })} className="h-9" /></label>
+        <label><span className="text-muted-foreground block">Hasta</span><Input type="date" value={borrador.hasta} onChange={(e) => setBorrador({ ...borrador, hasta: e.target.value })} className="h-9" /></label>
+        <label><span className="text-muted-foreground block">Actor</span><select value={borrador.actor} onChange={(e) => setBorrador({ ...borrador, actor: e.target.value })} className="bg-card h-9 rounded-md border border-border px-2"><option value="">Todos</option>{opts('actor').map((x) => <option key={x}>{x}</option>)}</select></label>
+        <label><span className="text-muted-foreground block">Acción</span><select value={borrador.accion} onChange={(e) => setBorrador({ ...borrador, accion: e.target.value })} className="bg-card h-9 rounded-md border border-border px-2"><option value="">Todas</option>{opts('accion').map((x) => <option key={x}>{x}</option>)}</select></label>
+        <Button size="sm" onClick={() => setF(borrador)}>Aplicar filtros</Button>
+        <Button size="sm" variant="outline" onClick={() => { setBorrador(vacio); setF(vacio) }}>Limpiar</Button>
+        <Button size="sm" variant="outline" onClick={exportar} disabled={!ev.length}>Exportar</Button>
+      </div>
+      <div className="grid gap-3 xl:grid-cols-[minmax(0,1fr)_320px]">
+        <div className="overflow-x-auto rounded-lg border border-border">
+          <table className="w-full">
+            <thead className="bg-secondary/50 text-left"><tr>{['Fecha y hora', 'Actor', 'Acción', 'Entidad', 'Motivo'].map((t) => <th key={t} className="px-2.5 py-2 font-semibold">{t}</th>)}</tr></thead>
+            <tbody className="divide-y divide-border">
+              {ev.length === 0 && <tr><td colSpan={5} className="text-muted-foreground px-2.5 py-6 text-center">Sin eventos con estos filtros.</td></tr>}
+              {ev.map((e) => (
+                <tr key={e.id} onClick={() => setSel(e)} className={cn('hover:bg-secondary/30 cursor-pointer', sel?.id === e.id && 'bg-primary/5')}>
+                  <td className="px-2.5 py-1.5 whitespace-nowrap">{fmtDateTime(e.cuando)}</td><td className="px-2.5">{e.actor}</td><td className="px-2.5 font-semibold">{e.accion}</td>
+                  <td className="px-2.5">{e.entidad}</td><td className="text-muted-foreground px-2.5">{e.motivo ?? '—'}</td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        </div>
+        {sel ? (
+          <div className="h-fit space-y-2 rounded-lg border border-border p-3">
+            <p className="flex items-center justify-between font-semibold">Detalle del evento<button onClick={() => setSel(null)} aria-label="Cerrar"><X className="size-4" /></button></p>
+            <p><span className="text-muted-foreground">Evento:</span> <strong>EVT{String(sel.id).padStart(6, '0')}</strong> · <span className="bg-success/12 text-success rounded-full px-2 py-0.5 text-[11px] font-semibold">● Correcto</span></p>
+            <p><span className="text-muted-foreground">Acción:</span> {sel.accion}</p>
+            <p><span className="text-muted-foreground">Entidad:</span> {sel.entidad}</p>
+            <p><span className="text-muted-foreground">Actor:</span> {sel.actor} · {fmtDateTime(sel.cuando)}</p>
+            <p><span className="text-muted-foreground">Antes:</span> {txt(sel.antes)}</p>
+            <p className="text-success"><span className="text-muted-foreground">Después:</span> {txt(sel.despues)}</p>
+            {sel.motivo && <p><span className="text-muted-foreground">Motivo:</span> {sel.motivo}</p>}
+            <Link href={`/auditoria?evento=${sel.id}`} className="text-primary block font-semibold underline">Ver en Auditoría</Link>
+            <p className="text-muted-foreground text-[11.5px]">Solo lectura · el historial no se edita ni se borra.</p>
+          </div>
+        ) : <p className="text-muted-foreground h-fit rounded-lg border border-border p-4 text-center">Elige un evento para ver su detalle.</p>}
+      </div>
     </div>
   )
 }

@@ -2,7 +2,8 @@
 
 import * as React from 'react'
 import { useQuery, useQueryClient } from '@tanstack/react-query'
-import { Database, CheckCircle2, Clock, Wallet, Plus, MessageSquare, X, Info, Save, Eye } from 'lucide-react'
+import { Database, CheckCircle2, Clock, Wallet, Plus, MessageSquare, X, Info, Save, Eye, Download } from 'lucide-react'
+import { descargarExcel } from '@/lib/reports'
 import { toast } from 'sonner'
 import { createClient } from '@/lib/supabase/client'
 import { useSession } from '@/lib/hooks/use-session'
@@ -58,29 +59,67 @@ export function Rendiciones({ cajas }: { cajas: any[] }) {
         .eq('service_id', service.id).order('creado_at', { ascending: false }).limit(100)
       const filas = (data ?? []) as any[]
       const ids = filas.map((r) => r.id)
-      const { data: m } = ids.length ? await sb.from('cash_movements').select('rendicion_id, amount, status, category, description, receipt_kind, receipt_number, storage_path, occurred_on').in('rendicion_id' as any, ids) : { data: [] as any[] }
+      const { data: m } = ids.length ? await sb.from('cash_movements').select('rendicion_id, amount, monto_solicitado, monto_aprobado, status, category, description, receipt_kind, receipt_number, storage_path, occurred_on').in('rendicion_id' as any, ids) : { data: [] as any[] }
       return filas.map((r) => {
         const g = ((m ?? []) as any[]).filter((x) => x.rendicion_id === r.id)
-        return { ...r, gastos: g, rendido: g.reduce((s, x) => s + Number(x.amount), 0), aprobado: g.filter((x) => x.status === 'aprobado').reduce((s, x) => s + Number(x.amount), 0) }
+        const sum = (f: (x: any) => number) => g.reduce((s, x) => s + f(x), 0)
+        return { ...r, gastos: g, rendido: sum((x) => Number(x.amount)), aprobado: g.filter((x) => x.status === 'aprobado').reduce((s, x) => s + Number(x.amount), 0),
+          solicitado: sum((x) => Number(x.monto_solicitado ?? x.amount)), aprobadoMonto: sum((x) => Number(x.monto_aprobado ?? (x.status === 'aprobado' ? x.amount : 0))),
+          concepto: [...new Set(g.map((x) => x.category ?? x.description).filter(Boolean))].slice(0, 3).join(', ') || '—' }
       })
     },
   })
   const puedeRevisar = ['admin', 'residente'].includes(role)
+  // Filtros, orden y KPIs (ADMIN_SUB_Caja_Rendiciones)
+  const [f, setF] = React.useState({ q: '', caja: '', estado: '' })
+  const [orden, setOrden] = React.useState<{ k: string; asc: boolean }>({ k: 'creado_at', asc: false })
+  const per = useQuery({
+    queryKey: ['caja-periodo', service.id, f.caja || null, '2000-01-01', toISODate(new Date())],
+    queryFn: async () => ((await sb.rpc('caja_periodo' as any, { p_service: service.id, p_box: f.caja || null, p_desde: '2000-01-01', p_hasta: toISODate(new Date()) } as any)).data as any) ?? {},
+  })
+  const filas = (q.data ?? []).filter((r) => (!f.caja || r.cash_box_id === f.caja) && (!f.estado || r.estado === f.estado)
+    && (!f.q || `${r.codigo} ${r.concepto} ${r.crews?.name ?? ''} ${r.responsable?.full_name ?? ''}`.toLowerCase().includes(f.q.toLowerCase())))
+    .sort((a, b) => { const x = a[orden.k], y = b[orden.k]; const c = typeof x === 'number' ? x - y : String(x ?? '').localeCompare(String(y ?? '')); return orden.asc ? c : -c })
+  const kp = [[Database, (per.data as any)?.fondo, 'Fondo', 'border-info text-info bg-info/[0.05]'],
+    [CheckCircle2, filas.filter((r) => r.estado === 'aprobada').reduce((s, r) => s + r.aprobado, 0), 'Rendido aprobado', 'border-success text-success bg-success/[0.05]'],
+    [Clock, filas.filter((r) => r.estado === 'por_revisar').reduce((s, r) => s + r.rendido, 0), 'Por revisar', 'border-warning text-warning bg-warning/[0.06]'],
+    [Wallet, (per.data as any)?.disponible, 'Disponible', 'border-success text-success bg-success/[0.05]']] as any[]
+  const Th = ({ k, t }: { k: string; t: string }) => <th className="px-3 py-2 text-left font-medium"><button onClick={() => setOrden({ k, asc: orden.k === k ? !orden.asc : true })}>{t} ⇅</button></th>
+  const exportar = () => descargarExcel(`Rendiciones_${toISODate(new Date())}`, { titulo: 'Rendiciones', subtitulo: 'Uso interno SERVICON · No visible para COVINCA', servicio: service.name, periodo: `Al ${fmtDate(new Date())}`, generadoPor: profile.full_name },
+    [{ name: 'Rendiciones', columns: [{ header: 'N.° Rendición', key: 'codigo', width: 12 }, { header: 'Fecha', key: 'f', width: 12 }, { header: 'Cuadrilla', key: 'cu', width: 20 }, { header: 'Concepto', key: 'concepto', width: 28 },
+      { header: 'Solicitado', key: 'solicitado', width: 12 }, { header: 'Aprobado', key: 'aprobadoMonto', width: 12 }, { header: 'Ejecutado', key: 'rendido', width: 12 }, { header: 'Estado', key: 'estado', width: 12 }],
+      rows: filas.map((r) => ({ ...r, f: fmtDate(r.creado_at), cu: r.crews?.name ?? r.cash_boxes?.name })) }])
   return (
+    <div className="space-y-4">
+    <div className="grid grid-cols-2 gap-3 lg:grid-cols-4">
+      {kp.map(([I, v, t, c]: any) => (
+        <div key={t} className={cn('flex items-center gap-3 rounded-xl border border-l-4 px-4 py-3', c)}><I className="size-6" /><div><p className="text-xl font-bold tabular-nums">{soles(v)}</p><p className="text-foreground text-[12px]">{t}</p></div></div>
+      ))}
+    </div>
+    <div className="flex flex-wrap items-end gap-2">
+      <Input value={f.q} onChange={(e) => setF({ ...f, q: e.target.value })} placeholder="Buscar rendición (N.°, concepto, cuadrilla...)" className="h-9 max-w-xs" />
+      <Elegir etiqueta="Cuadrilla" valor={f.caja} cambiar={(x) => setF({ ...f, caja: x })} todos="Todas" opciones={cajas.map((c) => [c.id, c.crew_name ?? c.name])} />
+      <Elegir etiqueta="Estado" valor={f.estado} cambiar={(x) => setF({ ...f, estado: x })} todos="Todos" opciones={[['por_revisar', 'Por revisar'], ['aprobada', 'Aprobada'], ['observada', 'Observada']]} />
+      <Button variant="outline" className="ml-auto" onClick={exportar} disabled={!filas.length}><Download className="size-4" />Exportar</Button>
+    </div>
     <div className={cn('grid gap-4', sel && 'xl:grid-cols-[1fr_380px]')}>
       <Card className="min-w-0">
-        <CardHeader className="flex-row items-center justify-between space-y-0 pb-2"><CardTitle className="text-[14px]">Rendiciones</CardTitle>
-          <Button size="sm" onClick={() => setNueva(true)}><Plus className="size-4" />Generar rendición</Button></CardHeader>
+        <CardHeader className="flex-row items-center justify-between space-y-0 pb-2"><CardTitle className="text-[14px]">Rendiciones del período</CardTitle>
+          <span className="flex gap-2"><Button size="sm" variant="outline" disabled={!filas.some((r) => r.estado === 'por_revisar')} onClick={() => setSel(filas.find((r) => r.estado === 'por_revisar'))}><CheckCircle2 className="size-4" />Revisar rendición</Button>
+          <Button size="sm" onClick={() => setNueva(true)}><Plus className="size-4" />Generar rendición</Button></span></CardHeader>
         <CardContent className="overflow-x-auto p-0">
           <table className="w-full text-[12.5px]">
-            <thead className="bg-secondary/60 text-muted-foreground text-[11.5px]"><tr>{['N.° Rendición', 'Fecha de rendición', 'Cuadrilla', 'Responsable', 'Periodo', 'Rendido', 'Aprobado', 'Estado', ''].map((t) => <th key={t} className="px-3 py-2 text-left font-medium">{t}</th>)}</tr></thead>
+            <thead className="bg-secondary/60 text-muted-foreground text-[11.5px]"><tr>
+              <Th k="codigo" t="N.° Rendición" /><Th k="creado_at" t="Fecha" /><th className="px-3 py-2 text-left font-medium">Cuadrilla</th><th className="px-3 py-2 text-left font-medium">Concepto</th>
+              <Th k="solicitado" t="Solicitado" /><Th k="aprobadoMonto" t="Aprobado" /><Th k="rendido" t="Ejecutado" /><Th k="estado" t="Estado" /><th />
+            </tr></thead>
             <tbody>
-              {(q.data ?? []).length === 0 && <tr><td colSpan={9} className="text-muted-foreground px-3 py-6 text-center">Sin rendiciones todavía.</td></tr>}
-              {(q.data ?? []).map((r) => (
+              {filas.length === 0 && <tr><td colSpan={9} className="text-muted-foreground px-3 py-6 text-center">Sin rendiciones con estos filtros.</td></tr>}
+              {filas.map((r) => (
                 <tr key={r.id} className={cn('border-t border-border', sel?.id === r.id && 'bg-info/[0.07]')}>
-                  <td className="px-3 py-2 font-semibold">{r.codigo}</td><td className="px-3">{fmtDate(r.creado_at)}</td><td className="px-3">{r.crews?.name ?? r.cash_boxes?.name}</td>
-                  <td className="px-3">{r.responsable?.full_name ?? '—'}</td><td className="px-3 whitespace-nowrap">{fmtDate(r.desde)} – {fmtDate(r.hasta)}</td>
-                  <td className="px-3 tabular-nums">{soles(r.rendido)}</td><td className="px-3 tabular-nums">{soles(r.aprobado)}</td>
+                  <td className="px-3 py-2 font-semibold">{r.codigo}</td><td className="px-3">{fmtDate(r.creado_at)}</td><td className="px-3">{r.crews?.name ?? r.cash_boxes?.name}<span className="text-muted-foreground block">{r.responsable?.full_name ?? ''}</span></td>
+                  <td className="px-3">{r.concepto}<span className="text-muted-foreground block">{fmtDate(r.desde)} – {fmtDate(r.hasta)}</span></td>
+                  <td className="px-3 tabular-nums">{soles(r.solicitado)}</td><td className="px-3 tabular-nums">{soles(r.aprobadoMonto)}</td><td className="px-3 tabular-nums">{soles(r.rendido)}</td>
                   <td className="px-3"><span className={cn('rounded-full px-2 py-0.5 text-[11.5px] font-semibold', ESTADO_RND[r.estado])}>● {r.estado === 'por_revisar' ? 'Por revisar' : r.estado === 'aprobada' ? 'Aprobada' : 'Observada'}</span></td>
                   <td className="px-3"><Button size="sm" variant="outline" onClick={() => setSel(r)}><Eye className="size-3.5" />Ver</Button></td>
                 </tr>
@@ -93,6 +132,7 @@ export function Rendiciones({ cajas }: { cajas: any[] }) {
       {sel && <DetalleRendicion r={sel} puedeRevisar={puedeRevisar && ![sel.responsable_id, sel.creado_por].includes(profile.id)} cerrar={() => setSel(null)}
         alCambiar={() => { qc.invalidateQueries({ queryKey: ['rendiciones'] }); qc.invalidateQueries({ queryKey: ['caja-periodo'] }); setSel(null) }} />}
       {nueva && <NuevaRendicion cajas={cajas} cerrar={() => setNueva(false)} alCrear={() => { setNueva(false); qc.invalidateQueries({ queryKey: ['rendiciones'] }) }} />}
+    </div>
     </div>
   )
 }
@@ -115,6 +155,16 @@ function DetalleRendicion({ r, puedeRevisar, cerrar, alCambiar }: { r: any; pued
       <CardContent className="space-y-2 text-[12.5px]">
         <p className="font-semibold">{r.codigo} · {r.crews?.name ?? r.cash_boxes?.name}</p>
         <p className="text-muted-foreground">Responsable: {r.responsable?.full_name ?? '—'} · Periodo {fmtDate(r.desde)} – {fmtDate(r.hasta)}</p>
+        <div className="grid grid-cols-3 gap-2">
+          <div className="bg-secondary rounded-lg p-2"><p className="text-muted-foreground text-[11px]">Solicitado</p><p className="font-bold">{soles(r.solicitado)}</p></div>
+          <div className="bg-secondary rounded-lg p-2"><p className="text-muted-foreground text-[11px]">Aprobado</p><p className="font-bold">{soles(r.aprobadoMonto)}</p></div>
+          <div className="bg-success/10 rounded-lg p-2"><p className="text-success text-[11px]">Ejecutado</p><p className="text-success font-bold">{soles(r.rendido)}</p></div>
+        </div>
+        {r.estado === 'observada' && r.motivo && <p className="bg-destructive/8 text-destructive rounded-lg p-2"><strong>Observación:</strong> {r.motivo}</p>}
+        <p className="font-semibold">Adjuntos ({r.gastos.filter((g: any) => g.storage_path).length})</p>
+        {r.gastos.filter((g: any) => g.storage_path).map((g: any, i: number) => (
+          <button key={`a${i}`} onClick={() => ver(g.storage_path)} className="hover:bg-secondary flex w-full items-center gap-2 rounded-lg border border-border p-2 text-left"><Eye className="size-3.5" /><span className="flex-1 truncate">{String(g.storage_path).split('/').pop()}</span><Download className="text-info size-3.5" /></button>
+        ))}
         <p className="font-semibold">Gastos ({r.gastos.length})</p>
         {r.gastos.map((g: any, i: number) => (
           <p key={i} className="flex items-center justify-between gap-2"><span className="truncate">{fmtDate(g.occurred_on)} · {g.category ?? g.description} · {g.receipt_kind ?? 'sin comprobante'} {g.receipt_number ?? ''}</span>

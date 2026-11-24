@@ -17,6 +17,7 @@ import { mensajeAmigable } from '@/lib/errores'
 import { Kpi } from '@/components/gestion/gestion-nav'
 import { Elegir } from '@/components/ssoma/control-ssoma'
 import { EquiposOperativos } from './equipos'
+import { VehiculosTab, AsignacionesTab } from './vehiculos'
 import { useSearchParams } from 'next/navigation'
 
 /**
@@ -42,7 +43,7 @@ export function RecursosOperativos() {
     queryFn: async () => {
       const [{ data: v }, { data: a }, { data: e }, { data: c }] = await Promise.all([
         sb.from('vehicles').select('*').eq('service_id', service.id).is('deleted_at', null).order('code'),
-        sb.from('crew_vehicle_assignments').select('*, vehicles(code, plate), crews(name)').eq('service_id', service.id).order('start_on', { ascending: false }).limit(200),
+        sb.from('crew_vehicle_assignments').select('*, vehicles(code, plate), crews(name, code)').eq('service_id', service.id).order('start_on', { ascending: false }).limit(200),
         sb.from('safety_equipment').select('*, crews(name)').eq('service_id', service.id).is('deleted_at', null).order('code'),
         sb.from('crews').select('id, name, code').eq('service_id', service.id).is('deleted_at', null).order('code'),
       ])
@@ -57,51 +58,14 @@ export function RecursosOperativos() {
     <>
       <PageHeader title="Recursos operativos" description="Gestión de vehículos, equipos y asignaciones operativas · Uso interno SERVICON" />
       <PageBody className="space-y-4">
-        <div className={cn('grid grid-cols-2 gap-3 lg:grid-cols-4', tab === 'equipos' && 'hidden')}>
-          <Kpi icono={Truck} valor={x?.v.length} etiqueta="Vehículos" tono="azul" />
-          <Kpi icono={CheckCircle2} valor={x?.v.filter((v) => v.status === 'operativo').length} etiqueta="Operativos" tono="verde" />
-          <Kpi icono={TriangleAlert} valor={x?.v.filter(vencido).length} etiqueta="Con documento vencido" tono="rojo" />
-          <Kpi icono={Wrench} valor={x?.e.length} etiqueta="Equipos" tono="ambar" />
+        <div className="bg-secondary inline-flex rounded-lg p-1">
+          {([['vehiculos', 'Vehículos', Truck], ['equipos', 'Equipos', Wrench], ['asignaciones', 'Asignaciones', Link2]] as const).map(([k, t, I]) => (
+            <button key={k} onClick={() => setTab(k)} className={cn('flex items-center gap-1.5 rounded-md px-3.5 py-1.5 text-[13px] font-semibold', tab === k ? 'bg-primary text-primary-foreground' : 'text-muted-foreground')}><I className="size-3.5" />{t}</button>
+          ))}
         </div>
-        <div className="flex flex-wrap items-center gap-2">
-          <div className="bg-secondary inline-flex rounded-lg p-1">
-            {([['vehiculos', 'Vehículos', Truck], ['equipos', 'Equipos', Wrench], ['asignaciones', 'Asignaciones', Link2]] as const).map(([k, t, I]) => (
-              <button key={k} onClick={() => setTab(k)} className={cn('flex items-center gap-1.5 rounded-md px-3.5 py-1.5 text-[13px] font-semibold', tab === k ? 'bg-primary text-primary-foreground' : 'text-muted-foreground')}><I className="size-3.5" />{t}</button>
-            ))}
-          </div>
-          {tab !== 'equipos' && <div className="relative min-w-56 flex-1"><Search className="text-muted-foreground absolute top-1/2 left-2.5 size-4 -translate-y-1/2" />
-            <Input value={q} onChange={(e) => setQ(e.target.value)} placeholder="Buscar placa, código o cuadrilla..." className="pl-8" /></div>}
-          {tab === 'vehiculos' && <Button onClick={() => setEditar({ status: 'operativo', kind: 'camioneta' })}><Plus className="size-4" />Nuevo vehículo</Button>}
-          {tab === 'asignaciones' && <Button onClick={() => setAsignar({})}><Plus className="size-4" />Nueva asignación</Button>}
-        </div>
+        {tab === 'vehiculos' && x && <VehiculosTab v={x.v} a={x.a} c={x.c} onEditar={setEditar} onAsignar={setAsignar} />}
         {tab === 'equipos' && <EquiposOperativos />}
-        <Card className={cn(tab === 'equipos' && 'hidden')}><CardContent className="overflow-x-auto p-0">
-          {tab === 'vehiculos' && (
-            <table className="w-full text-[12.5px]">
-              <thead className="bg-secondary/60 text-muted-foreground text-[11.5px]"><tr>{['Código', 'Placa', 'Tipo', 'Cuadrilla', 'SOAT', 'Revisión técnica', 'Póliza', 'Estado', ''].map((t) => <th key={t} className="px-3 py-2 text-left font-medium">{t}</th>)}</tr></thead>
-              <tbody>{(x?.v ?? []).filter((v) => !q || `${v.code} ${v.plate}`.toLowerCase().includes(q.toLowerCase())).map((v) => (
-                <tr key={v.id} className="border-t border-border">
-                  <td className="px-3 py-1.5 font-semibold">{v.code ?? '—'}</td><td className="px-3">{v.plate}</td><td className="px-3">{v.kind}</td>
-                  <td className="px-3">{x?.c.find((c) => c.id === v.crew_id)?.name ?? '—'}</td>
-                  {[v.soat_expires_on, v.inspection_expires_on, v.policy_expires_on].map((f, i) => <td key={i} className={cn('px-3 whitespace-nowrap', f && f < hoy && 'text-destructive font-semibold')}>{f ? fmtDate(f) : '—'}</td>)}
-                  <td className="px-3"><span className={cn('rounded-full px-2 py-0.5 text-[11.5px] font-semibold', ESTADO_V[v.status])}>● {String(v.status).replace(/_/g, ' ')}</span></td>
-                  <td className="px-3"><span className="flex gap-1"><Button size="icon-sm" variant="outline" aria-label="Editar" onClick={() => setEditar(v)}><Pencil className="size-3.5" /></Button>
-                    <Button size="sm" variant="outline" onClick={() => setAsignar({ vehicle_id: v.id })}><Link2 className="size-3.5" />Asignar</Button></span></td>
-                </tr>))}</tbody>
-            </table>
-          )}
-          {tab === 'asignaciones' && (
-            <table className="w-full text-[12.5px]">
-              <thead className="bg-secondary/60 text-muted-foreground text-[11.5px]"><tr>{['Vehículo', 'Cuadrilla', 'Tipo', 'Desde', 'Hasta', 'Motivo', 'Estado'].map((t) => <th key={t} className="px-3 py-2 text-left font-medium">{t}</th>)}</tr></thead>
-              <tbody>{(x?.a ?? []).filter((a) => !q || `${a.vehicles?.code} ${a.vehicles?.plate} ${a.crews?.name}`.toLowerCase().includes(q.toLowerCase())).map((a) => (
-                <tr key={a.id} className="border-t border-border">
-                  <td className="px-3 py-1.5 font-semibold">{a.vehicles?.code ?? a.vehicles?.plate}</td><td className="px-3">{a.crews?.name}</td><td className="px-3">{a.kind}</td>
-                  <td className="px-3">{fmtDate(a.start_on)}</td><td className="px-3">{a.end_on ? fmtDate(a.end_on) : '—'}</td><td className="text-muted-foreground px-3">{a.reason ?? ''}</td>
-                  <td className="px-3"><span className={cn('rounded-full px-2 py-0.5 text-[11.5px] font-semibold', !a.end_on || a.end_on >= hoy ? 'bg-success/12 text-success' : 'bg-secondary text-muted-foreground')}>● {!a.end_on || a.end_on >= hoy ? 'Vigente' : 'Finalizada'}</span></td>
-                </tr>))}</tbody>
-            </table>
-          )}
-        </CardContent></Card>
+        {tab === 'asignaciones' && x && <AsignacionesTab a={x.a} c={x.c} onNueva={() => setAsignar({})} />}
       </PageBody>
       {editar && <EditarVehiculo v={editar} cerrar={() => setEditar(null)} alGuardar={() => { setEditar(null); refrescar() }} />}
       {asignar && x && <AsignarVehiculo inicial={asignar} vehiculos={x.v} cuadrillas={x.c} cerrar={() => setAsignar(null)} alGuardar={() => { setAsignar(null); refrescar() }} />}
