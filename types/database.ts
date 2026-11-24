@@ -2766,6 +2766,75 @@ export type Database = {
           },
         ]
       }
+      exportaciones: {
+        Row: {
+          archivo: string | null
+          corte: string
+          created_at: string
+          error: string | null
+          estado: string
+          familia: string
+          filtros: Json
+          filtros_texto: string | null
+          formato: string
+          id: string
+          nombre: string
+          registros: number | null
+          service_id: string
+          terminado_at: string | null
+          user_id: string
+        }
+        Insert: {
+          archivo?: string | null
+          corte?: string
+          created_at?: string
+          error?: string | null
+          estado?: string
+          familia: string
+          filtros?: Json
+          filtros_texto?: string | null
+          formato: string
+          id?: string
+          nombre: string
+          registros?: number | null
+          service_id: string
+          terminado_at?: string | null
+          user_id?: string
+        }
+        Update: {
+          archivo?: string | null
+          corte?: string
+          created_at?: string
+          error?: string | null
+          estado?: string
+          familia?: string
+          filtros?: Json
+          filtros_texto?: string | null
+          formato?: string
+          id?: string
+          nombre?: string
+          registros?: number | null
+          service_id?: string
+          terminado_at?: string | null
+          user_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "exportaciones_service_id_fkey"
+            columns: ["service_id"]
+            isOneToOne: false
+            referencedRelation: "services"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "exportaciones_user_id_fkey"
+            columns: ["user_id"]
+            isOneToOne: false
+            referencedRelation: "profiles"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       hygiene_checks: {
         Row: {
           checked_on: string
@@ -10282,6 +10351,7 @@ export type Database = {
         Returns: string[]
       }
       apoyo_items_activos: { Args: never; Returns: string[] }
+      apoyo_items_ids: { Args: never; Returns: string[] }
       apoyo_items_para_carga: { Args: never; Returns: string[] }
       apoyo_revocar: {
         Args: { p_apoyo: string; p_motivo: string }
@@ -10648,6 +10718,11 @@ export type Database = {
         Args: { p_aceptar: boolean; p_ev: string; p_motivo?: string }
         Returns: Json
       }
+      familia_permitida: {
+        Args: { p_familia: string; p_service: string }
+        Returns: boolean
+      }
+      familias_permitidas: { Args: { p_service: string }; Returns: string[] }
       fase_legible: { Args: { p: string }; Returns: string }
       fijar_foto_referencial: {
         Args: { p_id: string; p_path: string; p_tabla: string }
@@ -11109,6 +11184,18 @@ export type Database = {
         }
         Returns: boolean
       }
+      reporte_pci: {
+        Args: {
+          p_crew?: string
+          p_desde?: string
+          p_hasta?: string
+          p_pci?: string
+          p_plazo?: number
+          p_sector?: string
+          p_service: string
+        }
+        Returns: Json
+      }
       requerimiento_calcular: {
         Args: { p_crew: string; p_plan: string }
         Returns: Json
@@ -11199,6 +11286,7 @@ export type Database = {
         Returns: Json
       }
       semana_historial: { Args: { p_plan: string }; Returns: Json }
+      semana_publicada: { Args: { p_plan: string }; Returns: boolean }
       semana_publicar: {
         Args: { p_motivo?: string; p_plan: string }
         Returns: Json

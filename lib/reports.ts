@@ -63,14 +63,14 @@ function logoServicon() {
     logoCache = (async () => {
       try {
         const blob = await fetch('/marca/logo-servicon.png').then((r) => (r.ok ? r.blob() : Promise.reject()))
-        const data = await new Promise<string>((res, rej) => {
-          const fr = new FileReader()
-          fr.onload = () => res(String(fr.result))
-          fr.onerror = rej
-          fr.readAsDataURL(blob)
-        })
+        // El original pesa varios MB sin comprimir dentro del PDF: basta 600 px de ancho
         const bmp = await createImageBitmap(blob)
-        const out = { data, w: bmp.width, h: bmp.height }
+        const k = Math.min(1, 600 / bmp.width)
+        const canvas = document.createElement('canvas')
+        canvas.width = Math.round(bmp.width * k)
+        canvas.height = Math.round(bmp.height * k)
+        canvas.getContext('2d')!.drawImage(bmp, 0, 0, canvas.width, canvas.height)
+        const out = { data: canvas.toDataURL('image/png'), w: canvas.width, h: canvas.height }
         bmp.close?.()
         logoListo = out
         return out
@@ -604,9 +604,33 @@ export async function descargarPdf(
   doc.save(`${nombre}.pdf`)
 }
 
+/** El mismo PDF, como archivo (para el historial de exportaciones). */
+export async function pdfBlob(meta: ReportMeta, columns: any[], rows: any[], options?: any): Promise<Blob> {
+  const doc = await reportePdf(meta, columns, rows, options)
+  return doc.output('blob') as Blob
+}
+
+/** Descarga un archivo ya generado con su nombre. */
+export function guardarArchivo(blob: Blob, nombre: string) {
+  const url = URL.createObjectURL(blob)
+  const a = document.createElement('a')
+  a.href = url
+  a.download = nombre
+  a.click()
+  setTimeout(() => URL.revokeObjectURL(url), 1500)
+}
+
 // ─── Excel con formato ────────────────────────────────────────────────────
 export async function descargarExcel(
   nombre: string,
+  meta: ReportMeta,
+  sheets: Parameters<typeof excelBlob>[1]
+) {
+  guardarArchivo(await excelBlob(meta, sheets), `${nombre}.xlsx`)
+}
+
+/** El libro Excel como archivo, sin descargarlo. */
+export async function excelBlob(
   meta: ReportMeta,
   sheets: {
     name: string
@@ -756,13 +780,7 @@ export async function descargarExcel(
   }
 
   const buf = await wb.xlsx.writeBuffer()
-  const blob = new Blob([buf], {
+  return new Blob([buf], {
     type: 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
   })
-  const url = URL.createObjectURL(blob)
-  const a = document.createElement('a')
-  a.href = url
-  a.download = `${nombre}.xlsx`
-  a.click()
-  URL.revokeObjectURL(url)
 }
