@@ -6,6 +6,7 @@ import { useQuery, useQueryClient } from '@tanstack/react-query'
 import { FileDown, FileSpreadsheet, List, ClipboardCheck, Info, CheckCircle2, XCircle } from 'lucide-react'
 import { toast } from 'sonner'
 import { createClient } from '@/lib/supabase/client'
+import { useSession } from '@/lib/hooks/use-session'
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
@@ -36,6 +37,8 @@ export function SeguimientoMateriales({ serviceId, crewId, crewNombre, desde, ha
 }) {
   const sb = React.useMemo(() => createClient(), [])
   const qc = useQueryClient()
+  const { role } = useSession()
+  const puedeDecidir = ['admin', 'supervisor'].includes(role)
   const [sel, setSel] = React.useState('')
   const [movs, setMovs] = React.useState(false)
   const [conteo, setConteo] = React.useState<{ supply: string; cantidad: string; nota: string } | null>(null)
@@ -199,7 +202,7 @@ export function SeguimientoMateriales({ serviceId, crewId, crewNombre, desde, ha
                     <td className="border border-[#C9D6E5] bg-[#DDE5EE]/70 px-2 tabular-nums">{x.conteo ? num(x.conteo.contado) : '—'}</td>
                     <td className="border border-[#C9D6E5] px-2 tabular-nums">{Number(x.por_validar) ? <Badge variant="warning">{num(x.por_validar)}</Badge> : ''}</td>
                     <td className="border border-[#C9D6E5] px-1">
-                      {canEdit && x.conteo?.estado === 'registrado' && (
+                      {canEdit && puedeDecidir && x.conteo?.estado === 'registrado' && (
                         <span className="flex justify-center gap-1" onClick={(e) => e.stopPropagation()}>
                           <Button size="sm" className="h-6 px-2 text-[11px]" onClick={() => decidir(x.conteo.id, true)}><CheckCircle2 className="size-3" />Ajustar</Button>
                           <Button size="sm" variant="outline" className="h-6 px-2 text-[11px]" onClick={() => decidir(x.conteo.id, false)}><XCircle className="size-3" />Descartar</Button>

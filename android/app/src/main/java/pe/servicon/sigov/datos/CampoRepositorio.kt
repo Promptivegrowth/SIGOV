@@ -299,7 +299,17 @@ class CampoRepositorio @Inject constructor(
                     filter { isIn("id", ids); isIn("status", listOf("pendiente", "en_atencion", "observado")) }
                 }.decodeList<JsonObject>()
             }.getOrDefault(emptyList())
-            val todas = filas + deApoyo.filter { a -> filas.none { it["id"] == a["id"] } }
+            // Se marcan como apoyo, con la hora en que vence, para no confundirlos con los propios (guía Jefe F1.2)
+            val apoyoHasta = if (deApoyo.isEmpty() || cuadrillaId == null) null else runCatching {
+                supabase.postgrest.from("apoyos_temporales").select {
+                    filter { eq("crew_destino", cuadrillaId); eq("estado", "vigente") }
+                    order("hasta", Order.ASCENDING)
+                    limit(1)
+                }.decodeList<JsonObject>().firstOrNull()?.get("hasta")?.jsonPrimitive?.content
+            }.getOrNull()
+            val marcadas = deApoyo.map { f -> JsonObject(f + mapOf("de_apoyo" to kotlinx.serialization.json.JsonPrimitive(true),
+                "apoyo_hasta" to kotlinx.serialization.json.JsonPrimitive(apoyoHasta))) }
+            val todas = filas + marcadas.filter { a -> filas.none { it["id"] == a["id"] } }
             espejar("pci_items", servicioId, todas)
             todas.map { fila -> json.decodeFromString<ItemPci>(fila.toString()) }
         }.getOrElse {

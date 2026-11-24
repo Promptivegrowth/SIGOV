@@ -105,7 +105,9 @@ function EditarVehiculo({ v, cerrar, alGuardar }: { v: any; cerrar: () => void; 
 
 function AsignarVehiculo({ inicial, vehiculos, cuadrillas, cerrar, alGuardar }: { inicial: any; vehiculos: any[]; cuadrillas: any[]; cerrar: () => void; alGuardar: () => void }) {
   const sb = React.useMemo(() => createClient(), [])
-  const [f, setF] = React.useState({ vehicle: inicial.vehicle_id ?? '', crew: '', kind: 'titular', desde: toISODate(new Date()), hasta: '', motivo: '' })
+  const [f, setF] = React.useState({ vehicle: inicial.vehicle_id ?? '', crew: '', kind: 'titular', desde: toISODate(new Date()), hasta: '', motivo: '', responsable: '' })
+  const personas = useQuery({ queryKey: ['asig-personas', f.crew], enabled: !!f.crew,
+    queryFn: async () => ((await sb.from('crew_members').select('profile_id, full_name').eq('crew_id', f.crew).eq('is_active', true).not('profile_id', 'is', null)).data ?? []) as any[] })
   const ver = useQuery({
     queryKey: ['asig-verif', f.vehicle, f.crew, f.desde, f.hasta],
     enabled: !!f.vehicle && !!f.crew && !!f.desde,
@@ -115,6 +117,8 @@ function AsignarVehiculo({ inicial, vehiculos, cuadrillas, cerrar, alGuardar }: 
   const guardar = async () => {
     const { error } = await sb.rpc('asignacion_guardar' as any, { p_vehicle: f.vehicle, p_crew: f.crew, p_kind: f.kind, p_desde: f.desde, p_hasta: f.hasta || null, p_motivo: f.motivo } as any)
     if (error) return toast.error(mensajeAmigable(error))
+    // Responsable de la asignación (guía: obligatorio)
+    await sb.from('crew_vehicle_assignments').update({ responsable_id: f.responsable } as any).eq('vehicle_id', f.vehicle).eq('crew_id', f.crew).eq('start_on', f.desde)
     toast.success('Asignación registrada'); alGuardar()
   }
   return (
@@ -125,7 +129,9 @@ function AsignarVehiculo({ inicial, vehiculos, cuadrillas, cerrar, alGuardar }: 
           <Elegir etiqueta="Vehículo" valor={f.vehicle} cambiar={(x) => setF({ ...f, vehicle: x })} todos="Elegir" opciones={vehiculos.map((v) => [v.id, `${v.code ?? ''} ${v.plate}`])} />
           <Elegir etiqueta="Cuadrilla" valor={f.crew} cambiar={(x) => setF({ ...f, crew: x })} todos="Elegir" opciones={cuadrillas.map((c) => [c.id, c.name])} />
           <Elegir etiqueta="Tipo" valor={f.kind} cambiar={(x) => setF({ ...f, kind: x || f.kind })} opciones={[['titular', 'Titular'], ['reemplazo', 'Reemplazo'], ['temporal', 'Temporal']]} />
-          <div className="grid grid-cols-2 gap-2"><Input type="date" value={f.desde} onChange={(e) => setF({ ...f, desde: e.target.value })} /><Input type="date" value={f.hasta} onChange={(e) => setF({ ...f, hasta: e.target.value })} /></div>
+          <Elegir etiqueta="Responsable *" valor={f.responsable} cambiar={(x) => setF({ ...f, responsable: x })} todos={f.crew ? 'Elegir' : 'Elige primero la cuadrilla'}
+            opciones={(personas.data ?? []).map((p: any) => [p.profile_id, p.full_name])} />
+          <div className="grid grid-cols-2 gap-2"><label><span className="text-muted-foreground block text-[12px]">Desde *</span><Input type="date" value={f.desde} onChange={(e) => setF({ ...f, desde: e.target.value })} /></label><label><span className="text-muted-foreground block text-[12px]">Hasta (vacío = hasta finalizarla)</span><Input type="date" value={f.hasta} onChange={(e) => setF({ ...f, hasta: e.target.value })} /></label></div>
           {conflictos.length > 0 && (
             <p className="bg-destructive/10 text-destructive rounded-md px-2.5 py-2 text-[12.5px] font-semibold"><TriangleAlert className="mr-1 inline size-3.5" />Asignación en conflicto: {conflictos.map((c) => `${c.cuadrilla} (${fmtDate(c.desde)} – ${c.hasta ? fmtDate(c.hasta) : 'vigente'})`).join(', ')}. Finaliza esa asignación o cambia las fechas.</p>
           )}
@@ -134,7 +140,7 @@ function AsignarVehiculo({ inicial, vehiculos, cuadrillas, cerrar, alGuardar }: 
           )}
           {ver.data && conflictos.length === 0 && ver.data.vehiculo?.apto !== false && <p className="bg-success/10 text-success rounded-md px-2.5 py-2 text-[12.5px]">Disponible en esas fechas. La cuadrilla tiene {ver.data.de_la_cuadrilla} vehículo(s) vigente(s) (máximo 2).</p>}
           <Textarea rows={2} value={f.motivo} onChange={(e) => setF({ ...f, motivo: e.target.value })} placeholder="Motivo de la asignación (obligatorio)" />
-          <div className="flex justify-end gap-2"><Button variant="outline" onClick={cerrar}>Cancelar</Button><Button onClick={guardar} disabled={!f.vehicle || !f.crew || !f.motivo.trim() || conflictos.length > 0 || ver.data?.vehiculo?.apto === false}><Save className="size-4" />Guardar asignación</Button></div>
+          <div className="flex justify-end gap-2"><Button variant="outline" onClick={cerrar}>Cancelar</Button><Button onClick={guardar} disabled={!f.vehicle || !f.crew || !f.responsable || !f.motivo.trim() || conflictos.length > 0 || ver.data?.vehiculo?.apto === false}><Save className="size-4" />Guardar asignación</Button></div>
         </div>
       </DialogContent>
     </Dialog>

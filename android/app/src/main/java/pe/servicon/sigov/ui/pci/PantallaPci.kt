@@ -168,7 +168,7 @@ fun PantallaPci(
         alVolver = { if (estado.abierto != null) vm.cerrarPci() else alVolver() },
         cuadrilla = estado.cuadrilla.ifBlank { null },
         ayuda = if (pci == null) (if (estado.soloConsulta) "Los ítems de los PCI de todas las cuadrillas, " else "Los ítems de tus PCI activos, ") + "${estado.orden.etiqueta.lowercase()}."
-                else "${pci.items} ítems de tu cuadrilla en este PCI.",
+                else "${pci.items} ítems en este PCI (los de apoyo temporal llevan su etiqueta).",
         avisos = avisos,
     ) { relleno ->
         Box(Modifier.fillMaxSize().padding(relleno)) {
@@ -592,6 +592,13 @@ private fun FichaDelItem(
         Row(horizontalArrangement = Arrangement.spacedBy(8.dp), verticalAlignment = Alignment.CenterVertically) {
             Etiqueta(etiquetaDe(item), colorDe(estado))
             Text(textoDelPlazo(item), style = MaterialTheme.typography.labelLarge, color = colorDelPlazo(item))
+        }
+        if (item.deApoyo) {
+            Text(
+                "Apoyo temporal · otra cuadrilla" + (item.apoyoHasta?.let { " · hasta " + it.take(16).replace('T', ' ') } ?: ""),
+                style = MaterialTheme.typography.labelLarge,
+                color = pe.servicon.sigov.ui.theme.Marca.Naranja,
+            )
         }
         item.quantity?.let {
             Text(

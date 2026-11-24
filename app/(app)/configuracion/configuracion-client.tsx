@@ -587,7 +587,7 @@ export function ConfiguracionClient() {
                               <Trash2 className="text-destructive size-3.5" />
                             </Button>
                           </Tip>
-                          <Button variant="outline" size="sm" onClick={() => setMemberForm({ open: true, crew: c })}>
+                          <Button variant="outline" size="sm" onClick={() => { window.location.href = '/gestion/cuadrillas' }}>
                             <Plus className="size-3.5" />
                             Integrante
                           </Button>
@@ -606,7 +606,7 @@ export function ConfiguracionClient() {
                               {m.position}{m.dni ? ` · DNI ${m.dni}` : ''}
                             </span>
                           </span>
-                          {can.admin && (
+                          {false && (
                             <button
                               onClick={() => setConfirm({
                                 open: true,

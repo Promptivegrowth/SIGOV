@@ -50,6 +50,9 @@ const ORIGEN: Record<string, string> = { camara_sigov: 'Cámara SIGOV', galeria:
 type Tab = 'evidencia' | 'observaciones' | 'historial' | 'documentos'
 
 /** Lo que necesita cualquier vista de revisión de un ítem (página y bandeja). */
+/** Foto de galería cuya fecha de toma no se conoce: su «taken_at» es la hora de carga. */
+const fechaDesconocida = (f: any) => f?.origen_captura === 'galeria' && !f?.fecha_original
+
 export function useRevisionDatos(itemId: string) {
   const sb = React.useMemo(() => createClient(), [])
   const qc = useQueryClient()
@@ -79,16 +82,18 @@ export function useRevisionDatos(itemId: string) {
     queryKey: ['rev-fotos', itemId],
     queryFn: async () => {
       const { data } = await sb.from('v_evidences')
-        .select('id, phase, storage_path, thumb_path, master_path, taken_at, cargada_at, created_at, origen_captura, created_by_name, publicada_version, sello_aplicado, lat, lng, apoyo_id, autorizacion_pendiente')
+        .select('id, phase, storage_path, thumb_path, master_path, taken_at, cargada_at, created_at, origen_captura, fecha_original, created_by_name, publicada_version, sello_aplicado, lat, lng, apoyo_id, autorizacion_pendiente')
         .eq('pci_item_id', itemId).order('taken_at')
       const filas = (data ?? []) as any[]
-      const rutas = [...new Set(filas.flatMap((f) => [f.thumb_path, f.storage_path]).filter(Boolean))] as string[]
+      const rutas = [...new Set(filas.flatMap((f) => [f.thumb_path, f.storage_path, f.master_path]).filter(Boolean))] as string[]
       const urls = new Map<string, string>()
       for (let i = 0; i < rutas.length; i += 100) {
         const { data: s } = await sb.storage.from('evidencias').createSignedUrls(rutas.slice(i, i + 100), 3600)
         for (const x of s ?? []) if (x.path && x.signedUrl) urls.set(x.path, x.signedUrl)
       }
-      return filas.map((f) => ({ ...f, mini: urls.get(f.thumb_path ?? f.storage_path) ?? null, url: urls.get(f.storage_path) ?? null }))
+      // «original»: el JPG del celular con su sello y EXIF (master_path); si no hay, la copia de trabajo
+      return filas.map((f) => ({ ...f, mini: urls.get(f.thumb_path ?? f.storage_path) ?? null, url: urls.get(f.storage_path) ?? null,
+        original: urls.get(f.master_path ?? f.storage_path) ?? urls.get(f.storage_path) ?? null }))
     },
   })
   const obs = useQuery({
@@ -238,7 +243,7 @@ function TabEvidencia({ item, fotos, pendientes = [], cargando, historial }: { i
                 <div className="text-muted-foreground flex aspect-[4/3] items-center justify-center border-2 border-dashed border-border text-[12.5px]">Sin archivo</div>
               )}
               <div className="text-muted-foreground space-y-0.5 px-3 py-2 text-[11.5px]">
-                <p className="flex items-center gap-1.5"><Calendar className="size-3" />Captura: {primera ? fmtDateTime(primera.taken_at) : '—'}</p>
+                <p className="flex items-center gap-1.5"><Calendar className="size-3" />Captura: {primera ? (fechaDesconocida(primera) ? 'desconocida (foto de galería sin fecha original)' : fmtDateTime(primera.taken_at)) : '—'}</p>
                 <p className="flex items-center gap-1.5"><Upload className="size-3" />Origen: {primera ? ORIGEN[primera.origen_captura] ?? 'Cámara SIGOV' : '—'}</p>
                 <p className="flex items-center gap-1.5"><User className="size-3" />{primera?.created_by_name ?? '—'}{primera?.apoyo_id ? ' · apoyo temporal' : ''}{primera?.publicada_version ? ` · v${primera.publicada_version}` : ''}</p>
                 {de.length > 1 && (
@@ -292,11 +297,11 @@ function TabEvidencia({ item, fotos, pendientes = [], cargando, historial }: { i
           <DialogHeader>
             <DialogTitle>{faseLegible(grande?.phase)} · Ítem {item.item_number}</DialogTitle>
             <DialogDescription>
-              Captura {fmtDateTime(grande?.taken_at)} · Carga {fmtDateTime(grande?.cargada_at ?? grande?.created_at)} · Sincronización {fmtDateTime(grande?.created_at)}
+              Captura {grande && fechaDesconocida(grande) ? 'desconocida (galería sin fecha original)' : fmtDateTime(grande?.taken_at)} · Carga {fmtDateTime(grande?.cargada_at ?? grande?.created_at)} · Sincronización {fmtDateTime(grande?.created_at)}
               {grande?.lat == null ? ' · GPS no disponible' : ''}
             </DialogDescription>
           </DialogHeader>
-          {grande?.url && <ImageViewer src={grande.url} alt="Foto" descargar={`ITEM_${item.item_number}_${grande.phase}.webp`} className="h-[65vh] w-full" />}
+          {grande?.url && <ImageViewer src={grande.original ?? grande.url} alt="Foto" descargar={`ITEM_${item.item_number}(${FASES.find((x) => x.v === grande.phase)?.n ?? 'G'}).${grande.master_path ? 'jpg' : 'webp'}`} className="h-[65vh] w-full" />}
         </DialogContent>
       </Dialog>
     </div>
@@ -568,10 +573,10 @@ function TabObservaciones({ item, obs, fotos, rol, alCambiar }: { item: any; obs
     alCambiar()
   }
   const publicadas = (v: number) => fotos.filter((f) => f.publicada_version != null && f.publicada_version <= v)
-  const nombreFoto = (f: any) => `ITEM_${item.item_number}(${FASES.find((x) => x.v === f.phase)?.n ?? 'G'}).jpg`
+  const nombreFoto = (f: any) => `ITEM_${item.item_number}(${FASES.find((x) => x.v === f.phase)?.n ?? 'G'}).${f.master_path ? 'jpg' : 'webp'}`
   const descargarFoto = async (f: any) => {
     try {
-      const blob = await (await fetch(f.url)).blob()
+      const blob = await (await fetch(f.original ?? f.url)).blob()
       const a = document.createElement('a'); a.href = URL.createObjectURL(blob); a.download = nombreFoto(f); a.click()
       setTimeout(() => URL.revokeObjectURL(a.href), 2000)
     } catch (e) { toast.error(mensajeAmigable(e, 'No se pudo descargar el archivo')) }
@@ -621,7 +626,7 @@ function TabObservaciones({ item, obs, fotos, rol, alCambiar }: { item: any; obs
                     return (
                       <div key={id} className="mt-1.5 flex flex-wrap items-center gap-2 rounded-md border border-border px-2.5 py-1.5 text-[12px]">
                         <ImageIcon className="size-3.5" />ITEM_{item.item_number}({FASES.find((x) => x.v === f.phase)?.n ?? 'G'}) · {faseLegible(f.phase)} · {fmtDateTime(f.taken_at)}
-                        {f.url && <a href={f.url} target="_blank" rel="noopener" className="text-primary ml-auto flex items-center gap-1"><ExternalLink className="size-3" />Ver original</a>}
+                        {f.url && <a href={f.original ?? f.url} target="_blank" rel="noopener" className="text-primary ml-auto flex items-center gap-1"><ExternalLink className="size-3" />Ver original</a>}
                         {f.url && <button onClick={() => descargarFoto(f)} className="text-primary flex items-center gap-1"><Download className="size-3" />Descargar</button>}
                       </div>
                     )

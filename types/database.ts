@@ -1923,6 +1923,7 @@ export type Database = {
           odometer_start: number | null
           reason: string | null
           replaces_id: string | null
+          responsable_id: string | null
           service_id: string
           start_on: string
           updated_at: string
@@ -1941,6 +1942,7 @@ export type Database = {
           odometer_start?: number | null
           reason?: string | null
           replaces_id?: string | null
+          responsable_id?: string | null
           service_id: string
           start_on?: string
           updated_at?: string
@@ -1959,6 +1961,7 @@ export type Database = {
           odometer_start?: number | null
           reason?: string | null
           replaces_id?: string | null
+          responsable_id?: string | null
           service_id?: string
           start_on?: string
           updated_at?: string
@@ -2006,6 +2009,13 @@ export type Database = {
             isOneToOne: false
             referencedRelation: "v_vehicles"
             referencedColumns: ["assignment_id"]
+          },
+          {
+            foreignKeyName: "crew_vehicle_assignments_responsable_id_fkey"
+            columns: ["responsable_id"]
+            isOneToOne: false
+            referencedRelation: "profiles"
+            referencedColumns: ["id"]
           },
           {
             foreignKeyName: "crew_vehicle_assignments_service_id_fkey"
@@ -4287,7 +4297,10 @@ export type Database = {
         Row: {
           cuando: string
           entidad: string
+          estado_anterior: string | null
+          estado_nuevo: string | null
           evidencias: string[] | null
+          fase: string | null
           id: string
           motivo: string | null
           nivel: string
@@ -4297,11 +4310,15 @@ export type Database = {
           resultado: string
           rol: string | null
           service_id: string
+          version: number | null
         }
         Insert: {
           cuando?: string
           entidad: string
+          estado_anterior?: string | null
+          estado_nuevo?: string | null
           evidencias?: string[] | null
+          fase?: string | null
           id?: string
           motivo?: string | null
           nivel: string
@@ -4311,11 +4328,15 @@ export type Database = {
           resultado: string
           rol?: string | null
           service_id: string
+          version?: number | null
         }
         Update: {
           cuando?: string
           entidad?: string
+          estado_anterior?: string | null
+          estado_nuevo?: string | null
           evidencias?: string[] | null
+          fase?: string | null
           id?: string
           motivo?: string | null
           nivel?: string
@@ -4325,6 +4346,7 @@ export type Database = {
           resultado?: string
           rol?: string | null
           service_id?: string
+          version?: number | null
         }
         Relationships: [
           {
@@ -11129,6 +11151,10 @@ export type Database = {
         Args: { p_pci_id: string }
         Returns: Json
       }
+      asignacion_finalizar: {
+        Args: { p_fin: string; p_id: string; p_motivo: string; p_tipo: string }
+        Returns: Json
+      }
       asignacion_guardar: {
         Args: {
           p_crew: string
@@ -11256,6 +11282,10 @@ export type Database = {
           p_hasta: string
           p_service: string
         }
+        Returns: Json
+      }
+      caja_gasto_revisar: {
+        Args: { p_estado: string; p_id: string; p_nota: string }
         Returns: Json
       }
       caja_movimiento_editar: {
@@ -11665,10 +11695,13 @@ export type Database = {
       }
       integrante_agregar: {
         Args: {
+          p_cargo?: string
           p_crew: string
           p_desde: string
+          p_dni?: string
           p_hasta: string
           p_motivo: string
+          p_nombre?: string
           p_profile: string
         }
         Returns: Json
@@ -12068,6 +12101,10 @@ export type Database = {
         Args: { p_aprobar: boolean; p_motivo: string; p_rend: string }
         Returns: Json
       }
+      rendimiento_material_guardar: {
+        Args: { p_cantidad: number; p_id: string; p_motivo: string }
+        Returns: Json
+      }
       rendimiento_referencia: {
         Args: { p_activity: string; p_crew?: string; p_service: string }
         Returns: number
@@ -12381,6 +12418,14 @@ export type Database = {
           titulo: string
           vehicle_id: string
         }[]
+      }
+      ssoma_ve: {
+        Args: { crew: string; equipment: string; sid: string; vehicle: string }
+        Returns: boolean
+      }
+      ssoma_ve_evento: {
+        Args: { doc: string; hz: string; insp: string; sid: string }
+        Returns: boolean
       }
       storage_service_id: { Args: { p_name: string }; Returns: string }
       sync_conflicto_resolver: {

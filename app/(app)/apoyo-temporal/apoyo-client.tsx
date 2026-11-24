@@ -267,7 +267,7 @@ export function ApoyoClient() {
               <Button variant="outline" onClick={() => setVerItems(!verItems)} disabled={!v}><Layers className="size-4" />Ver ítems ({v ? fmtNumber(v.items) : 0})</Button>
               <Button variant="outline" onClick={() => ver.refetch()} disabled={!v}><CalendarCheck className="size-4" />Revisar disponibilidad</Button>
               <Button variant="outline" onClick={() => fijar({ tab: 'historial' })}><ArrowLeftRight className="size-4" />Revisar cambios</Button>
-              {['supervisor', 'admin'].includes(role) && (
+              {role === 'supervisor' && (
                 <Button onClick={autorizar} loading={ocupado} disabled={!!falta}><CheckCircle2 className="size-4" />Autorizar apoyo</Button>
               )}
               <Button variant="outline" className="border-warning/50 text-warning" disabled={!vigenteDelPar?.puedo_revocar}

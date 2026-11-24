@@ -91,7 +91,11 @@ data class Aviso(
                 type.startsWith("programacion") || type.startsWith("partida") ->
                     dato("fecha")?.let { "programacion?fecha=$it" } ?: "programacion?fecha=${Peru.hoy()}"
                 type.startsWith("parte") -> dato("fecha")?.let { "parte?fecha=$it" } ?: "parte"
-                type.startsWith("ssoma") || type.startsWith("documento") -> "jornada"
+                // Hallazgo SSOMA: se atiende en su detalle (responder con evidencia); documento: nueva versión
+                type.startsWith("ssoma") && (dato("hallazgo_id") ?: url?.let { Regex("/ssoma/hallazgos/([0-9a-f-]{36})").find(it)?.groupValues?.get(1) }) != null ->
+                    "web?ruta=" + java.net.URLEncoder.encode("/ssoma/hallazgos/" + (dato("hallazgo_id") ?: Regex("/ssoma/hallazgos/([0-9a-f-]{36})").find(url!!)!!.groupValues[1]), "UTF-8")
+                type.startsWith("documento") || type.startsWith("ssoma_documento") -> "web?ruta=" + java.net.URLEncoder.encode("/ssoma/documentos", "UTF-8")
+                type.startsWith("ssoma") -> "jornada"
                 type.startsWith("vehiculo") -> "vehiculos"
                 type.startsWith("deposito") -> "caja"
                 else -> null

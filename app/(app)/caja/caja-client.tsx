@@ -143,15 +143,7 @@ export function CajaClient() {
   }
 
   const resolverMovimiento = async (id: string, estado: 'aprobado' | 'observado' | 'anulado', nota?: string) => {
-    const { error } = await sb
-      .from('cash_movements')
-      .update({
-        status: estado,
-        review_note: nota?.trim() || null,
-        reviewed_by: profile.id,
-        reviewed_at: new Date().toISOString(),
-      })
-      .eq('id', id)
+    const { error } = await sb.rpc('caja_gasto_revisar' as any, { p_id: id, p_estado: estado, p_nota: nota?.trim() || null } as any)
     if (error) { toast.error(mensajeAmigable(error)); return }
     toast.success(
       estado === 'aprobado' ? 'Gasto aprobado'

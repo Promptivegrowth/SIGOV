@@ -468,14 +468,15 @@ private fun BloqueProgramacion(r: ResumenAvance, alTocar: () -> Unit) {
             color = color,
             trackColor = color.copy(alpha = 0.18f),
         )
+        // Lo reportado por la cuadrilla (por validar) no se mezcla con lo validado por el supervisor
         Cifras(
             Triple("Asignadas", s.asignadas, Marca.Azul),
-            Triple("Ejecutadas", s.ejecutadas, Marca.VerdeBandera),
+            Triple("Validadas", (s.ejecutadas - s.porValidar).coerceAtLeast(0), Marca.VerdeBandera),
+            Triple("Por validar", s.porValidar, Marca.Azul),
             Triple("En ejecución", s.enEjecucion, Marca.Naranja),
             Triple("Pendientes", s.pendientes, MaterialTheme.colorScheme.onSurface),
         )
         Notas(
-            s.porValidar.takeIf { it > 0 }?.let { "$it por validar" } to Marca.Azul,
             s.atrasadas.takeIf { it > 0 }?.let { plural(it, "atrasada", "atrasadas") } to Semaforo.Vencido,
             s.suspendidas.takeIf { it > 0 }?.let { plural(it, "no ejecutada", "no ejecutadas") } to Semaforo.PorVencer,
         )

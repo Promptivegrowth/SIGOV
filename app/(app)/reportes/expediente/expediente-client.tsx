@@ -70,7 +70,7 @@ export function ExpedienteClient() {
         .eq('pci_id', pci).order('item_number')
       const { data: ev } = await sb.from('v_evidences')
         .select('id, pci_item_id, phase, storage_path, master_path, thumb_path, taken_at, created_at, lat, lng, origen_captura')
-        .eq('pci_id', pci)
+        .eq('pci_id', pci).or('autorizacion_pendiente.is.null,autorizacion_pendiente.eq.false')
       const { data: obs } = await sb.from('revision_observaciones').select('pci_item_id, estado').eq('pci_id', pci).neq('estado', 'cerrada')
       const abiertas = new Set((obs ?? []).map((o: any) => o.pci_item_id))
       const porItem = new Map<string, any[]>()
@@ -91,9 +91,10 @@ export function ExpedienteClient() {
     if (estado === 'completo' && faltan.length) return false
     if (estado === 'incompleto' && !faltan.length) return false
     if (estado === 'observado' && !i.observado) return false
-    return i.fotos.length > 0 || estado === 'incompleto'
+    // Los ítems sin fotos también van: salen como incompletos en el manifiesto de faltantes
+    return true
   })
-  React.useEffect(() => { setSel(new Set(visibles.map((i) => i.id))) }, [items.data, plazo, crew, estado, q]) // eslint-disable-line react-hooks/exhaustive-deps
+  React.useEffect(() => { setSel(new Set(visibles.map((i) => i.id))) }, [items.data, plazo, crew, estado, q, desde, hasta]) // eslint-disable-line react-hooks/exhaustive-deps
   const elegidos = visibles.filter((i) => sel.has(i.id))
   const totalFotos = elegidos.reduce((s, i) => s + i.fotos.length, 0)
   const observados = elegidos.filter((i) => i.observado || fotosOficiales(i.item_number, i.fotos).faltan.length > 0).length
@@ -312,7 +313,7 @@ export function ExpedienteClient() {
               <label className="flex items-center gap-2 text-[13px]"><input type="checkbox" checked={historial} onChange={(e) => setHistorial(e.target.checked)} />Incluir historial de revisiones</label>
               <div className="grid grid-cols-2 gap-2">
                 <Button variant="outline" onClick={() => setPrevia(true)} disabled={!elegidos.length}><Eye className="size-4" />Vista previa</Button>
-                <SiPuede modulo="pci" accion="exportar"><Button onClick={generar} loading={estadoPaquete === 'En preparación'} disabled={!elegidos.length}><Download className="size-4" />Generar paquete</Button></SiPuede>
+                <SiPuede modulo="reportes" accion="exportar"><Button onClick={generar} loading={estadoPaquete === 'En preparación'} disabled={!elegidos.length}><Download className="size-4" />Generar paquete</Button></SiPuede>
               </div>
               {estadoPaquete && <p className={cn('text-[12.5px] font-medium', estadoPaquete === 'Error' ? 'text-destructive' : estadoPaquete === 'Listo' ? 'text-success' : 'text-info')}>
                 Estado: {estadoPaquete}{estadoPaquete === 'Error' ? ' · puedes reintentar sin duplicar' : ''}</p>}

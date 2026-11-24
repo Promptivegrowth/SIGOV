@@ -181,6 +181,7 @@ class MainActivity : ComponentActivity() {
                             alAbrirInventario = { nav.navigate("inventario") },
                             alAbrirObservaciones = { nav.navigate("observaciones") },
                             alAbrirVehiculos = { nav.navigate("vehiculos") },
+                            alAbrirHallazgos = { nav.navigate("web?ruta=" + java.net.URLEncoder.encode("/ssoma/hallazgos", "UTF-8")) },
                             alAbrirCharlas = { nav.navigate("charlas") },
                             alAbrirHigiene = { nav.navigate("higiene") },
                             alAbrirParteDelDia = { dia -> nav.navigate("parte?fecha=$dia") },
@@ -338,6 +339,13 @@ class MainActivity : ComponentActivity() {
                             alVolver = { nav.popBackStack() },
                             alIr = { destino -> if (destino != "jornada") nav.navigate(destino) else nav.popBackStack() },
                         )
+                    }
+                    // Una pantalla web puntual dentro de la app (hallazgo SSOMA, documentos): misma sesión y reglas
+                    composable(
+                        "web?ruta={ruta}",
+                        arguments = listOf(navArgument("ruta") { type = NavType.StringType; defaultValue = "/dashboard" }),
+                    ) { entrada ->
+                        pe.servicon.sigov.ui.portal.PantallaPortal(entrada.arguments?.getString("ruta") ?: "/dashboard")
                     }
                     composable("configuracion") {
                         pe.servicon.sigov.ui.configuracion.PantallaConfiguracion(alVolver = { nav.popBackStack() })

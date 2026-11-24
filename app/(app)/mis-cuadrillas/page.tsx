@@ -1,9 +1,9 @@
 import type { Metadata } from 'next'
-import { SupervisorDashboard } from '../dashboard/supervisor-dashboard'
+import { CuadrillasYRecursos } from '@/components/recursos/cuadrillas-recursos'
 
-export const metadata: Metadata = { title: 'Mis cuadrillas' }
+export const metadata: Metadata = { title: 'Cuadrillas y recursos' }
 
-/** Las cuadrillas a cargo, su programación, avance y alertas (guía 5.1). */
+/** Supervisor: sus cuadrillas (guía 5.1). Residente y Administrador: cuadrillas y recursos del contrato (guía 6.2.1). */
 export default function MisCuadrillasPage() {
-  return <SupervisorDashboard />
+  return <CuadrillasYRecursos />
 }

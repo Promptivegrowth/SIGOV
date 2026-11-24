@@ -61,6 +61,8 @@ fun PantallaJornada(
     alAbrirConfiguracion: () -> Unit = {},
     alAbrirDocumento: (pe.servicon.sigov.datos.DocumentoDelDia) -> Unit = {},
     alAbrirAvisos: () -> Unit = {},
+    /** Hallazgos SSOMA de la cuadrilla: se responden con evidencia (guía Jefe F6.3). */
+    alAbrirHallazgos: () -> Unit = {},
     /** El reporte y la higiene de un día anterior, para subsanarlos. */
     alAbrirParteDelDia: (String) -> Unit = { alAbrirParte() },
     alAbrirHigieneDelDia: (String) -> Unit = { alAbrirHigiene() },
@@ -317,6 +319,8 @@ fun PantallaJornada(
                     .takeIf { estado.rol != "jefe_cuadrilla" },
                 Apartado(Icons.Outlined.HealthAndSafety, "Equipos SSOMA", "Extintores, botiquines", azul, 0, alAbrirEquipos),
                 Apartado(Icons.Outlined.DirectionsCar, "Vehículos", "Papeles y revisión", verde, 0, alAbrirVehiculos),
+                Apartado(Icons.Outlined.ReportProblem, "Hallazgos SSOMA", "Responder con evidencia", azul, 0, alAbrirHallazgos)
+                    .takeIf { estado.rol == "jefe_cuadrilla" },
                 Apartado(Icons.Outlined.Campaign, "Charlas", "Charla de 5 minutos", azul, 0, alAbrirCharlas),
                 Apartado(Icons.Outlined.CleanHands, "Higiene", "Checklist del día", verde, 0, alAbrirHigiene),
                 Apartado(Icons.Outlined.Assignment, "ATS", "Análisis de Trabajo Seguro", verde, 0, alAbrirAst),

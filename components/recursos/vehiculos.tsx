@@ -1,7 +1,9 @@
 'use client'
 
 import * as React from 'react'
-import { useQuery } from '@tanstack/react-query'
+import { useQuery, useQueryClient } from '@tanstack/react-query'
+import { toast } from 'sonner'
+import { mensajeAmigable } from '@/lib/errores'
 import {
   Truck, CheckCircle2, XCircle, Wrench, Search, Plus, Eye, UserPlus, History, X, MapPin, Gauge, ShieldCheck, Info, AlertTriangle, Ban,
   ArrowLeftRight, CalendarDays, Users, Activity, FileText, Layers, Download, Clock, MoreVertical, Pencil,
@@ -10,7 +12,7 @@ import { createClient } from '@/lib/supabase/client'
 import { useSession } from '@/lib/hooks/use-session'
 import { Card, CardContent } from '@/components/ui/card'
 import { Button } from '@/components/ui/button'
-import { Input } from '@/components/ui/input'
+import { Input, Textarea } from '@/components/ui/input'
 import { Kpi } from '@/components/gestion/gestion-nav'
 import { cn, fmtDate, fmtDateTime, fmtNumber, toISODate } from '@/lib/utils'
 import { descargarExcel } from '@/lib/reports'
@@ -318,7 +320,8 @@ export function AsignacionesTab({ a, c, onNueva }: { a: any[]; c: any[]; onNueva
               {sel.tipo === 'equipo' && <p><span className="text-muted-foreground block text-[11px]">Horas de uso</span><strong>{fmtNumber(sel.horas, 1)} h</strong></p>}
             </div>
             {sel.estado === 'conflicto' && <p className="bg-destructive/8 text-destructive rounded-lg p-2"><strong>Conflicto de horario: revisar disponibilidad.</strong> El recurso tiene otra asignación en el mismo rango.</p>}
-            <p className="text-muted-foreground">Las asignaciones registradas no se editan: para cambiarla, registra una nueva con su motivo (queda en el historial).</p>
+            {(!sel.hasta || sel.hasta >= hoy()) && <FinalizarAsignacion sel={sel} />}
+            <p className="text-muted-foreground">Las asignaciones registradas no se editan: se finalizan con fecha y motivo, o se registra una nueva (queda en el historial).</p>
             <p className="font-semibold">Historial</p>
             <ul className="space-y-1.5 border-l-2 border-border pl-3">
               {(hist.data ?? []).map((x) => <li key={x.id}><span className="text-muted-foreground">{fmtDateTime(x.created_at)}</span> · <strong>{x.action === 'INSERT' ? 'Asignación registrada' : 'Cambio'}</strong> · {(x.actor_email ?? 'Sistema').split('@')[0]}{x.motivo ? ` · ${x.motivo}` : ''}</li>)}
@@ -327,6 +330,29 @@ export function AsignacionesTab({ a, c, onNueva }: { a: any[]; c: any[]; onNueva
           </CardContent></Card>
         ) : <Card className="h-fit"><CardContent className="text-muted-foreground p-8 text-center text-[12.5px]">Elige «Ver» para el detalle y el historial de la asignación.</CardContent></Card>}
       </div>
+    </div>
+  )
+}
+
+/** Finalizar una asignación vigente (sin «Hasta» deja el recurso bloqueado), con fecha y motivo. */
+function FinalizarAsignacion({ sel }: { sel: any }) {
+  const sb = React.useMemo(() => createClient(), [])
+  const qc = useQueryClient()
+  const [v, setV] = React.useState<{ fin: string; motivo: string } | null>(null)
+  const guardar = async () => {
+    if (!v) return
+    const { error } = await sb.rpc('asignacion_finalizar' as any, { p_tipo: sel.tipo, p_id: sel.id, p_fin: v.fin, p_motivo: v.motivo } as any)
+    if (error) return toast.error(mensajeAmigable(error))
+    toast.success('Asignación finalizada', { description: 'El recurso queda libre después de esa fecha.' })
+    setV(null); qc.invalidateQueries()
+  }
+  if (!v) return <Button size="sm" variant="outline" onClick={() => setV({ fin: hoy(), motivo: '' })}>Finalizar asignación</Button>
+  return (
+    <div className="space-y-2 rounded-lg border border-border p-2.5">
+      <p className="font-semibold">Finalizar {sel.codigo}</p>
+      <label className="block"><span className="text-muted-foreground text-[12px]">Fecha de fin *</span><Input type="date" value={v.fin} min={sel.desde} onChange={(e) => setV({ ...v, fin: e.target.value })} className="h-9" /></label>
+      <label className="block"><span className="text-muted-foreground text-[12px]">Motivo *</span><Textarea rows={2} value={v.motivo} onChange={(e) => setV({ ...v, motivo: e.target.value })} /></label>
+      <div className="flex gap-2"><Button size="sm" onClick={guardar} disabled={!v.fin || !v.motivo.trim()}>Finalizar</Button><Button size="sm" variant="outline" onClick={() => setV(null)}>Cancelar</Button></div>
     </div>
   )
 }

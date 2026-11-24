@@ -43,6 +43,8 @@ export function AppShell({ children }: { children: React.ReactNode }) {
   const bloqueada = React.useMemo(() => {
     const item = NAV.filter((n) => pathname === n.href || pathname.startsWith(`${n.href}/`)).sort((a, b) => b.href.length - a.href.length)[0]
     if (rutaOculta(ocultas, pathname)) return true
+    // El Jefe atiende desde la app sus hallazgos SSOMA y carga versiones de sus documentos (guía Jefe F6; la base limita a su cuadrilla)
+    if (role === 'jefe_cuadrilla' && (pathname.startsWith('/ssoma/hallazgos') || pathname === '/ssoma/documentos')) return false
     if (!item) return false
     return Boolean((item.module && !hasModule(item.module)) || !item.roles.includes(role))
   }, [pathname, hasModule, role, ocultas])

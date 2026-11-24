@@ -320,6 +320,9 @@ function Materiales({ d }: { d: any }) {
   const [actId, setActId] = React.useState('')
   const [nuevo, setNuevo] = React.useState<{ activity_id: string; supply_id: string; cantidad: string } | null>(null)
   const [ed, setEd] = React.useState<{ id: string; cantidad: string } | null>(null)
+  const [motivoEd, setMotivoEd] = React.useState('')
+  const [histDe, setHistDe] = React.useState<string | null>(null)
+  const hist = useQuery({ queryKey: ['rend-mat-hist', histDe], enabled: !!histDe, queryFn: async () => ((await sb.rpc('registro_historial' as any, { p_tabla: 'rendimientos', p_id: histDe } as any)).data ?? []) as any[] })
   const r = useQuery({ queryKey: ['rend-mat', service.id], queryFn: async () => ((await sb.from('rendimientos').select('*, supplies(name, presentacion, units(symbol))').eq('service_id', service.id)).data ?? []) as any[] })
   const sup = useQuery({ queryKey: ['cat-supplies', service.id], queryFn: async () => ((await sb.from('supplies').select('id, code, name, presentacion, presentacion_nombre, units(symbol)').eq('service_id', service.id).is('deleted_at', null).order('name')).data ?? []) as any[] })
   const [pres, setPres] = React.useState<any | null>(null)
@@ -334,9 +337,10 @@ function Materiales({ d }: { d: any }) {
   }
   const guardarEd = async () => {
     if (!ed) return
-    const { error } = await sb.from('rendimientos').update({ cantidad: Number(ed.cantidad), updated_at: new Date().toISOString() } as any).eq('id', ed.id)
+    // Con motivo: el cambio del coeficiente queda versionado en la bitácora
+    const { error } = await sb.rpc('rendimiento_material_guardar' as any, { p_id: ed.id, p_cantidad: Number(ed.cantidad), p_motivo: motivoEd } as any)
     if (error) return toast.error(mensajeAmigable(error))
-    toast.success('Consumo referencial actualizado', { description: 'Los requerimientos ya guardados no cambian.' }); setEd(null); refrescar()
+    toast.success('Consumo referencial actualizado', { description: 'Los requerimientos ya guardados no cambian.' }); setEd(null); setMotivoEd(''); refrescar()
   }
   const quitar = async (x: any) => {
     if (!confirm(`¿Quitar ${x.supplies?.name} de «${act(x.activity_id)?.name}»? Queda en la auditoría.`)) return
@@ -369,9 +373,11 @@ function Materiales({ d }: { d: any }) {
           <tbody>{filas.slice(0, 300).map((x) => <tr key={x.id} className="border-t border-border"><td className="py-1.5">{x.supplies?.name}</td><td>{act(x.activity_id)?.name}</td>
             <td>{ed?.id === x.id ? <Input type="number" step="0.0001" min={0} value={ed!.cantidad} onChange={(e) => setEd({ id: ed!.id, cantidad: e.target.value })} className="h-8 w-28" />
               : <>{fmtNumber(Number(x.cantidad), 4)} {x.supplies?.units?.symbol ?? ''} / {d.units.find((u: any) => u.id === act(x.activity_id)?.unit_id)?.symbol ?? 'und'}</>}</td>
-            <td>{ed?.id === x.id ? <span className="flex gap-1"><Button size="sm" onClick={guardarEd} disabled={!(Number(ed!.cantidad) > 0)}>Guardar</Button><Button size="sm" variant="outline" onClick={() => setEd(null)}>Cancelar</Button></span>
+            <td>{ed?.id === x.id ? <span className="flex flex-wrap gap-1"><Input value={motivoEd} onChange={(e) => setMotivoEd(e.target.value)} placeholder="Motivo del cambio *" className="h-8 w-44" /><Button size="sm" onClick={guardarEd} disabled={!(Number(ed!.cantidad) > 0) || !motivoEd.trim()}>Guardar</Button><Button size="sm" variant="outline" onClick={() => setEd(null)}>Cancelar</Button></span>
               : <span className="flex gap-1"><Button size="icon-sm" variant="outline" aria-label="Editar consumo" onClick={() => setEd({ id: x.id, cantidad: String(x.cantidad) })}><Pencil className="size-3.5" /></Button>
-                <Button size="icon-sm" variant="outline" aria-label="Quitar material" onClick={() => quitar(x)}><Trash2 className="size-3.5" /></Button></span>}</td></tr>)}</tbody></table>
+                <Button size="icon-sm" variant="outline" aria-label="Historial del consumo" onClick={() => setHistDe(histDe === x.id ? null : x.id)}><Clock className="size-3.5" /></Button>
+                <Button size="icon-sm" variant="outline" aria-label="Quitar material" onClick={() => quitar(x)}><Trash2 className="size-3.5" /></Button></span>}
+              {histDe === x.id && <ul className="text-muted-foreground mt-1 space-y-0.5 text-[11.5px]">{(hist.data ?? []).map((h: any, i: number) => <li key={i}>{fmtDateTime(h.cuando)} · {h.actor} · {h.accion}{h.motivo ? ` · ${h.motivo}` : ''}</li>)}{!(hist.data ?? []).length && <li>Sin cambios registrados.</li>}</ul>}</td></tr>)}</tbody></table>
         <p className="text-muted-foreground text-[12px]">El consumo referencial lo usa el requerimiento de insumos de Programación (pre-cantidad = metrado × consumo). Cambiarlo no altera requerimientos ya guardados.</p>
       </CardContent></Card>
       <Card className="h-fit"><CardHeader className="pb-2"><CardTitle className="text-[14px]">Presentación de despacho</CardTitle></CardHeader>

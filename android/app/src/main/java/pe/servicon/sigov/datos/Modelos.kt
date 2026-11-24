@@ -156,6 +156,9 @@ data class ItemPci(
     val semaforo: String? = null,
     val status: String = "pendiente",
     @SerialName("assigned_crew_id") val cuadrillaId: String? = null,
+    /** Ítem de otra cuadrilla que esta atiende por apoyo temporal (y hasta cuándo). */
+    @SerialName("de_apoyo") val deApoyo: Boolean = false,
+    @SerialName("apoyo_hasta") val apoyoHasta: String? = null,
     @SerialName("requires_evidence") val exigeEvidencia: Boolean = true,
     @SerialName("evidence_count") val fotos: Int = 0,
     @SerialName("fotos_antes") val fotosAntes: Int = 0,

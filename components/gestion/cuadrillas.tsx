@@ -188,7 +188,7 @@ function Integrantes({ crew, personas, alCambiar }: { crew: any; personas: any[]
   const [q, setQ] = React.useState('')
   const [estado, setEstado] = React.useState('')
   const [agregar, setAgregar] = React.useState(false)
-  const [vig, setVig] = React.useState<{ x: any; finalizar: boolean; hasta: string; motivo: string } | null>(null)
+  const [vig, setVig] = React.useState<{ x: any; finalizar: boolean; desde: string; hasta: string; motivo: string } | null>(null)
   const [ficha, setFicha] = React.useState<any | null>(null)
   const m = useQuery({
     queryKey: ['crew-miembros', crew.id],
@@ -198,10 +198,10 @@ function Integrantes({ crew, personas, alCambiar }: { crew: any; personas: any[]
   const activo = (x: any) => x.is_active && (!x.hasta || x.hasta >= hoy)
   const filas = (m.data ?? []).filter((x) => (!estado || (estado === 'activo') === activo(x)) && (!q || String(x.full_name).toLowerCase().includes(q.toLowerCase())))
   const pag = usePagina(filas, 15)
-  const vigencia = (x: any, finalizar: boolean) => setVig({ x, finalizar, hasta: finalizar ? hoy : x.hasta ?? '', motivo: '' })
+  const vigencia = (x: any, finalizar: boolean) => setVig({ x, finalizar, desde: x.desde ?? '', hasta: finalizar ? hoy : x.hasta ?? '', motivo: '' })
   const guardarVigencia = async () => {
     if (!vig) return
-    const { error } = await sb.rpc('integrante_vigencia' as any, { p_id: vig.x.id, p_desde: null, p_hasta: vig.hasta || null, p_motivo: vig.motivo.trim(), p_finalizar: vig.finalizar } as any)
+    const { error } = await sb.rpc('integrante_vigencia' as any, { p_id: vig.x.id, p_desde: vig.finalizar ? null : vig.desde || null, p_hasta: vig.hasta || null, p_motivo: vig.motivo.trim(), p_finalizar: vig.finalizar } as any)
     if (error) return toast.error(mensajeAmigable(error))
     toast.success(vig.finalizar ? 'Integrante finalizado (se conserva su historial)' : 'Vigencia actualizada'); setVig(null); alCambiar()
   }
@@ -238,6 +238,7 @@ function Integrantes({ crew, personas, alCambiar }: { crew: any; personas: any[]
             <DialogHeader><DialogTitle>{vig.finalizar ? 'Finalizar integrante' : 'Editar vigencia'}</DialogTitle>
               <DialogDescription>{vig.x.full_name}. {vig.finalizar ? 'Deja de pertenecer a la cuadrilla desde hoy; su historial se conserva.' : 'Cambia la fecha de fin de su pertenencia.'}</DialogDescription></DialogHeader>
             <div className="space-y-2 text-[13px]">
+              {!vig.finalizar && <label className="block"><span className="text-muted-foreground text-[12px]">Vigente desde</span><Input type="date" value={vig.desde} onChange={(e) => setVig({ ...vig, desde: e.target.value })} className="h-9" /></label>}
               {!vig.finalizar && <label className="block"><span className="text-muted-foreground text-[12px]">Vigente hasta (vacío = sin fecha)</span><Input type="date" value={vig.hasta} onChange={(e) => setVig({ ...vig, hasta: e.target.value })} className="h-9" /></label>}
               <label className="block"><span className="text-muted-foreground text-[12px]">Motivo <span className="text-destructive">*</span></span><Textarea rows={2} maxLength={300} value={vig.motivo} onChange={(e) => setVig({ ...vig, motivo: e.target.value })} /></label>
               <div className="flex justify-end gap-2"><Button variant="outline" onClick={() => setVig(null)}>Cancelar</Button><Button onClick={guardarVigencia} disabled={!vig.motivo.trim()}>{vig.finalizar ? 'Finalizar' : 'Guardar vigencia'}</Button></div>
@@ -264,9 +265,10 @@ function Integrantes({ crew, personas, alCambiar }: { crew: any; personas: any[]
 
 function AgregarIntegrante({ crew, personas, cerrar, alGuardar }: { crew: any; personas: any[]; cerrar: () => void; alGuardar: () => void }) {
   const sb = React.useMemo(() => createClient(), [])
-  const [v, setV] = React.useState({ persona: '', desde: toISODate(new Date()), hasta: '', motivo: '' })
+  const [v, setV] = React.useState({ persona: '', desde: toISODate(new Date()), hasta: '', motivo: '', sinCuenta: false, nombre: '', dni: '', cargo: '' })
   const guardar = async () => {
-    const { error } = await sb.rpc('integrante_agregar' as any, { p_crew: crew.id, p_profile: v.persona, p_desde: v.desde, p_hasta: v.hasta || null, p_motivo: v.motivo } as any)
+    const { error } = await sb.rpc('integrante_agregar' as any, { p_crew: crew.id, p_profile: v.sinCuenta ? null : v.persona, p_desde: v.desde, p_hasta: v.hasta || null, p_motivo: v.motivo,
+      p_nombre: v.sinCuenta ? v.nombre : null, p_dni: v.sinCuenta ? v.dni || null : null, p_cargo: v.sinCuenta ? v.cargo || null : null } as any)
     if (error) return toast.error(mensajeAmigable(error))
     toast.success('Integrante agregado'); alGuardar()
   }
@@ -275,9 +277,18 @@ function AgregarIntegrante({ crew, personas, cerrar, alGuardar }: { crew: any; p
       <DialogContent className="max-w-md">
         <DialogHeader><DialogTitle>Agregar integrante</DialogTitle><DialogDescription>Incorpore un personal existente a la cuadrilla {crew.name}.</DialogDescription></DialogHeader>
         <div className="space-y-2.5 text-[13px]">
-          <p className="bg-info/[0.08] text-info rounded-md px-2.5 py-2 text-[12px] font-semibold">Vincula personal del maestro. No crea cuentas de acceso. Sin asignaciones incompatibles superpuestas.</p>
-          <Elegir etiqueta="Personal existente *" valor={v.persona} cambiar={(x) => setV({ ...v, persona: x })} todos="Seleccione persona del maestro..."
-            opciones={personas.filter((p) => p.rol !== 'visor').map((p) => [p.id, `${p.full_name} · ${p.rol}`])} />
+          <p className="bg-info/[0.08] text-info rounded-md px-2.5 py-2 text-[12px] font-semibold">Vincula personal del maestro o un trabajador sin cuenta. No crea cuentas de acceso. Sin asignaciones incompatibles superpuestas.</p>
+          <label className="flex items-center gap-2 text-[12.5px]"><input type="checkbox" checked={v.sinCuenta} onChange={(e) => setV({ ...v, sinCuenta: e.target.checked })} />Trabajador sin cuenta en SIGOV (obrero de la cuadrilla)</label>
+          {v.sinCuenta ? (
+            <div className="grid gap-2 sm:grid-cols-2">
+              <label className="sm:col-span-2"><span className="text-muted-foreground block text-[12px]">Nombre completo *</span><Input value={v.nombre} onChange={(e) => setV({ ...v, nombre: e.target.value })} /></label>
+              <label><span className="text-muted-foreground block text-[12px]">DNI</span><Input value={v.dni} onChange={(e) => setV({ ...v, dni: e.target.value.replace(/\D/g, '').slice(0, 8) })} /></label>
+              <label><span className="text-muted-foreground block text-[12px]">Cargo</span><Input value={v.cargo} onChange={(e) => setV({ ...v, cargo: e.target.value })} placeholder="Peón, operario…" /></label>
+            </div>
+          ) : (
+            <Elegir etiqueta="Personal existente *" valor={v.persona} cambiar={(x) => setV({ ...v, persona: x })} todos="Seleccione persona del maestro..."
+              opciones={personas.filter((p) => p.rol !== 'visor').map((p) => [p.id, `${p.full_name} · ${p.rol}`])} />
+          )}
           <div className="grid grid-cols-2 gap-2">
             <label><span className="text-muted-foreground block text-[12px]">Desde *</span><Input type="date" value={v.desde} onChange={(e) => setV({ ...v, desde: e.target.value })} /></label>
             <label><span className="text-muted-foreground block text-[12px]">Hasta</span><Input type="date" value={v.hasta} onChange={(e) => setV({ ...v, hasta: e.target.value })} /></label>
@@ -285,7 +296,7 @@ function AgregarIntegrante({ crew, personas, cerrar, alGuardar }: { crew: any; p
           <label className="block"><span className="text-muted-foreground text-[12px]">Motivo *</span>
             <Textarea rows={2} maxLength={500} value={v.motivo} onChange={(e) => setV({ ...v, motivo: e.target.value })} placeholder="Ingrese el motivo de la incorporación..." />
             <span className="text-muted-foreground block text-right text-[11px]">{v.motivo.length} / 500</span></label>
-          <div className="flex justify-end gap-2"><Button variant="outline" onClick={cerrar}>Cancelar</Button><Button onClick={guardar} disabled={!v.persona || !v.desde || !v.motivo.trim()}><Save className="size-4" />Guardar integrante</Button></div>
+          <div className="flex justify-end gap-2"><Button variant="outline" onClick={cerrar}>Cancelar</Button><Button onClick={guardar} disabled={(v.sinCuenta ? !v.nombre.trim() : !v.persona) || !v.desde || !v.motivo.trim()}><Save className="size-4" />Guardar integrante</Button></div>
         </div>
       </DialogContent>
     </Dialog>
@@ -299,7 +310,7 @@ function Asignaciones({ crew }: { crew: any }) {
     queryFn: async () => {
       const [{ data: v }, { data: e }, { data: dsg }] = await Promise.all([
         sb.from('crew_vehicle_assignments').select('kind, start_on, end_on, vehicles(plate, code)').eq('crew_id', crew.id).order('start_on', { ascending: false }).limit(10),
-        sb.from('safety_equipment').select('kind, code, status, expires_on').eq('crew_id', crew.id).is('deleted_at', null),
+        sb.from('equipo_asignaciones').select('desde, hasta, horas, equipos(codigo, nombre)').eq('crew_id', crew.id).order('desde', { ascending: false }).limit(10),
         sb.from('pci_designaciones' as any).select('desde, hasta, estado, pcis(code)').eq('crew_id', crew.id).order('creada_at', { ascending: false }).limit(5),
       ])
       return { v: (v ?? []) as any[], e: (e ?? []) as any[], d: (dsg ?? []) as any[] }
@@ -311,12 +322,12 @@ function Asignaciones({ crew }: { crew: any }) {
       {(a.data?.v ?? []).map((x, i) => <p key={i} className="text-muted-foreground">{x.vehicles?.code ?? x.vehicles?.plate} · {x.kind} · {fmtDate(x.start_on)} – {x.end_on ? fmtDate(x.end_on) : 'vigente'}</p>)}
       {!a.data?.v.length && <p className="text-muted-foreground">Sin vehículos asignados.</p>}
       <p className="font-semibold">Equipos</p>
-      {(a.data?.e ?? []).map((x, i) => <p key={i} className="text-muted-foreground">{x.kind} {x.code ?? ''} · {x.status}{x.expires_on ? ` · vence ${fmtDate(x.expires_on)}` : ''}</p>)}
+      {(a.data?.e ?? []).map((x, i) => <p key={i} className="text-muted-foreground">{x.equipos?.codigo} · {x.equipos?.nombre} · {fmtDate(x.desde)} – {x.hasta ? fmtDate(x.hasta) : 'vigente'}{x.horas ? ` · ${x.horas} h` : ''}</p>)}
       {!a.data?.e.length && <p className="text-muted-foreground">Sin equipos asignados.</p>}
       <p className="font-semibold">Designaciones de PCI</p>
       {(a.data?.d ?? []).map((x, i) => <p key={i} className="text-muted-foreground">{x.pcis?.code} · {x.estado} · {fmtDate(x.desde)} – {fmtDate(x.hasta)}</p>)}
       {!a.data?.d.length && <p className="text-muted-foreground">Sin designaciones.</p>}
-      <Link href="/vencimientos" className="text-primary inline-flex items-center gap-1 underline"><ExternalLink className="size-3" />Abrir asignaciones de recursos</Link>
+      <Link href={`/recursos?tab=asignaciones&crew=${crew.id}`} className="text-primary inline-flex items-center gap-1 underline"><ExternalLink className="size-3" />Abrir asignaciones de recursos</Link>
     </div>
   )
 }
