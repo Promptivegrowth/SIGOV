@@ -20,6 +20,9 @@ import kotlinx.serialization.json.buildJsonObject
 import kotlinx.serialization.json.jsonObject
 import kotlinx.serialization.json.contentOrNull
 import kotlinx.serialization.json.jsonPrimitive
+import kotlinx.serialization.json.booleanOrNull
+import kotlinx.coroutines.flow.first
+import io.github.jan.supabase.gotrue.auth
 import kotlinx.serialization.json.put
 import pe.servicon.sigov.datos.Configuracion
 import pe.servicon.sigov.datos.TABLA_ORIGINAL
@@ -201,6 +204,10 @@ class ColaRepositorio @Inject constructor(
 /** El candado del trabajador: una sola sincronización a la vez en el proceso. */
 private val candado = kotlinx.coroutines.sync.Mutex()
 
+/** El último latido y el contrato al que se reporta (se piden una vez por proceso). */
+private var ultimoLatido = 0L
+private var servicioDelLatido: String? = null
+
 @HiltWorker
 class TrabajadorSincronizacion @AssistedInject constructor(
     @Assisted contexto: Context,
@@ -236,10 +243,14 @@ class TrabajadorSincronizacion @AssistedInject constructor(
         // empezar quedó a medias de una corrida que Android cortó
         cola.revivirEnvios(ahora)
         val porEnviar = cola.porEnviar(ahora, MAX_INTENTOS)
-        if (porEnviar.isEmpty()) return Result.success()
+        if (porEnviar.isEmpty()) {
+            latido(0, 0)
+            return Result.success()
+        }
 
         val yaSubidos = cola.yaEnviados().toMutableSet()
         var fallaron = 0
+        var enviados = 0
         // Los originales de las fotos pesan ~3 MB: por omisión esperan al
         // Wi-Fi para no gastar los datos de la cuadrilla (OBS-23)
         val subirOriginales = when (configuracion.modoOriginales.value) {
@@ -314,6 +325,7 @@ class TrabajadorSincronizacion @AssistedInject constructor(
                         ) }, alEnviar = true,
                     )
                     yaSubidos += envio.clientId
+                    enviados++
                     return@runCatching
                 }
 
@@ -366,6 +378,7 @@ class TrabajadorSincronizacion @AssistedInject constructor(
                     ) }, alEnviar = true,
                 )
                 yaSubidos += envio.clientId
+                enviados++
 
             }.onFailure { fallo ->
                 fallaron++
@@ -388,7 +401,48 @@ class TrabajadorSincronizacion @AssistedInject constructor(
         // trabajo con espera exponencial dejaba todo lo nuevo detrás de un
         // registro terco durante horas: se vuelve a mirar en un minuto.
         if (fallaron > 0) pedirSincronizacionLuego(applicationContext)
+        latido(enviados, fallaron)
         return Result.success()
+    }
+
+    /**
+     * El latido del equipo (revisión visual 18/11, Sincronización): le dice
+     * al servidor qué tiene en cola, cuántos errores y cuándo confirmó por
+     * última vez. Así el Supervisor y el Administrador distinguen «en cola»,
+     * «error» y «sin conexión», y si piden «Reintentar», el equipo lo recibe
+     * aquí y vuelve a empujar su cola (repetir no duplica: client_id).
+     */
+    private suspend fun latido(enviados: Int, fallidos: Int) {
+        val ahora = System.currentTimeMillis()
+        if (enviados == 0 && fallidos == 0 && ahora - ultimoLatido < 5 * 60_000L) return
+        runCatching {
+            val uid = supabase.auth.currentUserOrNull()?.id ?: return
+            val servicio = servicioDelLatido ?: supabase.postgrest.from("service_members")
+                .select { filter { eq("profile_id", uid) }; limit(1) }
+                .decodeList<JsonObject>().firstOrNull()?.get("service_id")?.jsonPrimitive?.contentOrNull
+                ?.also { servicioDelLatido = it } ?: return
+            val confirmado = cola.ultimoEnvio().first()
+            val respuesta = supabase.postgrest.rpc("sync_latido", buildJsonObject {
+                put("p_service", servicio)
+                put("p_device", configuracion.idDeInstalacion)
+                put("p_label", android.os.Build.MANUFACTURER + " " + android.os.Build.MODEL)
+                put("p_plataforma", "android")
+                put("p_version", pe.servicon.sigov.BuildConfig.VERSION_NAME)
+                put("p_pendientes", cola.cuantosPendientes().first())
+                put("p_fotos", archivos.cuantosSinSubir().first())
+                put("p_errores", cola.cuantosConError().first())
+                cola.ultimoErrorTexto()?.let { put("p_ultimo_error", it.take(200)) }
+                confirmado?.let { put("p_confirmado_at", java.time.Instant.ofEpochMilli(it).toString()) }
+                put("p_enviados", enviados)
+                put("p_fallidos", fallidos)
+            }).decodeAs<JsonObject>()
+            ultimoLatido = ahora
+            if (respuesta["reintentar"]?.jsonPrimitive?.booleanOrNull == true) {
+                // El Supervisor o el Administrador pidió reintentar: lo rendido vuelve a la cola
+                cola.revivirFallidos(System.currentTimeMillis())
+                pedirSincronizacion(applicationContext, ahora = true)
+            }
+        }
     }
 
     /** Cada intento falla más espaciado: de 2 segundos hasta 5 minutos. */

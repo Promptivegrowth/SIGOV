@@ -1,287 +1,293 @@
 'use client'
 
-import { descargarExcel } from '@/lib/reports'
-
 import * as React from 'react'
 import { useQuery } from '@tanstack/react-query'
-import { History, Search, X, Plus, Pencil, Trash2, ChevronDown } from 'lucide-react'
+import { useSearchParams } from 'next/navigation'
+import {
+  FileText, CheckCircle2, AlertTriangle, XCircle, KeyRound, List, Search, Download, CalendarDays, User, Layers, MousePointerClick,
+  Eye, X, Filter, Info, ShieldCheck, MapPin, MessageSquare, ArrowRight,
+} from 'lucide-react'
 import { createClient } from '@/lib/supabase/client'
 import { useSession } from '@/lib/hooks/use-session'
 import { PageHeader, PageBody } from '@/components/shared/page-header'
-import {
-  EmptyState, DateRangeTabs, rangeFromPreset, type DatePresetKey,
-} from '@/components/shared/misc'
-import { Card, CardContent } from '@/components/ui/card'
+import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
 import { Button } from '@/components/ui/button'
-import { Badge } from '@/components/ui/badge'
 import { Input } from '@/components/ui/input'
 import { SkeletonList } from '@/components/ui/skeleton'
-import { Select, SelectTrigger, SelectValue, SelectContent, SelectItem } from '@/components/ui/select'
-import { fmtDateTime, fmtRelative, cn } from '@/lib/utils'
+import { Kpi } from '@/components/gestion/gestion-nav'
+import { descargarExcel } from '@/lib/reports'
+import { moduloDeTabla } from '@/lib/bitacora'
+import { fmtDateTime, fmtNumber, toISODate, addDays, cn } from '@/lib/utils'
+import { mensajeAmigable } from '@/lib/errores'
 
 /**
- * Auditoría (apartado 7.6).
+ * Bitácora del sistema (ADMIN_Auditoria_WEB_V2 / MOVIL_V2; apartado 7.6).
  *
- * Quién cambió qué, cuándo y desde dónde. La especificación la reserva al
- * Administrador y tiene razón: es el registro que sirve para pedir cuentas,
- * y enseñárselo a quien puede ser auditado lo convierte en otra cosa.
- *
- * No se edita ni se borra desde aquí. Una bitácora que se puede tocar no
- * es una bitácora.
+ * Eventos y accesos en una sola lista, con su resultado (Correcto,
+ * Advertencia, Fallido), filtros por usuario, módulo, acción y resultado, y
+ * el detalle del evento con lo que cambió (antes → después), el motivo y el
+ * historial del registro. Inalterable y de solo lectura: no se edita ni se
+ * borra desde aquí.
  */
-
-const ACCIONES: Record<string, { label: string; icono: React.ElementType; clase: string }> = {
-  INSERT: { label: 'Creó', icono: Plus, clase: 'bg-success/12 text-success border-success/30' },
-  UPDATE: { label: 'Modificó', icono: Pencil, clase: 'bg-info/12 text-info border-info/30' },
-  DELETE: { label: 'Eliminó', icono: Trash2, clase: 'bg-destructive/10 text-destructive border-destructive/30' },
+const RES: Record<string, { t: string; c: string; i: any; tono: string }> = {
+  correcto: { t: 'Correcto', c: 'bg-success/12 text-success', i: CheckCircle2, tono: 'text-success' },
+  advertencia: { t: 'Advertencia', c: 'bg-warning/15 text-warning', i: AlertTriangle, tono: 'text-warning' },
+  fallido: { t: 'Fallido', c: 'bg-destructive/10 text-destructive', i: XCircle, tono: 'text-destructive' },
 }
-
-/** Las tablas, dichas como se nombran en la operación. */
-const TABLAS: Record<string, string> = {
-  work_orders: 'Parte diario',
-  work_entries: 'Actividad ejecutada',
-  evidences: 'Evidencia fotográfica',
-  plan_items: 'Partida programada',
-  pci_items: 'Ítem de PCI',
-  pcis: 'Documento PCI',
-  cash_movements: 'Movimiento de caja',
-  deposit_requests: 'Pedido de depósito',
-  supply_requests: 'Pedido de materiales',
-  safety_talks: 'Charla de seguridad',
-  ats_iperc: 'ATS / IPERC',
-  safety_equipment: 'Equipo de seguridad',
-  vehicles: 'Vehículo',
-  road_assets: 'Activo vial',
-  crews: 'Cuadrilla',
-  profiles: 'Usuario',
-  services: 'Contrato',
-}
-
-const TODAS = '__todas__'
+type Pildora = 'todos' | 'correcto' | 'advertencia' | 'fallido' | 'accesos'
+const OCULTOS = new Set(['updated_at', 'created_at', 'version', 'geom', 'search', 'tsv'])
+const iniciales = (u: string) => (u || '?').replace(/[^a-zA-Z]/g, '').slice(0, 2).toUpperCase() || '?'
 
 export function AuditoriaClient() {
   const { service } = useSession()
   const sb = React.useMemo(() => createClient(), [])
-  const [preset, setPreset] = React.useState<DatePresetKey>('7d')
-  const range = React.useMemo(() => rangeFromPreset(preset), [preset])
-  const [tabla, setTabla] = React.useState(TODAS)
-  const [accion, setAccion] = React.useState(TODAS)
-  const [q, setQ] = React.useState('')
-  const [abierto, setAbierto] = React.useState<string | null>(null)
+  const sp = useSearchParams()
+  const [f, setF] = React.useState({ desde: toISODate(addDays(new Date(), -1)), hasta: toISODate(new Date()), q: '', usuario: '', modulo: '', accion: '', resultado: '' })
+  const [pildora, setPildora] = React.useState<Pildora>('todos')
+  const [abierto, setAbierto] = React.useState<string | null>(sp.get('evento'))
+  const [porPagina, setPorPagina] = React.useState(25)
   const [pagina, setPagina] = React.useState(0)
 
-  const POR_PAGINA = 60
-
-  const registros = useQuery({
-    queryKey: ['auditoria', service.id, range.from, range.to, tabla, accion, pagina],
+  const q = useQuery({
+    queryKey: ['bitacora', service.id, f.desde, f.hasta],
     queryFn: async () => {
-      let c = sb.from('audit_log')
-        .select('*', { count: 'exact' })
-        .eq('service_id', service.id)
-        .gte('created_at', `${range.from}T00:00:00`)
-        .lte('created_at', `${range.to}T23:59:59`)
-        .order('created_at', { ascending: false })
-        .range(pagina * POR_PAGINA, pagina * POR_PAGINA + POR_PAGINA - 1)
-      if (tabla !== TODAS) c = c.eq('table_name', tabla)
-      if (accion !== TODAS) c = c.eq('action', accion)
-      const { data, count, error } = await c
+      const { data, error } = await sb.rpc('bitacora_eventos' as any, { p_service: service.id, p_desde: f.desde, p_hasta: f.hasta } as any)
       if (error) throw error
-      return { filas: data ?? [], total: count ?? 0 }
+      return (data ?? []) as any[]
     },
   })
+  const todos = q.data ?? []
+  const base = todos.filter((e) => (!f.usuario || e.usuario === f.usuario) && (!f.modulo || moduloDe(e) === f.modulo)
+    && (!f.accion || e.accion === f.accion) && (!f.resultado || e.resultado === f.resultado)
+    && (!f.q || `${e.codigo} ${e.usuario} ${e.accion} ${moduloDe(e)} ${e.referencia ?? ''} ${e.record_id ?? ''} ${e.motivo ?? ''}`.toLowerCase().includes(f.q.toLowerCase())))
+  const filas = base.filter((e) => pildora === 'todos' || (pildora === 'accesos' ? e.origen === 'acceso' : e.resultado === pildora))
+  const cuenta = (r: string) => base.filter((e) => e.resultado === r).length
+  const paginas = Math.max(1, Math.ceil(filas.length / porPagina))
+  const visibles = filas.slice(pagina * porPagina, (pagina + 1) * porPagina)
+  React.useEffect(() => setPagina(0), [f, pildora, porPagina])
+  const elegido = todos.find((e) => e.id === abierto) ?? null
+  const unicos = (k: (e: any) => string) => [...new Set(todos.map(k).filter(Boolean))].sort((a, b) => a.localeCompare(b, 'es'))
+  const hayFiltros = !!(f.q || f.usuario || f.modulo || f.accion || f.resultado)
 
-  // Las tablas que realmente tienen movimiento, para no ofrecer filtros vacíos
-  const tablas = useQuery({
-    queryKey: ['auditoria-tablas', service.id],
-    queryFn: async () => {
-      const { data } = await sb.from('audit_log')
-        .select('table_name').eq('service_id', service.id).limit(2000)
-      return [...new Set((data ?? []).map((d: any) => d.table_name))].sort()
-    },
-    staleTime: 10 * 60_000,
-  })
-
-  const filas = React.useMemo(() => {
-    const t = q.trim().toLowerCase()
-    const base = registros.data?.filas ?? []
-    if (!t) return base
-    return base.filter((f: any) =>
-      [f.actor_email, f.table_name, f.record_id, TABLAS[f.table_name]]
-        .filter(Boolean).some((v: string) => String(v).toLowerCase().includes(t))
-    )
-  }, [registros.data, q])
-
-  const total = registros.data?.total ?? 0
-  const paginas = Math.max(1, Math.ceil(total / POR_PAGINA))
+  const exportar = () => descargarExcel(`Bitacora_filtrada_${f.desde}_${f.hasta}`,
+    { titulo: 'Bitácora del sistema', servicio: service.name, periodo: `Del ${f.desde} al ${f.hasta}`, generadoPor: '',
+      filtros: [f.usuario && `Usuario ${f.usuario}`, f.modulo && `Módulo ${f.modulo}`, f.accion && `Acción ${f.accion}`, f.resultado && `Resultado ${RES[f.resultado]?.t}`, pildora !== 'todos' && pildora, f.q && `«${f.q}»`].filter(Boolean).join(' · ') || undefined },
+    [{ name: 'Bitácora', columns: [
+      { header: 'Registro', key: 'codigo', width: 14 }, { header: 'Fecha y hora', key: 'fecha', width: 19 }, { header: 'Usuario', key: 'usuario', width: 20 },
+      { header: 'Módulo', key: 'modulo', width: 24 }, { header: 'Acción', key: 'accion', width: 22 }, { header: 'Referencia', key: 'referencia', width: 30 },
+      { header: 'Resultado', key: 'res', width: 13 }, { header: 'Motivo', key: 'motivo', width: 40 }, { header: 'Id del registro', key: 'record_id', width: 38 },
+    ], rows: filas.map((e) => ({ ...e, fecha: fmtDateTime(e.at), modulo: moduloDe(e), res: RES[e.resultado]?.t })) }])
 
   return (
     <>
-      <PageHeader
-        icon={History}
-        title="Bitácora del sistema"
-        description="Registro inalterable de eventos, acciones y accesos del SIGOV. Solo lectura: no se edita ni se borra."
-        actions={<>
-          <Button variant="outline" size="sm" disabled={!filas.length} onClick={() => descargarExcel('Bitacora_filtrada', { titulo: 'Bitácora del sistema', servicio: service.name, periodo: `${range.from} – ${range.to}`, generadoPor: '' },
-            [{ name: 'Bitácora', columns: [{ header: 'Fecha y hora', key: 'f', width: 20 }, { header: 'Usuario', key: 'actor_email', width: 28 }, { header: 'Módulo', key: 'table_name', width: 22 },
-              { header: 'Acción', key: 'action', width: 10 }, { header: 'Registro', key: 'record_id', width: 38 }, { header: 'Motivo', key: 'motivo', width: 40 }],
-              rows: filas.map((x: any) => ({ ...x, f: fmtDateTime(x.created_at) })) }])}>Exportar filtrado</Button>
-          <DateRangeTabs value={preset} onChange={(v) => { setPreset(v); setPagina(0) }} />
-        </>}
-      />
-
+      <PageHeader title="Bitácora del sistema" description="Registro inalterable de eventos, acciones y accesos del SIGOV" />
       <PageBody className="space-y-4">
-        {/* KPIs de la bitácora: eventos del periodo y accesos fallidos (Historial de accesos) */}
         <div className="grid grid-cols-2 gap-3 lg:grid-cols-4">
-          {[['Eventos', registros.data?.total ?? 0, 'text-info'], ['Altas', (registros.data?.filas ?? []).filter((x: any) => x.action === 'INSERT').length, 'text-success'],
-            ['Cambios', (registros.data?.filas ?? []).filter((x: any) => x.action === 'UPDATE').length, 'text-warning'], ['Bajas', (registros.data?.filas ?? []).filter((x: any) => x.action === 'DELETE').length, 'text-destructive']].map(([t, v, c]: any) => (
-            <div key={t} className="bg-card rounded-xl border border-border px-4 py-3"><p className={'text-2xl font-bold tabular-nums ' + c}>{v}</p><p className="text-[12px]">{t}</p></div>
+          <Kpi icono={FileText} valor={fmtNumber(base.length)} etiqueta="Eventos" tono="azul" />
+          <Kpi icono={CheckCircle2} valor={fmtNumber(cuenta('correcto'))} etiqueta="Correctos" tono="verde" />
+          <Kpi icono={AlertTriangle} valor={fmtNumber(cuenta('advertencia'))} etiqueta="Advertencias" tono="ambar" />
+          <Kpi icono={XCircle} valor={fmtNumber(cuenta('fallido'))} etiqueta="Fallidos" tono="rojo" />
+        </div>
+        <div className="flex flex-wrap gap-2">
+          {([['todos', `Todos (${base.length})`, List, ''], ['correcto', `Correctos (${cuenta('correcto')})`, CheckCircle2, 'text-success'],
+            ['advertencia', `Advertencias (${cuenta('advertencia')})`, AlertTriangle, 'text-warning'], ['fallido', `Fallidos (${cuenta('fallido')})`, XCircle, 'text-destructive'],
+            ['accesos', 'Accesos', KeyRound, '']] as const).map(([k, t, I, c]) => (
+            <button key={k} onClick={() => setPildora(k)} className={cn('flex items-center gap-1.5 rounded-full border px-3.5 py-1.5 text-[13px] font-semibold',
+              pildora === k ? 'bg-primary border-primary text-primary-foreground' : 'bg-card border-border hover:bg-secondary')}>
+              <I className={cn('size-4', pildora !== k && c)} />{t}
+            </button>
           ))}
         </div>
-        {/* ═══ Filtros ══════════════════════════════════════════════════ */}
         <div className="flex flex-wrap items-center gap-2">
-          <div className="relative min-w-52 flex-1 sm:max-w-sm">
-            <Search className="text-muted-foreground absolute top-1/2 left-3 size-3.5 -translate-y-1/2" />
-            <Input placeholder="Buscar por usuario o registro…" value={q}
-              onChange={(e) => setQ(e.target.value)} className="pl-9" />
-            {q && (
-              <button onClick={() => setQ('')} aria-label="Limpiar"
-                className="text-muted-foreground hover:text-foreground absolute top-1/2 right-3 -translate-y-1/2">
-                <X className="size-3.5" />
-              </button>
-            )}
-          </div>
-
-          <Select value={tabla} onValueChange={(v) => { setTabla(v); setPagina(0) }}>
-            <SelectTrigger className="w-[210px]"><SelectValue /></SelectTrigger>
-            <SelectContent>
-              <SelectItem value={TODAS}>Todos los módulos</SelectItem>
-              {(tablas.data ?? []).map((t: string) => (
-                <SelectItem key={t} value={t}>{TABLAS[t] ?? t}</SelectItem>
-              ))}
-            </SelectContent>
-          </Select>
-
-          <Select value={accion} onValueChange={(v) => { setAccion(v); setPagina(0) }}>
-            <SelectTrigger className="w-[160px]"><SelectValue /></SelectTrigger>
-            <SelectContent>
-              <SelectItem value={TODAS}>Toda acción</SelectItem>
-              <SelectItem value="INSERT">Creaciones</SelectItem>
-              <SelectItem value="UPDATE">Modificaciones</SelectItem>
-              <SelectItem value="DELETE">Eliminaciones</SelectItem>
-            </SelectContent>
-          </Select>
-
-          {!registros.isLoading && (
-            <span className="text-muted-foreground ml-auto text-[12px] tabular-nums">
-              {total.toLocaleString('es-PE')} movimientos
-            </span>
-          )}
+          <div className="relative min-w-64 flex-1"><Search className="text-muted-foreground absolute top-1/2 left-3 size-4 -translate-y-1/2" />
+            <Input value={f.q} onChange={(e) => setF({ ...f, q: e.target.value })} placeholder="Buscar por evento o registro..." className="pl-9" /></div>
+          <Button onClick={exportar} disabled={!filas.length}><Download className="size-4" />Exportar filtrado</Button>
+        </div>
+        <div className="flex flex-wrap items-center gap-2">
+          <Campo i={CalendarDays} t="Fecha inicial"><input type="date" value={f.desde} max={f.hasta} onChange={(e) => e.target.value && setF({ ...f, desde: e.target.value })} className="bg-transparent outline-none" /></Campo>
+          <Campo i={CalendarDays} t="Fecha final"><input type="date" value={f.hasta} min={f.desde} onChange={(e) => e.target.value && setF({ ...f, hasta: e.target.value })} className="bg-transparent outline-none" /></Campo>
+          <Campo i={User} t="Usuario"><Sel v={f.usuario} set={(v) => setF({ ...f, usuario: v })} ops={unicos((e) => e.usuario)} /></Campo>
+          <Campo i={Layers} t="Módulo"><Sel v={f.modulo} set={(v) => setF({ ...f, modulo: v })} ops={unicos(moduloDe)} /></Campo>
+          <Campo i={MousePointerClick} t="Acción"><Sel v={f.accion} set={(v) => setF({ ...f, accion: v })} ops={unicos((e) => e.accion)} todos="Todas" /></Campo>
+          <Campo i={CheckCircle2} t="Resultado"><Sel v={f.resultado} set={(v) => setF({ ...f, resultado: v })} ops={['correcto', 'advertencia', 'fallido']} nombre={(v) => RES[v].t} /></Campo>
+          {hayFiltros && <button onClick={() => setF({ ...f, q: '', usuario: '', modulo: '', accion: '', resultado: '' })} className="text-info flex items-center gap-1 text-[12.5px] font-semibold"><Filter className="size-3.5" />Limpiar filtros</button>}
         </div>
 
-        {/* ═══ La bitácora ══════════════════════════════════════════════ */}
-        <Card>
-          <CardContent className="px-0 py-2">
-            {registros.isLoading ? (
-              <div className="px-4"><SkeletonList rows={10} /></div>
-            ) : !filas.length ? (
-              <EmptyState icon={History} title="Sin movimientos en este periodo"
-                description="Amplía el rango de fechas o quita los filtros." className="py-12" />
-            ) : (
-              <ul className="divide-y divide-border/60">
-                {filas.map((f: any) => {
-                  const a = ACCIONES[f.action] ?? ACCIONES.UPDATE
-                  const desplegado = abierto === f.id
-                  return (
-                    <li key={f.id}>
-                      <button
-                        onClick={() => setAbierto(desplegado ? null : f.id)}
-                        className="hover:bg-secondary/40 flex w-full items-center gap-3 px-4 py-2.5 text-left transition-colors"
-                      >
-                        <Badge variant="outline" className={cn('shrink-0 gap-1', a.clase)}>
-                          <a.icono className="size-3" />
-                          {a.label}
-                        </Badge>
-                        <span className="min-w-0 flex-1">
-                          <span className="block truncate text-[13px] font-medium">
-                            {TABLAS[f.table_name] ?? f.table_name}
-                          </span>
-                          <span className="text-muted-foreground block truncate text-[11.5px]">
-                            {f.actor_email ?? 'Sistema'} · {fmtRelative(f.created_at)}
-                          </span>
-                        </span>
-                        <span className="text-muted-foreground hidden shrink-0 text-[11px] tabular-nums lg:block">
-                          {fmtDateTime(f.created_at)}
-                        </span>
-                        <ChevronDown className={cn('text-muted-foreground size-4 shrink-0 transition-transform',
-                          desplegado && 'rotate-180')} />
-                      </button>
-
-                      {desplegado && (
-                        <div className="bg-secondary/30 grid grid-cols-1 gap-3 px-4 py-3 lg:grid-cols-2">
-                          <Bloque titulo="Antes" datos={f.before_data} />
-                          <Bloque titulo="Después" datos={f.after_data} />
-                          {f.motivo && <p className="col-span-full text-[12px]"><strong>Motivo:</strong> {f.motivo}</p>}
-                          <p className="text-muted-foreground col-span-full text-[10.5px]">
-                            Solo lectura · la bitácora no se edita ni se borra · Registro {f.record_id}
-                            {f.ip_address ? ` · desde ${f.ip_address}` : ''}
-                          </p>
-                        </div>
-                      )}
-                    </li>
-                  )
-                })}
-              </ul>
+        <div className="grid gap-4 xl:grid-cols-[minmax(0,1fr)_400px]">
+          <Card className="min-w-0">
+            <CardHeader className="flex-row items-center justify-between space-y-0 pb-2">
+              <CardTitle className="text-[14px]">Registros de bitácora ({fmtNumber(filas.length)} eventos)</CardTitle>
+              <span className="text-muted-foreground text-[12px]">Mostrando {fmtNumber(visibles.length)} de {fmtNumber(filas.length)} eventos</span>
+            </CardHeader>
+            <CardContent className="p-0">
+              {q.isLoading ? <div className="p-4"><SkeletonList rows={8} /></div> : q.isError ? <p className="text-destructive p-5 text-[13px]">{mensajeAmigable(q.error, 'No se pudo cargar la bitácora')}</p>
+                : filas.length === 0 ? <p className="text-muted-foreground p-8 text-center text-[13px]">Sin eventos con estos filtros. Amplía el rango de fechas o quita filtros.</p> : (
+                <div className="overflow-x-auto">
+                  <table className="w-full text-[12.5px]">
+                    <thead className="bg-secondary/50 text-left"><tr>
+                      <th className="w-8 px-3 py-2"></th><th className="px-3 py-2 font-semibold">Fecha y hora</th><th className="px-3 py-2 font-semibold">Usuario</th>
+                      <th className="px-3 py-2 font-semibold">Módulo</th><th className="px-3 py-2 font-semibold">Acción</th><th className="px-3 py-2 font-semibold">Registro</th>
+                      <th className="px-3 py-2 font-semibold">Resultado</th><th className="px-3 py-2 text-center font-semibold">Acciones</th>
+                    </tr></thead>
+                    <tbody className="divide-y divide-border">
+                      {visibles.map((e) => {
+                        const R = RES[e.resultado] ?? RES.correcto
+                        return (
+                          <tr key={e.id} className={cn('hover:bg-secondary/30', abierto === e.id && 'bg-primary/5 outline outline-1 outline-primary/40')}>
+                            <td className="px-3 py-2"><R.i className={cn('size-4', R.tono)} /></td>
+                            <td className="px-3 py-2 whitespace-nowrap">{fmtDateTime(e.at)}</td>
+                            <td className="px-3 py-2"><span className="flex items-center gap-1.5"><span className="bg-primary/10 text-primary grid size-6 place-items-center rounded-full text-[10px] font-bold">{iniciales(e.usuario)}</span>{e.usuario}</span></td>
+                            <td className="px-3 py-2">{moduloDe(e)}</td>
+                            <td className="px-3 py-2">{e.accion}</td>
+                            <td className="px-3 py-2"><p className="font-semibold">{e.codigo}</p>{e.referencia && <p className="text-muted-foreground max-w-48 truncate">{e.referencia}</p>}</td>
+                            <td className="px-3 py-2"><span className={cn('rounded-full px-2.5 py-0.5 text-[11.5px] font-semibold whitespace-nowrap', R.c)}>● {R.t}</span></td>
+                            <td className="px-3 py-2 text-center"><Button size="sm" variant={abierto === e.id ? 'default' : 'outline'} onClick={() => setAbierto(abierto === e.id ? null : e.id)}><Eye className="size-3.5" />Ver detalle</Button></td>
+                          </tr>
+                        )
+                      })}
+                    </tbody>
+                  </table>
+                </div>
+              )}
+            </CardContent>
+            {filas.length > 0 && (
+              <div className="flex flex-wrap items-center justify-between gap-2 border-t border-border px-4 py-2.5 text-[12.5px]">
+                <span className="flex items-center gap-2">Mostrar<select value={porPagina} onChange={(e) => setPorPagina(Number(e.target.value))} className="bg-card rounded-md border border-border px-2 py-1">{[25, 50, 100].map((n) => <option key={n}>{n}</option>)}</select>por página</span>
+                <span className="flex items-center gap-1">
+                  <Button size="sm" variant="outline" disabled={pagina === 0} onClick={() => setPagina(pagina - 1)}>Anterior</Button>
+                  <span className="px-2 tabular-nums">Página {pagina + 1} de {paginas}</span>
+                  <Button size="sm" variant="outline" disabled={pagina >= paginas - 1} onClick={() => setPagina(pagina + 1)}>Siguiente</Button>
+                </span>
+              </div>
             )}
-          </CardContent>
-
-          {paginas > 1 && (
-            <div className="flex items-center justify-between gap-3 border-t border-border px-4 py-2.5">
-              <span className="text-muted-foreground text-[11.5px] tabular-nums">
-                Página {pagina + 1} de {paginas}
-              </span>
-              <span className="flex items-center gap-1">
-                <Button variant="outline" size="sm" disabled={pagina === 0}
-                  onClick={() => setPagina((p) => p - 1)}>Anterior</Button>
-                <Button variant="outline" size="sm" disabled={pagina >= paginas - 1}
-                  onClick={() => setPagina((p) => p + 1)}>Siguiente</Button>
-              </span>
-            </div>
-          )}
-        </Card>
+          </Card>
+          <DetalleEvento e={elegido} cerrar={() => setAbierto(null)} />
+        </div>
       </PageBody>
     </>
   )
 }
 
-/**
- * El contenido de un lado del cambio.
- *
- * Se muestran los campos, no el JSON crudo: quien audita busca qué valor
- * cambió, no cómo se guarda.
- */
-function Bloque({ titulo, datos }: { titulo: string; datos: any }) {
-  if (!datos || typeof datos !== 'object') {
-    return (
-      <div>
-        <p className="text-muted-foreground mb-1 text-[10.5px] font-semibold uppercase tracking-wide">{titulo}</p>
-        <p className="text-muted-foreground text-[12px]">—</p>
-      </div>
-    )
+const moduloDe = (e: any) => (e.origen === 'acceso' ? 'Accesos' : moduloDeTabla(e.tabla))
+
+function Campo({ i: I, t, children }: { i: any; t: string; children: React.ReactNode }) {
+  return <label className="bg-card flex items-center gap-2 rounded-lg border border-border px-3 py-1.5 text-[12.5px]"><I className="text-muted-foreground size-4" /><span className="font-semibold">{t}:</span>{children}</label>
+}
+function Sel({ v, set, ops, todos = 'Todos', nombre }: { v: string; set: (v: string) => void; ops: string[]; todos?: string; nombre?: (v: string) => string }) {
+  return <select value={v} onChange={(e) => set(e.target.value)} className="max-w-44 bg-transparent outline-none"><option value="">{todos}</option>{ops.map((o) => <option key={o} value={o}>{nombre ? nombre(o) : o}</option>)}</select>
+}
+
+function DetalleEvento({ e, cerrar }: { e: any | null; cerrar: () => void }) {
+  const { service } = useSession()
+  const sb = React.useMemo(() => createClient(), [])
+  const detalle = useQuery({
+    queryKey: ['bitacora-detalle', e?.id],
+    enabled: !!e,
+    queryFn: async () => {
+      if (e.origen === 'acceso') {
+        const { data } = await sb.from('accesos' as any).select('*').eq('id', e.id).maybeSingle()
+        return { fila: data, historial: [] as any[] }
+      }
+      const { data: fila } = await sb.from('audit_log').select('*').eq('id', Number(e.id)).maybeSingle()
+      const { data: historial } = fila?.record_id
+        ? await sb.from('audit_log').select('id, created_at, actor_email, action, motivo, after_data, before_data').eq('table_name', fila.table_name).eq('record_id', fila.record_id).order('created_at').limit(30)
+        : { data: [] as any[] }
+      return { fila, historial: historial ?? [] }
+    },
+  })
+  // Para decir «Pedregal → Vítor» en vez de dos identificadores
+  const nombres = useQuery({
+    queryKey: ['bitacora-nombres', service.id],
+    queryFn: async () => {
+      const [c, m] = await Promise.all([
+        sb.from('crews').select('id, code, name').eq('service_id', service.id),
+        sb.from('service_members').select('profile_id, profiles(full_name)').eq('service_id', service.id),
+      ])
+      const mapa = new Map<string, string>()
+      for (const x of (c.data ?? []) as any[]) mapa.set(x.id, `${x.code} · ${x.name}`)
+      for (const x of (m.data ?? []) as any[]) mapa.set(x.profile_id, x.profiles?.full_name ?? x.profile_id)
+      return mapa
+    },
+    staleTime: 10 * 60_000,
+  })
+  if (!e) {
+    return <Card className="h-fit"><CardContent className="text-muted-foreground flex flex-col items-center gap-2 p-8 text-center text-[12.5px]"><Eye className="size-6" />Elige «Ver detalle» en un evento para ver qué cambió, el motivo y su historial.</CardContent></Card>
   }
-  const campos = Object.entries(datos).filter(([k]) => !k.endsWith('_at') || k === 'deleted_at')
+  const R = RES[e.resultado] ?? RES.correcto
+  const fila: any = detalle.data?.fila
+  const valor = (v: any) => (v == null || v === '' ? '—' : typeof v === 'object' ? JSON.stringify(v) : nombres.data?.get(String(v)) ?? String(v))
+  const cambios = e.origen === 'bitacora' && fila
+    ? Object.keys({ ...(fila.before_data ?? {}), ...(fila.after_data ?? {}) })
+        .filter((k) => !OCULTOS.has(k) && JSON.stringify(fila.before_data?.[k] ?? null) !== JSON.stringify(fila.after_data?.[k] ?? null))
+    : []
+  const titulo = (h: any) => `${h.action === 'INSERT' ? 'Registro creado' : h.action === 'DELETE' ? 'Registro eliminado' : 'Actualización del registro'}`
+
   return (
-    <div className="min-w-0">
-      <p className="text-muted-foreground mb-1 text-[10.5px] font-semibold uppercase tracking-wide">{titulo}</p>
-      <dl className="space-y-0.5">
-        {campos.slice(0, 14).map(([k, v]) => (
-          <div key={k} className="flex gap-2 text-[11.5px]">
-            <dt className="text-muted-foreground shrink-0">{k}</dt>
-            <dd className="min-w-0 flex-1 truncate font-mono text-[11px]">
-              {v == null ? '—' : typeof v === 'object' ? JSON.stringify(v) : String(v)}
-            </dd>
+    <Card className="h-fit">
+      <CardHeader className="flex-row items-start justify-between space-y-0 pb-2">
+        <div>
+          <CardTitle className="flex flex-wrap items-center gap-2 text-[15px]">Detalle del evento: {e.codigo}<span className={cn('rounded-full px-2 py-0.5 text-[11.5px] font-semibold', R.c)}>● {R.t}</span></CardTitle>
+          <p className="text-muted-foreground text-[12px]">{e.accion} · {moduloDe(e)}</p>
+        </div>
+        <button onClick={cerrar} aria-label="Cerrar" className="hover:bg-secondary rounded-md p-1"><X className="size-4" /></button>
+      </CardHeader>
+      <CardContent className="space-y-3 text-[12.5px]">
+        <div>
+          <p className="mb-1.5 font-semibold">Información del evento</p>
+          <div className="grid grid-cols-2 gap-x-3 gap-y-1.5">
+            <Dato t="Módulo" v={moduloDe(e)} /><Dato t="Acción" v={e.accion} />
+            <Dato t="Registro" v={<span className="bg-info/10 text-info rounded px-1.5 font-semibold">{e.codigo}</span>} /><Dato t="Versión" v={e.version ?? '—'} />
+            <Dato t="Actor" v={e.usuario} /><Dato t="Fecha y hora" v={fmtDateTime(e.at)} />
           </div>
-        ))}
-      </dl>
-    </div>
+          {e.referencia && <p className="mt-1.5"><span className="text-muted-foreground">Detalle:</span> <strong>{e.referencia}</strong></p>}
+        </div>
+        {detalle.isLoading ? <SkeletonList rows={3} /> : (
+          <>
+            {cambios.length > 0 && (
+              <div>
+                <p className="mb-1.5 font-semibold">Antes → Después</p>
+                <ul className="space-y-1.5">
+                  {cambios.slice(0, 12).map((k) => (
+                    <li key={k} className="grid grid-cols-[110px_1fr_auto_1fr] items-center gap-1.5">
+                      <span className="text-muted-foreground truncate" title={k}>{k}</span>
+                      <span className="bg-info/8 flex items-center gap-1 truncate rounded px-1.5 py-1"><MapPin className="size-3 shrink-0" />{valor(fila.before_data?.[k])}</span>
+                      <ArrowRight className="text-muted-foreground size-3.5" />
+                      <span className="bg-success/10 truncate rounded px-1.5 py-1">{valor(fila.after_data?.[k])}</span>
+                    </li>
+                  ))}
+                </ul>
+                {cambios.length > 12 && <p className="text-muted-foreground mt-1">y {cambios.length - 12} campos más</p>}
+              </div>
+            )}
+            {e.motivo && <p className="flex gap-2"><MessageSquare className="text-muted-foreground mt-0.5 size-4 shrink-0" /><span><strong>Motivo:</strong> {e.motivo}</span></p>}
+            {e.origen === 'acceso' && fila && (
+              <div className="grid grid-cols-2 gap-x-3 gap-y-1.5">
+                <Dato t="Dispositivo" v={fila.dispositivo ?? '—'} /><Dato t="Plataforma" v={fila.plataforma ?? '—'} />
+                <Dato t="IP" v={fila.ip ?? '—'} /><Dato t="Usuario ingresado" v={fila.usuario ?? '—'} />
+              </div>
+            )}
+            {e.origen === 'bitacora' && (
+              <div>
+                <p className="mb-1.5 flex items-center gap-2 font-semibold">Historial del evento (inalterable)<span className="bg-info/10 text-info flex items-center gap-1 rounded-full px-2 py-0.5 text-[11px]"><Info className="size-3" />Solo lectura</span></p>
+                <ul className="space-y-2 border-l-2 border-border pl-3">
+                  {(detalle.data?.historial ?? []).map((h: any) => (
+                    <li key={h.id} className="relative">
+                      <span className={cn('absolute top-1 -left-[18px] size-2.5 rounded-full', String(h.id) === e.id ? 'bg-success' : 'bg-muted-foreground/50')} />
+                      <p><span className="text-muted-foreground">{fmtDateTime(h.created_at)}</span> · <strong>{titulo(h)}</strong>{String(h.id) === e.id && <span className="text-success"> (este evento)</span>}</p>
+                      <p className="text-muted-foreground">Actor: {(h.actor_email ?? 'Sistema').split('@')[0]} · EVT{String(h.id).padStart(6, '0')}{h.after_data?.version ? ` · Versión ${h.after_data.version}` : ''}{h.motivo ? ` · ${h.motivo}` : ''}</p>
+                    </li>
+                  ))}
+                </ul>
+              </div>
+            )}
+          </>
+        )}
+        <p className="bg-secondary flex gap-2 rounded-lg p-2.5"><ShieldCheck className="text-primary mt-0.5 size-4 shrink-0" />La bitácora es inalterable y de solo lectura. No es posible editar ni eliminar registros.</p>
+      </CardContent>
+    </Card>
   )
+}
+
+function Dato({ t, v }: { t: string; v: React.ReactNode }) {
+  return <p><span className="text-muted-foreground block text-[11px]">{t}</span><span className="font-semibold">{v}</span></p>
 }

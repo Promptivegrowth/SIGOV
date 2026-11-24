@@ -7540,6 +7540,233 @@ export type Database = {
           },
         ]
       }
+      sync_conflictos: {
+        Row: {
+          campos: string[]
+          carga_at: string
+          crew_id: string | null
+          datos_local: Json
+          datos_servidor: Json
+          device_id: string | null
+          estado: string
+          id: string
+          intentos: number
+          motivo: string | null
+          profile_id: string | null
+          referencia: string | null
+          registro_id: string
+          resuelto_at: string | null
+          resuelto_por: string | null
+          service_id: string
+          servidor_at: string | null
+          servidor_por: string | null
+          tabla: string
+          version_local: number | null
+          version_servidor: number | null
+        }
+        Insert: {
+          campos?: string[]
+          carga_at?: string
+          crew_id?: string | null
+          datos_local: Json
+          datos_servidor: Json
+          device_id?: string | null
+          estado?: string
+          id?: string
+          intentos?: number
+          motivo?: string | null
+          profile_id?: string | null
+          referencia?: string | null
+          registro_id: string
+          resuelto_at?: string | null
+          resuelto_por?: string | null
+          service_id: string
+          servidor_at?: string | null
+          servidor_por?: string | null
+          tabla: string
+          version_local?: number | null
+          version_servidor?: number | null
+        }
+        Update: {
+          campos?: string[]
+          carga_at?: string
+          crew_id?: string | null
+          datos_local?: Json
+          datos_servidor?: Json
+          device_id?: string | null
+          estado?: string
+          id?: string
+          intentos?: number
+          motivo?: string | null
+          profile_id?: string | null
+          referencia?: string | null
+          registro_id?: string
+          resuelto_at?: string | null
+          resuelto_por?: string | null
+          service_id?: string
+          servidor_at?: string | null
+          servidor_por?: string | null
+          tabla?: string
+          version_local?: number | null
+          version_servidor?: number | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "sync_conflictos_crew_id_fkey"
+            columns: ["crew_id"]
+            isOneToOne: false
+            referencedRelation: "crews"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "sync_conflictos_crew_id_fkey"
+            columns: ["crew_id"]
+            isOneToOne: false
+            referencedRelation: "v_hygiene_today"
+            referencedColumns: ["crew_id"]
+          },
+          {
+            foreignKeyName: "sync_conflictos_profile_id_fkey"
+            columns: ["profile_id"]
+            isOneToOne: false
+            referencedRelation: "profiles"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "sync_conflictos_resuelto_por_fkey"
+            columns: ["resuelto_por"]
+            isOneToOne: false
+            referencedRelation: "profiles"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "sync_conflictos_service_id_fkey"
+            columns: ["service_id"]
+            isOneToOne: false
+            referencedRelation: "services"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "sync_conflictos_servidor_por_fkey"
+            columns: ["servidor_por"]
+            isOneToOne: false
+            referencedRelation: "profiles"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      sync_dispositivos: {
+        Row: {
+          app_version: string | null
+          device_id: string
+          device_label: string | null
+          errores: number
+          fotos_pendientes: number
+          plataforma: string
+          profile_id: string
+          registros_pendientes: number
+          service_id: string
+          ultima_confirmacion: string | null
+          ultimo_contacto: string
+          ultimo_error: string | null
+        }
+        Insert: {
+          app_version?: string | null
+          device_id: string
+          device_label?: string | null
+          errores?: number
+          fotos_pendientes?: number
+          plataforma?: string
+          profile_id: string
+          registros_pendientes?: number
+          service_id: string
+          ultima_confirmacion?: string | null
+          ultimo_contacto?: string
+          ultimo_error?: string | null
+        }
+        Update: {
+          app_version?: string | null
+          device_id?: string
+          device_label?: string | null
+          errores?: number
+          fotos_pendientes?: number
+          plataforma?: string
+          profile_id?: string
+          registros_pendientes?: number
+          service_id?: string
+          ultima_confirmacion?: string | null
+          ultimo_contacto?: string
+          ultimo_error?: string | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "sync_dispositivos_profile_id_fkey"
+            columns: ["profile_id"]
+            isOneToOne: false
+            referencedRelation: "profiles"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "sync_dispositivos_service_id_fkey"
+            columns: ["service_id"]
+            isOneToOne: false
+            referencedRelation: "services"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      sync_reintentos: {
+        Row: {
+          atendido_at: string | null
+          device_id: string
+          id: string
+          profile_id: string
+          service_id: string
+          solicitado_at: string
+          solicitado_por: string
+        }
+        Insert: {
+          atendido_at?: string | null
+          device_id: string
+          id?: string
+          profile_id: string
+          service_id: string
+          solicitado_at?: string
+          solicitado_por: string
+        }
+        Update: {
+          atendido_at?: string | null
+          device_id?: string
+          id?: string
+          profile_id?: string
+          service_id?: string
+          solicitado_at?: string
+          solicitado_por?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "sync_reintentos_profile_id_fkey"
+            columns: ["profile_id"]
+            isOneToOne: false
+            referencedRelation: "profiles"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "sync_reintentos_service_id_fkey"
+            columns: ["service_id"]
+            isOneToOne: false
+            referencedRelation: "services"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "sync_reintentos_solicitado_por_fkey"
+            columns: ["solicitado_por"]
+            isOneToOne: false
+            referencedRelation: "profiles"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       sync_sessions: {
         Row: {
           device_id: string
@@ -8142,6 +8369,8 @@ export type Database = {
           deleted_at: string | null
           dispositivo: string | null
           duplicado_de: string | null
+          editado_at: string | null
+          editado_por: string | null
           ejecutado_por: string | null
           espesor_m: number | null
           exceso: number | null
@@ -8171,6 +8400,8 @@ export type Database = {
           started_at: string | null
           unit_id: string | null
           updated_at: string
+          version: number
+          version_dispositivo: number | null
           work_order_id: string
         }
         Insert: {
@@ -8183,6 +8414,8 @@ export type Database = {
           deleted_at?: string | null
           dispositivo?: string | null
           duplicado_de?: string | null
+          editado_at?: string | null
+          editado_por?: string | null
           ejecutado_por?: string | null
           espesor_m?: number | null
           exceso?: number | null
@@ -8212,6 +8445,8 @@ export type Database = {
           started_at?: string | null
           unit_id?: string | null
           updated_at?: string
+          version?: number
+          version_dispositivo?: number | null
           work_order_id: string
         }
         Update: {
@@ -8224,6 +8459,8 @@ export type Database = {
           deleted_at?: string | null
           dispositivo?: string | null
           duplicado_de?: string | null
+          editado_at?: string | null
+          editado_por?: string | null
           ejecutado_por?: string | null
           espesor_m?: number | null
           exceso?: number | null
@@ -8253,6 +8490,8 @@ export type Database = {
           started_at?: string | null
           unit_id?: string | null
           updated_at?: string
+          version?: number
+          version_dispositivo?: number | null
           work_order_id?: string
         }
         Relationships: [
@@ -8282,6 +8521,13 @@ export type Database = {
             columns: ["duplicado_de"]
             isOneToOne: false
             referencedRelation: "work_entries"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "work_entries_editado_por_fkey"
+            columns: ["editado_por"]
+            isOneToOne: false
+            referencedRelation: "profiles"
             referencedColumns: ["id"]
           },
           {
@@ -10422,6 +10668,10 @@ export type Database = {
         }
         Returns: Json
       }
+      avance_datos: {
+        Args: { w: Database["public"]["Tables"]["work_entries"]["Row"] }
+        Returns: Json
+      }
       avance_diario_partida: { Args: { p_plan_item: string }; Returns: Json }
       avisar_pedido: { Args: { p_id: string }; Returns: undefined }
       aviso_resolver: {
@@ -10470,6 +10720,14 @@ export type Database = {
           p_supervisor?: string
           p_tab?: string
         }
+        Returns: Json
+      }
+      bitacora_accion: {
+        Args: { a: Json; act: string; b: Json; t: string }
+        Returns: string
+      }
+      bitacora_eventos: {
+        Args: { p_desde: string; p_hasta: string; p_service: string }
         Returns: Json
       }
       buscar: {
@@ -10581,6 +10839,10 @@ export type Database = {
       cuadrilla_a_mi_cargo: {
         Args: { crew: string; sid: string }
         Returns: boolean
+      }
+      cuadrilla_de: {
+        Args: { p_profile: string; p_service: string }
+        Returns: string
       }
       cuadrilla_de_evidencia: { Args: { p_evidencia: string }; Returns: string }
       cuadrilla_guardar: {
@@ -10743,6 +11005,10 @@ export type Database = {
       fraccion_calibrada: {
         Args: { p_cal: Json; p_fin: number; p_ini: number; p_prog: number }
         Returns: number
+      }
+      gestiona_sync_de: {
+        Args: { p_profile: string; p_service: string }
+        Returns: boolean
       }
       hoy_peru: { Args: never; Returns: string }
       inicio_mr: {
@@ -11305,6 +11571,10 @@ export type Database = {
         Args: { p_dias?: number; p_service: string }
         Returns: Json
       }
+      sincronizacion_dispositivos: {
+        Args: { p_service: string }
+        Returns: Json
+      }
       ssoma_documento_crear: {
         Args: {
           p_crew?: string
@@ -11476,6 +11746,31 @@ export type Database = {
         }[]
       }
       storage_service_id: { Args: { p_name: string }; Returns: string }
+      sync_conflicto_resolver: {
+        Args: { p_accion: string; p_id: string; p_motivo?: string }
+        Returns: Json
+      }
+      sync_latido: {
+        Args: {
+          p_confirmado_at?: string
+          p_device: string
+          p_enviados?: number
+          p_errores?: number
+          p_fallidos?: number
+          p_fotos?: number
+          p_label?: string
+          p_pendientes?: number
+          p_plataforma?: string
+          p_service: string
+          p_ultimo_error?: string
+          p_version?: string
+        }
+        Returns: Json
+      }
+      sync_reintentar: {
+        Args: { p_equipos: Json; p_service: string }
+        Returns: Json
+      }
       usuarios_contrato: { Args: { p_service: string }; Returns: Json }
       validar_vehiculo: {
         Args: { p_aceptar: boolean; p_vehiculo: string }

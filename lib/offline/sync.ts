@@ -2,8 +2,9 @@
 
 import { createClient } from '@/lib/supabase/client'
 import { toISODate } from '@/lib/utils'
+import { APP } from '@/lib/constants'
 import {
-  db, getDeviceId, putMirror, setMeta, getMeta, purgeSynced,
+  db, getDeviceId, putMirror, setMeta, getMeta, purgeSynced, outboxCounts,
   type OutboxItem,
 } from './db'
 
@@ -234,6 +235,13 @@ async function pullMirror(scope: PullScope): Promise<number> {
 }
 
 // ─── Orquestador ──────────────────────────────────────────────────────────
+let ultimoLatido = 0
+const navegador = () => {
+  const ua = navigator.userAgent
+  const b = /Edg\//.test(ua) ? 'Edge' : /Chrome\//.test(ua) ? 'Chrome' : /Firefox\//.test(ua) ? 'Firefox' : /Safari\//.test(ua) ? 'Safari' : 'Navegador'
+  return `Web · ${b}${/Android/.test(ua) ? ' (Android)' : /Windows/.test(ua) ? ' (Windows)' : /Mac/.test(ua) ? ' (Mac)' : ''}`
+}
+
 export async function syncNow(scope?: PullScope): Promise<SyncResult> {
   if (running) return state.lastResult ?? { pushed: 0, pulled: 0, failed: 0, blobs: 0, durationMs: 0 }
   if (typeof navigator !== 'undefined' && !navigator.onLine) {
@@ -260,23 +268,33 @@ export async function syncNow(scope?: PullScope): Promise<SyncResult> {
 
     await purgeSynced(7)
 
-    // Registrar la sesión de sincronización en el servidor (trazabilidad).
-    // COVINCA entra como visor y solo mira: no escribe ni esta bitácora.
-    if (activeScope?.serviceId && activeScope.role !== 'visor' && (result.pushed > 0 || result.pulled > 0)) {
+    // Latido del equipo (Sincronización, revisión visual 18/11): cola, errores y
+    // última confirmación; registra la sesión si hubo envíos. COVINCA entra
+    // como visor y solo mira: no escribe ni esta bitácora.
+    if (activeScope?.serviceId && activeScope.role !== 'visor'
+        && (result.pushed > 0 || result.failed > 0 || Date.now() - ultimoLatido > 5 * 60_000)) {
       try {
         const sb = createClient()
-        const { data: auth } = await sb.auth.getUser()
-        if (auth.user) {
-          await sb.from('sync_sessions').insert({
-            profile_id: auth.user.id,
-            service_id: activeScope.serviceId,
-            device_id: await getDeviceId(),
-            pushed_count: result.pushed,
-            pulled_count: result.pulled,
-            failed_count: result.failed,
-            duration_ms: Math.round(performance.now() - t0),
-            finished_at: new Date().toISOString(),
-          })
+        const cuentas = await outboxCounts()
+        const { data } = await sb.rpc('sync_latido' as any, {
+          p_service: activeScope.serviceId,
+          p_device: await getDeviceId(),
+          p_label: typeof navigator !== 'undefined' ? navegador() : 'Web',
+          p_plataforma: 'web',
+          p_version: APP.version,
+          p_pendientes: cuentas.pendiente + cuentas.sincronizando,
+          p_fotos: result.blobs,
+          p_errores: cuentas.error,
+          p_ultimo_error: null,
+          p_confirmado_at: result.pushed > 0 || cuentas.pendiente + cuentas.error === 0 ? new Date().toISOString() : null,
+          p_enviados: result.pushed,
+          p_fallidos: result.failed,
+        } as any)
+        ultimoLatido = Date.now()
+        // El Supervisor o el Administrador pidió reintentar: lo que falló vuelve a la cola
+        if ((data as any)?.reintentar) {
+          const fallidos = await db.outbox.where('status').equals('error').toArray()
+          await db.outbox.bulkPut(fallidos.map((f) => ({ ...f, status: 'pendiente' as const, attempts: 0, next_attempt_at: Date.now() })))
         }
       } catch {
         /* la trazabilidad no debe romper la sincronización */

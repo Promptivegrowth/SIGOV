@@ -96,6 +96,10 @@ interface ColaDao {
     @Query("SELECT COUNT(*) FROM cola WHERE estado = 'ERROR'")
     fun cuantosConError(): Flow<Int>
 
+    /** El último error, para el latido del equipo (Sincronización). */
+    @Query("SELECT ultimoError FROM cola WHERE estado = 'ERROR' AND ultimoError IS NOT NULL ORDER BY proximoIntento DESC LIMIT 1")
+    suspend fun ultimoErrorTexto(): String?
+
     /**
      * Devuelve a la cola lo que ya se había rendido.
      *

@@ -2,9 +2,7 @@
 
 import * as React from 'react'
 import { useLiveQuery } from 'dexie-react-hooks'
-import { RefreshCw, CloudUpload, CloudCheck, Clock, WifiOff, AlertTriangle } from 'lucide-react'
-import { useQuery } from '@tanstack/react-query'
-import { createClient } from '@/lib/supabase/client'
+import { RefreshCw, CloudUpload, CloudCheck, Clock } from 'lucide-react'
 import { toast } from 'sonner'
 import { PageHeader, PageBody } from '@/components/shared/page-header'
 import { EmptyState } from '@/components/shared/misc'
@@ -16,6 +14,7 @@ import { syncNow } from '@/lib/offline/sync'
 import { useSession } from '@/lib/hooks/use-session'
 import { fmtRelative, fmtNumber, cn } from '@/lib/utils'
 import { mensajeAmigable } from '@/lib/errores'
+import { GestionSincronizacion } from '@/components/sincronizacion/gestion-sincronizacion'
 
 /**
  * Sincronización (apartado 4.12).
@@ -86,6 +85,25 @@ export function SincronizacionClient() {
   const total = pendientes?.length ?? 0
   const todoArriba = total === 0
 
+  // Supervisor, Residente y Administrador: la gestión de los equipos de su alcance
+  // (ADMIN_Sincronizacion_V2); este navegador queda en la pestaña Configuración.
+  if (role === 'supervisor' || role === 'residente' || role === 'admin') {
+    return (
+      <GestionSincronizacion esteEquipo={
+        <Card>
+          <CardHeader className="pb-2"><CardTitle className="text-[14px]">Este equipo</CardTitle>
+            <CardDescription className="text-[12px]">Lo registrado en este navegador que todavía no sube.</CardDescription></CardHeader>
+          <CardContent className="space-y-3 text-[12.5px]">
+            <p className="flex items-center gap-2">{todoArriba ? <CloudCheck className="text-success size-5" /> : <CloudUpload className="text-info size-5" />}
+              {todoArriba ? 'Todo sincronizado' : `${fmtNumber(total)} por enviar${conError.length ? ` · ${conError.length} con error` : ''}`}
+              {ultimo && <span className="text-muted-foreground"> · último envío {fmtRelative(new Date(ultimo.synced_at ?? ultimo.created_at))}</span>}</p>
+            <Button onClick={sincronizar} disabled={sincronizando} loading={sincronizando}><RefreshCw className="size-4" />Sincronizar ahora</Button>
+          </CardContent>
+        </Card>
+      } />
+    )
+  }
+
   return (
     <>
       <PageHeader
@@ -101,7 +119,6 @@ export function SincronizacionClient() {
       />
 
       <PageBody className="space-y-4">
-        {(role === 'supervisor' || role === 'residente' || role === 'admin') && <SincronizacionAmbito serviceId={service.id} role={role} />}
 
         {/* ═══ El estado, de un vistazo ═════════════════════════════════ */}
         <div className={cn(
@@ -180,95 +197,5 @@ export function SincronizacionClient() {
         </Card>
       </PageBody>
     </>
-  )
-}
-
-const ROL_CORTO: Record<string, string> = {
-  admin: 'Administrador', residente: 'Residente', supervisor: 'Supervisor', ing_seguridad: 'SSOMA', visor: 'COVINCA', jefe_cuadrilla: 'Jefe de cuadrilla',
-}
-
-const ESTADO_SYNC: Record<string, { texto: string; clase: string }> = {
-  confirmado: { texto: 'Envío confirmado', clase: 'border-success/40 text-success' },
-  sin_conexion: { texto: 'Sin conexión > 24 h', clase: 'border-muted-foreground/40 text-muted-foreground' },
-  error: { texto: 'Error en el último envío', clase: 'border-destructive/40 text-destructive' },
-  sin_registro: { texto: 'Sin registro', clase: 'border-muted-foreground/40 text-muted-foreground' },
-}
-
-/**
- * Guía 3.7 / 4.14: el Supervisor ve los equipos de sus cuadrillas; Residente
- * y Administrador, los del contrato. «Sin conexión» no es error ni envío
- * confirmado: se informa el último contacto y lo enviado por la persona.
- */
-function SincronizacionAmbito({ serviceId, role }: { serviceId: string; role: string }) {
-  const sb = React.useMemo(() => createClient(), [])
-  const q = useQuery({
-    queryKey: ['sync-ambito', serviceId],
-    queryFn: async () => {
-      const { data, error } = await sb.rpc('sincronizacion_ambito' as any, { p_service: serviceId, p_dias: 7 } as any)
-      if (error) throw error
-      return data as any
-    },
-    refetchInterval: 60_000,
-  })
-  const d = q.data
-  return (
-    <Card>
-      <CardHeader className="pb-2">
-        <CardTitle className="text-[15px]">{role === 'supervisor' ? 'Equipos de mis cuadrillas' : 'Equipos del contrato'}</CardTitle>
-        <CardDescription className="text-[12px]">Último contacto de cada teléfono con la nube y lo enviado en los últimos 7 días.</CardDescription>
-      </CardHeader>
-      <CardContent className="space-y-3 px-3 pb-3">
-        {q.error && <p className="text-destructive text-[13px]">{mensajeAmigable(q.error)}</p>}
-        {d && (
-          <>
-            <div className="grid gap-2 sm:grid-cols-4">
-              <Cifra icono={CloudCheck} titulo="Al día (< 24 h)" valor={d.resumen.al_dia} />
-              <Cifra icono={WifiOff} titulo="Sin conexión > 24 h" valor={d.resumen.sin_conexion_24h} />
-              <Cifra icono={AlertTriangle} titulo="Error en el último envío" valor={d.resumen.con_error} alerta={d.resumen.con_error > 0} />
-              <Cifra icono={CloudUpload} titulo="Registros enviados (7 d)" valor={d.resumen.enviados} />
-            </div>
-            <p className="text-muted-foreground text-[11.5px]">
-              {fmtNumber(d.resumen.personas)} personas{d.resumen.sin_registro ? ` · ${fmtNumber(d.resumen.sin_registro)} sin ningún envío registrado` : ''}.
-              «Sin conexión» no es error: lo que un teléfono aún no envía queda en él hasta que tenga señal. Se muestran sus 3 equipos más recientes.
-            </p>
-            <div className="overflow-x-auto">
-              <table className="w-full text-[12.5px]">
-                <thead className="bg-secondary/50 text-muted-foreground text-[11.5px]"><tr>
-                  <th className="px-3 py-2 text-left font-medium">Cuadrilla</th><th className="text-left font-medium">Persona</th>
-                  <th className="text-left font-medium">Equipo</th><th className="text-left font-medium">Último contacto</th>
-                  <th className="text-right font-medium">Enviados</th><th className="text-right font-medium">Fallidos</th>
-                  <th className="px-3 text-left font-medium">Estado</th>
-                </tr></thead>
-                <tbody>
-                  {(d.personas as any[]).flatMap((p) => {
-                    const devs = (p.dispositivos as any[]).length ? p.dispositivos as any[] : [null]
-                    return devs.map((x, i) => (
-                      <tr key={`${p.profile_id}-${i}`} className="border-t border-border">
-                        <td className="px-3 py-2">{i === 0 ? (p.codigo ?? '—') : ''}</td>
-                        <td>{i === 0 ? <>{p.nombre}{p.codigo ? '' : <span className="text-muted-foreground"> · {ROL_CORTO[p.rol] ?? p.rol}</span>}{p.equipos > 3 ? <span className="text-muted-foreground block text-[11px]">{p.equipos} equipos en total</span> : null}</> : ''}</td>
-                        <td className="font-mono text-[11.5px]">{x?.device ?? '—'}</td>
-                        <td>{x?.ultimo ? fmtRelative(new Date(x.ultimo)) : 'Nunca'}</td>
-                        <td className="text-right tabular-nums">{x ? fmtNumber(x.enviados) : '—'}</td>
-                        <td className="text-right tabular-nums">{x ? fmtNumber(x.fallidos) : '—'}</td>
-                        <td className="px-3"><Badge variant="outline" className={ESTADO_SYNC[x?.estado ?? 'sin_registro'].clase}>{ESTADO_SYNC[x?.estado ?? 'sin_registro'].texto}</Badge></td>
-                      </tr>
-                    ))
-                  })}
-                </tbody>
-              </table>
-            </div>
-          </>
-        )}
-      </CardContent>
-    </Card>
-  )
-}
-
-function Cifra({ icono: I, titulo, valor, alerta }: { icono: any; titulo: string; valor: number; alerta?: boolean }) {
-  return (
-    <div className={cn('rounded-lg border px-3 py-2', alerta && 'border-destructive/40 bg-destructive/5')}>
-      <p className="text-muted-foreground flex items-center gap-1.5 text-[11px]"><I className="size-3.5" />{titulo}</p>
-      <p className="text-[18px] font-bold tabular-nums">{fmtNumber(valor)}</p>
-    </div>
   )
 }
