@@ -60,6 +60,10 @@ export function ProgramacionClient() {
   const [confirm, setConfirm] = React.useState<any>(null)
   const [q, setQ] = React.useState('')
   const [crewFilter, setCrewFilter] = React.useState('todas')
+  // MRPCI_01: Subtramo, Sector y Origen
+  const [subtramoF, setSubtramoF] = React.useState('todos')
+  const [sectorF, setSectorF] = React.useState('todos')
+  const [origenF, setOrigenF] = React.useState('todos')
   const [statusFilter, setStatusFilter] = React.useState('todos')
 
   const monday = React.useMemo(() => addDays(startOfWeek(), offset * 7), [offset])
@@ -123,6 +127,9 @@ export function ProgramacionClient() {
     if (role === 'jefe_cuadrilla' && crew) all = all.filter((r: any) => r.crew_id === crew.id)
     if (crewFilter !== 'todas') all = all.filter((r: any) => r.crew_id === crewFilter)
     if (statusFilter !== 'todos') all = all.filter((r: any) => r.status === statusFilter)
+    if (subtramoF !== 'todos') all = all.filter((r: any) => r.section_code === subtramoF)
+    if (sectorF !== 'todos') all = all.filter((r: any) => r.sector_code === sectorF)
+    if (origenF !== 'todos') all = all.filter((r: any) => (r.origen ?? 'MR') === origenF)
     if (q) {
       const t = q.toLowerCase()
       all = all.filter((r: any) =>
@@ -133,7 +140,7 @@ export function ProgramacionClient() {
       )
     }
     return all
-  }, [items.data, role, crew, crewFilter, statusFilter, q])
+  }, [items.data, role, crew, crewFilter, statusFilter, q, subtramoF, sectorF, origenF])
 
   const catalogs = useQuery({
     queryKey: ['prog-catalogs', service.id],
@@ -515,6 +522,18 @@ export function ProgramacionClient() {
               </SelectContent>
             </Select>
           )}
+          {([['Subtramo', subtramoF, setSubtramoF, 'section_code', 'Todos los subtramos'], ['Sector', sectorF, setSectorF, 'sector_code', 'Todos los sectores'],
+            ['Origen', origenF, setOrigenF, 'origen', 'MR + PCI']] as const).map(([et, v, fijar, campo, todos]) => (
+            <Select key={et} value={v} onValueChange={fijar}>
+              <SelectTrigger className="w-40" aria-label={et}><SelectValue placeholder={et} /></SelectTrigger>
+              <SelectContent>
+                <SelectItem value="todos">{todos}</SelectItem>
+                {[...new Set((items.data ?? []).map((r: any) => (campo === 'origen' ? r.origen ?? 'MR' : r[campo])).filter(Boolean))].sort().map((x: any) => (
+                  <SelectItem key={x} value={x}>{et === 'Sector' ? `Sector ${x}` : x}</SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
+          ))}
           <Select value={statusFilter} onValueChange={setStatusFilter}>
             <SelectTrigger className="w-44"><SelectValue placeholder="Estado" /></SelectTrigger>
             <SelectContent>
@@ -562,7 +581,7 @@ export function ProgramacionClient() {
           <GrillaSemanal rows={rows} monday={monday} semana={semanaVisible} plan={p} cuadrilla={crewNombre}
             canEdit={can.manage} onEdit={(row) => setItemForm({ open: true, row })} onAgregar={() => setItemForm({ open: true })}
             onInsumos={() => setSeccion('insumos')}
-            meta={metaSemana({ semana: semanaVisible, cuadrilla: crewNombre, fecha: monday })} />
+            meta={metaSemana({ semana: semanaVisible, cuadrilla: crewNombre, fecha: monday, subtramo: subtramoF !== 'todos' ? subtramoF : undefined })} />
         ) : !rows.length ? (
           <Card>
             <CardContent className="p-0">

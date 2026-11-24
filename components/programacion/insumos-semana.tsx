@@ -26,6 +26,8 @@ import { mensajeAmigable } from '@/lib/errores'
  */
 type Linea = Record<string, any>
 const CAMPOS_LIBRES = ['almacen', 'fecha_retiro', 'encargado', 'nota_salida', 'nota'] as const
+/** Rendimiento con sus decimales reales (0,0081 no se redondea a 0,008). */
+const rend = (v: any) => Number(v ?? 0).toLocaleString('es-PE', { minimumFractionDigits: 2, maximumFractionDigits: 4 })
 
 export function InsumosSemana({ plan, crewId, crewNombre, semana, rows, canEdit }: {
   plan: any; crewId: string; crewNombre: string; semana: string; rows: any[]; canEdit: boolean
@@ -223,7 +225,7 @@ export function InsumosSemana({ plan, crewId, crewNombre, semana, rows, canEdit 
                     <td className="border border-[#C9D6E5] px-1">{x.unidad_partida}</td>
                     <td className="border border-[#C9D6E5] px-1 tabular-nums">{num(x.metrado)}</td>
                     <td className="border border-[#C9D6E5] px-1">{x.unidad_rend}</td>
-                    <td className="border border-[#C9D6E5] px-1 tabular-nums">{num(x.rendimiento, 2)}</td>
+                    <td className="border border-[#C9D6E5] px-1 tabular-nums">{rend(x.rendimiento)}</td>
                     <td className="border border-[#C9D6E5] px-1 text-left">{x.recurso}</td>
                     <td className="border border-[#C9D6E5] px-1">{x.unidad_recurso}</td>
                     <td className="border border-[#C9D6E5] px-1">{x.origen}</td>
@@ -256,7 +258,7 @@ export function InsumosSemana({ plan, crewId, crewNombre, semana, rows, canEdit 
             <CardHeader className="pb-2"><CardTitle className="text-[14px]">Ajuste del supervisor · {l.recurso}</CardTitle></CardHeader>
             <CardContent className="space-y-3 text-[12.5px]">
               <div className="grid gap-2 sm:grid-cols-5">
-                {[['BASE DEL CATÁLOGO', `${num(l.rendimiento, 2)} ${l.unidad_rend}`], ['PRE-CANTIDAD', `${num(l.pre)} ${l.unidad_recurso}`],
+                {[['BASE DEL CATÁLOGO', `${rend(l.rendimiento)} ${l.unidad_rend}`], ['PRE-CANTIDAD', `${num(l.pre)} ${l.unidad_recurso}`],
                   ['STOCK', `${num(l.stock)} ${l.unidad_recurso}`], ['NECESIDAD NETA', `${num(l.requerir)} ${l.unidad_recurso}`]].map(([e, v]) => (
                   <div key={e}><p className="text-muted-foreground text-[10.5px] font-semibold">{e}</p><p className="bg-secondary/60 mt-0.5 rounded-md px-2 py-1.5">{v}</p></div>
                 ))}
@@ -265,6 +267,7 @@ export function InsumosSemana({ plan, crewId, crewNombre, semana, rows, canEdit 
               </div>
               <label className="block"><span className="text-muted-foreground text-[10.5px] font-semibold">MOTIVO DE AJUSTE{ajustada(l) ? ' *' : ''}</span>
                 <Input disabled={!canEdit} value={l.motivo ?? ''} onChange={(e) => fijar(sel, { motivo: e.target.value })} placeholder="Presentación de despacho y margen operativo" className="mt-0.5 h-8" /></label>
+              {l.presentacion && <p className="text-info text-[12px]">Pedido sugerido en múltiplos de {num(l.presentacion, 0)} {l.unidad_recurso}{l.presentacion_nombre ? ` (${l.presentacion_nombre})` : ''}.</p>}
               <p className="text-muted-foreground">El ajuste se registra en esta versión y no modifica la constante administrada.</p>
               {faltaMotivo && <p className="text-warning text-[12px]">Hay pedidos ajustados (distintos del redondeo sugerido) sin motivo: complétalos para guardar.</p>}
             </CardContent>

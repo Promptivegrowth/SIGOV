@@ -2,7 +2,7 @@
 
 import * as React from 'react'
 import { useQueryClient } from '@tanstack/react-query'
-import { FileSpreadsheet } from 'lucide-react'
+import { FileSpreadsheet, FileDown } from 'lucide-react'
 import { toast } from 'sonner'
 import { createClient } from '@/lib/supabase/client'
 import { useSession } from '@/lib/hooks/use-session'
@@ -13,6 +13,8 @@ import { Select, SelectTrigger, SelectValue, SelectContent, SelectItem } from '@
 import { programacionSemanalXlsx } from '@/lib/formato-programacion'
 import { f7Xlsx } from '@/lib/formato-f7'
 import { semanaDelContrato } from '@/lib/covinca'
+import { agruparSemana, tablaSemana, datosSemana, metaSemana } from './grilla-semanal'
+import { tablaPdf } from '@/lib/formato-mrpci'
 import { mensajeAmigable } from '@/lib/errores'
 
 /** El logo de la cabecera del formato, una sola vez por sesión. */
@@ -126,6 +128,34 @@ export function FormatoCovinca({
     }
   }
 
+  // El mismo formato en PDF: una fila por partida, cabecera Residente / Supervisor / Inspector
+  const [busyPdf, setBusyPdf] = React.useState(false)
+  const descargarPdf = async () => {
+    if (!cuadrilla) { toast.error('Elige la cuadrilla'); return }
+    setBusyPdf(true)
+    try {
+      const monday = new Date(lunes + 'T12:00:00')
+      const domingo = new Date(monday.getTime() + 6 * 86400000).toISOString().slice(0, 10)
+      const { data, error } = await sb.from('v_plan_items').select('*').eq('service_id', service.id).eq('crew_id', cuadrilla)
+        .gte('scheduled_on', lunes).lte('scheduled_on', domingo).not('status', 'in', '(cancelado)').order('scheduled_on')
+      if (error) throw error
+      const { lineas } = agruparSemana((data ?? []) as any[], monday)
+      const c = cuadrillas.find((x) => x.id === cuadrilla)
+      // Semana del contrato (desde el 01/10/2026); antes de esa fecha, la semana del año
+      const iso = (() => { const d = new Date(Date.UTC(monday.getFullYear(), monday.getMonth(), monday.getDate())); const n = d.getUTCDay() || 7; d.setUTCDate(d.getUTCDate() + 4 - n); return Math.ceil(((d.getTime() - Date.UTC(d.getUTCFullYear(), 0, 1)) / 86400000 + 1) / 7) })()
+      const semana = cab.semana_contrato || String(semanaDelContrato(lunes) >= 1 ? semanaDelContrato(lunes) : iso).padStart(2, '0')
+      const planCab = { ...plan, residente: cab.residente, supervisor: cab.supervisor, inspector: cab.inspector, semana_contrato: cab.semana_contrato || null, emitido_on: cab.emitido_on || null }
+      const t = tablaSemana(lineas, monday, metaSemana({ semana, cuadrilla: c?.name, fecha: monday, cliente: service.client_name ?? undefined }), semana,
+        datosSemana({ plan: planCab, cuadrilla: c?.name, subtramos: lineas.map((l) => l.st), fecha: monday, semana, cliente: service.client_name ?? undefined }))
+      await tablaPdf(`Programacion_semanal_${semana}_${(c?.code ?? 'cuadrilla').replace(/\W+/g, '_')}`, [t])
+      toast.success('Programación en PDF descargada', { description: `${lineas.length} partidas` })
+    } catch (e: any) {
+      toast.error(mensajeAmigable(e, 'No se pudo generar el PDF'))
+    } finally {
+      setBusyPdf(false)
+    }
+  }
+
   const campo = (clave: keyof typeof cab, etiqueta: string, tipo = 'text') => (
     <Field label={etiqueta}>
       <Input type={tipo} value={cab[clave]} disabled={!can.manage}
@@ -162,6 +192,7 @@ export function FormatoCovinca({
           <Button variant="outline" onClick={descargarF7} loading={busyF7} title="Requerimiento de recursos (F7) de la semana">
             <FileSpreadsheet className="size-4" />F7 · Recursos
           </Button>
+          <Button variant="outline" onClick={descargarPdf} loading={busyPdf}><FileDown className="size-4" />PDF</Button>
           <Button onClick={descargar} loading={busy}><FileSpreadsheet className="size-4" />Descargar Excel</Button>
         </DialogFooter>
       </DialogContent>

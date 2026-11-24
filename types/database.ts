@@ -7565,6 +7565,8 @@ export type Database = {
           min_stock: number
           name: string
           notes: string | null
+          presentacion: number | null
+          presentacion_nombre: string | null
           service_id: string
           unit_cost: number | null
           unit_id: string | null
@@ -7583,6 +7585,8 @@ export type Database = {
           min_stock?: number
           name: string
           notes?: string | null
+          presentacion?: number | null
+          presentacion_nombre?: string | null
           service_id: string
           unit_cost?: number | null
           unit_id?: string | null
@@ -7601,6 +7605,8 @@ export type Database = {
           min_stock?: number
           name?: string
           notes?: string | null
+          presentacion?: number | null
+          presentacion_nombre?: string | null
           service_id?: string
           unit_cost?: number | null
           unit_id?: string | null

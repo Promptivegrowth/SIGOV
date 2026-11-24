@@ -200,14 +200,32 @@ export async function programacionSemanalXlsx(opciones: {
   ws.getRow(15).height = 29.4
 
   // ── Detalle ────────────────────────────────────────────────────────
-  const propias = items.filter((i) => !i.subcontratada)
-  const subcontratadas = items.filter((i) => i.subcontratada)
+  // Una fila por partida (como el modelo): los días de la misma partida, tramo y origen van en la misma fila
+  type Grupo = { it: any; dias: (any | null)[] }
+  const agrupar = (lista: any[]) => {
+    const grupos: (Grupo & { clave: string })[] = []
+    for (const it of lista) {
+      const d = Math.round((new Date(it.scheduled_on + 'T12:00:00').getTime() - new Date(lunes + 'T12:00:00').getTime()) / 86400000)
+      if (d < 0 || d > 5) continue
+      const clave = [it.activity_id, it.pci_item_id ?? 'mr', it.section_id ?? '', it.origen ?? 'MR', it.notes ?? ''].join('|')
+      let g = grupos.find((x) => x.clave === clave && !x.dias[d])
+      if (!g) { g = { clave, it, dias: [null, null, null, null, null, null] }; grupos.push(g) }
+      g.dias[d] = it
+    }
+    return grupos
+  }
+  const propias = agrupar(items.filter((i) => !i.subcontratada))
+  const subcontratadas = agrupar(items.filter((i) => i.subcontratada))
 
-  const escribirFila = (fila: number, n: number, it: any | null) => {
+  const escribirFila = (fila: number, n: number, g: Grupo | null) => {
     const row = ws.getRow(fila)
     const valores: Record<number, any> = {}
-    if (it) {
-      const diaIdx = Math.round((new Date(it.scheduled_on + 'T12:00:00').getTime() - new Date(lunes + 'T12:00:00').getTime()) / 86400000)
+    const it = g?.it ?? null
+    const conDato = g ? g.dias.map((x, k) => (x ? k : -1)).filter((k) => k >= 0) : []
+    const total = g ? g.dias.reduce((a, x) => a + Number(x?.target_qty ?? 0), 0) : 0
+    const deMin = g ? Math.min(...g.dias.filter(Boolean).map((x) => Number(x.prog_start_m ?? Infinity))) : Infinity
+    const aMax = g ? Math.max(...g.dias.filter(Boolean).map((x) => Number(x.prog_end_m ?? x.prog_start_m ?? -Infinity))) : -Infinity
+    if (it && g) {
       Object.assign(valores, {
         1: n,
         2: it.activity_code ?? '',
@@ -218,17 +236,18 @@ export async function programacionSemanalXlsx(opciones: {
         7: it.activity_name ?? '',
         8: it.unit_symbol ?? '',
         9: it.notes ?? '',
-        36: Number(it.target_qty ?? 0),
-        37: prog(it.prog_start_m),
-        38: prog(it.prog_end_m ?? it.prog_start_m),
+        36: total,
+        37: Number.isFinite(deMin) ? prog(deMin) : '',
+        38: Number.isFinite(aMax) ? prog(aMax) : '',
       })
-      if (diaIdx >= 0 && diaIdx < 6) {
-        const c = COL_DIA[diaIdx]
-        valores[c] = it.lado ?? LADO[it.side] ?? ''
-        valores[c + 1] = Number(it.target_qty ?? 0)
-        valores[c + 2] = prog(it.prog_start_m)
-        valores[c + 3] = prog(it.prog_end_m ?? it.prog_start_m)
-      }
+      g.dias.forEach((x, d) => {
+        if (!x) return
+        const c = COL_DIA[d]
+        valores[c] = x.lado ?? LADO[x.side] ?? ''
+        valores[c + 1] = Number(x.target_qty ?? 0)
+        valores[c + 2] = prog(x.prog_start_m)
+        valores[c + 3] = prog(x.prog_end_m ?? x.prog_start_m)
+      })
     } else {
       valores[1] = n
     }
@@ -256,9 +275,10 @@ export async function programacionSemanalXlsx(opciones: {
     // Total con fórmula, como el formato original: metrado = suma de los seis días; De/A = los del día programado
     if (it) {
       const letra = (c: number) => ws.getColumn(c).letter
-      row.getCell(36).value = { formula: `SUM(${COL_DIA.map((c) => letra(c + 1) + fila).join(',')})`, result: Number(it.target_qty ?? 0) }
-      const d = COL_DIA.findIndex((c) => valores[c + 1] !== undefined)
-      if (d >= 0) {
+      row.getCell(36).value = { formula: `SUM(${COL_DIA.map((c) => letra(c + 1) + fila).join(',')})`, result: total }
+      // Un solo día: el total De/A es el de ese día; varios: la menor y la mayor (el rango no representa continuidad)
+      if (conDato.length === 1) {
+        const d = conDato[0]
         row.getCell(37).value = { formula: `${letra(COL_DIA[d] + 2)}${fila}`, result: valores[COL_DIA[d] + 2] }
         row.getCell(38).value = { formula: `${letra(COL_DIA[d] + 3)}${fila}`, result: valores[COL_DIA[d] + 3] }
       }

@@ -8,7 +8,7 @@
  * Por cada partida programada y cada material de su rendimiento (P12):
  *   Pre-cantidad      = metrado × rendimiento
  *   Cantidad a requerir = Pre-cantidad − stock en cuadrilla (nunca negativa)
- *   Por practicidad   = la cantidad a requerir redondeada hacia arriba
+ *   Por practicidad   = la cantidad a requerir redondeada hacia arriba al múltiplo de la presentación
  *   Remanente         = por practicidad − a requerir
  * % Afectado y % Desperdicio quedan en blanco (P35). Una partida sin
  * rendimiento sale con el recurso vacío, para llenarlo a mano.
@@ -65,7 +65,7 @@ export async function f7Xlsx(opciones: {
     }
   }
   const { data: rends, error: errR } = ids.length
-    ? await sb.from('rendimientos').select('activity_id, supply_id, cantidad, supplies(name, codigo_covinca, code, units(symbol))').in('activity_id', ids)
+    ? await sb.from('rendimientos').select('activity_id, supply_id, cantidad, supplies(name, codigo_covinca, code, presentacion, units(symbol))').in('activity_id', ids)
     : { data: [] as any[], error: null }
   if (errR) throw errR
   const stock = new Map<string, number>((stockR.data ?? []).map((s: any) => [s.supply_id, Number(s.stock) || 0]))
@@ -165,7 +165,9 @@ export async function f7Xlsx(opciones: {
       const usado = Math.min(enCuadrilla, pre)
       queda.set(r.supply_id, enCuadrilla - usado)
       const aRequerir = redondeo(Math.max(0, pre - enCuadrilla))
-      const practico = Math.ceil(aRequerir)
+      // Al múltiplo de la presentación (cilindro de 55 gal…) o a la unidad
+      const pres = Number(r.supplies?.presentacion) > 0 ? Number(r.supplies.presentacion) : 1
+      const practico = Math.ceil(aRequerir / pres - 1e-9) * pres
       const unidadRec = r.supplies?.units?.symbol ?? ''
       poner([
         ++n, `${p.codigo} · ${p.nombre}`, p.unidad, redondeo(p.metrado), `${unidadRec}/${p.unidad}`, rend,
@@ -176,7 +178,7 @@ export async function f7Xlsx(opciones: {
       const rf = fila - 1, fr = ws.getRow(rf)
       fr.getCell(10).value = { formula: `ROUND(D${rf}*F${rf},3)`, result: pre }
       fr.getCell(12).value = { formula: `MAX(0,J${rf}-K${rf})`, result: aRequerir }
-      fr.getCell(13).value = { formula: `ROUNDUP(L${rf},0)`, result: practico }
+      fr.getCell(13).value = { formula: `ROUNDUP(L${rf}/${pres},0)*${pres}`, result: practico }
       fr.getCell(14).value = { formula: `M${rf}-L${rf}`, result: redondeo(practico - aRequerir) }
     }
   }
