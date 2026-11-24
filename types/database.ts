@@ -11672,6 +11672,15 @@ export type Database = {
       }
       is_member: { Args: { sid: string }; Returns: boolean }
       is_platform_admin: { Args: never; Returns: boolean }
+      jefe_cuadrilla_asignar: {
+        Args: {
+          p_crew: string
+          p_jefe: string
+          p_motivo: string
+          p_service: string
+        }
+        Returns: Json
+      }
       mi_avance: {
         Args: { p_crew_id: string; p_desde: string; p_hasta: string }
         Returns: Json
@@ -12359,6 +12368,10 @@ export type Database = {
       }
       sync_reintentar: {
         Args: { p_equipos: Json; p_service: string }
+        Returns: Json
+      }
+      usuario_historial: {
+        Args: { p_profile: string; p_service: string }
         Returns: Json
       }
       usuarios_contrato: { Args: { p_service: string }; Returns: Json }

@@ -1,6 +1,7 @@
 'use client'
 
 import * as React from 'react'
+import Link from 'next/link'
 import { useQuery, useQueryClient } from '@tanstack/react-query'
 import { Users, UserCheck, Clock, Hourglass, Search, Plus, Eye, Pencil, KeyRound, Unlock, HardHat, Briefcase, Shield, Monitor, Settings2, MapPin } from 'lucide-react'
 import { toast } from 'sonner'
@@ -25,6 +26,9 @@ import { Elegir } from '@/components/ssoma/control-ssoma'
  * filtros por estado, rol y cuadrilla, y por cada cuenta: ver, editar,
  * restablecer contraseña y desbloquear. «Pendiente» = cuenta creada que aún
  * no ingresó. Las cuentas las crea el servidor (/api/usuarios).
+ * ROL01 «Usuarios y acceso»: el ámbito (cobertura) de cada cuenta se ve en
+ * la tabla y se edita desde aquí (cuadrillas del Supervisor, cuadrilla del
+ * Jefe) con motivo; la ficha trae el historial de cambios de la bitácora.
  */
 const ICONO_ROL: Record<string, any> = { supervisor: HardHat, jefe_cuadrilla: Users, residente: Briefcase, ing_seguridad: Shield, visor: Monitor, admin: Settings2 }
 const ESTADO: Record<string, { t: string; c: string }> = {
@@ -41,6 +45,7 @@ export function GestionUsuarios() {
   const [ver, setVer] = React.useState<any | null>(null)
   const [editar, setEditar] = React.useState<any | null>(null)
   const [crear, setCrear] = React.useState(false)
+  const [ambito, setAmbito] = React.useState<any | null>(null)
   const q = useQuery({
     queryKey: ['gestion-usuarios', service.id],
     queryFn: async () => { const { data, error } = await sb.rpc('usuarios_contrato' as any, { p_service: service.id } as any); if (error) throw error; return (data ?? []) as any[] },
@@ -96,7 +101,7 @@ export function GestionUsuarios() {
                       <span className="bg-info/12 text-info grid size-9 place-items-center rounded-full text-[12px] font-bold">{u.nombre.split(' ').map((x: string) => x[0]).slice(0, 2).join('')}</span>
                       <div className="min-w-44 flex-1"><p className="font-semibold">{u.nombre}</p><p className="text-muted-foreground">{usuarioDeCorreo(u.email)}</p></div>
                       <p className="flex min-w-40 items-center gap-1.5 font-semibold"><I className="text-muted-foreground size-3.5" />{nombreRol(u.rol)}</p>
-                      <p className="text-muted-foreground flex min-w-40 items-center gap-1.5"><MapPin className="size-3.5" />{u.cuadrilla || (u.rol === 'visor' ? 'Solo lectura' : '—')}</p>
+                      <p className="text-muted-foreground flex min-w-44 items-center gap-1.5" title="Ámbito de la cuenta"><MapPin className="size-3.5" />{u.ambito || u.cuadrilla || '—'}</p>
                       <span className={cn('rounded-full px-2 py-0.5 text-[11.5px] font-semibold', ESTADO[u.estado]?.c)}>● {ESTADO[u.estado]?.t}</span>
                       <span className="flex gap-1">
                         <Button size="icon-sm" variant="outline" aria-label="Ver" onClick={() => setVer(u)}><Eye className="size-3.5" /></Button>
@@ -104,6 +109,9 @@ export function GestionUsuarios() {
                         <Button size="icon-sm" variant="outline" aria-label="Restablecer contraseña" onClick={() => restablecer(u)} disabled={u.id === profile.id}><KeyRound className="size-3.5" /></Button>
                         {u.estado === 'bloqueado' && <Button size="sm" variant="outline" onClick={() => llamar({ id: u.id, desbloquear: true }, 'Usuario desbloqueado')}><Unlock className="size-3.5" />Desbloquear</Button>}
                       </span>
+                      {['supervisor', 'jefe_cuadrilla'].includes(u.rol)
+                        ? <button className="text-primary min-w-24 text-[12px] font-semibold" onClick={() => setAmbito(u)}>Editar ámbito ›</button>
+                        : <button className="text-primary min-w-24 text-[12px] font-semibold" onClick={() => setVer(u)}>Ver perfil ›</button>}
                     </li>
                   )
                 })}
@@ -113,6 +121,7 @@ export function GestionUsuarios() {
         </Card>
       </PageBody>
       {ver && <VerUsuario u={ver} cerrar={() => setVer(null)} />}
+      {ambito && <EditarAmbito u={ambito} cerrar={() => setAmbito(null)} alGuardar={() => { setAmbito(null); qc.invalidateQueries({ queryKey: ['gestion-usuarios'] }) }} />}
       {editar && <EditarUsuario u={editar} cerrar={() => setEditar(null)} guardar={(c) => llamar({ id: editar.id, ...c }, 'Usuario actualizado').then(() => setEditar(null))} />}
       {crear && <CrearUsuario cerrar={() => setCrear(false)} alCrear={() => { setCrear(false); qc.invalidateQueries({ queryKey: ['gestion-usuarios'] }) }} />}
     </>
@@ -120,7 +129,13 @@ export function GestionUsuarios() {
 }
 
 function VerUsuario({ u, cerrar }: { u: any; cerrar: () => void }) {
+  const { service } = useSession()
   const sb = React.useMemo(() => createClient(), [])
+  const hist = useQuery({
+    queryKey: ['usuario-historial', u.id],
+    queryFn: async () => ((await sb.rpc('usuario_historial' as any, { p_service: service.id, p_profile: u.id } as any)).data ?? []) as any[],
+  })
+  const conRoles = (t: string) => t.replace(/\b(admin|supervisor|residente|jefe_cuadrilla|ing_seguridad|visor)\b/g, (r) => nombreRol(r))
   const acc = useQuery({
     queryKey: ['accesos-de', u.id],
     queryFn: async () => ((await sb.from('accesos' as any).select('*').eq('profile_id', u.id).order('cuando', { ascending: false }).limit(8)).data ?? []) as any[],
@@ -130,13 +145,23 @@ function VerUsuario({ u, cerrar }: { u: any; cerrar: () => void }) {
       <DialogContent className="max-w-lg">
         <DialogHeader><DialogTitle>{u.nombre}</DialogTitle><DialogDescription>{usuarioDeCorreo(u.email)} · {nombreRol(u.rol)}</DialogDescription></DialogHeader>
         <div className="space-y-1 text-[13px]">
-          {[['Estado', ESTADO[u.estado]?.t], ['Cuadrilla/Área', u.cuadrilla || '—'], ['Cargo', u.cargo || '—'], ['DNI', u.dni || '—'], ['Teléfono', u.telefono || '—'],
+          {[['Estado', ESTADO[u.estado]?.t], ['Ámbito', u.ambito || '—'], ['Cuadrilla/Área', u.cuadrilla || '—'], ['Cargo', u.cargo || '—'], ['DNI', u.dni || '—'], ['Teléfono', u.telefono || '—'],
             ['Creado', u.creado ? fmtDateTime(u.creado) : '—'], ['Último ingreso', u.ultimo_ingreso ? fmtDateTime(u.ultimo_ingreso) : 'Nunca']].map(([k, v]) => (
             <p key={k} className="flex justify-between gap-3"><span className="text-muted-foreground">{k}</span><span>{v}</span></p>
           ))}
           <p className="pt-2 font-semibold">Últimos accesos</p>
           {(acc.data ?? []).length === 0 && <p className="text-muted-foreground">Sin registros.</p>}
           {(acc.data ?? []).map((a) => <p key={a.id} className="text-muted-foreground text-[12px]">{fmtDateTime(a.cuando)} · {a.evento} · {a.dispositivo ?? ''} · {a.ip ?? ''}</p>)}
+          <p className="pt-2 font-semibold">Historial de cambios</p>
+          {hist.isLoading && <p className="text-muted-foreground">Cargando…</p>}
+          {!hist.isLoading && (hist.data ?? []).length === 0 && <p className="text-muted-foreground">Sin cambios registrados.</p>}
+          <ul className="max-h-56 space-y-1 overflow-y-auto border-l-2 border-info/40 pl-3">
+            {(hist.data ?? []).map((h) => (
+              <li key={h.id} className="text-[12px]"><p><strong>{conRoles(h.accion)}</strong></p>
+                <p className="text-muted-foreground">{fmtDateTime(h.at)} · por {h.actor}{h.motivo ? ` · ${h.motivo}` : ''} · <Link href={`/auditoria?evento=${h.id}`} className="text-primary underline">{h.codigo}</Link></p></li>
+            ))}
+          </ul>
+          <p className="text-muted-foreground text-[11.5px]">Solo lectura · sale de la bitácora, que no se edita ni se borra.</p>
         </div>
       </DialogContent>
     </Dialog>
@@ -204,4 +229,60 @@ function CrearUsuario({ cerrar, alCrear }: { cerrar: () => void; alCrear: () => 
   )
 }
 
-
+/** «Editar ámbito ›» (ROL01): cuadrillas del Supervisor o cuadrilla del Jefe, con motivo y bitácora. */
+function EditarAmbito({ u, cerrar, alGuardar }: { u: any; cerrar: () => void; alGuardar: () => void }) {
+  const { service } = useSession()
+  const sb = React.useMemo(() => createClient(), [])
+  const crews = useQuery({
+    queryKey: ['crews-ambito', service.id],
+    queryFn: async () => ((await sb.from('crews').select('id, code, name, leader_id, supervisor_id').eq('service_id', service.id).is('deleted_at', null).order('code')).data ?? []) as any[],
+  })
+  const esSup = u.rol === 'supervisor'
+  const [sel, setSel] = React.useState<string[]>(esSup ? (u.crews_supervisa ?? []) : u.crew_lider ? [u.crew_lider] : [])
+  const [motivo, setMotivo] = React.useState('')
+  const [guardando, setGuardando] = React.useState(false)
+  const lista = crews.data ?? []
+  const codigo = (id: string) => lista.find((c) => c.id === id)?.code ?? id
+  const ocupada = (c: any) => (esSup ? c.supervisor_id && c.supervisor_id !== u.id : c.leader_id && c.leader_id !== u.id)
+  const guardar = async () => {
+    setGuardando(true)
+    const { error } = esSup
+      ? await sb.rpc('alcance_supervisor_guardar' as any, { p_service: service.id, p_supervisor: u.id, p_crews: sel, p_motivo: motivo } as any)
+      : await sb.rpc('jefe_cuadrilla_asignar' as any, { p_service: service.id, p_jefe: u.id, p_crew: sel[0] ?? null, p_motivo: motivo } as any)
+    setGuardando(false)
+    if (error) return toast.error(mensajeAmigable(error))
+    toast.success('Ámbito actualizado', { description: 'Queda en el historial de la cuenta y en la bitácora.' })
+    alGuardar()
+  }
+  return (
+    <Dialog open onOpenChange={(o) => !o && cerrar()}>
+      <DialogContent className="max-w-md">
+        <DialogHeader><DialogTitle>Editar ámbito · {u.nombre}</DialogTitle>
+          <DialogDescription>{nombreRol(u.rol)} · hoy: {u.ambito || '—'}. {esSup ? 'Una cuadrilla tiene un solo supervisor: al agregarla deja de estar con el anterior.' : 'Una cuadrilla tiene un solo jefe: al asignarla, su jefe anterior queda sin ella.'}</DialogDescription></DialogHeader>
+        <div className="space-y-3 text-[13px]">
+          {esSup ? (
+            <div className="flex flex-wrap gap-1.5 rounded-md border border-border p-2">
+              {sel.map((id) => (
+                <span key={id} className="bg-info/10 text-info flex items-center gap-1 rounded-full px-2 py-0.5 text-[12px] font-semibold">{codigo(id)}
+                  <button aria-label={`Quitar ${codigo(id)}`} onClick={() => setSel(sel.filter((x) => x !== id))}>×</button></span>
+              ))}
+              <select value="" onChange={(e) => e.target.value && setSel([...sel, e.target.value])} className="min-w-28 flex-1 bg-transparent text-[12px] outline-none">
+                <option value="">+ Agregar cuadrilla</option>
+                {lista.filter((c) => !sel.includes(c.id)).map((c) => <option key={c.id} value={c.id}>{c.code} · {c.name}{ocupada(c) ? ' (tiene otro supervisor)' : ''}</option>)}
+              </select>
+            </div>
+          ) : (
+            <select value={sel[0] ?? ''} onChange={(e) => setSel(e.target.value ? [e.target.value] : [])} className="bg-card h-9 w-full rounded-md border border-border px-2">
+              <option value="">Sin cuadrilla</option>
+              {lista.map((c) => <option key={c.id} value={c.id}>{c.code} · {c.name}{ocupada(c) ? ' (tiene otro jefe)' : ''}</option>)}
+            </select>
+          )}
+          <label className="block space-y-1"><span className="font-medium">Motivo del cambio <span className="text-destructive">*</span></span>
+            <Input maxLength={250} value={motivo} onChange={(e) => setMotivo(e.target.value)} placeholder="Por qué cambia la cobertura de la cuenta" /></label>
+          <div className="flex justify-end gap-2"><Button variant="outline" onClick={cerrar}>Cancelar</Button>
+            <Button onClick={guardar} loading={guardando} disabled={!motivo.trim()}>Guardar ámbito</Button></div>
+        </div>
+      </DialogContent>
+    </Dialog>
+  )
+}
