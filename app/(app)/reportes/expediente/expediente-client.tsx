@@ -2,6 +2,7 @@
 
 import * as React from 'react'
 import Link from 'next/link'
+import { MenuFila } from '@/components/shared/menu-fila'
 import { useQuery } from '@tanstack/react-query'
 import { Search, Layers, Image as ImageIcon, AlertCircle, Eye, Download, FolderOpen, Info, FileSpreadsheet } from 'lucide-react'
 import { createClient } from '@/lib/supabase/client'
@@ -275,6 +276,13 @@ export function ExpedienteClient() {
                           {faltan.length ? `Falta ${faltan.join(', ')}` : 'Completo'}</span>
                         <span className="text-muted-foreground ml-auto flex items-center gap-1"><ImageIcon className="size-3.5" />{i.fotos.length} fotos</span>
                         <Link href={`/pci/${i.pci_id}/item/${i.id}`} onClick={(e) => e.stopPropagation()}><Eye className="text-muted-foreground size-4" /></Link>
+                        <span onClick={(e) => e.preventDefault()}><MenuFila opciones={[
+                          { t: 'Ver ítem', href: `/pci/${i.pci_id}/item/${i.id}` },
+                          { t: 'Ver evidencia', href: `/pci/${i.pci_id}/item/${i.id}?tab=evidencia` },
+                          { t: 'Ver documentos', href: `/pci/${i.pci_id}/item/${i.id}?tab=documentos` },
+                          { t: 'Historial del ítem', href: `/pci/${i.pci_id}/item/${i.id}?tab=historial` },
+                          { t: sel.has(i.id) ? 'Quitar de la selección' : 'Agregar a la selección', onClick: () => setSel((s) => { const n = new Set(s); if (n.has(i.id)) n.delete(i.id); else n.add(i.id); return n }) },
+                        ]} /></span>
                       </label>
                     )
                   })}

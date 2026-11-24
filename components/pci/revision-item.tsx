@@ -22,7 +22,7 @@ import { ImageViewer } from '@/components/shared/image-viewer'
 import { cn, fmtDate, fmtDateTime, fmtProgresiva, fmtNumber } from '@/lib/utils'
 import { etiquetaDeLado } from '@/lib/lados'
 import { fotosOficiales, aJpegReal } from '@/lib/fotos-oficiales'
-import { descargarPdf, nombreCliente, type ReportMeta } from '@/lib/reports'
+import { descargarPdf, descargarExcel, nombreCliente, type ReportMeta } from '@/lib/reports'
 import { toast } from 'sonner'
 import { mensajeAmigable } from '@/lib/errores'
 import { DocumentosItem } from './documentos-item'
@@ -438,6 +438,7 @@ function PanelDecision({ item: i, estado: e, fotos, rol, alCambiar }: { item: an
         {/* Visor COVINCA */}
         {esVisor && (
           <div className="space-y-2">
+            <Link href="?tab=evidencia" className="text-primary flex items-center gap-1 text-[12.5px] font-semibold"><ExternalLink className="size-3.5" />Ver originales</Link>
             <div className="grid grid-cols-2 gap-2">
               <Button onClick={() => validar(false)} loading={ocupado} disabled={!visorPuedeObservar || !motivo.trim()}>Observar</Button>
               <Button variant="outline" onClick={() => validar(true)} loading={ocupado} disabled={!visorPuedeAceptar}>Aceptar</Button>
@@ -541,6 +542,8 @@ function TabObservaciones({ item, obs, fotos, rol, alCambiar }: { item: any; obs
   const [comentario, setComentario] = React.useState('')
   const [ocupado, setOcupado] = React.useState(false)
   const [comparar, setComparar] = React.useState(false)
+  const [verFiltro, setVerFiltro] = React.useState('todas')
+  const { service, profile } = useSession()
   const o = obs.find((x) => x.id === sel) ?? obs[0]
   if (!o) return <Card><CardContent className="text-muted-foreground p-6 text-[13px]">Este ítem no tiene observaciones de revisión.</CardContent></Card>
   const esVisor = rol === 'visor'
@@ -549,7 +552,7 @@ function TabObservaciones({ item, obs, fotos, rol, alCambiar }: { item: any; obs
 
   const accion = async (a: 'responder' | 'mantener' | 'reabrir' | 'comentar') => {
     setOcupado(true)
-    const { error } = await sb.rpc('observacion_accion', { p_obs: o.id, p_accion: a, p_texto: comentario.trim() || null, p_evidencias: [] } as any)
+    const { error } = await sb.rpc('observacion_accion', { p_obs: o.id, p_accion: a, p_texto: comentario.trim() || null, p_evidencias: [], p_version: item.publicacion_version ?? null } as any)
     setOcupado(false)
     if (error) { toast.error(mensajeAmigable(error)); return }
     toast.success(a === 'mantener' ? 'Observación mantenida' : a === 'reabrir' ? 'Observación reabierta' : 'Registrado en la observación')
@@ -565,6 +568,25 @@ function TabObservaciones({ item, obs, fotos, rol, alCambiar }: { item: any; obs
     alCambiar()
   }
   const publicadas = (v: number) => fotos.filter((f) => f.publicada_version != null && f.publicada_version <= v)
+  const nombreFoto = (f: any) => `ITEM_${item.item_number}(${FASES.find((x) => x.v === f.phase)?.n ?? 'G'}).jpg`
+  const descargarFoto = async (f: any) => {
+    try {
+      const blob = await (await fetch(f.url)).blob()
+      const a = document.createElement('a'); a.href = URL.createObjectURL(blob); a.download = nombreFoto(f); a.click()
+      setTimeout(() => URL.revokeObjectURL(a.href), 2000)
+    } catch (e) { toast.error(mensajeAmigable(e, 'No se pudo descargar el archivo')) }
+  }
+  const versionesObs = [...new Set((o.eventos as any[]).map((ev) => ev.version).filter((v) => v != null))].sort((a: any, b: any) => a - b) as number[]
+  const eventosHist = (o.eventos as any[]).filter((ev) => ev.estado_nuevo && ev.estado_nuevo !== ev.estado_anterior)
+    .filter((ev) => verFiltro === 'todas' || String(ev.version ?? '') === verFiltro)
+  const descargarHistorial = () => descargarExcel(`Historial_${o.codigo}`, {
+    titulo: `Historial de la observación ${o.codigo}`, servicio: service.name, periodo: verFiltro === 'todas' ? 'Todas las versiones' : `v${verFiltro}`, generadoPor: profile.full_name,
+  }, [{ name: 'Historial', columns: [
+    { header: 'Estado', key: 'estado', width: 14 }, { header: 'Fecha', key: 'fecha', width: 18 }, { header: 'Usuario', key: 'autor', width: 22 },
+    { header: 'Organización', key: 'organizacion', width: 14 }, { header: 'Versión', key: 'ver', width: 9 }, { header: 'Texto', key: 'texto', width: 60 },
+  ], rows: (o.eventos as any[]).filter((ev) => verFiltro === 'todas' || String(ev.version ?? '') === verFiltro).map((ev) => ({
+    estado: ESTADO_OBS[ev.estado_nuevo]?.t ?? '—', fecha: fmtDateTime(ev.cuando), autor: ev.autor ?? 'Sistema', organizacion: ev.organizacion, ver: ev.version ? `v${ev.version}` : '', texto: ev.texto ?? '',
+  })) }])
 
   return (
     <div className="grid gap-4 lg:grid-cols-[1fr_300px]">
@@ -600,6 +622,7 @@ function TabObservaciones({ item, obs, fotos, rol, alCambiar }: { item: any; obs
                       <div key={id} className="mt-1.5 flex flex-wrap items-center gap-2 rounded-md border border-border px-2.5 py-1.5 text-[12px]">
                         <ImageIcon className="size-3.5" />ITEM_{item.item_number}({FASES.find((x) => x.v === f.phase)?.n ?? 'G'}) · {faseLegible(f.phase)} · {fmtDateTime(f.taken_at)}
                         {f.url && <a href={f.url} target="_blank" rel="noopener" className="text-primary ml-auto flex items-center gap-1"><ExternalLink className="size-3" />Ver original</a>}
+                        {f.url && <button onClick={() => descargarFoto(f)} className="text-primary flex items-center gap-1"><Download className="size-3" />Descargar</button>}
                       </div>
                     )
                   })}
@@ -609,7 +632,16 @@ function TabObservaciones({ item, obs, fotos, rol, alCambiar }: { item: any; obs
           </CardContent>
         </Card>
         <Card>
-          <CardHeader><CardTitle className="text-[14px]">Historial de la observación</CardTitle></CardHeader>
+          <CardHeader className="flex-row flex-wrap items-center justify-between gap-2 space-y-0">
+            <CardTitle className="text-[14px]">Historial de la observación</CardTitle>
+            <div className="flex items-center gap-2 text-[12px]">
+              <label className="flex items-center gap-1.5">Versión
+                <select value={verFiltro} onChange={(e) => setVerFiltro(e.target.value)} className="bg-card h-8 rounded-md border border-border px-2">
+                  <option value="todas">Todas</option>{versionesObs.map((v) => <option key={v} value={String(v)}>v{v}</option>)}
+                </select></label>
+              <Button size="sm" variant="outline" onClick={descargarHistorial}><Download className="size-3.5" />Descargar historial</Button>
+            </div>
+          </CardHeader>
           <CardContent>
             <table className="w-full text-[12.5px]">
               <thead className="text-muted-foreground text-[11.5px]"><tr className="border-b border-border">
@@ -617,7 +649,8 @@ function TabObservaciones({ item, obs, fotos, rol, alCambiar }: { item: any; obs
                 <th className="text-left font-medium">Usuario</th><th className="text-left font-medium">Organización</th>
               </tr></thead>
               <tbody>
-                {(o.eventos as any[]).filter((ev) => ev.estado_nuevo && ev.estado_nuevo !== ev.estado_anterior).map((ev, k) => (
+                {eventosHist.length === 0 && <tr><td colSpan={4} className="text-muted-foreground py-3 text-center">Sin cambios de estado en esta versión.</td></tr>}
+                {eventosHist.map((ev, k) => (
                   <tr key={k} className="border-b border-border/50">
                     <td className="py-1.5"><span className={cn('rounded px-1.5 py-0.5 text-[11px] font-semibold', ESTADO_OBS[ev.estado_nuevo]?.c)}>{ESTADO_OBS[ev.estado_nuevo]?.t}</span></td>
                     <td>{fmtDateTime(ev.cuando)}</td><td>{ev.autor ?? 'Sistema'}</td><td>{ev.organizacion}</td>
@@ -719,6 +752,11 @@ export function RevisionRapida({ itemId }: { itemId: string }) {
       .order('created_at', { ascending: false }).limit(1)).data?.[0] as any)?.work_order_id as string | undefined,
   })
   const i = item.data
+  const supervisor = useQuery({
+    queryKey: ['rev-supervisor', i?.assigned_crew_id],
+    enabled: !!i?.assigned_crew_id,
+    queryFn: async () => ((await sb.from('crews').select('profiles:supervisor_id(full_name)').eq('id', i.assigned_crew_id).maybeSingle()).data as any)?.profiles?.full_name as string | undefined,
+  })
   if (item.isLoading) return <Card><CardContent className="p-4"><SkeletonList rows={4} /></CardContent></Card>
   if (!i) return <Card><CardContent className="text-muted-foreground p-4 text-[13px]">No tienes acceso a este ítem o ya no existe.</CardContent></Card>
   const pciCorto = String(i.pci_code ?? '').replace(/^PCI-\d{4}-0*/, 'PCI ')
@@ -728,11 +766,14 @@ export function RevisionRapida({ itemId }: { itemId: string }) {
     <div className="space-y-3">
       <Card>
         <CardContent className="space-y-3 p-4 text-[13px]">
-          <p className="text-[14px] font-bold">{pciCorto} · Ítem {i.item_number}</p>
+          <p className="flex flex-wrap items-center justify-between gap-2 text-[14px] font-bold">{pciCorto} · Ítem {i.item_number}
+            {['levantado', 'subsanado'].includes(i.status) && !i.validado_servicon_at
+              ? <span className="bg-warning/15 text-warning rounded-full px-2 py-0.5 text-[11.5px] font-semibold">Por validar · SERVICON</span>
+              : i.validado_servicon_at ? <span className="bg-success/12 text-success rounded-full px-2 py-0.5 text-[11.5px] font-semibold">Validado · SERVICON</span> : null}</p>
           <div className="grid grid-cols-2 gap-x-4 gap-y-2">
             {[
               [Calendar, 'Ejecutado', i.closed_at ? fmtDate(i.closed_at) : '—'], [User, 'Cuadrilla', i.crew_name ?? 'Sin asignar'],
-              [FileText, 'Actividad', i.activity_name ?? '—'],
+              [FileText, 'Actividad', i.activity_name ?? '—'], [User, 'Supervisor asignado', supervisor.data ?? '—'],
               [MapPin, 'Progresiva', `${i.prog_start_txt ?? fmtProgresiva(i.prog_start_m)}${i.prog_end_m && i.prog_end_m !== i.prog_start_m ? ` – ${i.prog_end_txt ?? fmtProgresiva(i.prog_end_m)}` : ''}`],
               [Ruler, 'Metrado', i.metrado_registrado != null ? `${fmtNumber(Number(i.metrado_registrado), 2)} ${i.unit_symbol ?? ''}` : '—'],
               [Clock, 'Plazo', `${i.term_days} ${i.term_days === 1 ? 'día' : 'días'} · vence ${fmtDate(i.due_date)}`],

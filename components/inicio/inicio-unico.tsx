@@ -290,7 +290,8 @@ export function InicioUnico({
         {f.tab === 'pci' ? (
           <PestanaPci
             rol={rol} f={f} fijar={fijar} datos={pci.data} cargando={pci.isLoading} error={pci.error}
-            cuadrillas={cuadrillas.data ?? []} abrir={setCifra}
+            cuadrillas={cuadrillas.data ?? []} abrir={setCifra} ultimaSync={ultimaSync}
+            contrato={(service as any).contract_code ? `${(service as any).contract_code} · ${service.name}` : service.name}
           />
         ) : (
           <PestanaMr
@@ -305,7 +306,7 @@ export function InicioUnico({
             <Info className="text-info size-3.5 shrink-0" />
             {f.tab === 'pci'
               ? 'Atendido no equivale a expediente completo ni a conformidad del cliente.'
-              : 'No se suman metros, m², m³ ni unidades entre actividades. El avance físico no equivale a conformidad documental.'}
+              : 'La vista MR usa programado, ejecutado y saldo por actividad/unidad. No se suman metros, m², m³ ni unidades entre actividades; el avance físico no equivale a conformidad documental.'}
           </span>
           <span className="flex items-center gap-1.5">
             <RefreshCw className="size-3" />Última sincronización: <strong>{ultimaSync ? new Date(ultimaSync).toLocaleString('es-PE', { dateStyle: 'short', timeStyle: 'short' }) : 'sin registro'}</strong>
@@ -436,10 +437,12 @@ function Leyenda({ a, b }: { a: string; b: string }) {
 }
 
 // ═══════════════════════════════════════════════════════════════════════════
-function PestanaPci({ rol, f, fijar, datos: d, cargando, error, cuadrillas, abrir }: {
+function PestanaPci({ rol, f, fijar, datos: d, cargando, error, cuadrillas, abrir, contrato, ultimaSync }: {
   rol: Rol; f: any; fijar: (c: any) => void; datos: any; cargando: boolean; error: unknown
-  cuadrillas: any[]; abrir: (c: { cifra: string; plazo?: number; titulo: string }) => void
+  cuadrillas: any[]; abrir: (c: { cifra: string; plazo?: number; titulo: string }) => void; contrato: string; ultimaSync?: string | null
 }) {
+  // «Sincronización al día»: el último envío del equipo de quien consulta tiene menos de 30 min
+  const alDia = !!ultimaSync && Date.now() - new Date(ultimaSync).getTime() < 30 * 60_000
   const plazos = (d?.por_plazo ?? []) as any[]
   const ev = d?.evidencia ?? {}
   return (
@@ -469,6 +472,9 @@ function PestanaPci({ rol, f, fijar, datos: d, cargando, error, cuadrillas, abri
               opciones={[{ v: 'atendido', t: 'Atendidos' }, { v: 'sin_atencion', t: 'Sin atención' }, { v: 'observado', t: 'Observados' },
                 { v: 'vencido', t: 'Vencidos' }, { v: 'evidencia_incompleta', t: 'Evidencia incompleta' }]} />
           </Filtro>
+          {rol === 'visor' && (
+            <Filtro etiqueta="Contrato autorizado"><p className="flex h-9 items-center rounded-md border border-border px-3 text-[13px]">{contrato}</p></Filtro>
+          )}
         </CardContent>
       </Card>
       <Errores error={error} />
@@ -500,6 +506,11 @@ function PestanaPci({ rol, f, fijar, datos: d, cargando, error, cuadrillas, abri
             )}
             {(rol === 'residente' || rol === 'admin') && (
               <span className="flex items-center gap-1.5">Validados por publicar: <strong>{fmtNumber(ev.por_publicar ?? 0)}</strong></span>
+            )}
+            {rol === 'supervisor' && (
+              <span className={cn('ml-auto flex items-center gap-1.5 rounded-full px-2.5 py-0.5 text-[12px] font-semibold', alDia ? 'bg-success/12 text-success' : 'bg-warning/15 text-warning')}>
+                <RefreshCw className="size-3.5" />{alDia ? 'Sincronización al día' : 'Sincronización pendiente'}
+              </span>
             )}
           </div>
 
@@ -581,18 +592,11 @@ function PestanaPci({ rol, f, fijar, datos: d, cargando, error, cuadrillas, abri
                     <span>{t}</span><Badge variant={tono as any}>{fmtNumber(Number(v ?? 0))}</Badge>
                   </div>
                 ))}
+                <Link href={rol === 'visor' ? '/revision' : rol === 'supervisor' ? '/revision-reportes' : '/revision-reportes?tab=todos'}
+                  className="text-primary flex items-center gap-1 text-[12.5px] font-semibold">Ver detalle <ArrowRight className="size-3.5" /></Link>
                 <div className="border-t border-border pt-2">
                   {rol === 'visor' ? (
-                    <>
-                      <p className="mb-1.5 text-[12px] font-semibold">Últimos registros publicados</p>
-                      {(d.ultimos_publicados as any[]).length === 0 && <p className="text-muted-foreground text-[12.5px]">Sin publicaciones.</p>}
-                      {(d.ultimos_publicados as any[]).map((x) => (
-                        <Link key={x.item_id} href={`/pci/${x.pci_id}/item/${x.item_id}`} className="hover:bg-secondary/60 flex items-center justify-between rounded px-1.5 py-1 text-[12.5px]">
-                          <span>{x.pci} · Ítem {x.item}</span>
-                          <Badge variant={x.estado === 'Conforme' ? 'success' : x.estado === 'Por revisar' ? 'info' : 'warning'}>{x.estado}</Badge>
-                        </Link>
-                      ))}
-                    </>
+                    <p className="text-muted-foreground text-[12px]">Los últimos registros publicados se listan abajo.</p>
                   ) : (
                     <>
                       <div className="mb-1.5 flex items-center justify-between gap-2">
@@ -614,6 +618,30 @@ function PestanaPci({ rol, f, fijar, datos: d, cargando, error, cuadrillas, abri
               </CardContent>
             </Card>
           </div>
+          {rol === 'visor' && (
+            <Card>
+              <CardHeader><CardTitle>Últimos registros publicados</CardTitle><CardDescription>Lo publicado por SERVICON; abre el ítem para revisarlo.</CardDescription></CardHeader>
+              <CardContent className="overflow-x-auto">
+                <table className="w-full text-[13px]">
+                  <thead className="text-muted-foreground text-[11.5px]"><tr className="border-b border-border">
+                    <th className="py-2 text-left font-medium">PCI</th><th className="text-left font-medium">Ítem</th><th className="text-left font-medium">Descripción</th>
+                    <th className="text-left font-medium">Publicado</th><th className="text-left font-medium">Estado</th><th />
+                  </tr></thead>
+                  <tbody>
+                    {(d.ultimos_publicados as any[]).length === 0 && <tr><td colSpan={6} className="text-muted-foreground py-4 text-center">Sin publicaciones.</td></tr>}
+                    {(d.ultimos_publicados as any[]).map((x) => (
+                      <tr key={x.item_id} className="even:bg-secondary/40 border-b border-border/60">
+                        <td className="py-1.5">{x.pci}</td><td>{x.item}</td><td className="max-w-md truncate" title={x.descripcion}>{x.descripcion ?? '—'}</td>
+                        <td className="whitespace-nowrap">{x.publicado_at ? fmtDate(x.publicado_at) : '—'}</td>
+                        <td><Badge variant={x.estado === 'Conforme' ? 'success' : x.estado === 'Por revisar' ? 'info' : 'warning'}>{x.estado}</Badge></td>
+                        <td className="text-right"><Link href={`/pci/${x.pci_id}/item/${x.item_id}`} className="text-primary text-[12.5px] font-semibold whitespace-nowrap">Ver ítem ›</Link></td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              </CardContent>
+            </Card>
+          )}
         </>
       )}
     </div>
@@ -678,8 +706,9 @@ function PestanaMr({ rol, f, fijar, datos: d, cargando, error, cuadrillas, super
             <StatCard index={0} label="Programado" value={`${fmtNumber(programado, 2)}${u}`} icon={CalendarDays} tone="primary" />
             <StatCard index={1} label="Ejecutado" value={`${fmtNumber(ejecutado, 2)}${u}`} icon={CheckCircle2} tone="success" />
             <StatCard index={2} label="Saldo" value={`${fmtNumber(Math.max(programado - ejecutado, 0), 2)}${u}`} icon={Clock} tone="warning" />
-            <StatCard index={3} label="Avance" value={avance == null ? 'Sin registros' : `${fmtNumber(avance, 1)} %`} icon={Target} tone="info" />
+            <StatCard index={3} label={rol === 'visor' ? 'Cumplimiento' : 'Avance'} value={avance == null ? 'Sin registros' : `${fmtNumber(avance, 1)} %`} icon={Target} tone="info" />
           </div>
+          <p className="bg-info/[0.07] text-info flex items-center gap-2 rounded-lg px-3 py-1.5 text-[12px] font-semibold"><Info className="size-3.5" />Filtro homogéneo: una actividad y unidad ({d.unidad ?? '—'}).</p>
           <div className="bg-card flex flex-wrap items-center gap-x-6 gap-y-2 rounded-xl border border-border px-4 py-2.5 text-[13px]">
             <span className="flex items-center gap-1.5"><Gauge className="size-4" />Rendimiento real: <strong>{rendimiento == null ? 'Sin jornadas' : `${fmtNumber(rendimiento, 1)}${u}/jornada`}</strong></span>
             <span className="flex items-center gap-1.5"><Target className="size-4" />Referencia: <strong>{d.referencia == null ? 'Sin rendimiento configurado' : `${fmtNumber(Number(d.referencia), 1)}${u}/jornada`}</strong></span>
@@ -692,12 +721,17 @@ function PestanaMr({ rol, f, fijar, datos: d, cargando, error, cuadrillas, super
                 <CardDescription>Unidad: {d.unidad ?? '—'}.</CardDescription>
               </CardHeader>
               <CardContent>
+                {(d.por_dia as any[]).length === 0 && <p className="text-muted-foreground py-10 text-center text-[12.5px]">El detalle por día se muestra para rangos de hasta 62 días. Acorta las fechas para verlo.</p>}
                 <div className="flex h-44 items-end gap-3 overflow-x-auto pb-1">
                   {(d.por_dia as any[]).map((x) => (
                     <div key={x.fecha} className="flex min-w-14 flex-1 flex-col items-center gap-1">
                       <div className="flex h-36 items-end gap-1">
-                        <div className="bg-primary w-4 rounded-t" style={{ height: `${(100 * Number(x.programado)) / maxDia}%` }} title={`Programado ${x.programado}`} />
-                        <div className="w-4 rounded-t" style={{ height: `${(100 * Number(x.ejecutado)) / maxDia}%`, background: VERDE }} title={`Ejecutado ${x.ejecutado}`} />
+                        {([['programado', 'bg-primary', undefined], ['ejecutado', '', VERDE]] as const).map(([k, cls, color]) => (
+                          <div key={k} className="flex h-full w-7 flex-col items-center justify-end">
+                            {Number(x[k]) > 0 && <span className="mb-0.5 text-[8.5px] leading-none tabular-nums">{fmtNumber(Number(x[k]), 0)}</span>}
+                            <div className={cn('w-4 rounded-t', cls)} style={{ height: `${(88 * Number(x[k])) / maxDia}%`, background: color }} title={`${k === 'programado' ? 'Programado' : 'Ejecutado'} ${x[k]}`} />
+                          </div>
+                        ))}
                       </div>
                       <span className="text-muted-foreground text-[10.5px]">{fmtDate(x.fecha).slice(0, 5)}</span>
                     </div>
@@ -707,6 +741,12 @@ function PestanaMr({ rol, f, fijar, datos: d, cargando, error, cuadrillas, super
                   <span className="flex items-center gap-1.5"><span className="bg-primary size-2.5 rounded-sm" />Programado</span>
                   <span className="flex items-center gap-1.5"><span className="size-2.5 rounded-sm" style={{ background: VERDE }} />Ejecutado</span>
                 </p>
+                <div className="mt-3 grid grid-cols-3 gap-2 rounded-lg border border-border p-2 text-center text-[12px]">
+                  <p className="text-muted-foreground col-span-3 text-left text-[11.5px] font-semibold">Totales del período</p>
+                  <p><span className="text-muted-foreground block">Programado</span><strong>{fmtNumber(programado, 2)}{u}</strong></p>
+                  <p><span className="text-muted-foreground block">Ejecutado</span><strong style={{ color: VERDE }}>{fmtNumber(ejecutado, 2)}{u}</strong></p>
+                  <p><span className="text-muted-foreground block">Saldo</span><strong style={{ color: NARANJA }}>{fmtNumber(Math.max(programado - ejecutado, 0), 2)}{u}</strong></p>
+                </div>
               </CardContent>
             </Card>
             <Card>

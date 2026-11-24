@@ -11740,6 +11740,7 @@ export type Database = {
           p_evidencias?: string[]
           p_obs: string
           p_texto?: string
+          p_version?: number
         }
         Returns: Json
       }

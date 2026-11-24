@@ -2,6 +2,7 @@
 
 import * as React from 'react'
 import Link from 'next/link'
+import { MenuFila } from '@/components/shared/menu-fila'
 import { useRouter, useSearchParams, usePathname } from 'next/navigation'
 import { useQuery } from '@tanstack/react-query'
 import { MessageSquareWarning, MessagesSquare, CheckCircle2, Search, Eye, Info, Calendar, User, Layers } from 'lucide-react'
@@ -144,11 +145,19 @@ export function RevisionClient() {
                       <td className="whitespace-nowrap">{new Date(o.creada_at).toLocaleString('es-PE', { day: '2-digit', month: '2-digit', hour: '2-digit', minute: '2-digit' })}</td>
                       <td><span className={cn('rounded-md px-2 py-0.5 text-[11.5px] font-semibold capitalize', ESTADO[o.estado])}>{o.estado}</span></td>
                       <td className="pr-3 text-right">
+                        <span className="inline-flex items-center gap-1">
                         {o.item_id ? (
                           <Link href={`/pci/${o.pci_id}/item/${o.item_id}?tab=observaciones`}><Button size="sm" variant="outline"><Eye className="size-3.5" />Ver detalle</Button></Link>
                         ) : o.work_order_id ? (
                           <Link href={`/campo/${o.work_order_id}`}><Button size="sm" variant="outline"><Eye className="size-3.5" />Ver detalle</Button></Link>
                         ) : null}
+                        <MenuFila opciones={[
+                          { t: 'Ver detalle', href: o.item_id ? `/pci/${o.pci_id}/item/${o.item_id}?tab=observaciones` : o.work_order_id ? `/campo/${o.work_order_id}` : undefined, oculta: !o.item_id && !o.work_order_id },
+                          { t: 'Ver evidencia del ítem', href: `/pci/${o.pci_id}/item/${o.item_id}?tab=evidencia`, oculta: !o.item_id },
+                          { t: 'Historial del ítem', href: `/pci/${o.pci_id}/item/${o.item_id}?tab=historial`, oculta: !o.item_id },
+                          { t: 'Ver reporte diario', href: `/campo/${o.work_order_id}`, oculta: !o.work_order_id },
+                        ]} />
+                        </span>
                       </td>
                     </tr>
                   ))}
