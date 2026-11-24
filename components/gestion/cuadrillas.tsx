@@ -13,6 +13,7 @@ import { Card, CardContent } from '@/components/ui/card'
 import { Button } from '@/components/ui/button'
 import { Input, Textarea } from '@/components/ui/input'
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription } from '@/components/ui/dialog'
+import { usePagina, Paginador } from '@/components/ssoma/comun-ssoma'
 import { SkeletonList } from '@/components/ui/skeleton'
 import { cn, fmtDate, fmtDateTime, toISODate } from '@/lib/utils'
 import { mensajeAmigable } from '@/lib/errores'
@@ -176,7 +177,8 @@ function DatosCuadrilla({ c, personas, sectores, alGuardar }: { c: any; personas
         <Textarea rows={2} maxLength={300} value={v.motivo} onChange={(e) => setV({ ...v, motivo: e.target.value })} placeholder="Asignación inicial de cuadrilla." /></label>
       <HistorialCuadrilla crew={c} corto />
       <div className="flex justify-end gap-2"><Button variant="outline" onClick={() => setV({ ...v, motivo: '' })}>Cancelar</Button>
-        <Button onClick={guardar} loading={ocupado} disabled={!v.leader || !v.desde}><Save className="size-4" />Guardar cambios</Button></div>
+        <Button onClick={guardar} loading={ocupado} disabled={!v.leader || !v.sup || !v.sectores.length || !v.desde}><Save className="size-4" />Guardar cambios</Button></div>
+      {(!v.sup || !v.sectores.length) && <p className="text-warning text-[11.5px]">Elige el supervisor y al menos un sector: son obligatorios.</p>}
     </div>
   )
 }
@@ -186,6 +188,8 @@ function Integrantes({ crew, personas, alCambiar }: { crew: any; personas: any[]
   const [q, setQ] = React.useState('')
   const [estado, setEstado] = React.useState('')
   const [agregar, setAgregar] = React.useState(false)
+  const [vig, setVig] = React.useState<{ x: any; finalizar: boolean; hasta: string; motivo: string } | null>(null)
+  const [ficha, setFicha] = React.useState<any | null>(null)
   const m = useQuery({
     queryKey: ['crew-miembros', crew.id],
     queryFn: async () => ((await sb.from('crew_members').select('*').eq('crew_id', crew.id).order('desde', { ascending: false })).data ?? []) as any[],
@@ -193,14 +197,13 @@ function Integrantes({ crew, personas, alCambiar }: { crew: any; personas: any[]
   const hoy = toISODate(new Date())
   const activo = (x: any) => x.is_active && (!x.hasta || x.hasta >= hoy)
   const filas = (m.data ?? []).filter((x) => (!estado || (estado === 'activo') === activo(x)) && (!q || String(x.full_name).toLowerCase().includes(q.toLowerCase())))
-  const vigencia = async (x: any, finalizar: boolean) => {
-    const hasta = finalizar ? hoy : prompt('Nueva fecha Hasta (AAAA-MM-DD, vacío = sin fecha):', x.hasta ?? '')
-    if (hasta === null) return
-    const motivo = prompt(finalizar ? 'Motivo de la finalización (obligatorio):' : 'Motivo del cambio de vigencia (obligatorio):')?.trim()
-    if (!motivo) return
-    const { error } = await sb.rpc('integrante_vigencia' as any, { p_id: x.id, p_desde: null, p_hasta: hasta || null, p_motivo: motivo, p_finalizar: finalizar } as any)
+  const pag = usePagina(filas, 15)
+  const vigencia = (x: any, finalizar: boolean) => setVig({ x, finalizar, hasta: finalizar ? hoy : x.hasta ?? '', motivo: '' })
+  const guardarVigencia = async () => {
+    if (!vig) return
+    const { error } = await sb.rpc('integrante_vigencia' as any, { p_id: vig.x.id, p_desde: null, p_hasta: vig.hasta || null, p_motivo: vig.motivo.trim(), p_finalizar: vig.finalizar } as any)
     if (error) return toast.error(mensajeAmigable(error))
-    toast.success(finalizar ? 'Integrante finalizado (se conserva su historial)' : 'Vigencia actualizada'); alCambiar()
+    toast.success(vig.finalizar ? 'Integrante finalizado (se conserva su historial)' : 'Vigencia actualizada'); setVig(null); alCambiar()
   }
   return (
     <div className="space-y-2 text-[12.5px]">
@@ -212,12 +215,13 @@ function Integrantes({ crew, personas, alCambiar }: { crew: any; personas: any[]
       <table className="w-full">
         <thead className="text-muted-foreground text-[11px]"><tr><th className="py-1 text-left font-medium">Integrante</th><th className="text-left font-medium">Estado</th><th className="text-left font-medium">Desde</th><th className="text-left font-medium">Hasta</th><th /></tr></thead>
         <tbody>
-          {filas.map((x) => (
+          {pag.visibles.map((x) => (
             <tr key={x.id} className="border-t border-border">
               <td className="py-1.5">{x.full_name}</td>
               <td><span className={cn('rounded-full px-1.5 text-[11px] font-semibold', activo(x) ? 'bg-success/12 text-success' : 'bg-secondary text-muted-foreground')}>● {activo(x) ? 'Activo' : 'Finalizado'}</span></td>
               <td>{x.desde ? fmtDate(x.desde) : '—'}</td><td>{x.hasta ? fmtDate(x.hasta) : '—'}</td>
               <td className="text-right"><span className="flex justify-end gap-1">
+                <Button size="sm" variant="outline" onClick={() => setFicha(x)}>Ver ficha</Button>
                 <Button size="icon-sm" variant="outline" aria-label="Editar vigencia" onClick={() => vigencia(x, false)}><CalendarDays className="size-3.5" /></Button>
                 {activo(x) && <Button size="icon-sm" variant="outline" aria-label="Finalizar" onClick={() => vigencia(x, true)}><CheckCircle2 className="size-3.5" /></Button>}
               </span></td>
@@ -226,7 +230,33 @@ function Integrantes({ crew, personas, alCambiar }: { crew: any; personas: any[]
           {!filas.length && <tr><td colSpan={5} className="text-muted-foreground py-3 text-center">Sin integrantes.</td></tr>}
         </tbody>
       </table>
+      <Paginador p={pag} />
       <p className="bg-info/[0.08] text-info rounded-md px-2.5 py-2 text-[12px]">La pertenencia histórica de los integrantes nunca se elimina, solo se actualiza su vigencia y estado.</p>
+      {vig && (
+        <Dialog open onOpenChange={(o) => !o && setVig(null)}>
+          <DialogContent className="max-w-sm">
+            <DialogHeader><DialogTitle>{vig.finalizar ? 'Finalizar integrante' : 'Editar vigencia'}</DialogTitle>
+              <DialogDescription>{vig.x.full_name}. {vig.finalizar ? 'Deja de pertenecer a la cuadrilla desde hoy; su historial se conserva.' : 'Cambia la fecha de fin de su pertenencia.'}</DialogDescription></DialogHeader>
+            <div className="space-y-2 text-[13px]">
+              {!vig.finalizar && <label className="block"><span className="text-muted-foreground text-[12px]">Vigente hasta (vacío = sin fecha)</span><Input type="date" value={vig.hasta} onChange={(e) => setVig({ ...vig, hasta: e.target.value })} className="h-9" /></label>}
+              <label className="block"><span className="text-muted-foreground text-[12px]">Motivo <span className="text-destructive">*</span></span><Textarea rows={2} maxLength={300} value={vig.motivo} onChange={(e) => setVig({ ...vig, motivo: e.target.value })} /></label>
+              <div className="flex justify-end gap-2"><Button variant="outline" onClick={() => setVig(null)}>Cancelar</Button><Button onClick={guardarVigencia} disabled={!vig.motivo.trim()}>{vig.finalizar ? 'Finalizar' : 'Guardar vigencia'}</Button></div>
+            </div>
+          </DialogContent>
+        </Dialog>
+      )}
+      {ficha && (
+        <Dialog open onOpenChange={(o) => !o && setFicha(null)}>
+          <DialogContent className="max-w-sm">
+            <DialogHeader><DialogTitle>{ficha.full_name}</DialogTitle><DialogDescription>Integrante de {crew.name}</DialogDescription></DialogHeader>
+            <div className="space-y-1 text-[13px]">
+              {[['Estado', activo(ficha) ? 'Activo' : 'Finalizado'], ['DNI', ficha.dni], ['Cargo', ficha.cargo ?? ficha.position ?? ficha.role], ['Teléfono', ficha.phone ?? ficha.telefono],
+                ['Desde', ficha.desde ? fmtDate(ficha.desde) : null], ['Hasta', ficha.hasta ? fmtDate(ficha.hasta) : 'Sin fecha'], ['Cuenta en SIGOV', ficha.profile_id ? 'Sí' : 'No (solo integrante)'],
+                ['Motivo del último cambio', ficha.motivo]].map(([k, v]) => <p key={String(k)} className="flex justify-between gap-3"><span className="text-muted-foreground">{k}</span><span className="text-right">{v || '—'}</span></p>)}
+            </div>
+          </DialogContent>
+        </Dialog>
+      )}
       {agregar && <AgregarIntegrante crew={crew} personas={personas} cerrar={() => setAgregar(false)} alGuardar={() => { setAgregar(false); alCambiar() }} />}
     </div>
   )

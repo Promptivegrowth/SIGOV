@@ -29,10 +29,15 @@ export async function POST(req: NextRequest) {
   const evento = String(body?.evento ?? '')
   const ip = (req.headers.get('x-forwarded-for') ?? req.headers.get('x-real-ip') ?? '').split(',')[0].trim() || null
   const ua = req.headers.get('user-agent') ?? ''
+  // Ciudad aproximada que entrega el hosting (sin geolocalización externa)
+  const ciudad = (() => {
+    const c = req.headers.get('x-vercel-ip-city'); const r = req.headers.get('x-vercel-ip-country-region'); const p = req.headers.get('x-vercel-ip-country')
+    try { return [c ? decodeURIComponent(c) : null, r, p].filter(Boolean).join(', ') || null } catch { return c ?? null }
+  })()
   const plataforma = body?.plataforma === 'android' ? 'android' : 'web'
   const dispositivo = String(body?.dispositivo ?? '').slice(0, 80) || dispositivoDe(ua, plataforma)
   const admin = createAdminClient()
-  const anotar = (fila: Record<string, any>) => admin.from('accesos' as any).insert({ ip, user_agent: ua.slice(0, 300), dispositivo, plataforma, ...fila } as any)
+  const anotar = (fila: Record<string, any>) => admin.from('accesos' as any).insert({ ip, ciudad, user_agent: ua.slice(0, 300), dispositivo, plataforma, ...fila } as any)
 
   if (evento === 'ingreso' || evento === 'salida') {
     const token = req.headers.get('authorization')?.replace(/^Bearer\s+/i, '')

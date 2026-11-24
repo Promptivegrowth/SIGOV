@@ -5,6 +5,7 @@ import { useQuery, useQueryClient } from '@tanstack/react-query'
 import {
   Search, Plus, CheckSquare, Download, MoreVertical, Info, X, User, CalendarDays, Layers, FileText, AlertTriangle, Paperclip, History,
   MessageSquare, Check, Users, Activity, Tag, Save, Upload, ArrowLeftRight, Fuel, Wrench, Car, RotateCcw, Coins, ShoppingCart, Lock, Wallet, Database, Clock, CheckCircle2,
+  Pencil,
 } from 'lucide-react'
 import { toast } from 'sonner'
 import { createClient } from '@/lib/supabase/client'
@@ -267,6 +268,9 @@ export function MovimientosCaja({ cajas, onRevisar, verComprobante, nuevo, extra
   const [archivo, setArchivo] = React.useState<File | null>(null)
   const [elegido, setElegido] = React.useState<any | null>(null)
   const [guardando, setGuardando] = React.useState(false)
+  // Editar un movimiento ya registrado (con motivo; queda en su historial)
+  const [edicion, setEdicion] = React.useState<any | null>(null)
+  React.useEffect(() => { setEdicion(null) }, [elegido?.id])
   React.useEffect(() => { if (nuevo) setForm((x) => x ?? formVacio) }, [nuevo])
   const q = usePeriodo({ desde: f.desde, hasta: f.hasta, caja: f.caja })
   const filas = ((q.data?.movimientos ?? []) as any[]).filter((m) => (!f.tipo || m.tipo === f.tipo) && (!f.estado || m.estado_ui === f.estado)
@@ -318,6 +322,21 @@ export function MovimientosCaja({ cajas, onRevisar, verComprobante, nuevo, extra
     } finally {
       setGuardando(false)
     }
+  }
+  const editable = (m: any) => m && m.tipo !== 'transferencia' && m.estado !== 'aprobado' && !m.rendicion_id
+  const guardarEdicion = async () => {
+    if (!edicion || !elegido) return
+    setGuardando(true)
+    const { error } = await sb.rpc('caja_movimiento_editar' as any, {
+      p_id: elegido.id, p_fecha: edicion.fecha, p_concepto: edicion.concepto,
+      p_solicitado: edicion.solicitado === '' ? null : Number(edicion.solicitado), p_aprobado: edicion.aprobado === '' ? null : Number(edicion.aprobado), p_ejecutado: Number(edicion.ejecutado),
+      p_numero_comprobante: edicion.numero || null, p_proveedor: edicion.proveedor || null, p_motivo: edicion.motivo,
+    } as any)
+    setGuardando(false)
+    if (error) return toast.error(mensajeAmigable(error))
+    toast.success(`Movimiento ${elegido.codigo} actualizado`, { description: 'El cambio queda en su historial con el motivo.' })
+    setEdicion(null); setElegido(null)
+    qc.invalidateQueries({ queryKey: ['caja-periodo'] }); qc.invalidateQueries({ queryKey: ['cajas'] })
   }
   const valido = !!form && !!form.caja && !!form.fecha && !!form.concepto.trim() && Number(form.ejecutado) > 0
     && (form.tipo === 'transferencia' ? !!form.hacia && form.hacia !== form.caja : form.tipo !== 'gasto' || !!archivo || !!form.justificacion.trim())
@@ -413,6 +432,29 @@ export function MovimientosCaja({ cajas, onRevisar, verComprobante, nuevo, extra
                 {elegido.revisado_at ? <li><strong>Revisado</strong> · {fmtDateTime(elegido.revisado_at)}{elegido.revisado_por ? ` · ${elegido.revisado_por}` : ''}</li>
                   : elegido.tipo === 'gasto' && <li className="text-muted-foreground"><strong>Pendiente de revisión</strong> · en flujo de aprobación</li>}
               </ul>
+              {!edicion && (editable(elegido)
+                ? <Button size="sm" variant="outline" onClick={() => setEdicion({ fecha: elegido.fecha, concepto: elegido.descripcion ?? elegido.concepto ?? '', solicitado: elegido.solicitado ?? '', aprobado: elegido.aprobado ?? '',
+                    ejecutado: elegido.ejecutado ?? '', numero: elegido.numero_comprobante ?? '', proveedor: elegido.proveedor ?? '', motivo: '' })}><Pencil className="size-3.5" />Editar movimiento</Button>
+                : <p className="text-muted-foreground text-[11.5px]">{elegido.tipo === 'transferencia' ? 'Las transferencias no se editan: se registran de nuevo.' : 'Aprobado o rendido: no se edita; se corrige con un ajuste.'}</p>)}
+              {edicion && (
+                <div className="space-y-2 rounded-lg border border-border p-2.5">
+                  <p className="font-semibold">Editar {elegido.codigo}</p>
+                  <Etq t="Fecha" req><Input type="date" value={edicion.fecha} onChange={(e) => setEdicion({ ...edicion, fecha: e.target.value })} className="h-9" /></Etq>
+                  <Etq t="Concepto" req><Input value={edicion.concepto} onChange={(e) => setEdicion({ ...edicion, concepto: e.target.value })} className="h-9" /></Etq>
+                  <div className="grid grid-cols-3 gap-2">
+                    <Etq t="Solicitado"><Input type="number" step="0.01" value={edicion.solicitado} onChange={(e) => setEdicion({ ...edicion, solicitado: e.target.value })} className="h-9" /></Etq>
+                    <Etq t="Aprobado"><Input type="number" step="0.01" value={edicion.aprobado} onChange={(e) => setEdicion({ ...edicion, aprobado: e.target.value })} className="h-9" /></Etq>
+                    <Etq t="Ejecutado" req><Input type="number" step="0.01" value={edicion.ejecutado} onChange={(e) => setEdicion({ ...edicion, ejecutado: e.target.value })} className="h-9" /></Etq>
+                  </div>
+                  <div className="grid grid-cols-2 gap-2">
+                    <Etq t="N.° de comprobante"><Input value={edicion.numero} onChange={(e) => setEdicion({ ...edicion, numero: e.target.value })} className="h-9" /></Etq>
+                    <Etq t="Proveedor"><Input value={edicion.proveedor} onChange={(e) => setEdicion({ ...edicion, proveedor: e.target.value })} className="h-9" /></Etq>
+                  </div>
+                  <Etq t="Motivo del cambio" req><Textarea rows={2} maxLength={300} value={edicion.motivo} onChange={(e) => setEdicion({ ...edicion, motivo: e.target.value })} /></Etq>
+                  <div className="flex gap-2"><Button size="sm" onClick={guardarEdicion} loading={guardando} disabled={!edicion.motivo.trim() || !edicion.concepto.trim() || !(Number(edicion.ejecutado) > 0)}><Save className="size-3.5" />Guardar cambios</Button>
+                    <Button size="sm" variant="outline" onClick={() => setEdicion(null)}>Cancelar</Button></div>
+                </div>
+              )}
             </CardContent>
           </Card>
         ) : (

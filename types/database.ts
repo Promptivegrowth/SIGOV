@@ -16,6 +16,7 @@ export type Database = {
     Tables: {
       accesos: {
         Row: {
+          ciudad: string | null
           cuando: string
           detalle: string | null
           dispositivo: string | null
@@ -29,6 +30,7 @@ export type Database = {
           usuario: string | null
         }
         Insert: {
+          ciudad?: string | null
           cuando?: string
           detalle?: string | null
           dispositivo?: string | null
@@ -42,6 +44,7 @@ export type Database = {
           usuario?: string | null
         }
         Update: {
+          ciudad?: string | null
           cuando?: string
           detalle?: string | null
           dispositivo?: string | null
@@ -11252,6 +11255,20 @@ export type Database = {
           p_desde: string
           p_hasta: string
           p_service: string
+        }
+        Returns: Json
+      }
+      caja_movimiento_editar: {
+        Args: {
+          p_aprobado: number
+          p_concepto: string
+          p_ejecutado: number
+          p_fecha: string
+          p_id: string
+          p_motivo: string
+          p_numero_comprobante: string
+          p_proveedor: string
+          p_solicitado: number
         }
         Returns: Json
       }

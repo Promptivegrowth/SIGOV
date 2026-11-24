@@ -33,6 +33,7 @@ const RES: Record<string, string> = { exitoso: 'bg-success/12 text-success', fal
 export function HistorialAccesos() {
   const { service, profile } = useSession()
   const sb = React.useMemo(() => createClient(), [])
+  const [sel, setSel] = React.useState<any | null>(null)
   const [f, setF] = React.useState({ q: '', desde: toISODate(addDays(new Date(), -30)), hasta: toISODate(new Date()), usuario: '', rol: '', dispositivo: '', estado: '' })
   const miembros = useQuery({
     queryKey: ['acc-miembros', service.id],
@@ -47,12 +48,12 @@ export function HistorialAccesos() {
   const todos = (q.data ?? []).filter((a) => !a.profile_id || rolDe.has(a.profile_id))
   const filas = todos.filter((a) => (!f.usuario || a.profile_id === f.usuario) && (!f.rol || rolDe.get(a.profile_id) === f.rol)
     && (!f.dispositivo || a.dispositivo === f.dispositivo) && (!f.estado || a.resultado === f.estado)
-    && (!f.q || `${a.profiles?.full_name ?? ''} ${a.usuario ?? ''} ${a.ip ?? ''} ${a.dispositivo ?? ''}`.toLowerCase().includes(f.q.toLowerCase())))
+    && (!f.q || `${a.profiles?.full_name ?? ''} ${a.usuario ?? ''} ${a.ip ?? ''} ${a.ciudad ?? ''} ${a.dispositivo ?? ''}`.toLowerCase().includes(f.q.toLowerCase())))
   const usuarios = [...new Map(todos.filter((a) => a.profile_id).map((a) => [a.profile_id, a.profiles?.full_name ?? a.usuario])).entries()]
   const exportar = () => descargarExcel('Historial_de_accesos', { titulo: 'Historial de accesos', servicio: service.name, periodo: `${f.desde} – ${f.hasta}`, generadoPor: profile.full_name },
     [{ name: 'Accesos', columns: [
       { header: 'Fecha/hora', key: 'fecha', width: 18 }, { header: 'Usuario', key: 'u', width: 26 }, { header: 'Rol', key: 'rol', width: 18 }, { header: 'Evento', key: 'ev', width: 24 },
-      { header: 'Dispositivo', key: 'dispositivo', width: 16 }, { header: 'IP', key: 'ip', width: 16 }, { header: 'Estado', key: 'resultado', width: 12 }, { header: 'Detalle', key: 'detalle', width: 30 },
+      { header: 'Dispositivo', key: 'dispositivo', width: 16 }, { header: 'IP', key: 'ip', width: 16 }, { header: 'Ciudad', key: 'ciudad', width: 18 }, { header: 'Estado', key: 'resultado', width: 12 }, { header: 'Detalle', key: 'detalle', width: 30 },
     ], rows: filas.map((a) => ({ ...a, fecha: fmtDateTime(a.cuando), u: a.profiles?.full_name ?? a.usuario, rol: nombreRol(rolDe.get(a.profile_id) ?? ''), ev: EVENTO[a.evento]?.t ?? a.evento })) }])
 
   return (
@@ -79,7 +80,8 @@ export function HistorialAccesos() {
             <Button onClick={exportar} disabled={!filas.length}><Download className="size-4" />Exportar historial</Button>
           </CardContent>
         </Card>
-        <Card>
+        <div className={cn('grid gap-4', sel && 'xl:grid-cols-[minmax(0,1fr)_340px]')}>
+        <Card className="min-w-0">
           <CardHeader className="flex-row items-center justify-between space-y-0 pb-2"><CardTitle className="text-[14px]">Registros de accesos (recientes)</CardTitle>
             <span className="text-muted-foreground text-[12px]">Mostrando {fmtNumber(Math.min(filas.length, 200))} de {fmtNumber(filas.length)} registros</span></CardHeader>
           <CardContent className="p-0">
@@ -91,13 +93,13 @@ export function HistorialAccesos() {
                   const e = EVENTO[a.evento] ?? EVENTO.ingreso
                   const D = /android|bluestacks/i.test(a.dispositivo ?? '') ? (/bluestacks/i.test(a.dispositivo) ? Layers : Smartphone) : Laptop
                   return (
-                    <li key={a.id} className="flex flex-wrap items-center gap-3 px-4 py-2.5 text-[12.5px]">
+                    <li key={a.id} onClick={() => setSel(a)} className={cn('flex cursor-pointer flex-wrap items-center gap-3 px-4 py-2.5 text-[12.5px]', sel?.id === a.id ? 'bg-primary/[0.06]' : 'hover:bg-secondary/40')}>
                       <span className={cn('grid size-8 place-items-center rounded-lg', e.c)}><e.i className="size-4" /></span>
                       <p className="min-w-36 font-semibold">{fmtDateTime(a.cuando)}</p>
                       <div className="min-w-48 flex-1"><p className="font-semibold">{a.profiles?.full_name ?? a.usuario ?? '—'}</p>
                         <p className="text-muted-foreground">{a.profile_id ? nombreRol(rolDe.get(a.profile_id) ?? '') : 'Usuario no registrado'} · {e.t}</p></div>
                       <p className="text-muted-foreground flex min-w-32 items-center gap-1.5"><D className="size-3.5" />{a.dispositivo ?? '—'}</p>
-                      <p className="text-muted-foreground flex min-w-32 items-center gap-1.5"><MapPin className="size-3.5" />{a.ip ?? '—'}</p>
+                      <p className="text-muted-foreground flex min-w-32 items-center gap-1.5"><MapPin className="size-3.5" />{a.ciudad ?? a.ip ?? '—'}</p>
                       <span className={cn('rounded-full px-2 py-0.5 text-[11.5px] font-semibold', RES[a.resultado])}>● {a.resultado === 'exitoso' ? 'Exitoso' : a.resultado === 'fallido' ? 'Fallido' : 'Bloqueado'}
                         {a.detalle && <span className="text-muted-foreground ml-1 font-normal">— {a.detalle}</span>}</span>
                     </li>
@@ -107,6 +109,23 @@ export function HistorialAccesos() {
             )}
           </CardContent>
         </Card>
+        {sel && (
+          <Card className="h-fit">
+            <CardHeader className="flex-row items-center justify-between space-y-0 pb-2"><CardTitle className="text-[14px]">Detalle del acceso</CardTitle>
+              <button onClick={() => setSel(null)} aria-label="Cerrar" className="text-muted-foreground text-[16px]">×</button></CardHeader>
+            <CardContent className="space-y-1 text-[12.5px]">
+              {[['Fecha y hora', fmtDateTime(sel.cuando)], ['Usuario', sel.profiles?.full_name ?? sel.usuario ?? '—'], ['Cuenta', sel.profiles?.email ?? sel.usuario ?? '—'],
+                ['Rol', sel.profile_id ? nombreRol(rolDe.get(sel.profile_id) ?? '') : 'No registrado'], ['Evento', EVENTO[sel.evento]?.t ?? sel.evento],
+                ['Resultado', sel.resultado === 'exitoso' ? 'Exitoso' : sel.resultado === 'fallido' ? 'Fallido' : 'Bloqueado'], ['Detalle', sel.detalle ?? '—'],
+                ['Dispositivo', sel.dispositivo ?? '—'], ['Plataforma', sel.plataforma ?? '—'], ['IP', sel.ip ?? '—'], ['Ciudad', sel.ciudad ?? 'Sin dato (registro anterior)'],
+                ['Navegador', sel.user_agent ?? '—']].map(([k, v]) => (
+                <p key={k} className="flex justify-between gap-3"><span className="text-muted-foreground shrink-0">{k}</span><span className="text-right break-all">{v}</span></p>
+              ))}
+              <p className="text-muted-foreground pt-1 text-[11.5px]">Solo lectura · el historial de accesos no se edita ni se borra.</p>
+            </CardContent>
+          </Card>
+        )}
+        </div>
         <p className="text-muted-foreground text-[12px]">Cinco intentos fallidos en 15 minutos bloquean la cuenta 30 minutos y avisan al Administrador, que puede desbloquearla desde Usuarios.</p>
       </PageBody>
     </>
