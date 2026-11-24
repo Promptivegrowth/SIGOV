@@ -12050,6 +12050,7 @@ export type Database = {
         Args: { p_id: string; p_tabla: string }
         Returns: Json
       }
+      reglas_adjuntos: { Args: { p_service: string }; Returns: string[] }
       reglas_evidencia_guardar: {
         Args: { p_motivo: string; p_reglas: Json; p_service: string }
         Returns: Json

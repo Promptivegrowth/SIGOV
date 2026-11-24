@@ -1,5 +1,6 @@
 'use client'
 
+import { SiPuede } from '@/components/shared/si-puede'
 import * as React from 'react'
 import { useQuery, useQueryClient } from '@tanstack/react-query'
 import { ChevronDown, ChevronRight, Eye, Layers, Pencil, Search, Filter, Download, Upload, FileText, Calendar, User, Save, CheckCircle2 } from 'lucide-react'
@@ -77,7 +78,7 @@ export function DocumentosSsoma({ filtroObjeto }: { filtroObjeto?: { vehicle_id?
             <Elegir etiqueta="Vigencia:" valor={f.vigencia} cambiar={(v) => setF({ ...f, vigencia: v })} todos="Todas" opciones={[['vigente', 'Vigente'], ['vencido', 'Vencido'], ['no_aplica', 'No aplica']]} />
             <Elegir etiqueta="Última revisión:" valor={f.revision} cambiar={(v) => setF({ ...f, revision: v })} todos="Todas" opciones={[['pendiente', 'Pendiente'], ['conforme', 'Conforme'], ['observado', 'Observado']]} />
             <Button onClick={() => setAplicado(f)}><Filter className="size-4" />Aplicar</Button>
-            <Button variant="outline" onClick={exportar} disabled={!filas.length}><Download className="size-4" />Exportar</Button>
+            <SiPuede modulo="ssoma" accion="exportar"><Button variant="outline" onClick={exportar} disabled={!filas.length}><Download className="size-4" />Exportar</Button></SiPuede>
           </CardContent>
         </Card>
       )}

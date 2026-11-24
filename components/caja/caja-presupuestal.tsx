@@ -1,5 +1,6 @@
 'use client'
 
+import { SiPuede } from '@/components/shared/si-puede'
 import * as React from 'react'
 import { useQuery, useQueryClient } from '@tanstack/react-query'
 import { Database, CheckCircle2, Clock, Wallet, Plus, MessageSquare, X, Info, Save, Eye, Download } from 'lucide-react'
@@ -100,7 +101,7 @@ export function Rendiciones({ cajas }: { cajas: any[] }) {
       <Input value={f.q} onChange={(e) => setF({ ...f, q: e.target.value })} placeholder="Buscar rendición (N.°, concepto, cuadrilla...)" className="h-9 max-w-xs" />
       <Elegir etiqueta="Cuadrilla" valor={f.caja} cambiar={(x) => setF({ ...f, caja: x })} todos="Todas" opciones={cajas.map((c) => [c.id, c.crew_name ?? c.name])} />
       <Elegir etiqueta="Estado" valor={f.estado} cambiar={(x) => setF({ ...f, estado: x })} todos="Todos" opciones={[['por_revisar', 'Por revisar'], ['aprobada', 'Aprobada'], ['observada', 'Observada']]} />
-      <Button variant="outline" className="ml-auto" onClick={exportar} disabled={!filas.length}><Download className="size-4" />Exportar</Button>
+      <SiPuede modulo="caja" accion="exportar"><Button variant="outline" className="ml-auto" onClick={exportar} disabled={!filas.length}><Download className="size-4" />Exportar</Button></SiPuede>
     </div>
     <div className={cn('grid gap-4', sel && 'xl:grid-cols-[1fr_380px]')}>
       <Card className="min-w-0">

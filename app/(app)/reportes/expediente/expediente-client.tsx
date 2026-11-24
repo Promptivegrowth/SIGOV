@@ -1,5 +1,6 @@
 'use client'
 
+import { SiPuede } from '@/components/shared/si-puede'
 import * as React from 'react'
 import Link from 'next/link'
 import { MenuFila } from '@/components/shared/menu-fila'
@@ -311,7 +312,7 @@ export function ExpedienteClient() {
               <label className="flex items-center gap-2 text-[13px]"><input type="checkbox" checked={historial} onChange={(e) => setHistorial(e.target.checked)} />Incluir historial de revisiones</label>
               <div className="grid grid-cols-2 gap-2">
                 <Button variant="outline" onClick={() => setPrevia(true)} disabled={!elegidos.length}><Eye className="size-4" />Vista previa</Button>
-                <Button onClick={generar} loading={estadoPaquete === 'En preparación'} disabled={!elegidos.length}><Download className="size-4" />Generar paquete</Button>
+                <SiPuede modulo="pci" accion="exportar"><Button onClick={generar} loading={estadoPaquete === 'En preparación'} disabled={!elegidos.length}><Download className="size-4" />Generar paquete</Button></SiPuede>
               </div>
               {estadoPaquete && <p className={cn('text-[12.5px] font-medium', estadoPaquete === 'Error' ? 'text-destructive' : estadoPaquete === 'Listo' ? 'text-success' : 'text-info')}>
                 Estado: {estadoPaquete}{estadoPaquete === 'Error' ? ' · puedes reintentar sin duplicar' : ''}</p>}

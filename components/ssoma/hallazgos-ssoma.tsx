@@ -1,5 +1,6 @@
 'use client'
 
+import { SiPuede } from '@/components/shared/si-puede'
 import * as React from 'react'
 import Link from 'next/link'
 import { useQuery } from '@tanstack/react-query'
@@ -94,7 +95,7 @@ export function HallazgosSsoma() {
           <label className="text-[12px]"><span className="text-muted-foreground block">Desde:</span><Input type="date" value={f.desde} onChange={(e) => setF({ ...f, desde: e.target.value })} className="h-9" /></label>
           <label className="text-[12px]"><span className="text-muted-foreground block">Hasta:</span><Input type="date" value={f.hasta} onChange={(e) => setF({ ...f, hasta: e.target.value })} className="h-9" /></label>
           <Button onClick={() => setAplicado(f)}><Filter className="size-4" />Aplicar</Button>
-          <Button variant="outline" onClick={exportar} disabled={!filas.length}><Download className="size-4" />Exportar</Button>
+          <SiPuede modulo="ssoma" accion="exportar"><Button variant="outline" onClick={exportar} disabled={!filas.length}><Download className="size-4" />Exportar</Button></SiPuede>
         </CardContent>
       </Card>
       <Card>

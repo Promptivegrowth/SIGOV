@@ -1,5 +1,6 @@
 'use client'
 
+import { SiPuede } from '@/components/shared/si-puede'
 import * as React from 'react'
 import { useQuery, useQueryClient } from '@tanstack/react-query'
 import { FileDown, FileSpreadsheet, Save, RefreshCw, ListChecks, Ruler, Info, TriangleAlert } from 'lucide-react'
@@ -179,8 +180,8 @@ export function InsumosSemana({ plan, crewId, crewNombre, semana, rows, canEdit 
       <div className="flex flex-wrap items-center justify-between gap-2">
         <p className="text-muted-foreground text-[12.5px]">Derivado de la programación semanal · Semana {semana} · versión {version} · {crewNombre}.</p>
         <div className="flex gap-2">
-          <Button size="sm" variant="outline" disabled={!lineas.length} onClick={() => tablaPdf(nombre, [tablaReq(), tablaResumen(), tablaPlanilla()])}><FileDown className="size-4" />PDF</Button>
-          <Button size="sm" variant="outline" disabled={!lineas.length} onClick={() => tablaXlsx(nombre, [{ ...tablaReq(), hoja: HOJA_REQ }, { ...tablaResumen(), hoja: HOJA_RES }, { ...tablaPlanilla(), hoja: HOJA_PLA }])}><FileSpreadsheet className="size-4" />Excel</Button>
+          <SiPuede modulo="materiales" accion="exportar"><Button size="sm" variant="outline" disabled={!lineas.length} onClick={() => tablaPdf(nombre, [tablaReq(), tablaResumen(), tablaPlanilla()])}><FileDown className="size-4" />PDF</Button></SiPuede>
+          <SiPuede modulo="materiales" accion="exportar"><Button size="sm" variant="outline" disabled={!lineas.length} onClick={() => tablaXlsx(nombre, [{ ...tablaReq(), hoja: HOJA_REQ }, { ...tablaResumen(), hoja: HOJA_RES }, { ...tablaPlanilla(), hoja: HOJA_PLA }])}><FileSpreadsheet className="size-4" />Excel</Button></SiPuede>
           {canEdit && <Button size="sm" onClick={guardar} loading={guardando} disabled={!lineas.length || faltaMotivo}><Save className="size-4" />Guardar requerimiento</Button>}
         </div>
       </div>

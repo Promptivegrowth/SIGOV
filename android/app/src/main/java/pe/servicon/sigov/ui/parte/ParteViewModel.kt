@@ -703,10 +703,11 @@ class ParteViewModel @Inject constructor(
             // Guía Jefe F4: ATS, charla y checklist del vehículo asignado llevan al menos un adjunto.
             // Cuenta lo ya cargado y las fotos que esperan señal (salen antes que el envío en la cola).
             val sinAdjunto = runCatching {
+                val requeridos = sesion.adjuntosRequeridos().toSet()
                 val cuadrilla = sesion.cuadrilla()
                 if (cuadrilla == null || parte.cuadrillaId == null) emptyList()
                 else documentos.delDia(cuadrilla.servicioId, parte.cuadrillaId, LocalDate.parse(parte.fecha))
-                    .filter { it.tipo in setOf("ats", "charla", "checklist_vehicular") && it.paginas + it.porEnviar == 0 }
+                    .filter { it.tipo in requeridos && it.paginas + it.porEnviar == 0 }
                     .map { it.nombre }
             }.getOrDefault(emptyList())
             if (sinAdjunto.isNotEmpty()) {

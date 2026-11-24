@@ -1,5 +1,6 @@
 'use client'
 
+import { SiPuede } from '@/components/shared/si-puede'
 import * as React from 'react'
 import Link from 'next/link'
 import dynamic from 'next/dynamic'
@@ -415,12 +416,12 @@ export function ObservacionesClient() {
             <Button variant="outline" onClick={() => exportarMapa(true)} disabled={!mapa || !!exportando}>
               <ImageDown className="size-4" /> Mapa PDF
             </Button>
-            <Button variant="outline" onClick={exportarExcel} loading={exportando === 'excel'} disabled={!visibles.length || !!exportando}>
+            <SiPuede modulo="observaciones" accion="exportar"><Button variant="outline" onClick={exportarExcel} loading={exportando === 'excel'} disabled={!visibles.length || !!exportando}>
               <FileSpreadsheet className="size-4" /> Excel
-            </Button>
-            <Button variant="outline" onClick={exportarPdf} loading={exportando === 'pdf'} disabled={!visibles.length || !!exportando}>
+            </Button></SiPuede>
+            <SiPuede modulo="observaciones" accion="exportar"><Button variant="outline" onClick={exportarPdf} loading={exportando === 'pdf'} disabled={!visibles.length || !!exportando}>
               <Download className="size-4" /> PDF
-            </Button>
+            </Button></SiPuede>
           </>
         }
       />

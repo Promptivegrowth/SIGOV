@@ -1,5 +1,6 @@
 'use client'
 
+import { SiPuede } from '@/components/shared/si-puede'
 import * as React from 'react'
 import Link from 'next/link'
 import { ChevronDown, ChevronRight, Download, Search, Eye, ArrowRight, Info } from 'lucide-react'
@@ -62,7 +63,7 @@ export function HistorialSsoma({ eventos, titulo }: { eventos: any[]; titulo: st
             <Input value={b.q} onChange={(e) => setB({ ...b, q: e.target.value })} onKeyDown={(e) => e.key === 'Enter' && setF(b)} placeholder="Buscar evento (código, descripción, actor, versión...)" className="pl-8" /></div>
           <Button size="sm" onClick={() => setF(b)}>Aplicar</Button>
           <Button size="sm" variant="outline" onClick={() => { setB(vacio); setF(vacio) }}>Limpiar</Button>
-          <Button size="sm" variant="outline" onClick={exportar} disabled={!filas.length}><Download className="size-4" />Exportar historial</Button>
+          <SiPuede modulo="ssoma" accion="exportar"><Button size="sm" variant="outline" onClick={exportar} disabled={!filas.length}><Download className="size-4" />Exportar historial</Button></SiPuede>
         </div>
         <div className="overflow-x-auto">
           <table className="w-full text-[12.5px]">

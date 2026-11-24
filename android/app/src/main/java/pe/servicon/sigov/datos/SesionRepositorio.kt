@@ -328,6 +328,16 @@ class SesionRepositorio @Inject constructor(
         o.mapValues { (_, v) -> (v as? kotlinx.serialization.json.JsonArray)?.map { it.jsonPrimitive.content } ?: emptyList() }
     }
 
+    /**
+     * Formatos del día que el contrato exige con al menos un adjunto para
+     * enviar el reporte (Configuración › Evidencias; rpc reglas_adjuntos).
+     * Sin señal, lo último que se supo; sin dato, los tres de la guía.
+     */
+    suspend fun adjuntosRequeridos(): List<String> = recordando("adjuntos_requeridos") {
+        val servicio = servicioId() ?: return@recordando null
+        supabase.postgrest.rpc("reglas_adjuntos", buildJsonObject { put("p_service", servicio) }).decodeAs<List<String>>()
+    } ?: listOf("ats", "charla", "checklist_vehicular")
+
     /** ¿El Administrador dejó habilitada esta acción para el rol? */
     suspend fun puede(modulo: String, accion: String): Boolean {
         val p = misPermisos() ?: return true

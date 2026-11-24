@@ -1,5 +1,6 @@
 'use client'
 
+import { SiPuede } from '@/components/shared/si-puede'
 import * as React from 'react'
 import Link from 'next/link'
 import { useQuery } from '@tanstack/react-query'
@@ -161,8 +162,8 @@ export function GrillaSemanal({ rows, monday, semana, plan, cuadrilla, canEdit, 
         <CardHeader className="flex-row flex-wrap items-center justify-between gap-2 space-y-0">
           <CardTitle className="text-[14px]">Grilla semanal editable</CardTitle>
           <div className="flex flex-wrap gap-2">
-            <Button size="sm" variant="outline" onClick={() => tablaPdf(nombre, [tabla()])} disabled={!lineas.length}><FileDown className="size-4" />PDF</Button>
-            <Button size="sm" variant="outline" onClick={() => tablaXlsx(nombre, [{ ...tabla(), hoja: 'Programación semanal' }])} disabled={!lineas.length}><FileSpreadsheet className="size-4" />Excel</Button>
+            <SiPuede modulo="programacion" accion="exportar"><Button size="sm" variant="outline" onClick={() => tablaPdf(nombre, [tabla()])} disabled={!lineas.length}><FileDown className="size-4" />PDF</Button></SiPuede>
+            <SiPuede modulo="programacion" accion="exportar"><Button size="sm" variant="outline" onClick={() => tablaXlsx(nombre, [{ ...tabla(), hoja: 'Programación semanal' }])} disabled={!lineas.length}><FileSpreadsheet className="size-4" />Excel</Button></SiPuede>
             <Button size="sm" variant="outline" onClick={() => setHistorial(true)} disabled={!plan}><History className="size-4" />Historial</Button>
             {canEdit && <ObservacionesPorProgramar lunes={toISODate(monday)} />}
             {canEdit && <Button size="sm" onClick={onAgregar}><Plus className="size-4" />Agregar actividad</Button>}

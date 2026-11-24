@@ -1,5 +1,6 @@
 'use client'
 
+import { usePuede } from '@/lib/permisos'
 import * as React from 'react'
 import { useQuery, useQueryClient } from '@tanstack/react-query'
 import {
@@ -77,7 +78,9 @@ async function exportar(formato: 'excel' | 'pdf', titulo: string, filas: any[], 
 }
 
 function MenuExportar({ alElegir }: { alElegir: (f: 'excel' | 'pdf') => void }) {
+  const puede = usePuede()
   const [abierto, setAbierto] = React.useState(false)
+  if (!puede('caja', 'exportar')) return null
   return (
     <div className="relative">
       <Button variant="outline" onClick={() => setAbierto(!abierto)}><Download className="size-4" />Exportar ⌄</Button>

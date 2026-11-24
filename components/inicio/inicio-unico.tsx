@@ -1,5 +1,6 @@
 'use client'
 
+import { SiPuede } from '@/components/shared/si-puede'
 import * as React from 'react'
 import Link from 'next/link'
 import { useRouter, useSearchParams, usePathname } from 'next/navigation'
@@ -250,12 +251,12 @@ export function InicioUnico({
             <Button size="sm" onClick={() => actual.refetch()} loading={actual.isFetching}>
               <RefreshCw className="size-3.5" />Actualizar
             </Button>
-            <Button size="sm" variant="outline" onClick={() => exportar('excel')} disabled={!actual.data}>
+            <SiPuede modulo="reportes" accion="exportar"><Button size="sm" variant="outline" onClick={() => exportar('excel')} disabled={!actual.data}>
               <FileSpreadsheet className="size-3.5" />Excel
-            </Button>
-            <Button size="sm" variant="outline" onClick={() => exportar('pdf')} disabled={!actual.data}>
+            </Button></SiPuede>
+            <SiPuede modulo="reportes" accion="exportar"><Button size="sm" variant="outline" onClick={() => exportar('pdf')} disabled={!actual.data}>
               <FileText className="size-3.5" />PDF
-            </Button>
+            </Button></SiPuede>
           </div>
         }
       />

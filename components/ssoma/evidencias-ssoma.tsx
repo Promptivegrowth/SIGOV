@@ -1,5 +1,6 @@
 'use client'
 
+import { SiPuede } from '@/components/shared/si-puede'
 import * as React from 'react'
 import { useQuery } from '@tanstack/react-query'
 import { Paperclip, Eye, Download, Camera, Images, FileText, X, Upload, Save, Link2, User, Layers, Cloud, RefreshCw, ShieldCheck, MapPin } from 'lucide-react'
@@ -90,7 +91,7 @@ export function EvidenciasSsoma({ objetoTipo, objetoId, codigoObjeto, evidencias
           </div>
           <div className="flex gap-2">
             <Button size="sm" onClick={() => setAbierto(true)}><Paperclip className="size-4" />Adjuntar evidencia</Button>
-            <Button size="sm" variant="outline" onClick={exportar} disabled={!visibles.length}><Download className="size-4" />Exportar listado</Button>
+            <SiPuede modulo="ssoma" accion="exportar"><Button size="sm" variant="outline" onClick={exportar} disabled={!visibles.length}><Download className="size-4" />Exportar listado</Button></SiPuede>
           </div>
         </CardHeader>
         <CardContent className="space-y-3">

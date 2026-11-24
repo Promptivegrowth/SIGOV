@@ -1,5 +1,6 @@
 'use client'
 
+import { SiPuede } from '@/components/shared/si-puede'
 import * as React from 'react'
 import Link from 'next/link'
 import { useRouter, useSearchParams, usePathname } from 'next/navigation'
@@ -132,7 +133,7 @@ export function ControlSsoma({ pestana, titulo, subtitulo, esInicio }: { pestana
                 <Input value={borrador.q} onChange={(e) => setBorrador({ ...borrador, q: e.target.value })} onKeyDown={(e) => e.key === 'Enter' && aplicar({})}
                   placeholder="Buscar inspección, cuadrilla o equipo..." className="pl-8" /></div>
               {puedeRevisar && <Button onClick={() => setNueva(true)}><Plus className="size-4" />Nueva inspección</Button>}
-              <Button variant="outline" onClick={exportar}><Download className="size-4" />Exportar</Button>
+              <SiPuede modulo="ssoma" accion="exportar"><Button variant="outline" onClick={exportar}><Download className="size-4" />Exportar</Button></SiPuede>
             </div>
             {panel.error && <p className="text-destructive text-[13px]">{mensajeAmigable(panel.error)}</p>}
             <div className="grid gap-4 xl:grid-cols-[1fr_300px]">

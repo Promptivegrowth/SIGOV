@@ -1,5 +1,6 @@
 'use client'
 
+import { SiPuede } from '@/components/shared/si-puede'
 import * as React from 'react'
 import { useQuery, useQueryClient } from '@tanstack/react-query'
 import { FileDown, FileSpreadsheet, List, ClipboardCheck, Info, CheckCircle2, XCircle } from 'lucide-react'
@@ -149,8 +150,8 @@ export function SeguimientoMateriales({ serviceId, crewId, crewNombre, desde, ha
       <div className="flex flex-wrap items-center justify-between gap-2">
         <p className="text-muted-foreground text-[12.5px]">Seguimiento de materiales · Semana {semana} · {crewNombre} · Corte {corte}</p>
         <div className="flex gap-2">
-          <Button size="sm" variant="outline" disabled={!insumos.length} onClick={() => tablaPdf(nombre, [tabla(), kardex()])}><FileDown className="size-4" />PDF</Button>
-          <Button size="sm" variant="outline" disabled={!insumos.length} onClick={() => tablaXlsx(nombre, [{ ...tabla(), hoja: HOJA_RES }, { ...kardex(), hoja: HOJA_KAR }])}><FileSpreadsheet className="size-4" />Excel</Button>
+          <SiPuede modulo="materiales" accion="exportar"><Button size="sm" variant="outline" disabled={!insumos.length} onClick={() => tablaPdf(nombre, [tabla(), kardex()])}><FileDown className="size-4" />PDF</Button></SiPuede>
+          <SiPuede modulo="materiales" accion="exportar"><Button size="sm" variant="outline" disabled={!insumos.length} onClick={() => tablaXlsx(nombre, [{ ...tabla(), hoja: HOJA_RES }, { ...kardex(), hoja: HOJA_KAR }])}><FileSpreadsheet className="size-4" />Excel</Button></SiPuede>
         </div>
       </div>
       <div className="grid gap-3 sm:grid-cols-3">
