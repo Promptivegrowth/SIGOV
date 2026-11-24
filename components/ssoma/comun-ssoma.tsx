@@ -58,6 +58,59 @@ export async function subirArchivoSsoma(serviceId: string, carpeta: string, arch
   return ruta
 }
 
+/** Huella SHA-256 del archivo (detecta el mismo archivo adjuntado dos veces). */
+export async function huellaArchivo(archivo: File) {
+  const buf = await archivo.arrayBuffer()
+  const h = await crypto.subtle.digest('SHA-256', buf)
+  return [...new Uint8Array(h)].map((b) => b.toString(16).padStart(2, '0')).join('')
+}
+
+/**
+ * Adjunta una evidencia SSOMA sin duplicar: si el mismo archivo ya está en el
+ * objeto no se vuelve a subir, y el registro lleva un client_id para que un
+ * reintento tras un corte devuelva lo ya guardado (0161).
+ */
+export async function adjuntarEvidenciaSsoma(o: {
+  serviceId: string; objetoTipo: 'inspeccion' | 'hallazgo' | 'documento'; objetoId: string; archivo: File; descripcion: string
+  origen?: string; borrador?: boolean; tomadaAt?: string | null
+}): Promise<{ id: string; codigo: string; duplicada?: boolean }> {
+  const sb = createClient()
+  const sha = await huellaArchivo(o.archivo)
+  const { data: ya } = await sb.from('ssoma_evidencias' as any).select('id, codigo').eq('objeto_tipo', o.objetoTipo).eq('objeto_id', o.objetoId).eq('sha256', sha).maybeSingle()
+  if (ya) return { ...(ya as any), duplicada: true }
+  const ruta = await subirArchivoSsoma(o.serviceId, `${o.objetoTipo}/${o.objetoId}`, o.archivo)
+  const cuerpo = {
+    p_service: o.serviceId, p_objeto_tipo: o.objetoTipo, p_objeto_id: o.objetoId, p_path: ruta, p_nombre: o.archivo.name, p_mime: o.archivo.type || null,
+    p_bytes: o.archivo.size, p_descripcion: o.descripcion, p_origen: o.origen ?? 'archivo', p_tomada_at: o.tomadaAt ?? null, p_borrador: !!o.borrador,
+    p_sha256: sha, p_client_id: crypto.randomUUID(),
+  }
+  let r = await sb.rpc('ssoma_evidencia_registrar' as any, cuerpo as any)
+  // Un corte de red: se reintenta una vez con el mismo client_id (no duplica)
+  if (r.error && /fetch|network/i.test(r.error.message ?? '')) r = await sb.rpc('ssoma_evidencia_registrar' as any, cuerpo as any)
+  if (r.error) throw r.error
+  return r.data as any
+}
+
+/** Paginación simple de listas (20 por página). */
+export function usePagina<T>(lista: T[], tam = 20) {
+  const [pagina, setPagina] = React.useState(0)
+  const paginas = Math.max(1, Math.ceil(lista.length / tam))
+  React.useEffect(() => { if (pagina >= paginas) setPagina(0) }, [paginas, pagina])
+  return { pagina, setPagina, paginas, visibles: lista.slice(pagina * tam, pagina * tam + tam), total: lista.length, tam }
+}
+
+export function Paginador({ p }: { p: { pagina: number; setPagina: (n: number) => void; paginas: number; total: number; tam: number } }) {
+  if (p.paginas <= 1) return null
+  return (
+    <div className="flex items-center justify-end gap-2 px-3 py-2 text-[12px]">
+      <span className="text-muted-foreground">{p.pagina * p.tam + 1}–{Math.min(p.total, (p.pagina + 1) * p.tam)} de {p.total}</span>
+      <button className="rounded border border-border px-2 py-0.5 disabled:opacity-40" disabled={p.pagina === 0} onClick={() => p.setPagina(p.pagina - 1)}>‹ Anterior</button>
+      <span>Página {p.pagina + 1} de {p.paginas}</span>
+      <button className="rounded border border-border px-2 py-0.5 disabled:opacity-40" disabled={p.pagina >= p.paginas - 1} onClick={() => p.setPagina(p.pagina + 1)}>Siguiente ›</button>
+    </div>
+  )
+}
+
 export async function abrirArchivoSsoma(ruta: string, bucket = 'documentos') {
   const sb = createClient()
   const { data, error } = await sb.storage.from(bucket).createSignedUrl(ruta, 600)

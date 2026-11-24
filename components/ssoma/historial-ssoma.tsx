@@ -12,7 +12,8 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@
 import { cn, fmtDate, fmtDateTime } from '@/lib/utils'
 import { descargarExcel } from '@/lib/reports'
 import { mensajeAmigable } from '@/lib/errores'
-import { ChipSsoma, abrirArchivoSsoma } from './comun-ssoma'
+import { ChipSsoma, abrirArchivoSsoma, usePagina, Paginador } from './comun-ssoma'
+import { createClient } from '@/lib/supabase/client'
 
 /**
  * «Historial» (SSOMA_13/14): eventos inmutables del objeto — actor, fecha,
@@ -27,12 +28,21 @@ const EVENTO: Record<string, string> = {
 
 export function HistorialSsoma({ eventos, titulo }: { eventos: any[]; titulo: string }) {
   const { service, profile } = useSession()
-  const [f, setF] = React.useState({ actor: '', evento: '', desde: '', hasta: '', q: '' })
+  // Los filtros se editan en borrador y se aplican con «Aplicar»
+  const vacio = { actor: '', evento: '', desde: '', hasta: '', q: '' }
+  const [b, setB] = React.useState(vacio)
+  const [f, setF] = React.useState(vacio)
   const [abierto, setAbierto] = React.useState('')
+  const verVersion = async (e: any) => {
+    const { data } = await createClient().from('ssoma_documento_versiones' as any).select('archivo_path').eq('documento_id', e.documento_id).eq('version', e.version).maybeSingle()
+    if (!(data as any)?.archivo_path) return toast.info(`La versión v${e.version} no tiene archivo (fecha registrada antes del control de versiones)`)
+    abrirArchivoSsoma((data as any).archivo_path).catch((er) => toast.error(mensajeAmigable(er)))
+  }
   const actores = [...new Set(eventos.map((e) => e.actor))]
   const filas = eventos.filter((e) => (!f.actor || e.actor === f.actor) && (!f.evento || e.tipo === f.evento)
     && (!f.desde || e.cuando.slice(0, 10) >= f.desde) && (!f.hasta || e.cuando.slice(0, 10) <= f.hasta)
     && (!f.q || `${e.codigo} ${e.titulo} ${e.detalle ?? ''} ${e.actor} v${e.version ?? ''}`.toLowerCase().includes(f.q.toLowerCase())))
+  const pag = usePagina(filas)
   const exportar = () => descargarExcel(`Historial_${titulo.replace(/\W+/g, '_')}`, {
     titulo: `Historial · ${titulo}`, servicio: service.name, periodo: fmtDateTime(new Date()), generadoPor: profile.full_name,
   }, [{ name: 'Historial', columns: [
@@ -44,12 +54,14 @@ export function HistorialSsoma({ eventos, titulo }: { eventos: any[]; titulo: st
     <Card>
       <CardContent className="space-y-3 p-4">
         <div className="flex flex-wrap items-end gap-2 text-[12px]">
-          <Sel etiqueta="Actor" valor={f.actor} cambiar={(v) => setF({ ...f, actor: v })} opciones={actores.map((a) => [a, a])} />
-          <Sel etiqueta="Evento" valor={f.evento} cambiar={(v) => setF({ ...f, evento: v })} opciones={Object.entries(EVENTO)} />
-          <label><span className="text-muted-foreground block">Desde</span><Input type="date" value={f.desde} onChange={(e) => setF({ ...f, desde: e.target.value })} className="h-9" /></label>
-          <label><span className="text-muted-foreground block">Hasta</span><Input type="date" value={f.hasta} onChange={(e) => setF({ ...f, hasta: e.target.value })} className="h-9" /></label>
+          <Sel etiqueta="Actor" valor={b.actor} cambiar={(v) => setB({ ...b, actor: v })} opciones={actores.map((a) => [a, a])} />
+          <Sel etiqueta="Evento" valor={b.evento} cambiar={(v) => setB({ ...b, evento: v })} opciones={Object.entries(EVENTO)} />
+          <label><span className="text-muted-foreground block">Desde</span><Input type="date" value={b.desde} onChange={(e) => setB({ ...b, desde: e.target.value })} className="h-9" /></label>
+          <label><span className="text-muted-foreground block">Hasta</span><Input type="date" value={b.hasta} onChange={(e) => setB({ ...b, hasta: e.target.value })} className="h-9" /></label>
           <div className="relative min-w-56 flex-1"><Search className="text-muted-foreground absolute top-1/2 left-2.5 size-4 -translate-y-1/2" />
-            <Input value={f.q} onChange={(e) => setF({ ...f, q: e.target.value })} placeholder="Buscar evento (código, descripción, actor, versión...)" className="pl-8" /></div>
+            <Input value={b.q} onChange={(e) => setB({ ...b, q: e.target.value })} onKeyDown={(e) => e.key === 'Enter' && setF(b)} placeholder="Buscar evento (código, descripción, actor, versión...)" className="pl-8" /></div>
+          <Button size="sm" onClick={() => setF(b)}>Aplicar</Button>
+          <Button size="sm" variant="outline" onClick={() => { setB(vacio); setF(vacio) }}>Limpiar</Button>
           <Button size="sm" variant="outline" onClick={exportar} disabled={!filas.length}><Download className="size-4" />Exportar historial</Button>
         </div>
         <div className="overflow-x-auto">
@@ -60,7 +72,7 @@ export function HistorialSsoma({ eventos, titulo }: { eventos: any[]; titulo: st
             </tr></thead>
             <tbody>
               {filas.length === 0 && <tr><td colSpan={7} className="text-muted-foreground py-6 text-center">Sin eventos.</td></tr>}
-              {filas.map((e) => (
+              {pag.visibles.map((e) => (
                 <React.Fragment key={e.id}>
                   <tr className={cn('border-t border-border', abierto === e.id && 'bg-primary/[0.05]')}>
                     <td className="pl-2"><button onClick={() => setAbierto(abierto === e.id ? '' : e.id)} aria-label="Ver evento">{abierto === e.id ? <ChevronDown className="size-4" /> : <ChevronRight className="size-4" />}</button></td>
@@ -82,14 +94,14 @@ export function HistorialSsoma({ eventos, titulo }: { eventos: any[]; titulo: st
                           <Bloque titulo="Después (versión actual)" datos={e.despues} destacado />
                         </div>
                       )}
-                      {(e.evidencias ?? []).length > 0 && (
-                        <div className="mt-2 flex flex-wrap gap-2">
-                          {(e.evidencias as any[]).map((x) => (
-                            <Button key={x.id} size="sm" variant="outline" onClick={() => abrirArchivoSsoma(x.storage_path).catch((er) => toast.error(mensajeAmigable(er)))}>
-                              <Eye className="size-3.5" />{x.codigo} {x.nombre}</Button>
-                          ))}
-                        </div>
-                      )}
+                      <div className="mt-2 flex flex-wrap gap-2">
+                        {(e.evidencias as any[] ?? []).map((x) => (
+                          <Button key={x.id} size="sm" variant="outline" onClick={() => abrirArchivoSsoma(x.storage_path).catch((er) => toast.error(mensajeAmigable(er)))}>
+                            <Eye className="size-3.5" />Ver evidencia {x.codigo}</Button>
+                        ))}
+                        {e.documento_id && e.version && <Button size="sm" variant="outline" onClick={() => verVersion(e)}><Eye className="size-3.5" />Ver versión v{e.version}</Button>}
+                        {e.hallazgo_id && <Link href={`/ssoma/hallazgos/${e.hallazgo_id}`}><Button size="sm" variant="outline"><ArrowRight className="size-3.5" />Abrir hallazgo</Button></Link>}
+                      </div>
                     </td></tr>
                   )}
                 </React.Fragment>
@@ -97,6 +109,7 @@ export function HistorialSsoma({ eventos, titulo }: { eventos: any[]; titulo: st
             </tbody>
           </table>
         </div>
+        <Paginador p={pag} />
         <p className="text-info flex items-start gap-2 text-[12px]"><Info className="mt-0.5 size-3.5" />Solo lectura · No editar ni borrar eventos. El estado actual no borra la observación anterior; el evento histórico se mantiene registrado.</p>
       </CardContent>
     </Card>

@@ -13,7 +13,7 @@ import { Badge } from '@/components/ui/badge'
 import { cn, fmtDateTime } from '@/lib/utils'
 import { mensajeAmigable } from '@/lib/errores'
 import { descargarExcel } from '@/lib/reports'
-import { subirArchivoSsoma, abrirArchivoSsoma, pesoArchivo, NotaSsoma, ChipSsoma } from './comun-ssoma'
+import { subirArchivoSsoma, abrirArchivoSsoma, pesoArchivo, NotaSsoma, ChipSsoma, adjuntarEvidenciaSsoma } from './comun-ssoma'
 
 /**
  * «Evidencias» (SSOMA_11/12): componente reutilizable en inspección o
@@ -66,13 +66,10 @@ export function EvidenciasSsoma({ objetoTipo, objetoId, codigoObjeto, evidencias
     if (!archivo) return
     setSubiendo(true)
     try {
-      const ruta = await subirArchivoSsoma(service.id, `${objetoTipo}/${objetoId}`, archivo)
-      const { error } = await sb.rpc('ssoma_evidencia_registrar' as any, {
-        p_service: service.id, p_objeto_tipo: objetoTipo, p_objeto_id: objetoId, p_path: ruta, p_nombre: archivo.name, p_mime: archivo.type || null,
-        p_bytes: archivo.size, p_descripcion: descripcion, p_origen: origen, p_tomada_at: new Date(archivo.lastModified).toISOString(), p_borrador: borrador,
-      } as any)
-      if (error) throw error
-      toast.success(borrador ? 'Evidencia guardada como borrador' : 'Evidencia adjunta', { description: 'Adjuntar no aprueba ni cierra el hallazgo.' })
+      const r = await adjuntarEvidenciaSsoma({ serviceId: service.id, objetoTipo: objetoTipo as any, objetoId, archivo, descripcion, origen, borrador,
+        tomadaAt: new Date(archivo.lastModified).toISOString() })
+      if (r.duplicada) toast.info(`Ese archivo ya está adjunto (${r.codigo})`, { description: 'No se duplicó la evidencia.' })
+      else toast.success(borrador ? 'Evidencia guardada como borrador' : 'Evidencia adjunta', { description: 'Adjuntar no aprueba ni cierra el hallazgo.' })
       setArchivo(null); setDescripcion(''); setAbierto(false); alCambiar()
     } catch (e) { toast.error(mensajeAmigable(e)) } finally { setSubiendo(false) }
   }
@@ -81,7 +78,7 @@ export function EvidenciasSsoma({ objetoTipo, objetoId, codigoObjeto, evidencias
   }, [{ name: 'Evidencias', columns: [
     { header: 'Código', key: 'codigo', width: 10 }, { header: 'Archivo', key: 'nombre', width: 30 }, { header: 'Descripción', key: 'descripcion', width: 50 },
     { header: 'Autor', key: 'autor', width: 22 }, { header: 'Origen', key: 'origen', width: 12 }, { header: 'Captura', key: 'tomada', width: 18 }, { header: 'Carga', key: 'subida', width: 18 },
-  ], rows: evidencias.map((e) => ({ ...e, tomada: e.tomada_at ? fmtDateTime(e.tomada_at) : '', subida: fmtDateTime(e.subida_at) })) }])
+  ], rows: visibles.map((e: any) => ({ ...e, tomada: e.tomada_at ? fmtDateTime(e.tomada_at) : '', subida: fmtDateTime(e.subida_at) })) }])
 
   return (
     <div className="space-y-4">
@@ -93,7 +90,7 @@ export function EvidenciasSsoma({ objetoTipo, objetoId, codigoObjeto, evidencias
           </div>
           <div className="flex gap-2">
             <Button size="sm" onClick={() => setAbierto(true)}><Paperclip className="size-4" />Adjuntar evidencia</Button>
-            <Button size="sm" variant="outline" onClick={exportar} disabled={!evidencias.length}><Download className="size-4" />Exportar listado</Button>
+            <Button size="sm" variant="outline" onClick={exportar} disabled={!visibles.length}><Download className="size-4" />Exportar listado</Button>
           </div>
         </CardHeader>
         <CardContent className="space-y-3">

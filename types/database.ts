@@ -7027,6 +7027,7 @@ export type Database = {
           autor: string | null
           borrador: boolean
           bytes: number | null
+          client_id: string | null
           codigo: string | null
           descripcion: string
           id: string
@@ -7039,6 +7040,7 @@ export type Database = {
           objeto_tipo: string
           origen: string
           service_id: string
+          sha256: string | null
           storage_path: string
           subida_at: string
           tomada_at: string | null
@@ -7047,6 +7049,7 @@ export type Database = {
           autor?: string | null
           borrador?: boolean
           bytes?: number | null
+          client_id?: string | null
           codigo?: string | null
           descripcion: string
           id?: string
@@ -7059,6 +7062,7 @@ export type Database = {
           objeto_tipo: string
           origen?: string
           service_id: string
+          sha256?: string | null
           storage_path: string
           subida_at?: string
           tomada_at?: string | null
@@ -7067,6 +7071,7 @@ export type Database = {
           autor?: string | null
           borrador?: boolean
           bytes?: number | null
+          client_id?: string | null
           codigo?: string | null
           descripcion?: string
           id?: string
@@ -7079,6 +7084,7 @@ export type Database = {
           objeto_tipo?: string
           origen?: string
           service_id?: string
+          sha256?: string | null
           storage_path?: string
           subida_at?: string
           tomada_at?: string | null
@@ -12174,6 +12180,10 @@ export type Database = {
         Args: { p_service: string }
         Returns: Json
       }
+      ssoma_borrador: {
+        Args: { p_objeto_id: string; p_objeto_tipo: string; p_version?: string }
+        Returns: Json
+      }
       ssoma_documento_crear: {
         Args: {
           p_crew?: string
@@ -12228,6 +12238,7 @@ export type Database = {
         Args: {
           p_borrador?: boolean
           p_bytes: number
+          p_client_id?: string
           p_descripcion: string
           p_lat?: number
           p_lng?: number
@@ -12238,6 +12249,7 @@ export type Database = {
           p_origen?: string
           p_path: string
           p_service: string
+          p_sha256?: string
           p_tomada_at?: string
         }
         Returns: Json
@@ -12313,6 +12325,7 @@ export type Database = {
           p_objeto_tipo: string
           p_resultado: string
           p_verificado?: boolean
+          p_version?: string
         }
         Returns: Json
       }

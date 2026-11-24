@@ -14,7 +14,7 @@ import { SkeletonList } from '@/components/ui/skeleton'
 import { cn, fmtDate, fmtDateTime, fmtNumber, toISODate, addDays } from '@/lib/utils'
 import { mensajeAmigable } from '@/lib/errores'
 import { descargarExcel } from '@/lib/reports'
-import { ChipSsoma, NotaSsoma, abrirArchivoSsoma } from './comun-ssoma'
+import { ChipSsoma, NotaSsoma, abrirArchivoSsoma, usePagina, Paginador } from './comun-ssoma'
 import { Elegir } from './control-ssoma'
 
 /**
@@ -65,6 +65,7 @@ export function HallazgosSsoma() {
     queryFn: async () => ((await sb.from('crews').select('id, code, name').eq('service_id', service.id).is('deleted_at', null).order('code')).data ?? []) as any[],
   })
   const filas = (datos.data?.filas ?? []) as any[]
+  const pag = usePagina(filas)
   const k = datos.data?.kpis ?? {}
   const h = filas.find((x) => x.id === sel) ?? filas[0]
   const exportar = () => descargarExcel('Hallazgos_SSOMA', { titulo: 'Seguimiento de hallazgos', servicio: service.name, periodo: `${fmtDate(aplicado.desde)} – ${fmtDate(aplicado.hasta)}`, generadoPor: profile.full_name },
@@ -105,7 +106,7 @@ export function HallazgosSsoma() {
               </tr></thead>
               <tbody>
                 {filas.length === 0 && <tr><td colSpan={7} className="text-muted-foreground px-3 py-6 text-center">Sin hallazgos en el filtro.</td></tr>}
-                {filas.map((x) => (
+                {pag.visibles.map((x) => (
                   <tr key={x.id} onClick={() => setSel(x.id)} className={cn('cursor-pointer border-t border-border', h?.id === x.id && 'bg-info/[0.07]')}>
                     <td className="px-3 py-2"><strong>{x.codigo}</strong> <span className="text-muted-foreground">{x.descripcion}</span></td>
                     <td className="px-3">{x.inspeccion_id ? <Link href={`/ssoma/inspecciones/${x.inspeccion_id}`} className="text-primary underline" onClick={(e) => e.stopPropagation()}>{x.inspeccion_codigo}</Link> : '—'}</td>
@@ -119,6 +120,7 @@ export function HallazgosSsoma() {
               </tbody>
             </table>
           )}
+          <Paginador p={pag} />
         </CardContent>
       </Card>
       {h && (

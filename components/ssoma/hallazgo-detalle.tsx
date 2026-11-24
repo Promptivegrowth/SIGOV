@@ -15,10 +15,11 @@ import { Input, Textarea } from '@/components/ui/input'
 import { SkeletonList } from '@/components/ui/skeleton'
 import { cn, fmtDate, fmtDateTime } from '@/lib/utils'
 import { mensajeAmigable } from '@/lib/errores'
-import { ChipSsoma, NotaSsoma, abrirArchivoSsoma, subirArchivoSsoma, pesoArchivo } from './comun-ssoma'
+import { ChipSsoma, NotaSsoma, abrirArchivoSsoma, subirArchivoSsoma, pesoArchivo, adjuntarEvidenciaSsoma } from './comun-ssoma'
 import { EvidenciasSsoma } from './evidencias-ssoma'
 import { FlujoHallazgo } from './hallazgos-ssoma'
 import { Elegir } from './control-ssoma'
+import { HistorialSsoma } from './historial-ssoma'
 
 /**
  * «Hallazgo H-NNN» (SSOMA_04/06): seguimiento y verificación de la
@@ -102,30 +103,7 @@ export function HallazgoDetalle({ id }: { id: string }) {
               </CardContent></Card>
             )}
             {tab === 'evidencias' && <EvidenciasSsoma objetoTipo="hallazgo" objetoId={id} codigoObjeto={h.codigo} evidencias={evidencias} alCambiar={refrescar} />}
-            {tab === 'historial' && (
-              <Card><CardContent className="p-4">
-                <ol className="space-y-3 border-l-2 border-info/30 pl-4">
-                  {timeline.map((e, k) => {
-                    const pendiente = e.tipo === 'verificacion_pendiente' && h.estado === 'por_verificar' && k === timeline.length - 1
-                    return (
-                      <li key={e.id} className="relative rounded-lg border border-border p-3 text-[12.5px]">
-                        <span className={cn('absolute top-4 -left-[23px] size-3 rounded-full border-2 border-info', pendiente ? 'bg-card' : 'bg-info')} />
-                        <p className="text-muted-foreground flex items-center gap-1.5 text-[11.5px]"><Calendar className="size-3" />{fmtDateTime(e.cuando)}</p>
-                        <p className="font-semibold">{e.tipo === 'hallazgo_creado' ? 'Observación registrada' : e.titulo}</p>
-                        {e.detalle && <p>{e.detalle}</p>}
-                        <p className="text-muted-foreground flex items-center gap-1.5 text-[11.5px]"><User className="size-3" />{e.actor}</p>
-                        {(e.evidencias ?? []).map((x: any) => (
-                          <div key={x.id} className="bg-secondary/60 mt-2 flex items-center justify-between gap-2 rounded-md px-2 py-1.5">
-                            <span className="truncate"><FileText className="text-destructive mr-1 inline size-3.5" />{x.nombre} <span className="text-muted-foreground">{pesoArchivo(x.bytes)}</span></span>
-                            <Button size="sm" onClick={() => abrirArchivoSsoma(x.storage_path).catch((er) => toast.error(mensajeAmigable(er)))}><Eye className="size-3.5" />Ver archivo</Button>
-                          </div>
-                        ))}
-                      </li>
-                    )
-                  })}
-                </ol>
-              </CardContent></Card>
-            )}
+            {tab === 'historial' && <HistorialSsoma eventos={historial} titulo={h.codigo} />}
           </div>
           <div className="space-y-4">
             {h.estado !== 'cerrado' && !puedeRevisar && <Responder id={id} alCambiar={refrescar} />}
@@ -148,16 +126,21 @@ function NuevaRevision({ id, vigencia, alCambiar }: { id: string; vigencia: stri
   const [archivo, setArchivo] = React.useState<File | null>(null)
   const [ocupado, setOcupado] = React.useState(false)
   const input = React.useRef<HTMLInputElement>(null)
+  // Recupera el borrador propio posterior a la última revisión registrada
+  const borr = useQuery({
+    queryKey: ['ssoma-borrador', 'hallazgo', id],
+    queryFn: async () => ((await sb.rpc('ssoma_borrador' as any, { p_objeto_tipo: 'hallazgo', p_objeto_id: id } as any)).data ?? null) as any,
+  })
+  React.useEffect(() => {
+    if (borr.data) { setResultado((r) => r || borr.data.resultado || ''); setMotivo((m) => m || borr.data.motivo || '') }
+  }, [borr.data])
   const enviar = async (borrador: boolean) => {
     setOcupado(true)
     try {
       let evidencias: string[] = []
       if (archivo) {
-        const ruta = await subirArchivoSsoma(service.id, `hallazgo/${id}`, archivo)
-        const { data, error } = await sb.rpc('ssoma_evidencia_registrar' as any, { p_service: service.id, p_objeto_tipo: 'hallazgo', p_objeto_id: id, p_path: ruta,
-          p_nombre: archivo.name, p_mime: archivo.type || null, p_bytes: archivo.size, p_descripcion: motivo || 'Evidencia de la verificación', p_origen: 'archivo', p_borrador: borrador } as any)
-        if (error) throw error
-        evidencias = [(data as any).id]
+        const r = await adjuntarEvidenciaSsoma({ serviceId: service.id, objetoTipo: 'hallazgo', objetoId: id, archivo, descripcion: motivo || 'Evidencia de la verificación', borrador: borrador })
+        evidencias = [r.id]
       }
       const { error } = await sb.rpc('ssoma_revisar' as any, { p_objeto_tipo: 'hallazgo', p_objeto_id: id, p_resultado: resultado || null, p_motivo: motivo,
         p_evidencias: evidencias, p_borrador: borrador, p_verificado: verificado } as any)
@@ -171,6 +154,7 @@ function NuevaRevision({ id, vigencia, alCambiar }: { id: string; vigencia: stri
     <Card>
       <CardHeader className="pb-2"><CardTitle className="text-[14px]">Nueva revisión</CardTitle></CardHeader>
       <CardContent className="space-y-3 text-[12.5px]">
+        {borr.data && <p className="bg-warning/10 text-warning rounded-md px-2 py-1 text-[11.5px]">Borrador recuperado del {fmtDateTime(borr.data.cuando)}.</p>}
         <Elegir etiqueta="Resultado" valor={resultado} cambiar={setResultado} todos="Seleccionar" opciones={[['conforme', 'Conforme (cerrar)'], ['observado', 'Observado (vuelve a abierto)']]} />
         <label className="block"><span className="text-muted-foreground text-[12px]">Vigencia documental</span><Input readOnly value={vigencia} className="bg-secondary h-9" /></label>
         <label className="block space-y-1"><span className="font-medium">Motivo o detalle de la revisión</span>
@@ -202,11 +186,8 @@ function Responder({ id, alCambiar }: { id: string; alCambiar: () => void }) {
     try {
       let evidencias: string[] = []
       if (archivo) {
-        const ruta = await subirArchivoSsoma(service.id, `hallazgo/${id}`, archivo)
-        const { data, error } = await sb.rpc('ssoma_evidencia_registrar' as any, { p_service: service.id, p_objeto_tipo: 'hallazgo', p_objeto_id: id, p_path: ruta,
-          p_nombre: archivo.name, p_mime: archivo.type || null, p_bytes: archivo.size, p_descripcion: texto || 'Subsanación', p_origen: 'archivo' } as any)
-        if (error) throw error
-        evidencias = [(data as any).id]
+        const r = await adjuntarEvidenciaSsoma({ serviceId: service.id, objetoTipo: 'hallazgo', objetoId: id, archivo, descripcion: texto || 'Subsanación', borrador: false })
+        evidencias = [r.id]
       }
       const { error } = await sb.rpc('ssoma_hallazgo_responder' as any, { p_hallazgo: id, p_texto: texto, p_evidencias: evidencias } as any)
       if (error) throw error

@@ -16,7 +16,7 @@ import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription } f
 import { SkeletonList } from '@/components/ui/skeleton'
 import { cn, fmtDate, fmtDateTime, toISODate, addDays } from '@/lib/utils'
 import { mensajeAmigable } from '@/lib/errores'
-import { ChipSsoma, TIPOS_INSPECCION, NotaSsoma, abrirArchivoSsoma, subirArchivoSsoma } from './comun-ssoma'
+import { ChipSsoma, TIPOS_INSPECCION, NotaSsoma, abrirArchivoSsoma, subirArchivoSsoma, adjuntarEvidenciaSsoma } from './comun-ssoma'
 import { EvidenciasSsoma } from './evidencias-ssoma'
 import { HistorialSsoma } from './historial-ssoma'
 import { DocumentosSsoma } from './documentos-ssoma'
@@ -69,8 +69,8 @@ export function InspeccionDetalle({ id }: { id: string }) {
       <PageHeader title={`Detalle de inspección · ${i.codigo}`} description={`${tipo.t}${i.objeto ? ' · ' + i.objeto : ''} · ${i.crew_name ?? 'Sin cuadrilla'}`}
         actions={puedeRevisar && (
           <>
-            <Button variant="outline" onClick={() => document.getElementById('form-revision')?.scrollIntoView({ behavior: 'smooth' })}><Save className="size-4" />Guardar borrador</Button>
-            <Button onClick={() => document.getElementById('form-revision')?.scrollIntoView({ behavior: 'smooth' })}><CheckCircle2 className="size-4" />Registrar revisión</Button>
+            <Button variant="outline" onClick={() => window.dispatchEvent(new CustomEvent('ssoma-revision', { detail: 'borrador' }))}><Save className="size-4" />Guardar borrador</Button>
+            <Button onClick={() => window.dispatchEvent(new CustomEvent('ssoma-revision', { detail: 'registrar' }))}><CheckCircle2 className="size-4" />Registrar revisión</Button>
           </>
         )}>
         <nav className="text-muted-foreground mt-1 flex items-center gap-1.5 text-[12.5px]"><Home className="size-3.5" />
@@ -195,16 +195,25 @@ function FormRevision({ id, borrador, alCambiar }: { id: string; borrador: any; 
   const [archivo, setArchivo] = React.useState<File | null>(null)
   const [ocupado, setOcupado] = React.useState(false)
   const input = React.useRef<HTMLInputElement>(null)
+  // Los botones de la cabecera usan este mismo formulario (no solo desplazan)
+  const enviarRef = React.useRef<(b: boolean) => void>(() => {})
+  React.useEffect(() => {
+    const oir = (e: Event) => {
+      const accion = (e as CustomEvent).detail
+      document.getElementById('form-revision')?.scrollIntoView({ behavior: 'smooth' })
+      if (accion === 'registrar' && (!resultado || !motivo.trim())) { toast.error('Completa el resultado y el motivo para registrar la revisión'); return }
+      enviarRef.current(accion === 'borrador')
+    }
+    window.addEventListener('ssoma-revision', oir)
+    return () => window.removeEventListener('ssoma-revision', oir)
+  }, [resultado, motivo])
   const enviar = async (esBorrador: boolean) => {
     setOcupado(true)
     try {
       let evidencias: string[] = []
       if (archivo) {
-        const ruta = await subirArchivoSsoma(service.id, `inspeccion/${id}`, archivo)
-        const { data, error } = await sb.rpc('ssoma_evidencia_registrar' as any, { p_service: service.id, p_objeto_tipo: 'inspeccion', p_objeto_id: id, p_path: ruta,
-          p_nombre: archivo.name, p_mime: archivo.type || null, p_bytes: archivo.size, p_descripcion: motivo || 'Evidencia de la revisión', p_origen: 'archivo', p_borrador: esBorrador } as any)
-        if (error) throw error
-        evidencias = [(data as any).id]
+        const r = await adjuntarEvidenciaSsoma({ serviceId: service.id, objetoTipo: 'inspeccion', objetoId: id, archivo, descripcion: motivo || 'Evidencia de la revisión', borrador: esBorrador })
+        evidencias = [r.id]
       }
       const { error } = await sb.rpc('ssoma_revisar' as any, { p_objeto_tipo: 'inspeccion', p_objeto_id: id, p_resultado: resultado || null, p_motivo: motivo, p_evidencias: evidencias, p_borrador: esBorrador } as any)
       if (error) throw error
@@ -212,6 +221,7 @@ function FormRevision({ id, borrador, alCambiar }: { id: string; borrador: any; 
       setArchivo(null); alCambiar()
     } catch (e) { toast.error(mensajeAmigable(e)) } finally { setOcupado(false) }
   }
+  enviarRef.current = enviar
   return (
     <Card id="form-revision">
       <CardHeader className="pb-2"><CardTitle className="text-[14px]">Registrar revisión</CardTitle></CardHeader>

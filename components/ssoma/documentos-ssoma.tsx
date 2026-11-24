@@ -14,7 +14,7 @@ import { SkeletonList } from '@/components/ui/skeleton'
 import { cn, fmtDate, fmtDateTime, fmtNumber } from '@/lib/utils'
 import { mensajeAmigable } from '@/lib/errores'
 import { descargarExcel } from '@/lib/reports'
-import { ChipSsoma, TIPOS_DOCUMENTO, NotaSsoma, abrirArchivoSsoma, subirArchivoSsoma } from './comun-ssoma'
+import { ChipSsoma, TIPOS_DOCUMENTO, NotaSsoma, abrirArchivoSsoma, subirArchivoSsoma, usePagina, Paginador } from './comun-ssoma'
 import { Elegir } from './control-ssoma'
 
 /**
@@ -48,6 +48,7 @@ export function DocumentosSsoma({ filtroObjeto }: { filtroObjeto?: { vehicle_id?
   })
   let filas = (datos.data?.filas ?? []) as any[]
   if (filtroObjeto) filas = filas.filter((x) => (filtroObjeto.vehicle_id && x.vehicle_id === filtroObjeto.vehicle_id) || (filtroObjeto.equipment_id && x.equipment_id === filtroObjeto.equipment_id))
+  const pag = usePagina(filas)
   const k = datos.data?.kpis ?? {}
   const puedeRevisar = ['ing_seguridad', 'admin'].includes(role)
   const refrescar = () => qc.invalidateQueries({ queryKey: ['ssoma-docs'] })
@@ -89,7 +90,7 @@ export function DocumentosSsoma({ filtroObjeto }: { filtroObjeto?: { vehicle_id?
               </tr></thead>
               <tbody>
                 {filas.length === 0 && <tr><td colSpan={8} className="text-muted-foreground px-3 py-6 text-center">Sin documentos.</td></tr>}
-                {filas.map((x) => (
+                {pag.visibles.map((x) => (
                   <React.Fragment key={x.id}>
                     <tr className={cn('border-t border-border', abierto === x.id && 'bg-info/[0.06]')}>
                       <td className="pl-2"><button onClick={() => setAbierto(abierto === x.id ? '' : x.id)} aria-label="Expandir">{abierto === x.id ? <ChevronDown className="size-4" /> : <ChevronRight className="size-4" />}</button></td>
@@ -116,6 +117,7 @@ export function DocumentosSsoma({ filtroObjeto }: { filtroObjeto?: { vehicle_id?
               </tbody>
             </table>
           )}
+          <Paginador p={pag} />
           <p className="text-muted-foreground border-t border-border px-3 py-2 text-[12px]">{fmtNumber(filas.length)} documentos</p>
         </CardContent>
       </Card>
@@ -129,10 +131,20 @@ function PanelDocumento({ doc, puedeRevisar, alCambiar }: { doc: any; puedeRevis
   const [resultado, setResultado] = React.useState('')
   const [motivo, setMotivo] = React.useState('')
   const [ocupado, setOcupado] = React.useState(false)
-  const u = doc.ultima ?? {}
+  // La revisión va sobre la versión que se está viendo (por defecto, la última)
+  const versiones = [...((doc.versiones ?? []) as any[])].sort((a, b) => b.version - a.version)
+  const [verId, setVerId] = React.useState<string>(doc.ultima?.id ?? versiones[0]?.id ?? '')
+  const u = versiones.find((v) => v.id === verId) ?? doc.ultima ?? {}
+  const esUltima = !versiones.length || u.version === versiones[0]?.version
+  const borr = useQuery({
+    queryKey: ['ssoma-borrador', 'documento', doc.id, verId],
+    enabled: puedeRevisar && !!verId,
+    queryFn: async () => ((await sb.rpc('ssoma_borrador' as any, { p_objeto_tipo: 'documento', p_objeto_id: doc.id, p_version: verId } as any)).data ?? null) as any,
+  })
+  React.useEffect(() => { setResultado(borr.data?.resultado ?? ''); setMotivo(borr.data?.motivo ?? '') }, [borr.data, verId])
   const revisar = async (borrador: boolean) => {
     setOcupado(true)
-    const { error } = await sb.rpc('ssoma_revisar' as any, { p_objeto_tipo: 'documento', p_objeto_id: doc.id, p_resultado: resultado || null, p_motivo: motivo, p_borrador: borrador } as any)
+    const { error } = await sb.rpc('ssoma_revisar' as any, { p_objeto_tipo: 'documento', p_objeto_id: doc.id, p_resultado: resultado || null, p_motivo: motivo, p_borrador: borrador, p_version: u.id ?? null } as any)
     setOcupado(false)
     if (error) return toast.error(mensajeAmigable(error))
     toast.success(borrador ? 'Borrador de revisión guardado' : `Revisión registrada en v${u.version}`)
@@ -148,6 +160,8 @@ function PanelDocumento({ doc, puedeRevisar, alCambiar }: { doc: any; puedeRevis
         <p className="bg-warning/10 text-warning rounded-md px-3 py-1.5">📋 Revisión: <strong>{u.revision === 'conforme' ? 'Conforme' : u.revision === 'observado' ? 'Observado' : 'Pendiente'}</strong>{u.motivo ? ` · ${u.motivo}` : ''}</p>
         {puedeRevisar ? (
           <>
+            {!esUltima && <p className="bg-info/10 text-info rounded-md px-3 py-1.5 text-[12px]">Revisas la versión v{u.version} (hay una más reciente). Su fecha no cambia la aptitud del vehículo o equipo: rige la última versión.</p>}
+            {borr.data && <p className="bg-warning/10 text-warning rounded-md px-2 py-1 text-[11.5px]">Borrador recuperado del {fmtDateTime(borr.data.cuando)}.</p>}
             <p className="font-medium">Resultado <span className="text-destructive">*</span></p>
             <div className="flex gap-2">
               {(['conforme', 'observado'] as const).map((r) => (
@@ -173,12 +187,13 @@ function PanelDocumento({ doc, puedeRevisar, alCambiar }: { doc: any; puedeRevis
           <thead className="text-muted-foreground text-[11.5px]"><tr><th className="py-1 text-left font-medium">Versión</th><th className="text-left font-medium">Estado</th><th className="text-left font-medium">Vencimiento</th><th className="text-left font-medium">Última revisión</th><th /></tr></thead>
           <tbody>
             {(doc.versiones as any[]).map((v) => (
-              <tr key={v.id} className="border-t border-border">
+              <tr key={v.id} className={cn('border-t border-border', v.id === u.id && 'bg-info/[0.07]')}>
                 <td className="py-1.5">v{v.version}</td>
                 <td><ChipSsoma estado={!v.vence_on ? 'no_aplica' : v.vence_on < new Date().toISOString().slice(0, 10) ? 'vencido' : 'vigente'} /></td>
                 <td>{v.vence_on ? fmtDate(v.vence_on) : '—'}</td>
                 <td><ChipSsoma estado={v.revision} /></td>
-                <td className="text-right"><Button size="sm" variant="outline" disabled={!v.archivo_path} onClick={() => abrirArchivoSsoma(v.archivo_path).catch((e) => toast.error(mensajeAmigable(e)))}><Eye className="size-3.5" />Ver archivo</Button></td>
+                <td className="space-x-1 text-right whitespace-nowrap"><Button size="sm" variant="outline" disabled={!v.archivo_path} onClick={() => abrirArchivoSsoma(v.archivo_path).catch((e) => toast.error(mensajeAmigable(e)))}><Eye className="size-3.5" />Ver archivo</Button>
+                  {puedeRevisar && <Button size="sm" variant={v.id === u.id ? 'default' : 'outline'} onClick={() => setVerId(v.id)}><Pencil className="size-3.5" />{v.id === u.id ? 'En revisión' : 'Revisar esta'}</Button>}</td>
               </tr>
             ))}
           </tbody>
