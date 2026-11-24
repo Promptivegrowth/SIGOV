@@ -11,7 +11,7 @@ import { Input } from '@/components/ui/input'
 import { Badge } from '@/components/ui/badge'
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription } from '@/components/ui/dialog'
 import { SkeletonList } from '@/components/ui/skeleton'
-import { tablaPdf, tablaXlsx, num, type Tabla } from '@/lib/formato-mrpci'
+import { tablaPdf, tablaXlsx, num, textoCelda, type Tabla, type Valor } from '@/lib/formato-mrpci'
 import { cn, fmtDate, fmtDateTime, fmtProgresiva } from '@/lib/utils'
 import { mensajeAmigable } from '@/lib/errores'
 
@@ -78,10 +78,10 @@ export function InsumosSemana({ plan, crewId, crewNombre, semana, rows, canEdit 
   const meta = `PROYECTO: COVINCA ${new Date().getFullYear()} · EMPRESA: GRUPO SERVICON V&D E.I.R.L. · CUADRILLA: ${crewNombre.toUpperCase()} · SEMANA ${semana} · FECHA: ${fmtDate(new Date())}`
   const misRows = rows.filter((r) => r.crew_id === crewId && r.status !== 'cancelado')
   const porPartida = React.useMemo(() => {
-    const m = new Map<string, { partida: string; und: string; lado: Set<string>; de: number | null; a: number | null; total: number; det: any[] }>()
+    const m = new Map<string, { activity_id: string; partida: string; und: string; origen: string; lado: Set<string>; de: number | null; a: number | null; total: number; det: any[] }>()
     for (const r of misRows) {
       const k = r.activity_id
-      const x = m.get(k) ?? { partida: r.activity_name, und: r.unit_symbol ?? '', lado: new Set<string>(), de: null as number | null, a: null as number | null, total: 0, det: [] as any[] }
+      const x = m.get(k) ?? { activity_id: k, partida: r.activity_name, und: r.unit_symbol ?? '', origen: r.origen ?? 'MR', lado: new Set<string>(), de: null as number | null, a: null as number | null, total: 0, det: [] as any[] }
       if (r.lado) x.lado.add(r.lado)
       x.de = x.de == null ? r.prog_start_m : Math.min(x.de, r.prog_start_m ?? x.de)
       x.a = x.a == null ? (r.prog_end_m ?? r.prog_start_m) : Math.max(x.a, r.prog_end_m ?? r.prog_start_m ?? x.a)
@@ -90,29 +90,80 @@ export function InsumosSemana({ plan, crewId, crewNombre, semana, rows, canEdit 
     return [...m.values()]
   }, [misRows])
 
-  const tablaReq = (): Tabla => ({
-    titulo: 'REQUERIMIENTO DE RECURSOS', meta,
-    cabecera: [[
-      ...['N°', 'Partida', 'Unid. part.', 'Metrado', 'Unid. rend.', 'Rendi.', 'Recursos (mano de obra, materiales y/o equipos)', 'Unid. recurso', 'MR / PCI / E'].map((t) => ({ t, rs: 2 })),
-      { t: 'Materiales', cs: 9 }, { t: 'Nota', rs: 2 },
-    ], ['Pre-cantidad a requerir', 'Stock en cuadrilla', 'Cantidad a requerir', 'Cantidad a pedir por practicidad', 'Remanente', 'Almacén de retiro', 'Fecha de retiro', 'Encargado de retiro', 'Nota de salida'].map((t) => ({ t }))],
-    filas: lineas.map((x, i) => [String(i + 1).padStart(2, '0'), x.partida, x.unidad_partida, num(x.metrado), x.unidad_rend, num(x.rendimiento, 2), x.recurso, x.unidad_recurso, x.origen,
-      num(x.pre), num(x.stock), num(x.requerir), num(x.practica), num(remanente(x)), x.almacen || '—', x.fecha_retiro ? fmtDate(x.fecha_retiro) : '—', x.encargado || 'Por asignar', x.nota_salida || '—',
-      [x.motivo, x.nota, x.codigo_recurso ? `Código: ${x.codigo_recurso}` : ''].filter(Boolean).join(' · ')]),
-    resaltadas: { 12: 'DCE6F1' }, anchos: [16, 70, 24, 30, 28, 26, 90, 24, 22, 32, 30, 30, 34, 28, 34, 30, 40, 30, 70],
+  // ── Exportes con la cadena de la muestra COVINCA ─────────────────────────
+  // Planilla de metrado (detalle → subpartida → Total) → Resumen de metrado
+  // (Total) → Requerimiento (Metrado) → pre-cantidad, a requerir y remanente.
+  const HOJA_REQ = 'Requerimiento de recursos', HOJA_RES = 'Resumen de metrado', HOJA_PLA = 'Planilla de metrado'
+  const prog = (m: number | null | undefined) => (m != null ? fmtProgresiva(m) : '')
+  const PARTIDA = 'E7F2FA', SUBPARTIDA = 'FCECE5', CAPTURA = 'E7F2FA', CANT = '#,##0.00#'
+  // Fila (índice de datos) del Total de cada partida en la planilla
+  const planilla = React.useMemo(() => {
+    const filas: Valor[][] = []
+    const totalDe: number[] = []
+    porPartida.forEach((p, i) => {
+      const fPartida = filas.length, fSub = fPartida + 1, d0 = fSub + 1, d1 = d0 + p.det.length - 1
+      totalDe.push(fPartida)
+      const vacio = (n: number) => Array<Valor>(n).fill('')
+      filas.push(['-', p.origen, i + 1, { v: p.partida, negrita: true, fondo: PARTIDA }, '', '', [...p.lado].join('/'), p.und, ...vacio(16),
+        { v: p.total, f: `ROUND(SUM(X{r:${fSub}}),2)`, negrita: true, fondo: PARTIDA }])
+      filas.push(['', '', `${i + 1}.1`, { v: p.partida, negrita: true, fondo: SUBPARTIDA }, '', '', '', p.und, ...vacio(12),
+        { v: p.total, f: `SUM(U{r:${d0}}:U{r:${d1}})`, negrita: true, fondo: SUBPARTIDA },
+        { v: 1, fmt: '0%', fondo: CAPTURA }, { v: 0, fmt: '0%', fondo: CAPTURA },
+        { v: p.total, f: 'ROUND(U{r}*V{r}*(1+W{r}),2)', negrita: true, fondo: SUBPARTIDA }, ''])
+      for (const r of p.det) {
+        const q = Number(r.target_qty ?? 0)
+        // Sin dimensiones: el metrado programado; si se llenan Elem. simil. × Long. × Ancho (× Altura, Cant.), se calcula
+        const pre = `IF(COUNT(J{r}:M{r})=0,${q},ROUND(IF(I{r}="",1,I{r})*IF(J{r}="",1,J{r})*IF(K{r}="",1,K{r})*IF(L{r}="",1,L{r})*IF(M{r}="",1,M{r}),2))`
+        filas.push(['', '', '', `Programado ${fmtDate(r.scheduled_on)}`, prog(r.prog_start_m), prog(r.prog_end_m), r.lado ?? '', p.und,
+          { v: null, fondo: CAPTURA }, { v: null, fondo: CAPTURA }, { v: null, fondo: CAPTURA }, { v: null, fondo: CAPTURA }, { v: null, fondo: CAPTURA },
+          ...vacio(7), { v: q, f: pre }, '', '', '', ''])
+      }
+      filas.push(Array<Valor>(25).fill(''))
+    })
+    return { filas, totalDe }
+  }, [porPartida])
+
+  const tablaPlanilla = (): Tabla => ({
+    titulo: 'PLANILLA DE METRADO', meta,
+    cabecera: [
+      [{ t: 'N°', cs: 3, rs: 2 }, ...['Partida', 'Prog. inicial [km]', 'Prog. final [km]', 'Lado', 'Unid.', 'Elem. simil. [und]'].map((t) => ({ t, rs: 2 })),
+        { t: 'Dimensiones (1)', cs: 4 }, { t: 'Dimensiones (2)', cs: 4 }, { t: 'Tachas', cs: 3 },
+        ...['Pre-parcial', '% Afectado', '% Desperdicio', 'Parcial', 'Total'].map((t) => ({ t, rs: 2 }))],
+      [...['Long. [m]', 'Ancho [m]', 'Altura [m]', 'Cant. [und]', 'Long. [m]', 'Ancho [m]', 'Altura [m]', 'Cant. [und]', 'LD', 'C', 'LI'].map((t) => ({ t }))],
+    ],
+    filas: planilla.filas, fijas: 4,
+    anchos: [12, 18, 18, 100, 40, 40, 24, 24, 30, 28, 24, 24, 24, 28, 24, 24, 24, 18, 18, 18, 30, 32, 34, 34, 36],
+    pie: ['Pre-parcial = Elem. simil. × Long. × Ancho (× Altura, Cant.); sin dimensiones, el metrado programado. Parcial = Pre-parcial × % Afectado × (1 + % Desperdicio). El total redondea una sola vez.'],
   })
   const tablaResumen = (): Tabla => ({
     titulo: 'RESUMEN DE METRADO', meta,
-    cabecera: [['N°', 'Partida', 'Prog. inicial [km]', 'Prog. final [km]', 'Lado', 'Unidad', 'Total'].map((t) => ({ t }))],
-    filas: porPartida.map((p, i) => [`MR ${i + 1}`, p.partida, p.de != null ? fmtProgresiva(p.de) : '', p.a != null ? fmtProgresiva(p.a) : '', [...p.lado].join('/'), p.und, num(p.total)]),
+    cabecera: [[{ t: 'N°', cs: 3 }, ...['Partida', 'Prog. inicial [km]', 'Prog. final [km]', 'Lado'].map((t) => ({ t })), { t: 'Unidad', cs: 2 }, { t: 'Total' }]],
+    filas: porPartida.map((p, i) => ['-', p.origen, i + 1, p.partida, prog(p.de), prog(p.a), [...p.lado].join('/'), p.und, '',
+      { v: p.total, f: `'${HOJA_PLA}'!Y{r:${planilla.totalDe[i]}@${HOJA_PLA}}`, negrita: true }]),
+    anchos: [12, 18, 18, 170, 50, 50, 36, 30, 10, 46], fijas: 4,
   })
-  const tablaPlanilla = (): Tabla => ({
-    titulo: 'PLANILLA DE METRADO', meta,
-    cabecera: [['N°', 'Partida', 'Prog. inicial [km]', 'Prog. final [km]', 'Lado', 'Unid.', 'Fecha', 'Total'].map((t) => ({ t }))],
-    filas: porPartida.flatMap((p, i) => [
-      [`MR ${i + 1}`, p.partida, '', '', '', p.und, '', num(p.total)],
-      ...p.det.map((r: any, k: number) => [`${i + 1}.${k + 1}`, '', fmtProgresiva(r.prog_start_m), r.prog_end_m != null ? fmtProgresiva(r.prog_end_m) : '', r.lado ?? '', p.und, fmtDate(r.scheduled_on), num(Number(r.target_qty))]),
-    ]),
+  const tablaReq = (): Tabla => ({
+    titulo: 'REQUERIMIENTO DE RECURSOS', meta,
+    cabecera: [[
+      { t: 'N°', cs: 3, rs: 2 }, ...['Partida', 'Unid. part.', 'Metrado', 'Unid. rend.', 'Rendi.', 'Recursos (mano de obra, materiales y/o equipos)', 'Unid. recurso', 'MR / PCI / E'].map((t) => ({ t, rs: 2 })),
+      { t: 'Materiales', cs: 9 }, { t: 'Nota', rs: 2 },
+    ], ['Pre-cantidad a requerir', 'Stock en cuadrilla', 'Cantidad a requerir', 'Cantidad a pedir por practicidad', 'Remanente', 'Almacén de retiro', 'Fecha de retiro', 'Encargado de retiro', 'Nota de salida'].map((t) => ({ t }))],
+    filas: lineas.map((x, i): Valor[] => {
+      // El metrado viene del Resumen de metrado de la misma partida (si coincide con el de la semana)
+      const k = porPartida.findIndex((p) => p.activity_id === x.activity_id)
+      const metrado: Valor = k >= 0 && Math.abs(porPartida[k].total - Number(x.metrado)) < 0.001
+        ? { v: Number(x.metrado), f: `'${HOJA_RES}'!J{r:${k}@${HOJA_RES}}` } : { v: Number(x.metrado) }
+      return ['-', x.origen ?? 'MR', i + 1, x.partida, x.unidad_partida, metrado, x.unidad_rend, { v: Number(x.rendimiento), fmt: '0.####' }, x.recurso, x.unidad_recurso, x.origen,
+        { v: Number(x.pre), f: 'ROUND(F{r}*H{r},3)', fmt: CANT },
+        { v: Number(x.stock), fmt: CANT, color: 'FF0000' },
+        { v: Number(x.requerir), f: 'MAX(0,L{r}-M{r})', fmt: CANT },
+        { v: Number(x.practica), fmt: CANT, negrita: true, fondo: 'DCE6F1' },
+        { v: remanente(x), f: 'M{r}+O{r}-L{r}', fmt: CANT },
+        x.almacen || '—', x.fecha_retiro ? fmtDate(x.fecha_retiro) : '—', x.encargado || 'Por asignar', x.nota_salida || '—',
+        [x.motivo, x.nota, x.codigo_recurso ? `Código: ${x.codigo_recurso}` : ''].filter(Boolean).join(' · ')]
+    }),
+    anchos: [12, 18, 14, 70, 24, 34, 28, 26, 90, 24, 22, 34, 32, 32, 36, 30, 34, 30, 40, 30, 70], fijas: 4,
+    pie: ['Pre-cantidad = Metrado × Rendi. · Cantidad a requerir = máx(0; Pre-cantidad − Stock) · Remanente = Stock + Pedido − Pre-cantidad. El pedido no modifica existencias.'],
   })
   const nombre = `Requerimiento_semana_${semana}_${crewNombre.replace(/\W+/g, '_')}`
 
@@ -127,7 +178,7 @@ export function InsumosSemana({ plan, crewId, crewNombre, semana, rows, canEdit 
         <p className="text-muted-foreground text-[12.5px]">Derivado de la programación semanal · Semana {semana} · versión {version} · {crewNombre}.</p>
         <div className="flex gap-2">
           <Button size="sm" variant="outline" disabled={!lineas.length} onClick={() => tablaPdf(nombre, [tablaReq(), tablaResumen(), tablaPlanilla()])}><FileDown className="size-4" />PDF</Button>
-          <Button size="sm" variant="outline" disabled={!lineas.length} onClick={() => tablaXlsx(nombre, [{ ...tablaReq(), hoja: 'Requerimiento' }, { ...tablaResumen(), hoja: 'Resumen de metrado' }, { ...tablaPlanilla(), hoja: 'Planilla de metrado' }])}><FileSpreadsheet className="size-4" />Excel</Button>
+          <Button size="sm" variant="outline" disabled={!lineas.length} onClick={() => tablaXlsx(nombre, [{ ...tablaReq(), hoja: HOJA_REQ }, { ...tablaResumen(), hoja: HOJA_RES }, { ...tablaPlanilla(), hoja: HOJA_PLA }])}><FileSpreadsheet className="size-4" />Excel</Button>
           {canEdit && <Button size="sm" onClick={guardar} loading={guardando} disabled={!lineas.length || faltaMotivo}><Save className="size-4" />Guardar requerimiento</Button>}
         </div>
       </div>
@@ -249,7 +300,7 @@ export function TablaSimple({ t }: { t: Tabla }) {
         {t.cabecera.map((f, i) => <tr key={i}>{f.map((c, j) => <th key={j} colSpan={c.cs} rowSpan={c.rs} className="border border-[#9FB4CD] px-1.5 py-1">{c.t}</th>)}</tr>)}
       </thead>
       <tbody>
-        {t.filas.map((f, i) => <tr key={i} className={cn(String(f[0]).startsWith('MR') && 'bg-[#DCE6F1]/60 font-semibold')}>{f.map((v, j) => <td key={j} className="border border-[#C9D6E5] px-1.5 py-0.5 text-center">{v}</td>)}</tr>)}
+        {t.filas.map((f, i) => <tr key={i} className={cn(typeof f[2] === 'number' && 'bg-[#DCE6F1]/60 font-semibold')}>{f.map((v, j) => <td key={j} className="border border-[#C9D6E5] px-1.5 py-0.5 text-center">{textoCelda(v)}</td>)}</tr>)}
         {t.filas.length === 0 && <tr><td colSpan={12} className="text-muted-foreground px-3 py-4 text-center">Sin datos.</td></tr>}
       </tbody>
     </table>

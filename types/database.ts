@@ -2893,8 +2893,8 @@ export type Database = {
           heading: number | null
           height: number | null
           id: string
-          lat: number
-          lng: number
+          lat: number | null
+          lng: number | null
           master_bytes: number | null
           master_height: number | null
           master_path: string | null
@@ -2946,8 +2946,8 @@ export type Database = {
           heading?: number | null
           height?: number | null
           id?: string
-          lat: number
-          lng: number
+          lat?: number | null
+          lng?: number | null
           master_bytes?: number | null
           master_height?: number | null
           master_path?: string | null
@@ -2999,8 +2999,8 @@ export type Database = {
           heading?: number | null
           height?: number | null
           id?: string
-          lat?: number
-          lng?: number
+          lat?: number | null
+          lng?: number | null
           master_bytes?: number | null
           master_height?: number | null
           master_path?: string | null
@@ -4828,6 +4828,24 @@ export type Database = {
           },
         ]
       }
+      permisos_base: {
+        Row: {
+          accion: string
+          modulo: string
+          rol: Database["public"]["Enums"]["user_role"]
+        }
+        Insert: {
+          accion: string
+          modulo: string
+          rol: Database["public"]["Enums"]["user_role"]
+        }
+        Update: {
+          accion?: string
+          modulo?: string
+          rol?: Database["public"]["Enums"]["user_role"]
+        }
+        Relationships: []
+      }
       permisos_cambios: {
         Row: {
           cambios: Json
@@ -4878,30 +4896,33 @@ export type Database = {
       }
       permisos_rol: {
         Row: {
+          acciones: Json
           actualizado_at: string
           actualizado_por: string | null
           modulo: string
           rol: Database["public"]["Enums"]["user_role"]
           service_id: string
-          ver: boolean
+          ver: boolean | null
           version: number
         }
         Insert: {
+          acciones?: Json
           actualizado_at?: string
           actualizado_por?: string | null
           modulo: string
           rol: Database["public"]["Enums"]["user_role"]
           service_id: string
-          ver: boolean
+          ver?: boolean | null
           version?: number
         }
         Update: {
+          acciones?: Json
           actualizado_at?: string
           actualizado_por?: string | null
           modulo?: string
           rol?: Database["public"]["Enums"]["user_role"]
           service_id?: string
-          ver?: boolean
+          ver?: boolean | null
           version?: number
         }
         Relationships: [
@@ -10957,6 +10978,10 @@ export type Database = {
     }
     Functions: {
       _campos_comunes_mtc: { Args: never; Returns: Json }
+      accion_permitida: {
+        Args: { p_accion: string; p_modulo: string; p_service: string }
+        Returns: boolean
+      }
       actividad_guardar: {
         Args: {
           p_activa: boolean
@@ -11535,6 +11560,10 @@ export type Database = {
         Args: { p_aceptar: boolean; p_ev: string; p_motivo?: string }
         Returns: Json
       }
+      exigir_accion: {
+        Args: { p_accion: string; p_modulo: string; p_service: string }
+        Returns: undefined
+      }
       familia_permitida: {
         Args: { p_familia: string; p_service: string }
         Returns: boolean
@@ -11583,6 +11612,8 @@ export type Database = {
           p_busqueda?: string
           p_corte?: string
           p_crew?: string
+          p_desde?: string
+          p_estado?: string
           p_pci?: string
           p_sector?: string
           p_service: string
@@ -11594,6 +11625,8 @@ export type Database = {
           p_cifra?: string
           p_corte?: string
           p_crew?: string
+          p_desde?: string
+          p_estado?: string
           p_pci?: string
           p_plazo?: number
           p_sector?: string
@@ -11644,6 +11677,7 @@ export type Database = {
         Returns: Json
       }
       mis_cuadrillas: { Args: { p_service_id: string }; Returns: string[] }
+      mis_permisos: { Args: { p_service: string }; Returns: Json }
       mis_servicios: { Args: never; Returns: string[] }
       movimientos_confirmados: {
         Args: { p_crew: string; p_service: string }
@@ -11772,6 +11806,7 @@ export type Database = {
         }
       }
       parte_publicar: { Args: { p_ids: string[] }; Returns: Json }
+      parte_sin_adjuntos: { Args: { p_work_order: string }; Returns: string[] }
       parte_sin_metrado: {
         Args: { p_work_order_id: string }
         Returns: string[]

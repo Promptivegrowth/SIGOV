@@ -1,5 +1,6 @@
 'use client'
 
+import { usePuede } from '@/lib/permisos'
 import * as React from 'react'
 import { useSearchParams } from 'next/navigation'
 import { useQuery, useQueryClient } from '@tanstack/react-query'
@@ -40,6 +41,9 @@ export function ImportarClient() {
   const params = useSearchParams()
   const qc = useQueryClient()
   const sb = React.useMemo(() => createClient(), [])
+  // Roles y permisos: «Importar» del módulo de destino (el servidor lo vuelve a exigir)
+  const puede = usePuede()
+  const importable = (k: string) => k === 'actividades' ? role === 'admin' : puede(k as any, 'importar')
 
   const initialKind = (params.get('kind') as ImportKind['key']) || null
   const [kind, setKind] = React.useState<ImportKind['key'] | null>(initialKind)
@@ -556,8 +560,10 @@ export function ImportarClient() {
                 {Object.values(IMPORT_KINDS).map((k) => (
                   <button
                     key={k.key}
+                    disabled={!importable(k.key)}
+                    title={importable(k.key) ? undefined : 'Tu rol no tiene habilitado «Importar» en este módulo (Roles y permisos)'}
                     onClick={() => { setKind(k.key); setStep('archivo') }}
-                    className="bg-card group flex items-start gap-3.5 rounded-xl border border-border p-4 text-left transition-all hover:border-primary/40 hover:shadow-md"
+                    className="bg-card group flex items-start gap-3.5 rounded-xl border border-border p-4 text-left transition-all hover:border-primary/40 hover:shadow-md disabled:cursor-not-allowed disabled:opacity-50"
                   >
                     <span className="bg-primary/10 text-primary flex size-10 shrink-0 items-center justify-center rounded-lg">
                       <FileSpreadsheet className="size-5" />

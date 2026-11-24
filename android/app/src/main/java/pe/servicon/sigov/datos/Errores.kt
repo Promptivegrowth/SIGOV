@@ -43,6 +43,10 @@ fun Throwable.enCristiano(): String {
             (this as? RestException)?.statusCode == 401 ->
             "Tu sesión venció. Vuelve a entrar cuando tengas señal."
 
+        // Matriz de Roles y permisos: el Administrador apagó esta acción para el rol
+        texto.contains("policy \"permiso_", ignoreCase = true) ->
+            "El Administrador desactivó esta acción para tu rol (Roles y permisos). Avisa al coordinador."
+
         texto.contains("row-level security", ignoreCase = true) ||
             texto.contains("permission denied", ignoreCase = true) ||
             (this as? RestException)?.statusCode == 403 ->

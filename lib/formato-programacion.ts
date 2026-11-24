@@ -79,6 +79,7 @@ export async function programacionSemanalXlsx(opciones: {
 
   const ExcelJS = (await import('exceljs')).default ?? (await import('exceljs'))
   const wb = new (ExcelJS as any).Workbook()
+  wb.calcProperties = { fullCalcOnLoad: true }
   wb.creator = 'SIGOV'
   const ws = wb.addWorksheet('PS-ST' + String(stCuadrilla ?? '').padStart(2, '0') + '-SERVICON', {
     views: [{ showGridLines: false, zoomScale: 70 }],
@@ -251,6 +252,16 @@ export async function programacionSemanalXlsx(opciones: {
       if (col === 36) cell.numFmt = '#,##0.00'
       // Lo obligatorio que falta, en amarillo (como el formato original)
       if (it && [2, 3, 5, 6, 7, 8].includes(col) && (valores[col] === '' || valores[col] == null)) cell.fill = relleno('FFFFFF99')
+    }
+    // Total con fórmula, como el formato original: metrado = suma de los seis días; De/A = los del día programado
+    if (it) {
+      const letra = (c: number) => ws.getColumn(c).letter
+      row.getCell(36).value = { formula: `SUM(${COL_DIA.map((c) => letra(c + 1) + fila).join(',')})`, result: Number(it.target_qty ?? 0) }
+      const d = COL_DIA.findIndex((c) => valores[c + 1] !== undefined)
+      if (d >= 0) {
+        row.getCell(37).value = { formula: `${letra(COL_DIA[d] + 2)}${fila}`, result: valores[COL_DIA[d] + 2] }
+        row.getCell(38).value = { formula: `${letra(COL_DIA[d] + 3)}${fila}`, result: valores[COL_DIA[d] + 3] }
+      }
     }
     ws.getCell(`J${fila}`).fill = relleno(AZUL)
     ws.getCell(`AI${fila}`).fill = relleno(AZUL)

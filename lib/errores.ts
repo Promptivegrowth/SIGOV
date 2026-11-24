@@ -118,6 +118,9 @@ export function mensajeAmigable(error: unknown, porDefecto: string = GENERICO): 
   const propio = /^\s*SIGOV\s*:/i.test(crudo) || codigo === 'P0001'
   if (propio && esParaPersonas(sinGuionesBajos(texto))) return conMayuscula(sinGuionesBajos(texto))
 
+  // Matriz de Roles y permisos (0159): la política «permiso_<acción>» rechazó la escritura
+  const pol = /policy "permiso_(crear|editar|importar)"/i.exec(crudo)
+  if (pol) return `Tu rol no tiene habilitado «${pol[1][0].toUpperCase() + pol[1].slice(1)}» en este módulo. Lo habilita el Administrador en Roles y permisos.`
   // Sin conexión: lo dice el navegador, en inglés y sin código.
   if (/failed to fetch|networkerror|network request failed|load failed|fetch failed/i.test(crudo)) {
     return 'No hay conexión con el servidor. Revisa tu internet e inténtalo de nuevo.'

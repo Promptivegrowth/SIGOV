@@ -3,15 +3,18 @@
 import * as React from 'react'
 import { useQuery } from '@tanstack/react-query'
 import { createClient } from '@/lib/supabase/client'
+import { useSession } from '@/lib/hooks/use-session'
 import { NAV, type Role } from '@/lib/constants'
 
 /**
  * Permisos por rol (A01 «Roles y permisos»).
  *
- * «Ver» por módulo es configurable por contrato (tabla permisos_rol) y
- * gobierna el menú y las rutas. Las demás acciones son reglas que verifica
- * el servidor en cada operación (funciones de 0126/0135/…); aquí solo se
- * describen para mostrarlas en la matriz, sin poder cambiarlas.
+ * «Ver» por módulo gobierna el menú y las rutas; las acciones (crear,
+ * editar, importar, asignar, validar, exportar) se encienden o apagan por
+ * contrato y rol dentro de lo que el sistema admite para ese rol
+ * (tabla permisos_base, 0159). El servidor aplica la matriz en cada
+ * operación (accion_permitida / exigir_accion); aquí solo se usa para
+ * mostrarla y para ocultar botones que de todas formas serían rechazados.
  */
 export const MODULOS_PERMISO = [
   { k: 'programacion', t: 'Programación', rutas: ['/programacion'] },
@@ -27,32 +30,18 @@ export const MODULOS_PERMISO = [
   { k: 'configuracion', t: 'Configuración', rutas: ['/configuracion'] },
 ] as const
 export type ModuloPermiso = (typeof MODULOS_PERMISO)[number]['k']
+export type Accion = 'crear' | 'editar' | 'importar' | 'asignar' | 'validar' | 'exportar'
+export const nombreModulo = (k: string) => MODULOS_PERMISO.find((m) => m.k === k)?.t ?? k
 
-type Accion = 'crear' | 'editar' | 'importar' | 'asignar' | 'validar' | 'exportar'
-/** Lo que el servidor permite hoy a cada rol (fuente: funciones SQL de permisos). */
-export const REGLAS_SERVIDOR: Record<string, Partial<Record<ModuloPermiso, Accion[]>>> = {
-  admin: Object.fromEntries(MODULOS_PERMISO.map((m) => [m.k, ['crear', 'editar', 'importar', 'asignar', 'validar', 'exportar']])) as any,
-  supervisor: {
-    programacion: ['crear', 'editar', 'asignar', 'exportar'], pci: ['crear', 'editar', 'importar', 'asignar', 'validar', 'exportar'],
-    reporte_diario: ['validar', 'exportar'], observaciones: ['crear', 'editar', 'asignar', 'exportar'], inventario: ['crear', 'editar', 'exportar'],
-    materiales: ['crear', 'exportar'], reportes: ['exportar'],
-  },
-  residente: {
-    programacion: ['crear', 'editar', 'asignar', 'exportar'], pci: ['crear', 'editar', 'importar', 'asignar', 'validar', 'exportar'],
-    reporte_diario: ['validar', 'exportar'], observaciones: ['crear', 'editar', 'exportar'], inventario: ['editar', 'exportar'],
-    materiales: ['crear', 'validar', 'exportar'], caja: ['crear', 'validar', 'exportar'], ssoma: ['exportar'], reportes: ['exportar'],
-  },
-  jefe_cuadrilla: {
-    pci: ['editar'], reporte_diario: ['crear', 'editar'], observaciones: ['crear'], inventario: ['crear'], materiales: ['crear'], caja: ['crear'], ssoma: ['crear'],
-  },
-  ing_seguridad: { ssoma: ['crear', 'editar', 'validar', 'exportar'], observaciones: [], reportes: ['exportar'] },
-  visor: { pci: ['validar'], programacion: [], reportes: ['exportar'] },
-}
-
-/** «Ver» por defecto: lo que el menú del rol ya mostraba. */
-export function verPorDefecto(rol: string, modulo: string) {
+/**
+ * «Ver» por defecto: lo que el menú del rol ya mostraba. El Jefe trabaja en
+ * la app de campo: sus módulos de campo cuentan como visibles aunque no
+ * estén en su menú web.
+ */
+export function verPorDefecto(rol: string, modulo: string, base?: string[]) {
   const m = MODULOS_PERMISO.find((x) => x.k === modulo)
   if (!m) return false
+  if (rol === 'jefe_cuadrilla' && base?.length) return true
   return NAV.some((n) => m.rutas.some((r) => n.href === r || n.href.startsWith(r + '/')) && n.roles.includes(rol as Role))
 }
 
@@ -67,9 +56,31 @@ export function useRutasOcultas(serviceId: string, rol: string) {
   })
   return React.useMemo(() => {
     const ocultas: string[] = []
-    for (const p of q.data ?? []) if (!p.ver) ocultas.push(...(MODULOS_PERMISO.find((m) => m.k === p.modulo)?.rutas ?? []))
+    for (const p of q.data ?? []) if (p.ver === false) ocultas.push(...(MODULOS_PERMISO.find((m) => m.k === p.modulo)?.rutas ?? []))
     return ocultas
   }, [q.data])
 }
 
 export const rutaOculta = (ocultas: string[], href: string) => ocultas.some((r) => href === r || href.startsWith(r + '/'))
+
+/**
+ * Lo que el usuario tiene habilitado en el contrato (mis_permisos). Mientras
+ * carga, o para acciones que la matriz no describe, responde true: la última
+ * palabra la tiene siempre el servidor.
+ */
+export function usePuede() {
+  const { service, role } = useSession()
+  const sb = React.useMemo(() => createClient(), [])
+  const q = useQuery({
+    queryKey: ['mis-permisos', service.id, role],
+    enabled: !!service.id && role !== 'admin',
+    staleTime: 5 * 60_000,
+    queryFn: async () => ((await sb.rpc('mis_permisos' as any, { p_service: service.id } as any)).data ?? {}) as Record<string, string[] | null>,
+  })
+  return React.useCallback((modulo: ModuloPermiso, accion: Accion) => {
+    if (role === 'admin' || !q.data) return true
+    const lista = q.data[modulo]
+    if (lista === undefined) return true
+    return (lista ?? []).includes(accion)
+  }, [q.data, role])
+}

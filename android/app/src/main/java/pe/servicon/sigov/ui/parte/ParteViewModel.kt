@@ -132,6 +132,7 @@ class ParteViewModel @Inject constructor(
     private val charlas: pe.servicon.sigov.datos.CharlaRepositorio,
     private val ssoma: pe.servicon.sigov.datos.SsomaRepositorio,
     private val colaEnvio: pe.servicon.sigov.datos.sync.ColaRepositorio,
+    private val documentos: pe.servicon.sigov.datos.DocumentosRepositorio,
 ) : ViewModel() {
 
     private val _estado = MutableStateFlow(EstadoParte())
@@ -694,6 +695,27 @@ class ParteViewModel @Inject constructor(
             return
         }
         viewModelScope.launch {
+            // Roles y permisos: si el Administrador desactivó «Crear» en Reporte diario, se avisa antes de encolar
+            if (!runCatching { sesion.puede("reporte_diario", "crear") }.getOrDefault(true)) {
+                _estado.update { it.copy(error = "El Administrador desactivó el envío del reporte diario para tu rol (Roles y permisos). Avisa al coordinador.") }
+                return@launch
+            }
+            // Guía Jefe F4: ATS, charla y checklist del vehículo asignado llevan al menos un adjunto.
+            // Cuenta lo ya cargado y las fotos que esperan señal (salen antes que el envío en la cola).
+            val sinAdjunto = runCatching {
+                val cuadrilla = sesion.cuadrilla()
+                if (cuadrilla == null || parte.cuadrillaId == null) emptyList()
+                else documentos.delDia(cuadrilla.servicioId, parte.cuadrillaId, LocalDate.parse(parte.fecha))
+                    .filter { it.tipo in setOf("ats", "charla", "checklist_vehicular") && it.paginas + it.porEnviar == 0 }
+                    .map { it.nombre }
+            }.getOrDefault(emptyList())
+            if (sinAdjunto.isNotEmpty()) {
+                _estado.update {
+                    it.copy(error = "Falta el adjunto de: " + sinAdjunto.joinToString(", ") +
+                        ". Toma la foto del formato en Seguridad › Documentos del día y vuelve a enviar.")
+                }
+                return@launch
+            }
             // El personal, si no se puso: los integrantes de la cuadrilla
             val sugerido = _estado.value.personalSugerido
             val completo = if (parte.personal == null && sugerido != null) {

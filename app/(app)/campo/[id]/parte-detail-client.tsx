@@ -1,5 +1,6 @@
 'use client'
 
+import { usePuede } from '@/lib/permisos'
 import { encolarOriginal } from '@/lib/offline/original'
 import * as React from 'react'
 import Link from 'next/link'
@@ -145,6 +146,13 @@ export function ParteDetailClient({ orderId }: { orderId: string }) {
   // El dueño del parte es el jefe de ESA cuadrilla, no cualquier jefe
   // (CASO 27: el de la 01 no edita el parte de la 05)
   const isOwner = role === 'jefe_cuadrilla' && !!o && o.crew_id === crew?.id
+  const puede = usePuede()
+  // Guía Jefe F4: ATS, charla y checklist del vehículo asignado llevan al menos un adjunto
+  const sinAdjuntos = useQuery({
+    queryKey: ['parte-sin-adjuntos', orderId],
+    enabled: !!o && editable,
+    queryFn: async () => ((await sb.rpc('parte_sin_adjuntos' as any, { p_work_order: orderId } as any)).data ?? []) as string[],
+  })
   // Fotos desde el ordenador: también el supervisor, el residente y el
   // administrador (matriz: «Importar fotos desde galería/PC»); la base
   // comprueba que la cuadrilla esté a su cargo
@@ -157,7 +165,7 @@ export function ParteDetailClient({ orderId }: { orderId: string }) {
   const submit = async () => {
     // Por la función de la base: exige actividades y avisa al supervisor
     const { error } = await sb.rpc('enviar_parte' as any, { p_id: orderId } as any)
-    if (error) return toast.error(mensajeAmigable(error))
+    if (error) { qc.invalidateQueries({ queryKey: ['parte-sin-adjuntos', orderId] }); return toast.error(mensajeAmigable(error)) }
     haptic([30, 40, 30])
     toast.success('Parte enviado al supervisor')
     qc.invalidateQueries({ queryKey: ['work-order', orderId] })
@@ -214,19 +222,19 @@ export function ParteDetailClient({ orderId }: { orderId: string }) {
               <FileDown className="size-4" />
               FOR:001 Excel
             </Button>
-            {editable && isOwner && (
+            {editable && isOwner && puede('reporte_diario', 'crear') && (
               <Button variant="accent" onClick={submit} disabled={!entries.data?.length}>
                 <Send className="size-4" />
                 Enviar a validación
               </Button>
             )}
-            {o?.status === 'validado' && role === 'residente' && versionPublicada === 0 && (
+            {o?.status === 'validado' && role === 'residente' && versionPublicada === 0 && puede('reporte_diario', 'validar') && (
               <Button onClick={publicar} loading={publicando}>
                 <Send className="size-4" />
                 Publicar a COVINCA
               </Button>
             )}
-            {o?.status === 'enviado' && can.manage && (
+            {o?.status === 'enviado' && can.manage && puede('reporte_diario', 'validar') && (
               <Button onClick={() => setReviewOpen(true)}>
                 <CircleCheck className="size-4" />
                 Revisar parte
@@ -270,6 +278,12 @@ export function ParteDetailClient({ orderId }: { orderId: string }) {
       </PageHeader>
 
       <PageBody className="space-y-4">
+        {editable && (sinAdjuntos.data?.length ?? 0) > 0 && (
+          <div className="bg-warning/10 border-warning/30 flex items-start gap-3 rounded-xl border px-4 py-3 text-[13px]">
+            <TriangleAlert className="text-warning mt-0.5 size-4 shrink-0" />
+            <p>Para enviar el reporte falta el adjunto de: <strong>{sinAdjuntos.data!.join(', ')}</strong>. Carga la foto del formato en Seguridad › Documentos del día.</p>
+          </div>
+        )}
         {o?.status === 'observado' && o.review_notes && (
           <div className="bg-destructive/8 border-destructive/25 flex items-start gap-3 rounded-xl border px-4 py-3">
             <TriangleAlert className="text-destructive mt-0.5 size-4 shrink-0" />

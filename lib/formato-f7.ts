@@ -172,11 +172,18 @@ export async function f7Xlsx(opciones: {
         r.supplies?.name ?? '', unidadRec, p.origen,
         pre, redondeo(enCuadrilla), aRequerir, practico, redondeo(practico - aRequerir), '', '', '', '', '',
       ])
+      // Fórmulas del modelo: pre = metrado × rendimiento; a requerir = máx(0; pre − stock); práctico = redondeo hacia arriba
+      const rf = fila - 1, fr = ws.getRow(rf)
+      fr.getCell(10).value = { formula: `ROUND(D${rf}*F${rf},3)`, result: pre }
+      fr.getCell(12).value = { formula: `MAX(0,J${rf}-K${rf})`, result: aRequerir }
+      fr.getCell(13).value = { formula: `ROUNDUP(L${rf},0)`, result: practico }
+      fr.getCell(14).value = { formula: `M${rf}-L${rf}`, result: redondeo(practico - aRequerir) }
     }
   }
   if (!partidas.size) poner(['', 'Sin partidas programadas en la semana', '', '', '', '', '', '', '', '', '', '', '', '', '', '', '', '', ''], true)
 
   ws.views = [{ state: 'frozen', ySplit: h2 }]
+  wb.calcProperties = { fullCalcOnLoad: true }
   const buffer = await wb.xlsx.writeBuffer()
   const cc = codigoCuadrilla(crew?.numero ?? 0)
   return {

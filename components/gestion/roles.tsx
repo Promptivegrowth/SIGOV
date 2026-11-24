@@ -12,17 +12,19 @@ import { Button } from '@/components/ui/button'
 import { Input, Textarea } from '@/components/ui/input'
 import { cn, fmtDateTime } from '@/lib/utils'
 import { mensajeAmigable } from '@/lib/errores'
-import { MODULOS_PERMISO, REGLAS_SERVIDOR, verPorDefecto, type ModuloPermiso } from '@/lib/permisos'
+import { MODULOS_PERMISO, verPorDefecto, nombreModulo, type ModuloPermiso } from '@/lib/permisos'
 import { GestionNav, Kpi } from './gestion-nav'
 import { nombreRol } from './usuarios'
 import { Elegir } from '@/components/ssoma/control-ssoma'
 
 /**
- * «Roles y permisos» (A01/A02). La columna «Ver» decide qué módulos ve cada
- * rol (menú y rutas) y se cambia con motivo y vista previa Antes/Después;
- * queda auditado. Crear, editar, importar, asignar, validar y exportar son
- * reglas que el servidor verifica en cada acción: se muestran con candado,
- * sin auto-validación ni atajos desde aquí.
+ * «Roles y permisos» (A01/A02). «Ver» decide qué módulos ve cada rol (menú y
+ * rutas) y cada acción (crear, editar, importar, asignar, validar, exportar)
+ * se enciende o apaga por rol, con motivo y vista previa Antes/Después; todo
+ * queda versionado y en la bitácora, y el servidor lo aplica en cada
+ * operación (0159). Solo se puede tocar lo que el sistema admite para el rol
+ * (permisos_base): lo demás va con candado para no romper la separación de
+ * funciones (el Jefe no valida su propio reporte, el Visor no crea).
  */
 const ACCIONES = [['crear', Plus, 'Crear'], ['editar', Pencil, 'Editar'], ['importar', Download, 'Importar'], ['asignar', UserPlus, 'Asignar'], ['validar', CheckCircle2, 'Validar'], ['exportar', Upload, 'Exportar']] as const
 const ALCANCE: Record<string, string> = {
@@ -36,7 +38,8 @@ export function RolesPermisos() {
   const qc = useQueryClient()
   const [rol, setRol] = React.useState('supervisor')
   const [q, setQ] = React.useState('')
-  const [cambios, setCambios] = React.useState<Record<string, boolean>>({})
+  // cambios[módulo][«ver» | acción] = nuevo valor
+  const [cambios, setCambios] = React.useState<Record<string, Record<string, boolean>>>({})
   const [motivo, setMotivo] = React.useState('')
   const [guardando, setGuardando] = React.useState(false)
   const datos = useQuery({
@@ -48,7 +51,8 @@ export function RolesPermisos() {
         sb.from('service_members').select('role, profile_id, profiles(full_name, email)').eq('service_id', service.id),
         sb.from('crews').select('id, code, name, supervisor_id').eq('service_id', service.id).is('deleted_at', null).order('code'),
       ])
-      return { permisos: (p ?? []) as any[], ultimo: ((c ?? []) as any[])[0], miembros: (m ?? []) as any[], crews: (cr ?? []) as any[] }
+      const { data: b } = await sb.from('permisos_base' as any).select('rol, modulo, accion')
+      return { permisos: (p ?? []) as any[], ultimo: ((c ?? []) as any[])[0], miembros: (m ?? []) as any[], crews: (cr ?? []) as any[], base: (b ?? []) as any[] }
     },
   })
   const d = datos.data
@@ -66,16 +70,39 @@ export function RolesPermisos() {
     const c = (d?.crews ?? []).find((x: any) => x.id === id)
     return c?.supervisor_id && c.supervisor_id !== sup ? supervisores.find((m: any) => m.profile_id === c.supervisor_id)?.profiles?.full_name ?? 'otro supervisor' : null
   }
-  const verActual = (m: ModuloPermiso) => {
-    const f = (d?.permisos ?? []).find((x) => x.rol === rol && x.modulo === m)
-    return f ? !!f.ver : verPorDefecto(rol, m)
-  }
-  const ver = (m: ModuloPermiso) => (m in cambios ? cambios[m] : verActual(m))
-  const diff = Object.entries(cambios).filter(([m, v]) => v !== verActual(m as ModuloPermiso))
+  const baseDe = (r: string, m: string) => (d?.base ?? []).filter((x: any) => x.rol === r && x.modulo === m).map((x: any) => x.accion as string)
+  const fila = (r: string, m: string) => (d?.permisos ?? []).find((x) => x.rol === r && x.modulo === m)
+  const verDe = (r: string, m: ModuloPermiso) => { const f = fila(r, m); return f && f.ver != null ? !!f.ver : verPorDefecto(r, m, baseDe(r, m)) }
+  const accDe = (r: string, m: string, k: string) => baseDe(r, m).includes(k) && fila(r, m)?.acciones?.[k] !== false
+  const verActual = (m: ModuloPermiso) => verDe(rol, m)
+  const accActual = (m: ModuloPermiso, k: string) => accDe(rol, m, k)
+  const ver = (m: ModuloPermiso) => (cambios[m]?.ver ?? verActual(m))
+  const acc = (m: ModuloPermiso, k: string) => (cambios[m]?.[k] ?? accActual(m, k))
+  const cambiar = (m: ModuloPermiso, k: string, v: boolean) => setCambios({ ...cambios, [m]: { ...(cambios[m] ?? {}), [k]: v } })
+  // Lo que de verdad cambia, en orden de la matriz
+  const diff = MODULOS_PERMISO.flatMap((m) => ['ver', ...ACCIONES.map(([k]) => k)].flatMap((k) => {
+    const nuevo = cambios[m.k]?.[k]
+    const antes = k === 'ver' ? verActual(m.k) : accActual(m.k, k)
+    return nuevo === undefined || nuevo === antes ? [] : [{ m: m.k as ModuloPermiso, k, antes, nuevo }]
+  }))
+  const etiqueta = (k: string) => k === 'ver' ? 'Ver' : ACCIONES.find(([x]) => x === k)?.[2] ?? k
+  // Avisos de impacto antes de guardar
+  const avisos = diff.filter((c) => !c.nuevo).flatMap((c) => {
+    const out: string[] = []
+    if (rol === 'jefe_cuadrilla' && ['reporte_diario', 'ssoma', 'pci'].includes(c.m))
+      out.push(`${nombreModulo(c.m)} – ${etiqueta(c.k)}: la app de campo dejará de poder enviarlo; lo que esté en cola quedará con error de sincronización hasta reactivarlo.`)
+    if (c.k !== 'ver') {
+      const otros = ['supervisor', 'residente', 'jefe_cuadrilla', 'ing_seguridad', 'visor'].filter((r) => r !== rol && verDe(r, c.m) && accDe(r, c.m, c.k))
+      if (!otros.length) out.push(`${nombreModulo(c.m)} – ${etiqueta(c.k)}: ningún otro rol lo tiene; solo lo podrá hacer el Administrador.`)
+    } else out.push(`${nombreModulo(c.m)} – Ver apagado: el rol tampoco podrá registrar nada en el módulo.`)
+    return out
+  })
   const guardar = async () => {
     setGuardando(true)
     if (diff.length) {
-      const { error } = await sb.rpc('permisos_guardar' as any, { p_service: service.id, p_rol: rol, p_cambios: Object.fromEntries(diff), p_motivo: motivo } as any)
+      const pCambios: Record<string, Record<string, boolean>> = {}
+      for (const c of diff) pCambios[c.m] = { ...(pCambios[c.m] ?? {}), [c.k]: c.nuevo }
+      const { error } = await sb.rpc('permisos_guardar' as any, { p_service: service.id, p_rol: rol, p_cambios: pCambios, p_motivo: motivo } as any)
       if (error) { setGuardando(false); return toast.error(mensajeAmigable(error)) }
     }
     if (alcanceCambia) {
@@ -83,8 +110,8 @@ export function RolesPermisos() {
       if (error) { setGuardando(false); return toast.error(mensajeAmigable(error)) }
     }
     setGuardando(false)
-    toast.success('Cambios guardados', { description: alcanceCambia ? 'El alcance del supervisor se aplica en su próxima consulta.' : 'El menú y las rutas del rol se actualizan al recargar su sesión.' })
-    setCambios({}); setMotivo(''); setCrewsSel(null); qc.invalidateQueries({ queryKey: ['permisos'] }); qc.invalidateQueries({ queryKey: ['permisos-ver'] })
+    toast.success('Cambios guardados', { description: alcanceCambia ? 'El alcance del supervisor se aplica en su próxima consulta.' : 'El servidor ya los aplica; el menú del rol se actualiza al recargar su sesión.' })
+    setCambios({}); setMotivo(''); setCrewsSel(null); qc.invalidateQueries({ queryKey: ['permisos'] }); qc.invalidateQueries({ queryKey: ['permisos-ver'] }); qc.invalidateQueries({ queryKey: ['mis-permisos'] })
   }
   const modulos = MODULOS_PERMISO.filter((m) => !q || m.t.toLowerCase().includes(q.toLowerCase()))
   const editable = rol !== 'admin'
@@ -120,10 +147,11 @@ export function RolesPermisos() {
                   {modulos.map((m) => (
                     <tr key={m.k} className="border-t border-border">
                       <td className="px-3 py-2 font-medium">{m.t}</td>
-                      <td className="px-2 text-center"><Toggle on={ver(m.k)} disabled={!editable} onChange={(v) => setCambios({ ...cambios, [m.k]: v })} /></td>
-                      {ACCIONES.map(([k]) => {
-                        const on = ver(m.k) && (REGLAS_SERVIDOR[rol]?.[m.k] ?? []).includes(k)
-                        return <td key={k} className="px-2 text-center"><Toggle on={on} disabled bloqueado /></td>
+                      <td className="px-2 text-center"><Toggle on={ver(m.k)} disabled={!editable} cambiado={cambios[m.k]?.ver !== undefined && cambios[m.k].ver !== verActual(m.k)} onChange={(v) => cambiar(m.k, 'ver', v)} etiqueta={`${m.t} – Ver`} /></td>
+                      {ACCIONES.map(([k, , t]) => {
+                        const disponible = baseDe(rol, m.k).includes(k)
+                        if (!disponible) return <td key={k} className="px-2 text-center" title="No disponible para este rol (separación de funciones)"><Lock className="text-muted-foreground/50 mx-auto size-3" /></td>
+                        return <td key={k} className="px-2 text-center"><Toggle on={ver(m.k) && acc(m.k, k)} disabled={!editable || !ver(m.k)} cambiado={cambios[m.k]?.[k] !== undefined && cambios[m.k][k] !== accActual(m.k, k)} onChange={(v) => cambiar(m.k, k, v)} etiqueta={`${m.t} – ${t}`} /></td>
                       })}
                     </tr>
                   ))}
@@ -131,7 +159,8 @@ export function RolesPermisos() {
               </table>
               <p className="text-muted-foreground flex flex-wrap items-center gap-3 border-t border-border px-3 py-2 text-[11.5px]">
                 <span className="flex items-center gap-1"><Toggle on /> Permiso activado</span><span className="flex items-center gap-1"><Toggle on={false} /> Desactivado</span>
-                <span className="flex items-center gap-1"><Lock className="size-3" /> Regla del servidor (se verifica en cada acción)</span>
+                <span className="flex items-center gap-1"><Lock className="size-3" /> No disponible para el rol (separación de funciones)</span>
+                <span className="flex items-center gap-1"><span className="ring-warning inline-block size-3 rounded-full ring-2" /> Cambio sin guardar</span>
                 <span className="flex items-center gap-1"><Info className="size-3" /> Los permisos se aplican según el alcance del rol.</span></p>
             </CardContent>
           </Card>
@@ -163,13 +192,18 @@ export function RolesPermisos() {
               <p className="font-medium"><Eye className="mr-1 inline size-3.5" />Vista previa de cambios</p>
               <div className="grid grid-cols-[1fr_auto_1fr] items-start gap-2">
                 <div className="rounded-lg border border-border"><p className="bg-secondary rounded-t-lg px-2 py-1 font-semibold">Antes (actual)</p>
-                  {diff.length === 0 && !alcanceCambia ? <p className="text-muted-foreground p-2">Sin cambios</p> : diff.map(([m]) => <p key={m} className="flex items-center justify-between gap-1 p-2">{MODULOS_PERMISO.find((x) => x.k === m)?.t} – Ver <Toggle on={verActual(m as ModuloPermiso)} /></p>)}
+                  {diff.length === 0 && !alcanceCambia ? <p className="text-muted-foreground p-2">Sin cambios</p> : diff.map((c) => <p key={c.m + c.k} className="flex items-center justify-between gap-1 p-2">{nombreModulo(c.m)} – {etiqueta(c.k)} <Toggle on={c.antes} /></p>)}
                   {alcanceCambia && <p className="p-2">Cuadrillas: {crewsActuales.map(codigo).join(', ') || 'ninguna'}</p>}</div>
                 <span className="pt-6">→</span>
                 <div className="border-success/40 rounded-lg border"><p className="bg-success/10 text-success rounded-t-lg px-2 py-1 font-semibold">Después (nuevo)</p>
-                  {diff.length === 0 && !alcanceCambia ? <p className="text-muted-foreground p-2">Sin cambios</p> : diff.map(([m, v]) => <p key={m} className="flex items-center justify-between gap-1 p-2">{MODULOS_PERMISO.find((x) => x.k === m)?.t} – Ver <Toggle on={v} /></p>)}
+                  {diff.length === 0 && !alcanceCambia ? <p className="text-muted-foreground p-2">Sin cambios</p> : diff.map((c) => <p key={c.m + c.k} className="flex items-center justify-between gap-1 p-2">{nombreModulo(c.m)} – {etiqueta(c.k)} <Toggle on={c.nuevo} /></p>)}
                   {alcanceCambia && <p className="text-success p-2">Cuadrillas: {crewsNuevas.map(codigo).join(', ') || 'ninguna'}</p>}</div>
               </div>
+              {avisos.length > 0 && (
+                <ul className="bg-warning/10 border-warning/30 space-y-1 rounded-lg border p-2 text-[12px]">
+                  {avisos.map((a) => <li key={a} className="flex gap-1.5"><Info className="text-warning mt-0.5 size-3.5 shrink-0" />{a}</li>)}
+                </ul>
+              )}
               <div className="flex justify-end gap-2">
                 <Button variant="outline" onClick={() => { setCambios({}); setMotivo(''); setCrewsSel(null) }}>Cancelar</Button>
                 <Button onClick={guardar} loading={guardando} disabled={!editable || (!diff.length && !alcanceCambia) || !motivo.trim()}><Save className="size-4" />Guardar cambios</Button>
@@ -190,10 +224,10 @@ export function RolesPermisos() {
   )
 }
 
-function Toggle({ on, disabled, bloqueado, onChange }: { on: boolean; disabled?: boolean; bloqueado?: boolean; onChange?: (v: boolean) => void }) {
+function Toggle({ on, disabled, cambiado, etiqueta, onChange }: { on: boolean; disabled?: boolean; cambiado?: boolean; etiqueta?: string; onChange?: (v: boolean) => void }) {
   return (
-    <button type="button" role="switch" aria-checked={on} disabled={disabled} onClick={() => onChange?.(!on)}
-      className={cn('relative inline-flex h-4.5 w-8 shrink-0 items-center rounded-full transition-colors', on ? (bloqueado ? 'bg-success/60' : 'bg-success') : 'bg-muted-foreground/30', disabled && !bloqueado && 'opacity-60', !disabled && 'cursor-pointer')}>
+    <button type="button" role="switch" aria-checked={on} aria-label={etiqueta} disabled={disabled} onClick={() => onChange?.(!on)}
+      className={cn('relative inline-flex h-4.5 w-8 shrink-0 items-center rounded-full transition-colors', on ? 'bg-success' : 'bg-muted-foreground/30', disabled && onChange && 'opacity-50', !disabled && 'cursor-pointer', cambiado && 'ring-warning ring-2 ring-offset-1')}>
       <span className={cn('inline-block size-3.5 rounded-full bg-white shadow transition-transform', on ? 'translate-x-4' : 'translate-x-0.5')} />
     </button>
   )

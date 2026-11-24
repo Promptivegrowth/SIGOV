@@ -12,6 +12,9 @@ import io.github.jan.supabase.gotrue.providers.builtin.Email
 import io.github.jan.supabase.postgrest.postgrest
 import io.github.jan.supabase.postgrest.query.Columns
 import kotlinx.serialization.json.JsonObject
+import kotlinx.serialization.json.buildJsonObject
+import kotlinx.serialization.json.put
+import io.github.jan.supabase.postgrest.rpc
 import kotlinx.serialization.json.contentOrNull
 import kotlinx.serialization.json.jsonObject
 import kotlinx.serialization.json.jsonPrimitive
@@ -312,6 +315,24 @@ class SesionRepositorio @Inject constructor(
             .select { filter { eq("leader_id", usuario) } }
             .decodeList<Cuadrilla>()
             .firstOrNull()
+    }
+
+    /**
+     * Lo que el rol tiene habilitado en el contrato según Roles y permisos
+     * (rpc mis_permisos, 0159): módulo → acciones. Sin señal, lo último que
+     * se supo; sin dato, nada se bloquea aquí (el servidor decide).
+     */
+    suspend fun misPermisos(): Map<String, List<String>>? = recordando("mis_permisos") {
+        val servicio = servicioId() ?: return@recordando null
+        val o = supabase.postgrest.rpc("mis_permisos", buildJsonObject { put("p_service", servicio) }).decodeAs<JsonObject>()
+        o.mapValues { (_, v) -> (v as? kotlinx.serialization.json.JsonArray)?.map { it.jsonPrimitive.content } ?: emptyList() }
+    }
+
+    /** ¿El Administrador dejó habilitada esta acción para el rol? */
+    suspend fun puede(modulo: String, accion: String): Boolean {
+        val p = misPermisos() ?: return true
+        val lista = p[modulo] ?: return !p.containsKey(modulo)
+        return accion in lista
     }
 
     /**

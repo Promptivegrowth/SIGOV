@@ -12,7 +12,7 @@ import { Badge } from '@/components/ui/badge'
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription } from '@/components/ui/dialog'
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select'
 import { SkeletonList } from '@/components/ui/skeleton'
-import { tablaPdf, tablaXlsx, num, type Tabla } from '@/lib/formato-mrpci'
+import { tablaPdf, tablaXlsx, num, L, type Tabla, type Valor, type Celda } from '@/lib/formato-mrpci'
 import { cn, fmtDate, fmtDateTime, toISODate } from '@/lib/utils'
 import { mensajeAmigable } from '@/lib/errores'
 
@@ -75,21 +75,73 @@ export function SeguimientoMateriales({ serviceId, crewId, crewNombre, desde, ha
   const confirmados = movsDe.filter((m) => m.confirmado && (!s || m.supply_id === s.supply_id)).length
   const corte = `${fmtDate(hasta).slice(0, 5)} · ${new Date().toTimeString().slice(0, 5)}`
   const meta = `SEGUIMIENTO DE MATERIALES · SEMANA ${semana} · CUADRILLA: ${crewNombre.toUpperCase()} · PERIODO ${fmtDate(desde)} – ${fmtDate(hasta)} · CORTE ${corte}`
-  const tabla = (): Tabla => {
-    const filas: (string | number | null)[][] = []
-    let familia = ''
+  // ── Exportes: Resumen de insumos por periodo (A4 vertical) vinculado al Kardex diario ──
+  const HOJA_KAR = 'Kardex diario', HOJA_RES = 'Resumen de insumos'
+  const dias: Date[] = []
+  for (let t = new Date(toISODate(desde) + 'T12:00:00'); toISODate(t) <= toISODate(hasta); t = new Date(t.getTime() + 86400000)) dias.push(t)
+  const MES = ['Ene', 'Feb', 'Mar', 'Abr', 'May', 'Jun', 'Jul', 'Ago', 'Set', 'Oct', 'Nov', 'Dic']
+  const DIA = ['Dom', 'Lun', 'Mar', 'Mié', 'Jue', 'Vie', 'Sáb']
+  const semanaIso = (f: Date) => { const d = new Date(Date.UTC(f.getFullYear(), f.getMonth(), f.getDate())); const n = d.getUTCDay() || 7; d.setUTCDate(d.getUTCDate() + 4 - n); return Math.ceil(((d.getTime() - Date.UTC(d.getUTCFullYear(), 0, 1)) / 86400000 + 1) / 7) }
+  const OCULTA_CERO = '#,##0.00;-#,##0.00;""'
+  // Las mismas filas (familias e insumos) en las dos hojas: el resumen apunta a la fila del kardex
+  const orden = (() => {
+    const out: ({ banda: string } | { x: any; n: number })[] = []
+    let familia: string | null = null
     insumos.forEach((x, i) => {
-      if (x.familia !== familia) { familia = x.familia; filas.push(['', String(familia ?? 'OTROS').toUpperCase(), '', '', '', '', '']) }
-      filas.push([String(i + 1).padStart(2, '0'), x.nombre, x.unidad, x.entradas ? num(x.entradas) : '—', x.salidas ? num(x.salidas) : '—',
-        Number(x.teorico) === 0 ? '' : num(x.teorico), x.conteo ? num(x.conteo.contado) : '—'])
+      const f = String(x.familia ?? 'OTROS').toUpperCase()
+      if (f !== familia) { familia = f; out.push({ banda: f }) }
+      out.push({ x, n: i + 1 })
+    })
+    return out
+  })()
+  const bandas = orden.map((o, i) => ('banda' in o ? i : -1)).filter((i) => i >= 0)
+  const kardex = (): Tabla => {
+    const nd = dias.length
+    const cEnt = (k: number) => 6 + k * 2, cSal = (k: number) => 7 + k * 2, cSaldo = 6 + nd * 2
+    const cab: Celda[][] = [
+      [...['ITEM', 'DESCRIPCIÓN DE MATERIAL', 'UNIDAD', 'ENTRADA', 'SALIDA'].map((t) => ({ t, rs: 3 })), { t: 'STOCK', rs: 3, fondo: 'FFF1BA' },
+        ...dias.map((f) => ({ t: `${MES[f.getMonth()]} · ${semanaIso(f)}`, cs: 2 })), { t: 'Saldo inicial', rs: 3, fondo: 'E7F2FA' }],
+      dias.map((f) => ({ t: `${DIA[f.getDay()]} ${String(f.getDate()).padStart(2, '0')}`, cs: 2 })),
+      dias.flatMap(() => [{ t: 'Entr', fondo: 'C6EFCE' }, { t: 'Sali', fondo: 'FFC7CE' }]),
+    ]
+    const filas: Valor[][] = orden.map((o): Valor[] => {
+      if ('banda' in o) return [o.banda]
+      const x = o.x
+      const del = (f: Date, campo: 'entrada' | 'salida') => movsDe.filter((m) => m.confirmado && m.supply_id === x.supply_id && String(m.fecha).slice(0, 10) === toISODate(f))
+        .reduce((a, m) => a + Number(m[campo] ?? 0), 0)
+      const pares = dias.flatMap((f): Valor[] => {
+        const e = del(f, 'entrada'), sa = del(f, 'salida')
+        return [e ? { v: e, fmt: '0.00', color: '006100' } : null, sa ? { v: sa, fmt: '0.00', color: '9C0006' } : null]
+      })
+      return [String(o.n).padStart(2, '0'), x.nombre, x.unidad,
+        { v: Number(x.entradas ?? 0), f: `SUM(${dias.map((_, k) => L(cEnt(k)) + '{r}').join(',')})`, fmt: '0.00' },
+        { v: Number(x.salidas ?? 0), f: `SUM(${dias.map((_, k) => L(cSal(k)) + '{r}').join(',')})`, fmt: '0.00' },
+        { v: Number(x.teorico ?? 0), f: `${L(cSaldo)}{r}+D{r}-E{r}`, fmt: '0.00', fondo: 'FFF1BA', negrita: true },
+        ...pares, { v: Number(x.apertura ?? 0), fmt: '0.00', fondo: 'E7F2FA' }]
     })
     return {
-      titulo: 'RESUMEN DE INSUMOS POR PERIODO', meta,
-      cabecera: [['Ítem', 'Descripción del material', 'Unidad', 'Entradas', 'Salidas', { t: 'Stock teórico', fondo: 'FFEB9C' } as any, { t: 'Stock real insitu', fondo: 'DCE6F1' } as any].map((c: any) => (typeof c === 'string' ? { t: c } : c))],
-      filas, resaltadas: { 5: 'FFEB9C', 6: 'DCE6F1' }, anchos: [24, 160, 34, 40, 40, 44, 50],
-      pie: ['El requerimiento de material no modifica el stock. Solo se registran ingresos, salidas y ajustes efectivos confirmados.'],
+      titulo: `KARDEX DIARIO · ${crewNombre.toUpperCase()}`, meta: `${meta} · ENTRADAS Y SALIDAS CONFIRMADAS POR DÍA`,
+      cabecera: cab, filas, bandas, fijas: 3,
+      anchos: [20, 120, 30, 34, 34, 36, ...dias.flatMap(() => [24, 24]), 40],
+      pie: ['ENTRADA = suma de entradas del periodo · SALIDA = suma de salidas · STOCK = saldo inicial + entradas − salidas. Solo movimientos confirmados (el consumo del parte cuenta al validarlo).'],
     }
   }
+  const tabla = (): Tabla => ({
+    titulo: 'RESUMEN DE INSUMOS POR PERIODO', meta, vertical: true, fijas: 2,
+    cabecera: [['ITEM', 'DESCRIPCIÓN DE MATERIAL', 'UNIDAD', 'ENTRADA', 'SALIDA', { t: 'STOCK', fondo: 'FFF1BA' } as any, { t: 'STOCK REAL INSITU', fondo: 'DCE6F1' } as any].map((c: any) => (typeof c === 'string' ? { t: c } : c))],
+    filas: orden.map((o, i): Valor[] => {
+      if ('banda' in o) return [o.banda]
+      const x = o.x
+      const ref = (col: string) => `'${HOJA_KAR}'!${col}{r:${i}@${HOJA_KAR}}`
+      return [String(o.n).padStart(2, '0'), x.nombre, x.unidad,
+        { v: Number(x.entradas ?? 0), f: ref('D'), fmt: OCULTA_CERO }, { v: Number(x.salidas ?? 0), f: ref('E'), fmt: OCULTA_CERO },
+        { v: Number(x.teorico ?? 0), f: ref('F'), fmt: OCULTA_CERO, fondo: 'FFF1BA', negrita: true },
+        x.conteo ? { v: Number(x.conteo.contado), fmt: '0.00', fondo: 'DCE6F1' } : { v: null, fondo: 'DCE6F1' }]
+    }),
+    bandas, anchos: [24, 200, 34, 44, 44, 48, 60],
+    pie: ['STOCK = saldo inicial + entradas − salidas. El conteo real es independiente; nunca reemplaza el saldo calculado.',
+      'El requerimiento de material no modifica el stock. Solo se registran ingresos, salidas y ajustes efectivos confirmados.'],
+  })
   const nombre = `Seguimiento_materiales_semana_${semana}_${crewNombre.replace(/\W+/g, '_')}`
 
   return (
@@ -97,8 +149,8 @@ export function SeguimientoMateriales({ serviceId, crewId, crewNombre, desde, ha
       <div className="flex flex-wrap items-center justify-between gap-2">
         <p className="text-muted-foreground text-[12.5px]">Seguimiento de materiales · Semana {semana} · {crewNombre} · Corte {corte}</p>
         <div className="flex gap-2">
-          <Button size="sm" variant="outline" disabled={!insumos.length} onClick={() => tablaPdf(nombre, [tabla()])}><FileDown className="size-4" />PDF</Button>
-          <Button size="sm" variant="outline" disabled={!insumos.length} onClick={() => tablaXlsx(nombre, [{ ...tabla(), hoja: 'Resumen por periodo' }])}><FileSpreadsheet className="size-4" />Excel</Button>
+          <Button size="sm" variant="outline" disabled={!insumos.length} onClick={() => tablaPdf(nombre, [tabla(), kardex()])}><FileDown className="size-4" />PDF</Button>
+          <Button size="sm" variant="outline" disabled={!insumos.length} onClick={() => tablaXlsx(nombre, [{ ...tabla(), hoja: HOJA_RES }, { ...kardex(), hoja: HOJA_KAR }])}><FileSpreadsheet className="size-4" />Excel</Button>
         </div>
       </div>
       <div className="grid gap-3 sm:grid-cols-3">

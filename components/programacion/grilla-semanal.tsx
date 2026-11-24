@@ -10,7 +10,7 @@ import { Button } from '@/components/ui/button'
 import { Badge } from '@/components/ui/badge'
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription } from '@/components/ui/dialog'
 import { ObservacionesPorProgramar } from '@/components/observaciones/observaciones-por-programar'
-import { tablaPdf, tablaXlsx, num, type Celda, type Tabla } from '@/lib/formato-mrpci'
+import { tablaPdf, tablaXlsx, num, L, type Celda, type Tabla, type Valor } from '@/lib/formato-mrpci'
 import { cn, fmtDate, fmtDateTime, fmtProgresiva, addDays, toISODate } from '@/lib/utils'
 
 /**
@@ -64,25 +64,48 @@ export function agruparSemana(rows: any[], monday: Date): { lineas: LineaSemana[
   return { lineas, domingo }
 }
 
-export function tablaSemana(lineas: LineaSemana[], monday: Date, meta: string, semana: string): Tabla {
+export function tablaSemana(lineas: LineaSemana[], monday: Date, meta: string, semana: string, datos?: string[][]): Tabla {
   const cab: Celda[][] = [
     [...['N°', 'CODIGO', 'ST', 'PCI', 'Origen de Partida', 'Código de Partida', 'Descripción de Partida', 'UND (Unidad de trabajo)', 'ITEM'].map((t) => ({ t, rs: 3 })),
       ...DIAS.map((d, i) => ({ t: `${d} ${String(addDays(monday, i).getDate()).padStart(2, '0')}`, cs: 4 })), { t: 'Total', cs: 3 }],
     [...DIAS.flatMap(() => [{ t: 'Lado', rs: 2 }, { t: 'Metrado', rs: 2, fondo: 'DCE6F1' }, { t: 'Progresiva', cs: 2 }]), { t: 'Metrado', rs: 2 }, { t: 'Progresiva', cs: 2 }],
     [...DIAS.flatMap(() => [{ t: 'De' }, { t: 'A' }]), { t: 'De' }, { t: 'A' }],
   ]
-  const filas = lineas.map((l) => [
-    String(l.n).padStart(2, '0'), l.codigo, l.st, l.pci, l.origen, l.codPartida, l.descripcion, l.und, l.item,
-    ...l.dias.flatMap((d) => d ? [d.lado, num(d.metrado), d.de != null ? fmtProgresiva(d.de) : '', d.a != null ? fmtProgresiva(d.a) : ''] : ['', '', '', '']),
-    num(l.total), l.de != null ? fmtProgresiva(l.de) : '', l.a != null ? fmtProgresiva(l.a) : '',
-  ])
+  // Columnas (base 0) de cada día: Lado 9+4i, Metrado 10+4i, De 11+4i, A 12+4i; Total 33–35
+  const colMetrado = DIAS.map((_, i) => 10 + i * 4)
+  const prog = (m: number | null) => (m != null ? fmtProgresiva(m) : '')
+  const filas: Valor[][] = lineas.map((l) => {
+    const conDato = l.dias.map((d, i) => (d ? i : -1)).filter((i) => i >= 0)
+    // Un solo día: el total De/A es el de ese día (como la muestra: =L11, =M11); varios: la menor y la mayor
+    const totalDe: Valor = conDato.length === 1 && l.dias[conDato[0]]!.de != null ? { v: prog(l.de), f: `${L(11 + conDato[0] * 4)}{r}` } : prog(l.de)
+    const totalA: Valor = conDato.length === 1 && l.dias[conDato[0]]!.a != null ? { v: prog(l.a), f: `${L(12 + conDato[0] * 4)}{r}` } : prog(l.a)
+    return [
+      String(l.n).padStart(2, '0'), l.codigo, l.st, l.pci, l.origen, l.codPartida, l.descripcion, l.und, l.item,
+      ...l.dias.flatMap((d): Valor[] => d ? [d.lado, { v: d.metrado, fmt: '0.00' }, prog(d.de), prog(d.a)] : ['', null, '', '']),
+      // Total de metrado: suma de los seis días de la misma partida y unidad
+      { v: l.total, f: `SUM(${colMetrado.map((c) => L(c) + '{r}').join(',')})`, fmt: '0.00', negrita: true }, totalDe, totalA,
+    ]
+  })
+  const vacia = (n: string): Valor[] => [n, ...Array(35).fill('')]
+  const bandas = [filas.length, filas.length + 6]
+  filas.push(vacia('PARTIDAS SUBCONTRATADAS'), ...[1, 2, 3, 4, 5].map((n) => vacia(String(n))), vacia('OBSERVACIONES'), vacia(''))
   const resaltadas: Record<number, string> = {}
-  DIAS.forEach((_, i) => { resaltadas[9 + i * 4 + 1] = 'DCE6F1' })
+  colMetrado.forEach((c) => { resaltadas[c] = 'DCE6F1' })
   return {
-    titulo: `PROGRAMACIÓN SEMANAL · SEMANA ${semana}`, meta, cabecera: cab, filas, resaltadas,
+    titulo: `PROGRAMACIÓN SEMANAL · SEMANA ${semana}`, meta, datos, cabecera: cab, filas, bandas, resaltadas, fijas: 9,
     anchos: [14, 40, 26, 16, 22, 22, 80, 22, 18, ...DIAS.flatMap(() => [16, 24, 27, 27]), 26, 27, 27],
     pie: ['Totales por metrado y unidad. Las progresivas de cada día conservan sus tramos; el rango total no representa continuidad.'],
   }
+}
+
+/** Bloque de datos del modelo COVINCA: proyecto, cliente, sub tramo, residente, supervisor e inspector. */
+export function datosSemana(o: { plan: any; cuadrilla?: string; subtramos: string[]; fecha: Date; semana: string; cliente?: string }): string[][] {
+  const st = [...new Set(o.subtramos.filter(Boolean))].join(', ') || 'TODOS'
+  return [
+    [`PROYECTO: COVINCA - ${o.fecha.getFullYear()}`, `CLIENTE: ${o.cliente ?? 'COVINCA S.A.'}`, `SUB TRAMO - CUADRILLA: ${(o.cuadrilla || 'TODAS').toUpperCase()}`, `FECHA: ${fmtDate(o.plan?.emitido_on ?? o.fecha)}`],
+    ['COMPONENTE:', `SUB TRAMO: ${st}`, 'RESIDENTE / SUPERVISOR / INSPECTOR', `SEMANA ${o.plan?.semana_contrato ?? o.semana}`],
+    [`RESIDENTE: ${o.plan?.residente || '—'}`, `SUPERVISOR: ${o.plan?.supervisor || '—'}`, `INSPECTOR: ${o.plan?.inspector || '—'}`],
+  ]
 }
 
 export function GrillaSemanal({ rows, monday, semana, plan, cuadrilla, canEdit, onEdit, onAgregar, onInsumos, meta }: {
@@ -116,7 +139,7 @@ export function GrillaSemanal({ rows, monday, semana, plan, cuadrilla, canEdit, 
   })
   const estado = !plan ? 'Sin semana' : plan.status === 'publicado' ? (plan.cambios_sin_publicar ? 'Publicada con cambios' : `Publicada v${plan.version_publicada}`) : plan.status === 'borrador' ? 'Borrador' : plan.status
   const nombre = `Programacion_semana_${semana}${cuadrilla ? '_' + cuadrilla.replace(/\W+/g, '_') : ''}`
-  const tabla = () => tablaSemana(lineas, monday, meta, semana)
+  const tabla = () => tablaSemana(lineas, monday, meta, semana, datosSemana({ plan, cuadrilla, subtramos: lineas.map((l) => l.st), fecha: monday, semana }))
 
   return (
     <div className="space-y-4">
@@ -139,7 +162,7 @@ export function GrillaSemanal({ rows, monday, semana, plan, cuadrilla, canEdit, 
           <CardTitle className="text-[14px]">Grilla semanal editable</CardTitle>
           <div className="flex flex-wrap gap-2">
             <Button size="sm" variant="outline" onClick={() => tablaPdf(nombre, [tabla()])} disabled={!lineas.length}><FileDown className="size-4" />PDF</Button>
-            <Button size="sm" variant="outline" onClick={() => tablaXlsx(nombre, [{ ...tabla(), hoja: `Semana ${semana}` }])} disabled={!lineas.length}><FileSpreadsheet className="size-4" />Excel</Button>
+            <Button size="sm" variant="outline" onClick={() => tablaXlsx(nombre, [{ ...tabla(), hoja: 'Programación semanal' }])} disabled={!lineas.length}><FileSpreadsheet className="size-4" />Excel</Button>
             <Button size="sm" variant="outline" onClick={() => setHistorial(true)} disabled={!plan}><History className="size-4" />Historial</Button>
             {canEdit && <ObservacionesPorProgramar lunes={toISODate(monday)} />}
             {canEdit && <Button size="sm" onClick={onAgregar}><Plus className="size-4" />Agregar actividad</Button>}
