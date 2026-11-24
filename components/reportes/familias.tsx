@@ -231,7 +231,7 @@ const programacion: Familia = {
     { k: 'estado', t: 'Estado', v: (f) => PLAN[f.status]?.[0] ?? f.status, orden: true, ancho: 12, ver: (f) => <Chip tono={PLAN[f.status]?.[1] ?? 'gris'}>{PLAN[f.status]?.[0] ?? f.status}</Chip> },
   ],
   texto: (f) => `${f.activities_catalog?.code ?? ''} ${f.activities_catalog?.name ?? ''} ${f.crews?.name ?? ''} ${f.prog_start_m != null ? fmtProgresiva(f.prog_start_m) : ''}`,
-  ver: (f) => `/programacion?semana=${f.weekly_plans?.year}-${f.weekly_plans?.week}`,
+  ver: (f) => `/programacion?fecha=${f.scheduled_on}`,
 }
 
 // ═══ Diario (partes) ════════════════════════════════════════════════════

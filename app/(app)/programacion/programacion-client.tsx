@@ -42,6 +42,13 @@ export function ProgramacionClient() {
   const qc = useQueryClient()
   const sb = React.useMemo(() => createClient(), [])
   const [offset, setOffset] = React.useState(0)
+  // Abierta desde el Inicio o el Centro de reportes con ?fecha=: la semana de esa fecha
+  React.useEffect(() => {
+    const fecha = new URLSearchParams(window.location.search).get('fecha')
+    if (!fecha || !/^\d{4}-\d{2}-\d{2}$/.test(fecha)) return
+    const dias = (startOfWeek(new Date(fecha + 'T12:00:00')).getTime() - startOfWeek().getTime()) / 86_400_000
+    setOffset(Math.round(dias / 7))
+  }, [])
   const [view, setView] = React.useState<'grilla' | 'tablero' | 'calendario' | 'lista'>('grilla')
   // Programación MR + PCI (MRPCI_01–03): Semana · Insumos · Seguimiento, con los mismos filtros
   const [seccion, setSeccion] = React.useState<'semana' | 'insumos' | 'seguimiento'>('semana')

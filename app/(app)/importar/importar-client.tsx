@@ -6,7 +6,7 @@ import { useQuery, useQueryClient } from '@tanstack/react-query'
 import { AnimatePresence, motion } from 'motion/react'
 import {
   Upload, FileSpreadsheet, ArrowRight, CircleCheck, TriangleAlert,
-  Download, X, ArrowLeft, Database, Sparkles, CircleX, History,
+  Download, X, ArrowLeft, Database, Sparkles, CircleX, History, FileText, RefreshCw, ExternalLink, CalendarClock, ListChecks, Eye,
 } from 'lucide-react'
 import { createClient } from '@/lib/supabase/client'
 import { useSession } from '@/lib/hooks/use-session'
@@ -27,6 +27,7 @@ import Link from 'next/link'
 import { usePlazosPci, etiquetaPlazo } from '@/lib/hooks/use-plazos-pci'
 import { SINONIMOS_DE_LADO, ladoDesdeTexto } from '@/lib/lados'
 import { mensajeAmigable } from '@/lib/errores'
+import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription } from '@/components/ui/dialog'
 import { FormularioPlazos, faltaEnPlazos, guardarPlazos, type ValorPlazos, type PlazoItems } from '@/components/pci/configurar-plazos'
 
 /** «Detectar el PCI desde la columna del Excel» en vez de elegir uno. */
@@ -65,6 +66,11 @@ export function ImportarClient() {
     modo: 'oficiales', fechas: {}, fechaBase: toISODate(new Date()), contrastado: false, motivo: '',
   })
   const [cambiarPlazos, setCambiarPlazos] = React.useState(true)
+  // Asistente PCI en 3 pasos (06/07): Archivo · Plazos · Vista previa
+  const [oficio, setOficio] = React.useState<File | null>(null)
+  const [subpaso, setSubpaso] = React.useState<'plazos' | 'vista'>('plazos')
+  const [verErrores, setVerErrores] = React.useState(false)
+  React.useEffect(() => { if (step === 'validacion') setSubpaso('plazos') }, [step])
 
   // ── Catálogos para resolver lookups ───────────────────────────────────
   const lookups = useQuery({
@@ -117,7 +123,7 @@ export function ImportarClient() {
     queryFn: async () => {
       const { data } = await sb
         .from('pcis')
-        .select('id, code, title, notified_on, received_on, default_days, published_at, plazos_version')
+        .select('id, code, title, notified_on, received_on, default_days, published_at, plazos_version, document_path')
         .eq('service_id', service.id)
         .is('deleted_at', null)
         .order('notified_on', { ascending: false })
@@ -311,7 +317,7 @@ export function ImportarClient() {
                 default_days: plazos.includes(7) ? 7 : plazos[plazos.length - 1],
                 status: 'abierto',
                 created_by: profile.id,
-              }).select('id, code, title, notified_on, received_on, default_days, published_at, plazos_version').single()
+              }).select('id, code, title, notified_on, received_on, default_days, published_at, plazos_version, document_path').single()
               if (error) throw new Error(`No se pudo crear el PCI ${code}: ${error.message}`)
               pci = data
             }
@@ -404,6 +410,20 @@ export function ImportarClient() {
           }
         }
       }
+      // El oficio queda con el PCI (Documentos del ítem · Oficio)
+      if (oficio && pcisTocados.length === 1 && !failed) {
+        try {
+          const limpio = oficio.name.normalize('NFD').replace(/[\u0300-\u036f]/g, '').replace(/[^\w.\-]+/g, '_')
+          const ruta = `${service.id}/pci/${pcisTocados[0].id}/oficio_${Date.now()}_${limpio}`
+          const up = await sb.storage.from('documentos').upload(ruta, oficio, { contentType: oficio.type || 'application/pdf' })
+          if (up.error) throw up.error
+          const { error: e2 } = await sb.from('pcis').update({ document_path: ruta }).eq('id', pcisTocados[0].id)
+          if (e2) throw e2
+        } catch (e: any) {
+          errors.push({ error: `Oficio: ${mensajeAmigable(e)}` })
+          toast.error('Los ítems se importaron, pero el oficio no se guardó', { description: mensajeAmigable(e) })
+        }
+      }
       // Plazos del oficio (o calculados) sobre el PCI destino, como versión
       if (aplicaPlazos && pcisTocados.length === 1 && !failed) {
         try {
@@ -494,6 +514,13 @@ export function ImportarClient() {
       fechas: Object.fromEntries(vig.map((x) => [String(x.plazo), x.vencimiento ?? ''])),
     }))
   }, [step, pciExistente, plazosExistentes.data]) // eslint-disable-line react-hooks/exhaustive-deps
+  const abrirOficio = async () => {
+    if (oficio) { window.open(URL.createObjectURL(oficio), '_blank', 'noopener'); return }
+    const ruta = pciUnico?.document_path
+    if (!ruta) return
+    const { data } = await sb.storage.from('documentos').createSignedUrl(ruta, 600)
+    if (data?.signedUrl) window.open(data.signedUrl, '_blank', 'noopener')
+  }
   const aplicaPlazos = schema?.key === 'pci' && codigosPci.length === 1 && cambiarPlazos
   const pideMotivoPlazos = pciExistente && Number(pciUnico?.plazos_version ?? 0) >= 1
   const faltaPlazos = aplicaPlazos ? faltaEnPlazos(valorPlazos, plazosImport, pideMotivoPlazos) : null
@@ -506,8 +533,8 @@ export function ImportarClient() {
     <>
       <PageHeader
         icon={Upload}
-        title="Importación desde Excel"
-        description="Sube el archivo tal como lo maneja Grupo Servicon. El sistema detecta las columnas, valida fila a fila y muestra los errores antes de escribir nada en la base."
+        title={kind === 'pci' ? 'Importar PCI · Configurar plazos' : 'Importación desde Excel'}
+        description={kind === 'pci' ? 'Disponible para Administrador, Supervisor y Residente según alcance' : 'Sube el archivo tal como lo maneja Grupo Servicon. El sistema detecta las columnas, valida fila a fila y muestra los errores antes de escribir nada en la base.'}
         actions={
           schema && (
             <Button variant="outline" onClick={downloadTemplate}>
@@ -517,7 +544,7 @@ export function ImportarClient() {
           )
         }
       >
-        <Steps step={step} />
+        <Steps step={step} pci={schema?.key === 'pci'} subpaso={subpaso} />
       </PageHeader>
 
       <PageBody className="space-y-5">
@@ -583,6 +610,12 @@ export function ImportarClient() {
                         ))}
                       </SelectContent>
                     </Select>
+                    <div className="mt-3 border-t border-border pt-3">
+                      <p className="mb-1 text-[13px] font-semibold">Oficio de notificación (PDF, opcional)</p>
+                      <p className="text-muted-foreground mb-2 text-[12px]">Se guarda con el PCI para contrastar las fechas y queda en los Documentos de cada ítem.</p>
+                      <input type="file" accept="application/pdf" onChange={(e) => setOficio(e.target.files?.[0] ?? null)} className="text-[12.5px]" />
+                      {oficio && <span className="text-success ml-2 text-[12px]">✓ {oficio.name}</span>}
+                    </div>
                   </CardContent>
                 </Card>
               )}
@@ -720,7 +753,78 @@ export function ImportarClient() {
           )}
 
           {/* ── 4. Validación ─────────────────────────────────────────── */}
-          {step === 'validacion' && (
+          {step === 'validacion' && schema?.key === 'pci' && subpaso === 'plazos' && (
+            <motion.div key="plazos" initial={{ opacity: 0, y: 8 }} animate={{ opacity: 1, y: 0 }} exit={{ opacity: 0 }} className="space-y-4">
+              <div className="grid gap-4 lg:grid-cols-[1.2fr_1fr]">
+                <div className="space-y-4">
+                  <Card><CardContent className="space-y-2 p-4">
+                    <p className="flex items-center gap-2 text-[13.5px] font-semibold"><FileText className="size-4" />Archivo de origen</p>
+                    <div className="bg-success/[0.08] flex flex-wrap items-center gap-3 rounded-lg px-3 py-2.5">
+                      <FileSpreadsheet className="text-success size-7" />
+                      <div className="min-w-0 flex-1"><p className="truncate font-semibold">{file?.name ?? 'Archivo'}</p>
+                        <p className="text-muted-foreground text-[12px]">PCI: {codigosPci.join(', ') || '—'} | {fmtNumber(valid.length)} ítems</p></div>
+                    </div>
+                    <div className="flex flex-wrap gap-2">
+                      <Button size="sm" variant="outline" onClick={reset}><RefreshCw className="size-3.5" />Cambiar archivo</Button>
+                      <Button size="sm" variant="outline" onClick={() => void abrirOficio()} disabled={!oficio && !pciUnico?.document_path}
+                        title={!oficio && !pciUnico?.document_path ? 'Adjunta el oficio en el paso Archivo' : 'Abrir el oficio'}><ExternalLink className="size-3.5" />Abrir oficio</Button>
+                    </div>
+                  </CardContent></Card>
+                  <Card><CardContent className="space-y-3 p-4">
+                    <p className="flex items-center gap-2 text-[13.5px] font-semibold"><CalendarClock className="size-4" />Configuración de plazos</p>
+                    {codigosPci.length !== 1 ? (
+                      <p className="text-muted-foreground text-[12.5px]">El Excel trae {codigosPci.length} PCI. Los plazos van por oficio: configúralos en la ficha de cada PCI después de importar.</p>
+                    ) : (
+                      <>
+                        {pciExistente && (
+                          <label className="flex items-center gap-2 text-[12.5px]">
+                            <input type="checkbox" className="size-4" checked={cambiarPlazos} onChange={(e) => setCambiarPlazos(e.target.checked)} />
+                            Cambiar los plazos de {pciUnico.code} con esta importación (si no, conserva la versión vigente v{pciUnico.plazos_version ?? 1})
+                          </label>
+                        )}
+                        {aplicaPlazos && <FormularioPlazos valor={valorPlazos} cambiar={setValorPlazos} plazos={plazosImport} pideMotivo={pideMotivoPlazos} />}
+                      </>
+                    )}
+                  </CardContent></Card>
+                </div>
+                <Card className="h-fit"><CardContent className="space-y-3 p-4">
+                  <p className="flex items-center gap-2 text-[13.5px] font-semibold"><ListChecks className="size-4" />Vista previa de importación</p>
+                  <p className={cn('flex items-center gap-2 rounded-lg px-3 py-2.5 text-[13px]', rows.length - valid.length ? 'bg-warning/10' : 'bg-success/10')}>
+                    <CircleCheck className="text-success size-5" /><span><strong>{fmtNumber(valid.length)} filas válidas</strong> · <strong className={rows.length - valid.length ? 'text-destructive' : 'text-success'}>{fmtNumber(rows.length - valid.length)} errores</strong>
+                      {avisos.length > 0 && <> · {fmtNumber(avisos.length)} por revisar</>}</span>
+                  </p>
+                  <div className="text-muted-foreground space-y-1 text-[12.5px]">
+                    {plazosImport.map((p) => <p key={p.plazo} className="flex justify-between"><span>{p.plazo} {p.plazo === 1 ? 'día' : 'días'}</span><span>{fmtNumber(p.items)} ítems</span></p>)}
+                  </div>
+                  <div className="flex flex-wrap gap-2">
+                    <Button variant="outline" onClick={() => setVerErrores(true)} disabled={!issues.length && !avisos.length}><Eye className="size-4" />Ver errores</Button>
+                    <Button variant="outline" onClick={() => setSubpaso('vista')}><RefreshCw className="size-4" />Revisar vista previa</Button>
+                  </div>
+                </CardContent></Card>
+              </div>
+              <div className="flex flex-wrap items-center gap-2">
+                <span className="text-warning flex items-center gap-1.5 text-[12.5px]"><TriangleAlert className="size-4" />No sobrescribir ítems existentes sin revisar diferencias.</span>
+                {faltaPlazos && <span className="text-muted-foreground text-[12px]">{faltaPlazos}</span>}
+                <Button variant="outline" className="ml-auto" onClick={reset}>Cancelar</Button>
+                <Button onClick={() => void prepararImportacion()} loading={importing} disabled={!valid.length || !!faltaPlazos}>
+                  <Database className="size-4" />Confirmar importación ({fmtNumber(valid.length)})
+                </Button>
+              </div>
+              <Dialog open={verErrores} onOpenChange={setVerErrores}>
+                <DialogContent className="max-w-2xl">
+                  <DialogHeader><DialogTitle>Errores y datos por revisar</DialogTitle><DialogDescription>Las filas con error se omiten; corrígelas en el Excel y vuelve a subirlo si las necesitas.</DialogDescription></DialogHeader>
+                  <ul className="max-h-[60vh] divide-y divide-border overflow-y-auto text-[12px]">
+                    {[...issues.map((i) => ({ ...i, t: 'error' })), ...avisos.map((i) => ({ ...i, t: 'aviso' }))].slice(0, 300).map((i, k) => (
+                      <li key={k} className="flex items-center gap-3 py-1.5"><span className="text-muted-foreground w-16 shrink-0 font-mono">fila {i.row}</span>
+                        <span className="w-32 shrink-0 truncate font-medium">{i.field}</span><span className={cn('min-w-0 flex-1', i.t === 'error' ? 'text-destructive' : 'text-warning')}>{i.message}</span></li>
+                    ))}
+                  </ul>
+                </DialogContent>
+              </Dialog>
+            </motion.div>
+          )}
+
+          {step === 'validacion' && (schema?.key !== 'pci' || subpaso === 'vista') && (
             <motion.div key="validacion" initial={{ opacity: 0, y: 8 }} animate={{ opacity: 1, y: 0 }} exit={{ opacity: 0 }} className="space-y-4">
               <div className="grid grid-cols-1 gap-3 sm:grid-cols-3">
                 {[
@@ -798,7 +902,7 @@ export function ImportarClient() {
               )}
 
               {/* Plazos (paso 2 de la maqueta) */}
-              {schema?.key === 'pci' && valid.length > 0 && (
+              {schema?.key === 'pci' && valid.length > 0 && subpaso !== 'vista' && (
                 <Card>
                   <CardContent className="space-y-3 p-4">
                     <p className="text-[13.5px] font-semibold">Configuración de plazos</p>
@@ -859,10 +963,14 @@ export function ImportarClient() {
               )}
 
               <div className="flex items-center gap-2">
-                <Button variant="ghost" onClick={() => setStep('mapeo')}>
-                  <ArrowLeft className="size-4" />
-                  Ajustar mapeo
-                </Button>
+                {schema?.key === 'pci' ? (
+                  <Button variant="ghost" onClick={() => setSubpaso('plazos')}><ArrowLeft className="size-4" />Volver a plazos</Button>
+                ) : (
+                  <Button variant="ghost" onClick={() => setStep('mapeo')}>
+                    <ArrowLeft className="size-4" />
+                    Ajustar mapeo
+                  </Button>
+                )}
                 {schema?.key === 'pci' && (
                   <span className="text-warning ml-auto flex items-center gap-1.5 text-[12px]">
                     <TriangleAlert className="size-3.5" />No sobrescribir ítems existentes sin revisar diferencias.
@@ -978,15 +1086,19 @@ export function ImportarClient() {
 }
 
 // ═══════════════════════════════════════════════════════════════════════════
-function Steps({ step }: { step: Step }) {
-  const steps: { key: Step; label: string }[] = [
-    { key: 'tipo', label: 'Tipo' },
-    { key: 'archivo', label: 'Archivo' },
-    { key: 'mapeo', label: 'Mapeo de columnas' },
-    { key: 'validacion', label: 'Validación' },
-    { key: 'resultado', label: 'Resultado' },
-  ]
-  const idx = steps.findIndex((s) => s.key === step)
+function Steps({ step, pci, subpaso }: { step: Step; pci?: boolean; subpaso?: 'plazos' | 'vista' }) {
+  // El PCI sigue el asistente de la maqueta 06/07: Archivo · Plazos · Vista previa
+  const steps: { key: string; label: string }[] = pci
+    ? [{ key: 'archivo', label: 'Archivo' }, { key: 'plazos', label: 'Plazos' }, { key: 'vista', label: 'Vista previa' }]
+    : [
+      { key: 'tipo', label: 'Tipo' },
+      { key: 'archivo', label: 'Archivo' },
+      { key: 'mapeo', label: 'Mapeo de columnas' },
+      { key: 'validacion', label: 'Validación' },
+      { key: 'resultado', label: 'Resultado' },
+    ]
+  const actual = pci ? (step === 'validacion' ? subpaso ?? 'plazos' : step === 'resultado' ? 'fin' : 'archivo') : step
+  const idx = actual === 'fin' ? steps.length : steps.findIndex((s) => s.key === actual)
 
   return (
     <ol className="flex flex-wrap items-center gap-2">

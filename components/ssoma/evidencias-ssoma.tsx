@@ -8,7 +8,7 @@ import { createClient } from '@/lib/supabase/client'
 import { useSession } from '@/lib/hooks/use-session'
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
 import { Button } from '@/components/ui/button'
-import { Textarea } from '@/components/ui/input'
+import { Input, Textarea } from '@/components/ui/input'
 import { Badge } from '@/components/ui/badge'
 import { cn, fmtDateTime } from '@/lib/utils'
 import { mensajeAmigable } from '@/lib/errores'
@@ -52,7 +52,16 @@ export function EvidenciasSsoma({ objetoTipo, objetoId, codigoObjeto, evidencias
       return out
     },
   })
-  const s = todas.find((t) => t.id === sel) ?? todas[0]
+  // Filtros (SSOMA_11/12): tipo, origen, fecha y nombre; se aplican con «Aplicar»
+  const [borradorF, setBorradorF] = React.useState({ tipo: '', origen: '', fecha: '', q: '' })
+  const [filtro, setFiltro] = React.useState(borradorF)
+  const tipoDe = (t: any) => (String(t.mime ?? t.nombre ?? '').toLowerCase().includes('pdf') || /\.pdf$/i.test(t.nombre ?? '') ? 'pdf' : /image|\.(jpe?g|png|webp)$/i.test(`${t.mime ?? ''} ${t.nombre ?? ''}`) ? 'imagen' : 'otro')
+  const fechaDe = (t: any) => String(t.tomada_at ?? t.subida_at ?? '').slice(0, 10)
+  const hoyIso = new Date().toISOString().slice(0, 10)
+  const visibles = todas.filter((t: any) => (!filtro.tipo || tipoDe(t) === filtro.tipo) && (!filtro.origen || (t.origen ?? '') === filtro.origen)
+    && (!filtro.fecha || (filtro.fecha === 'hoy' ? fechaDe(t) === hoyIso : filtro.fecha === '7d' ? fechaDe(t) >= new Date(Date.now() - 7 * 86400000).toISOString().slice(0, 10) : fechaDe(t) >= new Date(Date.now() - 30 * 86400000).toISOString().slice(0, 10)))
+    && (!filtro.q || `${t.nombre ?? ''} ${t.codigo ?? ''}`.toLowerCase().includes(filtro.q.toLowerCase())))
+  const s = visibles.find((t) => t.id === sel) ?? visibles[0]
   const adjuntar = async (borrador: boolean) => {
     if (!archivo) return
     setSubiendo(true)
@@ -87,10 +96,23 @@ export function EvidenciasSsoma({ objetoTipo, objetoId, codigoObjeto, evidencias
             <Button size="sm" variant="outline" onClick={exportar} disabled={!evidencias.length}><Download className="size-4" />Exportar listado</Button>
           </div>
         </CardHeader>
-        <CardContent className="grid gap-4 lg:grid-cols-[1fr_300px]">
+        <CardContent className="space-y-3">
+          <div className="flex flex-wrap items-center gap-2 text-[12.5px]">
+            {([['tipo', 'Tipo', [['pdf', 'PDF'], ['imagen', 'Imagen'], ['otro', 'Otro']]], ['origen', 'Origen', [['camara', 'Cámara'], ['galeria', 'Galería'], ['archivo', 'Archivo'], ['registro de campo', 'Registro de campo']]],
+              ['fecha', 'Fecha', [['hoy', 'Hoy'], ['7d', 'Últimos 7 días'], ['30d', 'Últimos 30 días']]]] as const).map(([k, t, ops]) => (
+              <label key={k} className="bg-card flex items-center gap-1.5 rounded-lg border border-border px-2.5 py-1"><span className="font-semibold">{t}:</span>
+                <select value={(borradorF as any)[k]} onChange={(e) => setBorradorF({ ...borradorF, [k]: e.target.value })} className="bg-transparent outline-none">
+                  <option value="">{k === 'fecha' ? 'Todas' : 'Todos'}</option>{ops.map(([v, x]) => <option key={v} value={v}>{x}</option>)}</select></label>
+            ))}
+            <Input value={borradorF.q} onChange={(e) => setBorradorF({ ...borradorF, q: e.target.value })} onKeyDown={(e) => e.key === 'Enter' && setFiltro(borradorF)}
+              placeholder="Buscar por nombre de archivo..." className="h-8 max-w-60" />
+            <Button size="sm" onClick={() => setFiltro(borradorF)}>Aplicar</Button>
+            <span className="text-muted-foreground ml-auto">{visibles.length} {visibles.length === 1 ? 'evidencia' : 'evidencias'}</span>
+          </div>
+        <div className="grid gap-4 lg:grid-cols-[1fr_300px]">
           <div className="grid grid-cols-2 gap-3 sm:grid-cols-3">
-            {todas.length === 0 && <p className="text-muted-foreground col-span-3 text-[13px]">Sin evidencias todavía.</p>}
-            {todas.map((t) => {
+            {visibles.length === 0 && <p className="text-muted-foreground col-span-3 text-[13px]">{todas.length ? 'Sin evidencias con estos filtros.' : 'Sin evidencias todavía.'}</p>}
+            {visibles.map((t) => {
               const url = miniaturas.data?.get(t.storage_path)
               return (
                 <button key={t.id} onClick={() => setSel(t.id)} className={cn('overflow-hidden rounded-lg border text-left', s?.id === t.id ? 'border-primary ring-primary/30 ring-2' : 'border-border')}>
@@ -124,6 +146,7 @@ export function EvidenciasSsoma({ objetoTipo, objetoId, codigoObjeto, evidencias
               <Button size="sm" variant="outline" className="w-full" onClick={() => abrirArchivoSsoma(s.storage_path, s.bucket).catch((x) => toast.error(mensajeAmigable(x)))}><Download className="size-3.5" />Descargar</Button>
             </div>
           )}
+        </div>
         </CardContent>
       </Card>
 

@@ -58,6 +58,8 @@ export function InicioUnico({
     tab: (sp.get('tab') as 'pci' | 'mr') ?? pestanaInicial,
     pci: sp.get('pci') ?? '',
     corte: sp.get('corte') ?? hoy,
+    pdesde: sp.get('pdesde') ?? '',
+    estado: sp.get('estado') ?? '',
     crew: sp.get('crew') ?? '',
     sector: sp.get('sector') ?? '',
     q: sp.get('q') ?? '',
@@ -111,12 +113,12 @@ export function InicioUnico({
 
   // ── Datos ─────────────────────────────────────────────────────────────
   const pci = useQuery({
-    queryKey: ['inicio-pci', service.id, f.pci, f.corte, f.crew, f.sector, f.q],
+    queryKey: ['inicio-pci', service.id, f.pci, f.corte, f.crew, f.sector, f.q, f.pdesde, f.estado],
     enabled: f.tab === 'pci',
     queryFn: async () => {
       const { data, error } = await sb.rpc('inicio_pci', {
         p_service: service.id, p_pci: f.pci || null, p_corte: f.corte, p_crew: f.crew || null,
-        p_sector: f.sector || null, p_busqueda: f.q || null,
+        p_sector: f.sector || null, p_busqueda: f.q || null, p_desde: f.pdesde || null, p_estado: f.estado || null,
       } as any)
       if (error) throw error
       return data as any
@@ -141,12 +143,12 @@ export function InicioUnico({
   // ── Los ítems detrás de una cifra ─────────────────────────────────────
   const [cifra, setCifra] = React.useState<{ cifra: string; plazo?: number; titulo: string } | null>(null)
   const detalle = useQuery({
-    queryKey: ['inicio-pci-items', service.id, f.pci, f.corte, f.crew, f.sector, cifra?.cifra, cifra?.plazo],
+    queryKey: ['inicio-pci-items', service.id, f.pci, f.corte, f.crew, f.sector, cifra?.cifra, cifra?.plazo, f.pdesde, f.estado],
     enabled: !!cifra,
     queryFn: async () => {
       const { data, error } = await sb.rpc('inicio_pci_items', {
         p_service: service.id, p_pci: f.pci || null, p_corte: f.corte, p_crew: f.crew || null, p_sector: f.sector || null,
-        p_cifra: cifra!.cifra, p_plazo: cifra!.plazo ?? null,
+        p_cifra: cifra!.cifra, p_plazo: cifra!.plazo ?? null, p_desde: f.pdesde || null, p_estado: f.estado || null,
       } as any)
       if (error) throw error
       return (data ?? []) as any[]
@@ -186,7 +188,7 @@ export function InicioUnico({
         ]
         const nombre = `SIGOV_INICIO_PCI_${f.corte}`
         if (formato === 'excel') {
-          const { data: items } = await sb.rpc('inicio_pci_items', { p_service: service.id, p_pci: f.pci || null, p_corte: f.corte, p_crew: f.crew || null, p_sector: f.sector || null, p_cifra: 'total', p_plazo: null } as any)
+          const { data: items } = await sb.rpc('inicio_pci_items', { p_service: service.id, p_pci: f.pci || null, p_corte: f.corte, p_crew: f.crew || null, p_sector: f.sector || null, p_cifra: 'total', p_plazo: null, p_desde: f.pdesde || null, p_estado: f.estado || null } as any)
           await descargarExcel(nombre, meta('Inicio · Avance PCI'), [
             { name: 'Detalle por plazo', columns: cols, rows: filas },
             {
@@ -288,6 +290,7 @@ export function InicioUnico({
           <PestanaMr
             rol={rol} f={f} fijar={fijar} datos={mr.data} cargando={mr.isLoading} error={mr.error}
             cuadrillas={cuadrillas.data ?? []} supervisores={supervisores.data ?? []} actividades={actividades.data ?? []}
+            contrato={(service as any).contract_code ? `${(service as any).contract_code} · ${service.name}` : service.name}
           />
         )}
 
@@ -437,8 +440,11 @@ function PestanaPci({ rol, f, fijar, datos: d, cargando, error, cuadrillas, abri
     <div className="space-y-4">
       <Card>
         <CardContent className="flex flex-wrap items-end gap-3 p-4">
-          <Filtro etiqueta="Fecha de corte">
-            <Input type="date" value={f.corte} max={toISODate(new Date())} onChange={(e) => fijar({ corte: e.target.value })} className="h-9" />
+          <Filtro etiqueta="Fecha inicial">
+            <Input type="date" value={f.pdesde} max={f.corte} onChange={(e) => fijar({ pdesde: e.target.value })} className="h-9" />
+          </Filtro>
+          <Filtro etiqueta="Fecha final (corte)">
+            <Input type="date" value={f.corte} min={f.pdesde || undefined} max={toISODate(new Date())} onChange={(e) => fijar({ corte: e.target.value })} className="h-9" />
           </Filtro>
           <Filtro etiqueta="Cuadrilla">
             <SelectSimple valor={f.crew} alCambiar={(v) => fijar({ crew: v })} todos={rol === 'supervisor' ? 'Todas las asignadas' : 'Todas'}
@@ -451,6 +457,11 @@ function PestanaPci({ rol, f, fijar, datos: d, cargando, error, cuadrillas, abri
           <Filtro etiqueta="PCI">
             <SelectSimple valor={f.pci} alCambiar={(v) => fijar({ pci: v })} todos="Todos los PCI"
               opciones={((d?.pcis ?? []) as any[]).map((p) => ({ v: p.id, t: p.code }))} />
+          </Filtro>
+          <Filtro etiqueta="Estado">
+            <SelectSimple valor={f.estado} alCambiar={(v) => fijar({ estado: v })} todos="Todos"
+              opciones={[{ v: 'atendido', t: 'Atendidos' }, { v: 'sin_atencion', t: 'Sin atención' }, { v: 'observado', t: 'Observados' },
+                { v: 'vencido', t: 'Vencidos' }, { v: 'evidencia_incompleta', t: 'Evidencia incompleta' }]} />
           </Filtro>
         </CardContent>
       </Card>
@@ -604,9 +615,14 @@ function PestanaPci({ rol, f, fijar, datos: d, cargando, error, cuadrillas, abri
 }
 
 // ═══════════════════════════════════════════════════════════════════════════
-function PestanaMr({ rol, f, fijar, datos: d, cargando, error, cuadrillas, supervisores, actividades }: {
+const ESTADO_PLAN: Record<string, [string, string]> = {
+  programado: ['Programado', 'bg-info/10 text-info'], en_curso: ['En ejecución', 'bg-info/10 text-info'], por_validar: ['Por validar', 'bg-warning/15 text-warning'],
+  ejecutado: ['Ejecutado', 'bg-success/12 text-success'], suspendido: ['Suspendido', 'bg-destructive/10 text-destructive'],
+}
+
+function PestanaMr({ rol, f, fijar, datos: d, cargando, error, cuadrillas, supervisores, actividades, contrato }: {
   rol: Rol; f: any; fijar: (c: any) => void; datos: any; cargando: boolean; error: unknown
-  cuadrillas: any[]; supervisores: { id: string; nombre: string }[]; actividades: any[]
+  cuadrillas: any[]; supervisores: { id: string; nombre: string }[]; actividades: any[]; contrato: string
 }) {
   const u = d?.unidad ? ` ${d.unidad}` : ''
   const homogeneo = !!d?.homogeneo
@@ -634,6 +650,13 @@ function PestanaMr({ rol, f, fijar, datos: d, cargando, error, cuadrillas, super
             <SelectSimple valor={f.act} alCambiar={(v) => fijar({ act: v, unit: '' })} todos="Todas (conteo por actividad)"
               opciones={actividades.map((a: any) => ({ v: a.id, t: `${a.name}${a.units?.symbol ? ` (${a.units.symbol})` : ''}` }))} />
           </Filtro>
+          <Filtro etiqueta="Unidad">
+            <SelectSimple valor={f.unit} alCambiar={(v) => fijar({ unit: v })} todos="Según la actividad"
+              opciones={[...new Map(actividades.filter((a: any) => a.unit_id && (!f.act || a.id === f.act)).map((a: any) => [a.unit_id, a.units?.symbol ?? '—'])).entries()].map(([v, t]) => ({ v, t }))} />
+          </Filtro>
+          {rol === 'visor' && (
+            <Filtro etiqueta="Contrato autorizado"><p className="flex h-9 items-center rounded-md border border-border px-3 text-[13px]">{contrato}</p></Filtro>
+          )}
         </CardContent>
       </Card>
       <Errores error={error} />
@@ -683,8 +706,10 @@ function PestanaMr({ rol, f, fijar, datos: d, cargando, error, cuadrillas, super
                 <Dona a={ejecutado} b={Math.max(programado - ejecutado, 0)} centro={avance == null ? '—' : `${fmtNumber(avance, 0)} %`}
                   etiquetaA={`${fmtNumber(ejecutado, 1)}${u} ejecutados`} etiquetaB={`${fmtNumber(Math.max(programado - ejecutado, 0), 1)}${u} saldo`} />
                 <div className="mt-4 space-y-1.5 border-t border-border pt-3 text-[13px]">
-                  <p className="flex justify-between"><span>Reportes publicados</span><Badge variant="success">{fmtNumber(d.partes_publicados)}</Badge></p>
-                  <p className="flex justify-between"><span>Observaciones abiertas</span><Badge variant="warning">{fmtNumber(d.observaciones_abiertas)}</Badge></p>
+                  <p className="font-semibold">Evidencia</p>
+                  <p className="flex justify-between"><span>{fmtNumber(d.partes_publicados)} reportes publicados</span><Badge variant="success">{fmtNumber(d.partes_publicados)}</Badge></p>
+                  <p className="flex justify-between"><span>{fmtNumber(d.observaciones_abiertas)} {Number(d.observaciones_abiertas) === 1 ? 'observación abierta' : 'observaciones abiertas'}</span><Badge variant="warning">{fmtNumber(d.observaciones_abiertas)}</Badge></p>
+                  <Link href={rol === 'visor' ? '/revision' : '/observaciones'} className="text-primary flex items-center gap-1 pt-1 text-[12.5px] font-semibold">Ver observaciones <ArrowRight className="size-3.5" /></Link>
                 </div>
               </CardContent>
             </Card>
@@ -701,6 +726,47 @@ function PestanaMr({ rol, f, fijar, datos: d, cargando, error, cuadrillas, super
               </CardContent>
             </Card>
           )}
+          {rol !== 'visor' && (d.por_cuadrilla as any[]).length > 0 && (
+            <div className="grid gap-4 xl:grid-cols-[1.6fr_1fr]">
+              <Card>
+                <CardHeader><CardTitle>Detalle de programación por cuadrilla</CardTitle></CardHeader>
+                <CardContent className="overflow-x-auto">
+                  <table className="w-full text-[13px] tabular-nums">
+                    <thead className="bg-primary text-primary-foreground text-[11.5px]"><tr>
+                      <th className="px-2 py-2 text-left font-medium">Cuadrilla</th><th className="px-2 text-right font-medium">Programado ({d.unidad ?? '—'})</th>
+                      <th className="px-2 text-right font-medium">Ejecutado ({d.unidad ?? '—'})</th><th className="px-2 text-right font-medium">Saldo ({d.unidad ?? '—'})</th><th className="px-2 text-right font-medium">Avance</th>
+                    </tr></thead>
+                    <tbody>
+                      {(d.por_cuadrilla as any[]).map((c) => (
+                        <tr key={c.crew_id} className="even:bg-secondary/40 border-b border-border/60">
+                          <td className="px-2 py-1.5">{c.cuadrilla}</td><td className="px-2 text-right">{fmtNumber(Number(c.programado), 2)}</td>
+                          <td className="px-2 text-right" style={{ color: VERDE }}>{fmtNumber(Number(c.ejecutado), 2)}</td>
+                          <td className="px-2 text-right" style={{ color: NARANJA }}>{fmtNumber(Number(c.saldo), 2)}</td><td className="px-2 text-right">{pct(c.avance)}</td>
+                        </tr>
+                      ))}
+                      <tr className="bg-primary/[0.07] font-bold">
+                        <td className="px-2 py-1.5">Total</td><td className="px-2 text-right">{fmtNumber(programado, 2)}</td>
+                        <td className="px-2 text-right" style={{ color: VERDE }}>{fmtNumber(ejecutado, 2)}</td>
+                        <td className="px-2 text-right" style={{ color: NARANJA }}>{fmtNumber(Math.max(programado - ejecutado, 0), 2)}</td>
+                        <td className="px-2 text-right">{avance == null ? '—' : `${fmtNumber(avance, 0)} %`}</td>
+                      </tr>
+                    </tbody>
+                  </table>
+                </CardContent>
+              </Card>
+              <Card>
+                <CardHeader><CardTitle>Control de ejecución</CardTitle></CardHeader>
+                <CardContent className="space-y-2.5 text-[13px]">
+                  <p className="flex items-center gap-2"><Layers className="text-muted-foreground size-4" /><strong>Actividad:</strong> {actividades.find((a: any) => a.id === f.act)?.name ?? ((d.por_actividad ?? []) as any[]).find((x) => x.activity_id === f.act)?.actividad ?? '—'}</p>
+                  <p className="flex items-center gap-2"><Ruler className="text-muted-foreground size-4" /><strong>Unidad:</strong> {d.unidad ?? '—'}</p>
+                  <p className="flex items-center gap-2"><FileText className="text-muted-foreground size-4" /><strong>Observaciones:</strong> {fmtNumber(d.observaciones_abiertas)} abiertas
+                    <Link href="/observaciones" className="border-primary/40 text-primary ml-auto flex items-center gap-1 rounded-full border px-2 py-0.5 text-[12px] font-semibold"><Eye className="size-3.5" />Ver detalle</Link></p>
+                  <p className="flex items-center gap-2"><Database className="text-muted-foreground size-4" /><strong>Fuentes:</strong> Programación y reporte digital</p>
+                  <p className="text-muted-foreground flex items-center gap-2"><Gauge className="size-4" />Rendimiento comparado por actividad y unidad.</p>
+                </CardContent>
+              </Card>
+            </div>
+          )}
           <Card>
             <CardHeader><CardTitle>Detalle de programación</CardTitle></CardHeader>
             <CardContent className="overflow-x-auto">
@@ -711,6 +777,7 @@ function PestanaMr({ rol, f, fijar, datos: d, cargando, error, cuadrillas, super
                     <th className="text-left font-medium">Sector</th><th className="text-left font-medium">Progresiva</th>
                     <th className="text-right font-medium">Programado</th><th className="text-right font-medium">Ejecutado</th>
                     <th className="text-right font-medium">Saldo</th>
+                    <th className="pl-3 text-left font-medium">Estado</th><th className="text-left font-medium">Acción</th>
                   </tr>
                 </thead>
                 <tbody>
@@ -721,6 +788,8 @@ function PestanaMr({ rol, f, fijar, datos: d, cargando, error, cuadrillas, super
                       <td className="text-right">{fmtNumber(Number(x.programado), 2)}{u}</td>
                       <td className="text-right" style={{ color: VERDE }}>{fmtNumber(Number(x.ejecutado), 2)}{u}</td>
                       <td className="text-right" style={{ color: NARANJA }}>{fmtNumber(Number(x.saldo), 2)}{u}</td>
+                      <td className="pl-3"><span className={cn('rounded-full px-2 py-0.5 text-[11.5px] font-semibold whitespace-nowrap', ESTADO_PLAN[x.estado]?.[1] ?? 'bg-secondary text-muted-foreground')}>● {ESTADO_PLAN[x.estado]?.[0] ?? x.estado}</span></td>
+                      <td><Link href={`/programacion?fecha=${x.fecha}`} className="text-primary flex items-center gap-1 text-[12.5px] font-semibold whitespace-nowrap">Ver detalle <ArrowRight className="size-3.5" /></Link></td>
                     </tr>
                   ))}
                   {(d.detalle as any[]).length > 0 && (
@@ -729,6 +798,7 @@ function PestanaMr({ rol, f, fijar, datos: d, cargando, error, cuadrillas, super
                       <td className="text-right">{fmtNumber(programado, 2)}{u}</td>
                       <td className="text-right" style={{ color: VERDE }}>{fmtNumber(ejecutado, 2)}{u}</td>
                       <td className="text-right" style={{ color: NARANJA }}>{fmtNumber(Math.max(programado - ejecutado, 0), 2)}{u}</td>
+                      <td /><td />
                     </tr>
                   )}
                 </tbody>

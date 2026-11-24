@@ -25,6 +25,7 @@ import { fotosOficiales, aJpegReal } from '@/lib/fotos-oficiales'
 import { descargarPdf, nombreCliente, type ReportMeta } from '@/lib/reports'
 import { toast } from 'sonner'
 import { mensajeAmigable } from '@/lib/errores'
+import { DocumentosItem } from './documentos-item'
 
 /**
  * «Revisión del ítem» (maquetas V02/V06, V11/V12, V13/V14; guía 3.6 y 9.3–9.7).
@@ -195,7 +196,7 @@ export function RevisionItem({ pciId, itemId }: { pciId: string; itemId: string 
             {tab === 'observaciones' && <TabObservaciones item={i} obs={obs.data ?? []} fotos={autorizadas} rol={role} alCambiar={refrescar} />}
             {tab === 'historial' && <TabHistorial historial={historial.data ?? []} item={i} />}
             {tab === 'documentos' && (
-              <TabDocumentos item={i} fotos={autorizadas} historial={historial.data ?? []} publicaciones={publicaciones.data ?? []}
+              <DocumentosItem item={i} fotos={autorizadas} historial={historial.data ?? []} publicaciones={publicaciones.data ?? []}
                 esVisor={esVisor} meta={{
                   titulo: `${pciCorto} · Ítem ${i.item_number}`, servicio: service.name, cliente: nombreCliente((service as any).client_name),
                   periodo: `Al ${fmtDate(new Date())}`, generadoPor: profile.full_name, cuadrilla: i.crew_name,
@@ -708,109 +709,6 @@ function TabObservaciones({ item, obs, fotos, rol, alCambiar }: { item: any; obs
 }
 
 // ═══════════════════════════════════════════════════════════════════════════
-function TabDocumentos({ item, fotos, historial, publicaciones, esVisor, meta }: {
-  item: any; fotos: any[]; historial: any[]; publicaciones: any[]; esVisor: boolean; meta: ReportMeta
-}) {
-  const [ocupado, setOcupado] = React.useState<string | null>(null)
-  const versiones = publicaciones.map((p) => p.version as number)
-  const docs = [
-    ...publicaciones.map((p) => ({ id: `panel-${p.version}`, nombre: `Panelfotografico${item.item_number}.pdf`, tipo: 'Panel', version: p.version, fecha: p.cuando, por: p.profiles?.full_name ?? 'Residente', p })),
-    ...publicaciones.map((p) => ({ id: `hist-${p.version}`, nombre: `Historialrevision${item.item_number}.pdf`, tipo: 'Historial', version: p.version, fecha: p.cuando, por: 'Sistema', p })),
-    ...publicaciones.map((p) => ({ id: `man-${p.version}`, nombre: `Manifiestoevidencias${item.item_number}.csv`, tipo: 'Manifiesto', version: p.version, fecha: p.cuando, por: 'Sistema', p })),
-  ]
-  const [selId, setSelId] = React.useState<string | null>(null)
-  const sel = docs.find((d) => d.id === selId) ?? docs[docs.length - 1]
-
-  const generar = async (d: any) => {
-    setOcupado(d.id)
-    try {
-      const fotosVersion = fotos.filter((f) => (d.p.evidencias as string[]).includes(f.id))
-      if (d.tipo === 'Manifiesto') {
-        const { oficiales, adicionales, faltan } = fotosOficiales(item.item_number, fotosVersion)
-        const csv = ['archivo,fase,captura,carga,origen,version', ...oficiales.map((o) => `${o.nombre},${o.fase},${o.foto.taken_at ?? ''},${o.foto.cargada_at ?? ''},${o.foto.origen_captura ?? ''},v${d.version}`),
-          ...adicionales.map((a) => `ADICIONAL,${a.phase ?? 'general'},${a.taken_at ?? ''},,,v${d.version}`), ...faltan.map((f) => `FALTA,${f},,,,v${d.version}`)].join('\n')
-        const a = document.createElement('a'); a.href = URL.createObjectURL(new Blob([csv], { type: 'text/csv' })); a.download = d.nombre; a.click()
-      } else if (d.tipo === 'Historial') {
-        await descargarPdf(d.nombre.replace('.pdf', ''), { ...meta, titulo: `Historial de revisión · ${meta.titulo}` },
-          [{ header: 'Fecha', key: 'fecha', width: 32 }, { header: 'Usuario', key: 'quien', width: 38 }, { header: 'Origen', key: 'entidad', width: 22 },
-           { header: 'Evento', key: 'detalle' }, { header: 'Versión', key: 'version', width: 18 }],
-          historial.filter((h) => !h.version || h.version <= d.version).map((h) => ({ fecha: fmtDateTime(h.cuando), quien: h.quien ?? '—', entidad: h.entidad ?? 'SERVICON', detalle: h.detalle, version: h.version ? `v${h.version}` : '—' })),
-          { cover: false })
-      } else {
-        const { oficiales } = fotosOficiales(item.item_number, fotosVersion)
-        await descargarPdf(d.nombre.replace('.pdf', ''), { ...meta, titulo: `Panel fotográfico · ${meta.titulo} · v${d.version}` },
-          [{ header: 'Archivo', key: 'archivo', width: 50 }, { header: 'Fase', key: 'fase', width: 25 }, { header: 'Captura', key: 'captura' }],
-          oficiales.map((o) => ({ archivo: o.nombre, fase: FASES.find((x) => x.n === o.fase)?.t, captura: fmtDateTime(o.foto.taken_at) })),
-          { cover: false, fotos: oficiales.filter((o) => o.foto.url).map((o) => ({ url: o.foto.url, titulo: o.nombre, pie: `${FASES.find((x) => x.n === o.fase)?.t} · ${fmtDateTime(o.foto.taken_at)}` })) })
-      }
-    } catch (e) {
-      toast.error(mensajeAmigable(e, 'No se pudo generar el documento'))
-    } finally {
-      setOcupado(null)
-    }
-  }
-
-  return (
-    <div className="grid gap-4 lg:grid-cols-[1fr_280px]">
-      <Card>
-        <CardHeader>
-          <CardTitle className="text-[14px]">Documentos publicados · Ítem {item.item_number}</CardTitle>
-          <CardDescription>{esVisor ? 'Sólo documentos autorizados para COVINCA.' : 'Generados de la misma intervención para cada versión publicada.'}</CardDescription>
-        </CardHeader>
-        <CardContent className="overflow-x-auto">
-          {docs.length === 0 ? <p className="text-muted-foreground py-4 text-[13px]">Aún no hay versiones publicadas de este ítem.</p> : (
-            <table className="w-full text-[12.5px]">
-              <thead className="text-muted-foreground text-[11.5px]"><tr className="border-b border-border">
-                <th className="py-1.5 text-left font-medium">Documento</th><th className="text-left font-medium">Tipo</th>
-                <th className="text-left font-medium">Versión</th><th className="text-left font-medium">Publicación</th>
-                <th className="text-left font-medium">Publicado por</th><th />
-              </tr></thead>
-              <tbody>
-                {docs.map((d) => (
-                  <tr key={d.id} onClick={() => setSelId(d.id)} className={cn('cursor-pointer border-b border-border/50', sel?.id === d.id && 'bg-primary/[0.07] font-semibold')}>
-                    <td className="py-1.5">{d.nombre}</td><td>{d.tipo}</td><td>v{d.version}</td><td>{fmtDate(d.fecha)}</td><td>{d.por}</td>
-                    <td className="text-right">
-                      <Button size="sm" variant="outline" loading={ocupado === d.id} onClick={(x) => { x.stopPropagation(); generar(d) }}>
-                        <Download className="size-3.5" />Descargar
-                      </Button>
-                    </td>
-                  </tr>
-                ))}
-              </tbody>
-            </table>
-          )}
-          <p className="text-muted-foreground mt-3 text-[11.5px]">Los documentos se consultan por versión; no se editan desde aquí.</p>
-        </CardContent>
-      </Card>
-      {sel && (
-        <Card className="h-fit">
-          <CardHeader><CardTitle className="text-[14px]">{sel.nombre}</CardTitle>
-            <CardDescription>Publicación v{sel.version} · {fmtDate(sel.fecha)} · {sel.por}</CardDescription></CardHeader>
-          <CardContent className="space-y-2">
-            <Button className="w-full" onClick={() => generar(sel)} loading={ocupado === sel.id}><Download className="size-4" />Descargar</Button>
-            <p className="pt-2 text-[12px] font-semibold">Historial de versiones</p>
-            {[...versiones].reverse().map((v) => {
-              const p = publicaciones.find((x) => x.version === v)
-              return (
-                <div key={v} className={cn('rounded-md border px-2.5 py-1.5 text-[12px]', v === sel.version ? 'border-success/40 bg-success/[0.07]' : 'border-border')}>
-                  <strong>v{v} · {fmtDate(p?.cuando)}</strong>
-                  <p className="text-muted-foreground">{p?.nota ?? (v === 1 ? 'Publicado' : 'Nueva versión publicada')}</p>
-                </div>
-              )
-            })}
-          </CardContent>
-        </Card>
-      )}
-    </div>
-  )
-}
-
-/**
- * Panel de detalle de la bandeja «Revisión de reportes / del contrato»
- * (maquetas 03_SUPERVISOR_MOVIL_REVISION y 03_RESIDENTE_MOVIL_REVISION):
- * datos del ítem, las tres fases, el historial corto y el mismo panel de
- * decisión que la página del ítem (mismas reglas en el servidor).
- */
 export function RevisionRapida({ itemId }: { itemId: string }) {
   const { role } = useSession()
   const sb = React.useMemo(() => createClient(), [])
