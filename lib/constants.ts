@@ -404,5 +404,5 @@ export const APP = {
   tagline: 'Gestión Operativa Vial 4.0',
   org: 'Grupo Servicon V&D EIRL',
   builtBy: 'Promptive',
-  version: '1.17.0',
+  version: '1.18.0',
 }
