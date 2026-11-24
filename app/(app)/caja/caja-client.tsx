@@ -13,7 +13,10 @@ import { Badge } from '@/components/ui/badge'
 import { Card, CardContent } from '@/components/ui/card'
 import { Input, Textarea, Field } from '@/components/ui/input'
 import { Tabs, TabsList, TabsTrigger, TabsContent } from '@/components/ui/primitives'
-import { KpisCaja, Rendiciones, Conciliacion } from '@/components/caja/caja-presupuestal'
+import { Rendiciones } from '@/components/caja/caja-presupuestal'
+import { ResumenCaja, MovimientosCaja, ConciliacionCaja } from '@/components/caja/caja-pestanas'
+import { useSearchParams } from 'next/navigation'
+import { BarChart3, ArrowLeftRight, FileText, Layers } from 'lucide-react'
 import {
   Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription, DialogFooter,
 } from '@/components/ui/dialog'
@@ -159,8 +162,78 @@ export function CajaClient() {
     refrescar()
   }
 
+  const sp = useSearchParams()
+  const [tab, setTab] = React.useState<string>(() => (presupuestal ? (sp.get('tab') ?? 'resumen') : 'gastos'))
+  const [nuevoMov, setNuevoMov] = React.useState(false)
+  const irA = (t: string) => { setNuevoMov(t.endsWith(':nuevo')); setTab(t.replace(':nuevo', '')) }
+  /** Revisar un gasto desde la tabla del período (puede estar fuera del rango de la lista) */
+  const revisarPorId = async (id: string) => {
+    const { data, error } = await sb.from('v_cash_movements').select('*').eq('id', id).single()
+    if (error || !data) { toast.error('No se pudo abrir el movimiento'); return }
+    setRevisando(data)
+  }
+
   const pendientes = movimientos.data?.filter((m: any) => m.status === 'registrado') ?? []
   const solicitudesAbiertas = solicitudes.data?.filter((s: any) => SOLICITUD_ABIERTA.includes(s.status)) ?? []
+
+  const listaDepositos = (
+          <>
+            {solicitudes.isLoading && <SkeletonList rows={4} />}
+
+            {solicitudes.data?.length === 0 && (
+              <EmptyState
+                icon={Landmark}
+                title="Sin solicitudes"
+                description="Cuando una cuadrilla se quede sin fondo, su pedido aparecerá aquí."
+              />
+            )}
+
+            {solicitudes.data?.map((s: any) => {
+              const estado = SOLICITUD_ESTADO[s.status as keyof typeof SOLICITUD_ESTADO]
+              return (
+                <Card key={s.id}>
+                  <CardContent className="flex flex-wrap items-start gap-3 p-4">
+                    <div className="min-w-0 flex-1">
+                      <div className="flex flex-wrap items-center gap-2">
+                        <p className="font-medium">{s.reason}</p>
+                        <Badge variant={estado?.variant ?? 'outline'}>{estado?.label ?? s.status}</Badge>
+                        {s.priority === 'urgente' && <Badge variant="destructive">Urgente</Badge>}
+                      </div>
+                      <p className="text-muted-foreground mt-0.5 text-[13px]">
+                        {[
+                          s.cash_boxes?.code,
+                          fmtDate(s.created_at),
+                          s.needed_by && `Para el ${fmtDate(s.needed_by)}`,
+                          s.approved_amount != null && Number(s.approved_amount) !== Number(s.amount)
+                            && `${s.status === 'depositado' ? 'Depositado' : 'Aprobado'} ${soles(Number(s.approved_amount))}`,
+                          s.bank_reference && `Operación ${s.bank_reference}`,
+                        ].filter(Boolean).join(' · ')}
+                      </p>
+                      {s.resolution_note && (
+                        <p className="text-muted-foreground mt-1 text-[13px]">«{s.resolution_note}»</p>
+                      )}
+                    </div>
+
+                    <p className="text-lg font-bold tabular-nums">{soles(Number(s.amount))}</p>
+
+                    {s.voucher_path && (
+                      <Button size="sm" variant="outline" onClick={() => verComprobante(s.voucher_path)}>
+                        <ReceiptText /> Comprobante
+                      </Button>
+                    )}
+
+                    {/* Solo el administrador las atiende (Elvis, P47) */}
+                    {can.admin && !['depositado', 'rechazado'].includes(s.status) && (
+                      <Button size="sm" onClick={() => setResolviendo(s)}>
+                        <Banknote /> Responder
+                      </Button>
+                    )}
+                  </CardContent>
+                </Card>
+              )
+            })}
+          </>
+  )
 
   return (
     <>
@@ -168,13 +241,12 @@ export function CajaClient() {
         title={presupuestal ? 'Caja presupuestal' : 'Caja chica'}
         description={presupuestal ? 'Uso interno SERVICON · No visible para COVINCA.' : 'Saldos por cuadrilla, revisión de gastos y solicitudes de depósito'}
         icon={Wallet}
-        actions={<DateRangeTabs value={preset} onChange={setPreset} />}
+        actions={presupuestal ? undefined : <DateRangeTabs value={preset} onChange={setPreset} />}
       />
 
       <PageBody>
-        {presupuestal && <div className="mb-4"><KpisCaja desde={rango.from} hasta={rango.to} caja={caja === 'todas' ? null : caja} /></div>}
-        {/* Los saldos: lo primero que administración necesita ver */}
-        <div className="grid gap-3 sm:grid-cols-2 xl:grid-cols-3">
+        {/* Los saldos: lo primero que administración necesita ver (la caja presupuestal los resume en sus KPIs) */}
+        <div className={cn('grid gap-3 sm:grid-cols-2 xl:grid-cols-3', presupuestal && 'hidden')}>
           {cajas.isLoading && <SkeletonList rows={3} />}
           {cajas.data?.map((c: any) => {
             const bajo = Number(c.balance) <= Number(c.low_balance_threshold)
@@ -222,19 +294,29 @@ export function CajaClient() {
           })}
         </div>
 
-        <Tabs defaultValue="gastos" className="mt-6">
+        <Tabs value={tab} onValueChange={setTab} className={presupuestal ? '' : 'mt-6'}>
           <TabsList>
-            <TabsTrigger value="gastos">
+            {presupuestal && <>
+              <TabsTrigger value="resumen"><BarChart3 className="size-3.5" />Resumen</TabsTrigger>
+              <TabsTrigger value="movimientos"><ArrowLeftRight className="size-3.5" />Movimientos{solicitudesAbiertas.length > 0 && <Badge variant="warning" className="ml-1.5">{solicitudesAbiertas.length}</Badge>}</TabsTrigger>
+              <TabsTrigger value="rendiciones"><FileText className="size-3.5" />Rendiciones</TabsTrigger>
+              <TabsTrigger value="conciliacion"><Layers className="size-3.5" />Conciliación</TabsTrigger>
+            </>}
+            {!presupuestal && <TabsTrigger value="gastos">
               Gastos {pendientes.length > 0 && <Badge variant="warning" className="ml-1.5">{pendientes.length}</Badge>}
-            </TabsTrigger>
-            <TabsTrigger value="depositos">
+            </TabsTrigger>}
+            {!presupuestal && <TabsTrigger value="depositos">
               Depósitos {solicitudesAbiertas.length > 0 && (
                 <Badge variant="warning" className="ml-1.5">{solicitudesAbiertas.length}</Badge>
               )}
-            </TabsTrigger>
-            {presupuestal && <TabsTrigger value="rendiciones">Rendiciones</TabsTrigger>}
-            {presupuestal && <TabsTrigger value="conciliacion">Conciliación</TabsTrigger>}
+            </TabsTrigger>}
           </TabsList>
+
+          {presupuestal && <TabsContent value="resumen" className="mt-4"><ResumenCaja cajas={cajas.data ?? []} onRevisar={revisarPorId} verComprobante={verComprobante} irA={irA} /></TabsContent>}
+          {presupuestal && <TabsContent value="movimientos" className="mt-4">
+            <MovimientosCaja cajas={cajas.data ?? []} onRevisar={revisarPorId} verComprobante={verComprobante} nuevo={nuevoMov}
+              extra={<div className="space-y-2"><p className="text-[14px] font-semibold">Solicitudes de depósito de las cuadrillas</p>{listaDepositos}</div>} />
+          </TabsContent>}
 
           {/* ─── Gastos ───────────────────────────────────────────────── */}
           <TabsContent value="gastos" className="mt-4 space-y-2">
@@ -308,63 +390,10 @@ export function CajaClient() {
 
           {/* ─── Solicitudes de depósito ──────────────────────────────── */}
           <TabsContent value="depositos" className="mt-4 space-y-2">
-            {solicitudes.isLoading && <SkeletonList rows={4} />}
-
-            {solicitudes.data?.length === 0 && (
-              <EmptyState
-                icon={Landmark}
-                title="Sin solicitudes"
-                description="Cuando una cuadrilla se quede sin fondo, su pedido aparecerá aquí."
-              />
-            )}
-
-            {solicitudes.data?.map((s: any) => {
-              const estado = SOLICITUD_ESTADO[s.status as keyof typeof SOLICITUD_ESTADO]
-              return (
-                <Card key={s.id}>
-                  <CardContent className="flex flex-wrap items-start gap-3 p-4">
-                    <div className="min-w-0 flex-1">
-                      <div className="flex flex-wrap items-center gap-2">
-                        <p className="font-medium">{s.reason}</p>
-                        <Badge variant={estado?.variant ?? 'outline'}>{estado?.label ?? s.status}</Badge>
-                        {s.priority === 'urgente' && <Badge variant="destructive">Urgente</Badge>}
-                      </div>
-                      <p className="text-muted-foreground mt-0.5 text-[13px]">
-                        {[
-                          s.cash_boxes?.code,
-                          fmtDate(s.created_at),
-                          s.needed_by && `Para el ${fmtDate(s.needed_by)}`,
-                          s.approved_amount != null && Number(s.approved_amount) !== Number(s.amount)
-                            && `${s.status === 'depositado' ? 'Depositado' : 'Aprobado'} ${soles(Number(s.approved_amount))}`,
-                          s.bank_reference && `Operación ${s.bank_reference}`,
-                        ].filter(Boolean).join(' · ')}
-                      </p>
-                      {s.resolution_note && (
-                        <p className="text-muted-foreground mt-1 text-[13px]">«{s.resolution_note}»</p>
-                      )}
-                    </div>
-
-                    <p className="text-lg font-bold tabular-nums">{soles(Number(s.amount))}</p>
-
-                    {s.voucher_path && (
-                      <Button size="sm" variant="outline" onClick={() => verComprobante(s.voucher_path)}>
-                        <ReceiptText /> Comprobante
-                      </Button>
-                    )}
-
-                    {/* Solo el administrador las atiende (Elvis, P47) */}
-                    {can.admin && !['depositado', 'rechazado'].includes(s.status) && (
-                      <Button size="sm" onClick={() => setResolviendo(s)}>
-                        <Banknote /> Responder
-                      </Button>
-                    )}
-                  </CardContent>
-                </Card>
-              )
-            })}
+            {listaDepositos}
           </TabsContent>
           {presupuestal && <TabsContent value="rendiciones" className="mt-4"><Rendiciones cajas={cajas.data ?? []} /></TabsContent>}
-          {presupuestal && <TabsContent value="conciliacion" className="mt-4"><Conciliacion cajas={cajas.data ?? []} /></TabsContent>}
+          {presupuestal && <TabsContent value="conciliacion" className="mt-4"><ConciliacionCaja cajas={cajas.data ?? []} /></TabsContent>}
         </Tabs>
       </PageBody>
 

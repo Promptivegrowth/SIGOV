@@ -1,5 +1,7 @@
 'use client'
 
+import { ConfigMarca, ConfigAlertas, ConfigEvidencias, ConfigExportacion } from '@/components/gestion/config-secciones'
+import { Palette, BellRing, Camera, FileDown } from 'lucide-react'
 import * as React from 'react'
 import { useQuery, useQueryClient } from '@tanstack/react-query'
 import {
@@ -359,6 +361,10 @@ export function ConfiguracionClient() {
         <Tabs value={tab} onValueChange={setTab}>
           <TabsList className="flex-wrap">
             {can.admin && <TabsTrigger value="contrato"><Settings className="size-3.5" />Contrato</TabsTrigger>}
+            {can.admin && <TabsTrigger value="marca"><Palette className="size-3.5" />Marca y formatos</TabsTrigger>}
+            {can.admin && <TabsTrigger value="alertas"><BellRing className="size-3.5" />Alertas</TabsTrigger>}
+            {can.admin && <TabsTrigger value="evidencias"><Camera className="size-3.5" />Evidencias</TabsTrigger>}
+            {can.admin && <TabsTrigger value="exportacion"><FileDown className="size-3.5" />Exportación</TabsTrigger>}
             <TabsTrigger value="usuarios"><Users className="size-3.5" />Usuarios</TabsTrigger>
             <TabsTrigger value="cuadrillas"><Truck className="size-3.5" />Cuadrillas</TabsTrigger>
             <TabsTrigger value="tramos"><Route className="size-3.5" />Tramos</TabsTrigger>
@@ -372,6 +378,10 @@ export function ConfiguracionClient() {
 
           {/* ═══ USUARIOS ══════════════════════════════════════════════════ */}
           {can.admin && <TabsContent value="contrato" className="mt-4"><ConfigContrato /></TabsContent>}
+          {can.admin && <TabsContent value="marca" className="mt-4"><ConfigMarca /></TabsContent>}
+          {can.admin && <TabsContent value="alertas" className="mt-4"><ConfigAlertas /></TabsContent>}
+          {can.admin && <TabsContent value="evidencias" className="mt-4"><ConfigEvidencias /></TabsContent>}
+          {can.admin && <TabsContent value="exportacion" className="mt-4"><ConfigExportacion /></TabsContent>}
           <TabsContent value="usuarios" className="mt-4 space-y-4">
             <div className="flex flex-wrap items-center justify-between gap-3">
               <div>

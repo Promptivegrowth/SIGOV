@@ -1,5 +1,6 @@
 'use client'
 
+import { MarcaVigenteSync } from '@/components/gestion/config-secciones'
 import * as React from 'react'
 import { usePathname, useRouter } from 'next/navigation'
 import { AnimatePresence, motion } from 'motion/react'
@@ -70,6 +71,7 @@ export function AppShell({ children }: { children: React.ReactNode }) {
         <BandaDeMarca />
         <Topbar onMenuClick={() => setMobileOpen(true)} />
         <OfflineBanner />
+        <MarcaVigenteSync />
 
         <main className="flex-1 pb-24 lg:pb-0">
           <AnimatePresence mode="wait">

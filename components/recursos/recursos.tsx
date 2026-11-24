@@ -16,6 +16,8 @@ import { cn, fmtDate, toISODate } from '@/lib/utils'
 import { mensajeAmigable } from '@/lib/errores'
 import { Kpi } from '@/components/gestion/gestion-nav'
 import { Elegir } from '@/components/ssoma/control-ssoma'
+import { EquiposOperativos } from './equipos'
+import { useSearchParams } from 'next/navigation'
 
 /**
  * «Recursos operativos» (ADMIN_Recursos_*): vehículos (alta y edición con
@@ -30,7 +32,8 @@ export function RecursosOperativos() {
   const { service } = useSession()
   const sb = React.useMemo(() => createClient(), [])
   const qc = useQueryClient()
-  const [tab, setTab] = React.useState<Tab>('vehiculos')
+  const sp = useSearchParams()
+  const [tab, setTab] = React.useState<Tab>(() => (['vehiculos', 'asignaciones', 'equipos'].includes(sp.get('tab') ?? '') ? sp.get('tab') as Tab : 'vehiculos'))
   const [q, setQ] = React.useState('')
   const [editar, setEditar] = React.useState<any | null>(null)
   const [asignar, setAsignar] = React.useState<any | null>(null)
@@ -52,9 +55,9 @@ export function RecursosOperativos() {
   const refrescar = () => qc.invalidateQueries({ queryKey: ['recursos'] })
   return (
     <>
-      <PageHeader title="Recursos operativos" description="Vehículos, equipos y sus asignaciones a cuadrillas" />
+      <PageHeader title="Recursos operativos" description="Gestión de vehículos, equipos y asignaciones operativas · Uso interno SERVICON" />
       <PageBody className="space-y-4">
-        <div className="grid grid-cols-2 gap-3 lg:grid-cols-4">
+        <div className={cn('grid grid-cols-2 gap-3 lg:grid-cols-4', tab === 'equipos' && 'hidden')}>
           <Kpi icono={Truck} valor={x?.v.length} etiqueta="Vehículos" tono="azul" />
           <Kpi icono={CheckCircle2} valor={x?.v.filter((v) => v.status === 'operativo').length} etiqueta="Operativos" tono="verde" />
           <Kpi icono={TriangleAlert} valor={x?.v.filter(vencido).length} etiqueta="Con documento vencido" tono="rojo" />
@@ -62,16 +65,17 @@ export function RecursosOperativos() {
         </div>
         <div className="flex flex-wrap items-center gap-2">
           <div className="bg-secondary inline-flex rounded-lg p-1">
-            {([['vehiculos', 'Vehículos', Truck], ['asignaciones', 'Asignaciones', Link2], ['equipos', 'Equipos', Wrench]] as const).map(([k, t, I]) => (
+            {([['vehiculos', 'Vehículos', Truck], ['equipos', 'Equipos', Wrench], ['asignaciones', 'Asignaciones', Link2]] as const).map(([k, t, I]) => (
               <button key={k} onClick={() => setTab(k)} className={cn('flex items-center gap-1.5 rounded-md px-3.5 py-1.5 text-[13px] font-semibold', tab === k ? 'bg-primary text-primary-foreground' : 'text-muted-foreground')}><I className="size-3.5" />{t}</button>
             ))}
           </div>
-          <div className="relative min-w-56 flex-1"><Search className="text-muted-foreground absolute top-1/2 left-2.5 size-4 -translate-y-1/2" />
-            <Input value={q} onChange={(e) => setQ(e.target.value)} placeholder="Buscar placa, código o cuadrilla..." className="pl-8" /></div>
+          {tab !== 'equipos' && <div className="relative min-w-56 flex-1"><Search className="text-muted-foreground absolute top-1/2 left-2.5 size-4 -translate-y-1/2" />
+            <Input value={q} onChange={(e) => setQ(e.target.value)} placeholder="Buscar placa, código o cuadrilla..." className="pl-8" /></div>}
           {tab === 'vehiculos' && <Button onClick={() => setEditar({ status: 'operativo', kind: 'camioneta' })}><Plus className="size-4" />Nuevo vehículo</Button>}
           {tab === 'asignaciones' && <Button onClick={() => setAsignar({})}><Plus className="size-4" />Nueva asignación</Button>}
         </div>
-        <Card><CardContent className="overflow-x-auto p-0">
+        {tab === 'equipos' && <EquiposOperativos />}
+        <Card className={cn(tab === 'equipos' && 'hidden')}><CardContent className="overflow-x-auto p-0">
           {tab === 'vehiculos' && (
             <table className="w-full text-[12.5px]">
               <thead className="bg-secondary/60 text-muted-foreground text-[11.5px]"><tr>{['Código', 'Placa', 'Tipo', 'Cuadrilla', 'SOAT', 'Revisión técnica', 'Póliza', 'Estado', ''].map((t) => <th key={t} className="px-3 py-2 text-left font-medium">{t}</th>)}</tr></thead>
@@ -97,18 +101,6 @@ export function RecursosOperativos() {
                 </tr>))}</tbody>
             </table>
           )}
-          {tab === 'equipos' && (
-            <table className="w-full text-[12.5px]">
-              <thead className="bg-secondary/60 text-muted-foreground text-[11.5px]"><tr>{['Código', 'Tipo', 'Cuadrilla', 'Vence', 'Próxima revisión', 'Estado'].map((t) => <th key={t} className="px-3 py-2 text-left font-medium">{t}</th>)}</tr></thead>
-              <tbody>{(x?.e ?? []).filter((e) => !q || `${e.code} ${e.kind} ${e.crews?.name}`.toLowerCase().includes(q.toLowerCase())).map((e) => (
-                <tr key={e.id} className="border-t border-border">
-                  <td className="px-3 py-1.5 font-semibold">{e.code ?? '—'}</td><td className="px-3">{String(e.kind).replace(/_/g, ' ')}</td><td className="px-3">{e.crews?.name ?? '—'}</td>
-                  <td className={cn('px-3', e.expires_on && e.expires_on < hoy && 'text-destructive font-semibold')}>{e.expires_on ? fmtDate(e.expires_on) : '—'}</td>
-                  <td className="px-3">{e.next_check_on ? fmtDate(e.next_check_on) : '—'}</td><td className="px-3">{String(e.status).replace(/_/g, ' ')}</td>
-                </tr>))}</tbody>
-            </table>
-          )}
-          {tab === 'equipos' && <p className="text-muted-foreground border-t border-border px-3 py-2 text-[12px]">El alta, la revisión y la renovación de equipos se hacen en <Link href="/vencimientos" className="text-primary underline"><ExternalLink className="mr-0.5 inline size-3" />Vencimientos › Equipos</Link>, con su historial de inspecciones.</p>}
         </CardContent></Card>
       </PageBody>
       {editar && <EditarVehiculo v={editar} cerrar={() => setEditar(null)} alGuardar={() => { setEditar(null); refrescar() }} />}

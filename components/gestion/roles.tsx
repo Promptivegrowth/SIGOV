@@ -45,14 +45,27 @@ export function RolesPermisos() {
       const [{ data: p }, { data: c }, { data: m }, { data: cr }] = await Promise.all([
         sb.from('permisos_rol' as any).select('*').eq('service_id', service.id),
         sb.from('permisos_cambios' as any).select('*, profiles:quien(full_name, email)').eq('service_id', service.id).order('cuando', { ascending: false }).limit(1),
-        sb.from('service_members').select('role').eq('service_id', service.id),
-        sb.from('crews').select('id, name, supervisor_id').eq('service_id', service.id).is('deleted_at', null),
+        sb.from('service_members').select('role, profile_id, profiles(full_name, email)').eq('service_id', service.id),
+        sb.from('crews').select('id, code, name, supervisor_id').eq('service_id', service.id).is('deleted_at', null).order('code'),
       ])
       return { permisos: (p ?? []) as any[], ultimo: ((c ?? []) as any[])[0], miembros: (m ?? []) as any[], crews: (cr ?? []) as any[] }
     },
   })
-  React.useEffect(() => { setCambios({}); setMotivo('') }, [rol])
   const d = datos.data
+  // Alcance editable del Supervisor: sus cuadrillas asignadas (A01/A02 · «Cuadrillas asignadas»)
+  const supervisores = (d?.miembros ?? []).filter((m: any) => m.role === 'supervisor')
+  const [sup, setSup] = React.useState('')
+  const [crewsSel, setCrewsSel] = React.useState<string[] | null>(null)
+  React.useEffect(() => { setCambios({}); setMotivo(''); setCrewsSel(null) }, [rol, sup])
+  React.useEffect(() => { if (!sup && supervisores[0]) setSup(supervisores[0].profile_id) }, [supervisores, sup])
+  const crewsActuales = (d?.crews ?? []).filter((c: any) => c.supervisor_id === sup).map((c: any) => c.id as string)
+  const crewsNuevas = crewsSel ?? crewsActuales
+  const alcanceCambia = rol === 'supervisor' && crewsSel !== null && (crewsNuevas.length !== crewsActuales.length || crewsNuevas.some((x) => !crewsActuales.includes(x)))
+  const codigo = (id: string) => (d?.crews ?? []).find((c: any) => c.id === id)?.code ?? id
+  const otroSupervisor = (id: string) => {
+    const c = (d?.crews ?? []).find((x: any) => x.id === id)
+    return c?.supervisor_id && c.supervisor_id !== sup ? supervisores.find((m: any) => m.profile_id === c.supervisor_id)?.profiles?.full_name ?? 'otro supervisor' : null
+  }
   const verActual = (m: ModuloPermiso) => {
     const f = (d?.permisos ?? []).find((x) => x.rol === rol && x.modulo === m)
     return f ? !!f.ver : verPorDefecto(rol, m)
@@ -61,11 +74,17 @@ export function RolesPermisos() {
   const diff = Object.entries(cambios).filter(([m, v]) => v !== verActual(m as ModuloPermiso))
   const guardar = async () => {
     setGuardando(true)
-    const { error } = await sb.rpc('permisos_guardar' as any, { p_service: service.id, p_rol: rol, p_cambios: Object.fromEntries(diff), p_motivo: motivo } as any)
+    if (diff.length) {
+      const { error } = await sb.rpc('permisos_guardar' as any, { p_service: service.id, p_rol: rol, p_cambios: Object.fromEntries(diff), p_motivo: motivo } as any)
+      if (error) { setGuardando(false); return toast.error(mensajeAmigable(error)) }
+    }
+    if (alcanceCambia) {
+      const { error } = await sb.rpc('alcance_supervisor_guardar' as any, { p_service: service.id, p_supervisor: sup, p_crews: crewsNuevas, p_motivo: motivo } as any)
+      if (error) { setGuardando(false); return toast.error(mensajeAmigable(error)) }
+    }
     setGuardando(false)
-    if (error) return toast.error(mensajeAmigable(error))
-    toast.success('Permisos guardados', { description: 'El menú y las rutas del rol se actualizan al recargar su sesión.' })
-    setCambios({}); setMotivo(''); qc.invalidateQueries({ queryKey: ['permisos'] }); qc.invalidateQueries({ queryKey: ['permisos-ver'] })
+    toast.success('Cambios guardados', { description: alcanceCambia ? 'El alcance del supervisor se aplica en su próxima consulta.' : 'El menú y las rutas del rol se actualizan al recargar su sesión.' })
+    setCambios({}); setMotivo(''); setCrewsSel(null); qc.invalidateQueries({ queryKey: ['permisos'] }); qc.invalidateQueries({ queryKey: ['permisos-ver'] })
   }
   const modulos = MODULOS_PERMISO.filter((m) => !q || m.t.toLowerCase().includes(q.toLowerCase()))
   const editable = rol !== 'admin'
@@ -119,22 +138,41 @@ export function RolesPermisos() {
           <Card className="h-fit">
             <CardHeader className="pb-2"><CardTitle className="text-[14px]">Alcance y cambios</CardTitle></CardHeader>
             <CardContent className="space-y-3 text-[12.5px]">
-              <p><HardHat className="mr-1 inline size-3.5" /><strong>{ALCANCE[rol]}</strong>
-                {rol === 'supervisor' && <span className="text-muted-foreground block">Las cuadrillas de cada supervisor se asignan en Gestión › Cuadrillas.</span>}</p>
+              <p><HardHat className="mr-1 inline size-3.5" /><strong>{ALCANCE[rol]}</strong></p>
+              {rol === 'supervisor' && (
+                <div className="space-y-1.5">
+                  <select value={sup} onChange={(e) => setSup(e.target.value)} className="bg-card h-9 w-full rounded-md border border-border px-2">
+                    {supervisores.map((m: any) => <option key={m.profile_id} value={m.profile_id}>{m.profiles?.full_name ?? m.profile_id}</option>)}
+                  </select>
+                  <div className="flex flex-wrap gap-1.5 rounded-md border border-border p-2">
+                    {crewsNuevas.map((id) => (
+                      <span key={id} className="bg-info/10 text-info flex items-center gap-1 rounded-full px-2 py-0.5 text-[12px] font-semibold">{codigo(id)}
+                        <button aria-label={`Quitar ${codigo(id)}`} onClick={() => setCrewsSel(crewsNuevas.filter((x) => x !== id))}>×</button></span>
+                    ))}
+                    <select value="" onChange={(e) => e.target.value && setCrewsSel([...crewsNuevas, e.target.value])} className="min-w-28 flex-1 bg-transparent text-[12px] outline-none">
+                      <option value="">+ Agregar cuadrilla</option>
+                      {(d?.crews ?? []).filter((c: any) => !crewsNuevas.includes(c.id)).map((c: any) => <option key={c.id} value={c.id}>{c.code} · {c.name}{otroSupervisor(c.id) ? ` (hoy: ${otroSupervisor(c.id)})` : ''}</option>)}
+                    </select>
+                  </div>
+                  <p className="text-muted-foreground text-[11.5px]">Una cuadrilla tiene un solo supervisor: al agregarla aquí deja de estar con el anterior.</p>
+                </div>
+              )}
               <label className="block space-y-1"><span className="font-medium">Motivo del cambio <span className="text-destructive">*</span></span>
                 <Textarea rows={3} maxLength={250} value={motivo} onChange={(e) => setMotivo(e.target.value)} disabled={!editable} placeholder="Por qué cambia el acceso del rol" />
                 <span className="text-muted-foreground block text-right text-[11px]">{motivo.length} / 250</span></label>
               <p className="font-medium"><Eye className="mr-1 inline size-3.5" />Vista previa de cambios</p>
               <div className="grid grid-cols-[1fr_auto_1fr] items-start gap-2">
                 <div className="rounded-lg border border-border"><p className="bg-secondary rounded-t-lg px-2 py-1 font-semibold">Antes (actual)</p>
-                  {diff.length === 0 ? <p className="text-muted-foreground p-2">Sin cambios</p> : diff.map(([m]) => <p key={m} className="flex items-center justify-between gap-1 p-2">{MODULOS_PERMISO.find((x) => x.k === m)?.t} – Ver <Toggle on={verActual(m as ModuloPermiso)} /></p>)}</div>
+                  {diff.length === 0 && !alcanceCambia ? <p className="text-muted-foreground p-2">Sin cambios</p> : diff.map(([m]) => <p key={m} className="flex items-center justify-between gap-1 p-2">{MODULOS_PERMISO.find((x) => x.k === m)?.t} – Ver <Toggle on={verActual(m as ModuloPermiso)} /></p>)}
+                  {alcanceCambia && <p className="p-2">Cuadrillas: {crewsActuales.map(codigo).join(', ') || 'ninguna'}</p>}</div>
                 <span className="pt-6">→</span>
                 <div className="border-success/40 rounded-lg border"><p className="bg-success/10 text-success rounded-t-lg px-2 py-1 font-semibold">Después (nuevo)</p>
-                  {diff.length === 0 ? <p className="text-muted-foreground p-2">Sin cambios</p> : diff.map(([m, v]) => <p key={m} className="flex items-center justify-between gap-1 p-2">{MODULOS_PERMISO.find((x) => x.k === m)?.t} – Ver <Toggle on={v} /></p>)}</div>
+                  {diff.length === 0 && !alcanceCambia ? <p className="text-muted-foreground p-2">Sin cambios</p> : diff.map(([m, v]) => <p key={m} className="flex items-center justify-between gap-1 p-2">{MODULOS_PERMISO.find((x) => x.k === m)?.t} – Ver <Toggle on={v} /></p>)}
+                  {alcanceCambia && <p className="text-success p-2">Cuadrillas: {crewsNuevas.map(codigo).join(', ') || 'ninguna'}</p>}</div>
               </div>
               <div className="flex justify-end gap-2">
-                <Button variant="outline" onClick={() => { setCambios({}); setMotivo('') }}>Cancelar</Button>
-                <Button onClick={guardar} loading={guardando} disabled={!editable || !diff.length || !motivo.trim()}><Save className="size-4" />Guardar cambios</Button>
+                <Button variant="outline" onClick={() => { setCambios({}); setMotivo(''); setCrewsSel(null) }}>Cancelar</Button>
+                <Button onClick={guardar} loading={guardando} disabled={!editable || (!diff.length && !alcanceCambia) || !motivo.trim()}><Save className="size-4" />Guardar cambios</Button>
               </div>
               {!editable && <p className="text-muted-foreground">Los permisos del Administrador no se recortan desde aquí.</p>}
             </CardContent>

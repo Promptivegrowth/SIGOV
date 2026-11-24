@@ -144,6 +144,24 @@ export function CentroReportes() {
       .order('created_at', { ascending: false }).limit(12)).data ?? []) as any[],
     refetchInterval: (q) => ((q.state.data as any[] | undefined)?.some((e) => e.estado === 'en_proceso') ? 3000 : false),
   })
+  // Retención (Configuración › Exportación): las copias temporales vencidas se eliminan;
+  // los originales y la bitácora no se tocan
+  React.useEffect(() => {
+    const vencidas = async () => {
+      const filas = (historial.data ?? []).filter((e) => e.estado === 'listo' && e.archivo)
+      if (!filas.length) return
+      const { data } = await sb.rpc('config_vigente' as any, { p_service: service.id, p_seccion: 'exportacion' } as any)
+      const dias = Number((data as any)?.retencion_dias ?? 30)
+      const limite = Date.now() - dias * 86_400_000
+      const viejas = filas.filter((e) => new Date(e.created_at).getTime() < limite)
+      if (!viejas.length) return
+      await sb.storage.from('exportaciones').remove(viejas.map((e) => e.archivo))
+      await sb.from('exportaciones' as any).update({ estado: 'expirado' }).in('id', viejas.map((e) => e.id))
+      qc.invalidateQueries({ queryKey: ['exportaciones', service.id] })
+    }
+    vencidas().catch(() => { /* la limpieza no interrumpe la pantalla */ })
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [historial.data])
   const [progreso, setProgreso] = React.useState<{ id: string; texto: string } | null>(null)
   const cancelar = React.useRef<string | null>(null)
 
@@ -526,7 +544,7 @@ export function CentroReportes() {
                             </>
                           ) : (
                             <span className={cn('rounded-full px-2 py-0.5 font-semibold', e.estado === 'error' ? 'bg-destructive/10 text-destructive' : 'bg-secondary text-muted-foreground')} title={e.error ?? ''}>
-                              {e.estado === 'error' ? 'Error' : e.estado === 'cancelado' ? 'Cancelada' : 'Interrumpida'}
+                              {e.estado === 'error' ? 'Error' : e.estado === 'cancelado' ? 'Cancelada' : e.estado === 'expirado' ? 'Expirada' : 'Interrumpida'}
                             </span>
                           )}
                         </li>

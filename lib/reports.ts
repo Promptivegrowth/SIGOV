@@ -54,6 +54,27 @@ function contexto(meta: ReportMeta, filas?: number) {
   }
 }
 
+/**
+ * La marca vigente del contrato (Configuración › Marca y formatos, guía F16):
+ * logo autorizado y encabezado/pie por formato. Se versiona; lo exportado
+ * antes conserva la marca con que salió (su archivo queda en el historial).
+ */
+export interface MarcaVigente {
+  version?: number
+  logoUrl?: string | null
+  formatos?: Partial<Record<'diario' | 'panel' | 'excel', { encabezado?: string; pie?: string }>>
+}
+let marca: MarcaVigente | null = null
+let formatoEnCurso: 'diario' | 'panel' = 'diario'
+export function fijarMarca(m: MarcaVigente | null) {
+  marca = m
+  logoCache = null
+  logoListo = null
+}
+export function marcaActual() {
+  return marca
+}
+
 /** El logo de SERVICON, una vez por sesión, listo para jsPDF y ExcelJS. */
 let logoCache: Promise<{ data: string; w: number; h: number } | null> | null = null
 /** El ya cargado: las páginas de fotos y firmas lo usan sin esperarlo. */
@@ -62,7 +83,7 @@ function logoServicon() {
   if (!logoCache) {
     logoCache = (async () => {
       try {
-        const blob = await fetch('/marca/logo-servicon.png').then((r) => (r.ok ? r.blob() : Promise.reject()))
+        const blob = await fetch(marca?.logoUrl || '/marca/logo-servicon.png').then((r) => (r.ok ? r.blob() : Promise.reject()))
         // El original pesa varios MB sin comprimir dentro del PDF: basta 600 px de ancho
         const bmp = await createImageBitmap(blob)
         const k = Math.min(1, 600 / bmp.width)
@@ -246,7 +267,7 @@ function header(doc: any, meta: ReportMeta, logo?: { data: string; w: number; h:
   doc.setFont('helvetica', 'normal')
   doc.setFontSize(7.5)
   doc.setTextColor(255, 255, 255)
-  doc.text('SISTEMA INTEGRAL DE GESTION OPERATIVA VIAL', x0, 18.5)
+  doc.text((marca?.formatos?.[formatoEnCurso]?.encabezado || 'SISTEMA INTEGRAL DE GESTION OPERATIVA VIAL').slice(0, 70), x0, 18.5)
 
   doc.setFontSize(11)
   doc.setFont('helvetica', 'bold')
@@ -297,6 +318,8 @@ function footer(doc: any, meta: ReportMeta, conPortada = true) {
       H - 9
     )
     doc.text(`Página ${i - desde + 1} de ${pages - desde + 1}`, W - 14, H - 9, { align: 'right' })
+    const pie = marca?.formatos?.[formatoEnCurso]?.pie
+    if (pie) doc.text(doc.splitTextToSize(pie, W - 28).slice(0, 1), 14, H - 5)
   }
 }
 
@@ -499,6 +522,7 @@ export async function reportePdf(
 ) {
   const { jsPDF, autoTable } = await jspdf()
   const doc = new jsPDF({ orientation: options?.landscape ? 'landscape' : 'portrait', unit: 'mm', format: 'a4' })
+  formatoEnCurso = options?.fotos?.length ? 'panel' : 'diario'
 
   if (options?.cover !== false) cover(doc, meta, options?.kpis)
 
@@ -659,7 +683,7 @@ export async function excelBlob(
 
   portada.mergeCells('A3:B3')
   const t1 = portada.getCell('A3')
-  t1.value = 'SISTEMA INTEGRAL DE GESTION OPERATIVA VIAL'
+  t1.value = marca?.formatos?.excel?.encabezado || 'SISTEMA INTEGRAL DE GESTION OPERATIVA VIAL'
   t1.font = { size: 8.5, color: { argb: 'FFFFFFFF' } }
   t1.alignment = { horizontal: 'center' }
   t1.fill = { type: 'pattern', pattern: 'solid', fgColor: { argb: 'FF072D70' } }
@@ -704,6 +728,11 @@ export async function excelBlob(
   const hojas = portada.addRow(['HOJAS', sheets.map((x) => x.name).join(' - ')])
   hojas.getCell(1).font = { size: 8.5, bold: true, color: { argb: 'FF787E8E' } }
   hojas.getCell(2).font = { size: 10, color: { argb: 'FF1C2238' } }
+  if (marca?.formatos?.excel?.pie) {
+    portada.addRow([])
+    const pie = portada.addRow(['', marca.formatos.excel.pie])
+    pie.getCell(2).font = { size: 8.5, italic: true, color: { argb: 'FF787E8E' } }
+  }
 
   for (const s of sheets) {
     const ws = wb.addWorksheet(s.name.slice(0, 31), {
