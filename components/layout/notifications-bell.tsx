@@ -34,7 +34,7 @@ export function NotificationsBell() {
       const sb = createClient()
       const { data } = await sb
         .from('notifications')
-        .select('id, type, title, body, url, severity, read_at, created_at')
+        .select('id, type, title, body, url, severity, read_at, created_at, actualizada_at, resuelta_at')
         .order('created_at', { ascending: false })
         .limit(25)
       return data ?? []
@@ -42,7 +42,13 @@ export function NotificationsBell() {
     refetchInterval: 90_000,
   })
 
-  const unread = items.filter((n: any) => !n.read_at).length
+  // VIS-03: un aviso cuya cola ya quedó vacía (resuelto) no cuenta como pendiente ni lleva a un filtro vacío
+  const unread = items.filter((n: any) => !n.read_at && !n.resuelta_at).length
+  const marcarLeido = async (id: string) => {
+    await createClient().from('notifications').update({ read_at: new Date().toISOString() }).eq('id', id).is('read_at', null)
+    qc.invalidateQueries({ queryKey: ['notifications'] })
+    qc.invalidateQueries({ queryKey: ['pending-counts'] })
+  }
 
   const markAll = async () => {
     const sb = createClient()
@@ -123,25 +129,29 @@ export function NotificationsBell() {
                   : n.severity === 'success' ? 'text-success'
                   : 'text-info'
                 const body = (
-                  <div className={cn('flex gap-3 px-4 py-3 transition-colors', !n.read_at && 'bg-primary/[0.04]')}>
+                  <div className={cn('flex gap-3 px-4 py-3 transition-colors', !n.read_at && !n.resuelta_at && 'bg-primary/[0.04]', n.resuelta_at && 'opacity-75')}>
                     <Icon className={cn('mt-0.5 size-4 shrink-0', color)} />
                     <div className="min-w-0 flex-1">
-                      <p className={cn('text-[12.5px] leading-snug', !n.read_at && 'font-medium')}>
+                      <p className={cn('text-[12.5px] leading-snug', !n.read_at && !n.resuelta_at && 'font-medium')}>
                         {n.title}
                       </p>
+                      {n.resuelta_at && (
+                        <p className="text-success mt-0.5 text-[11px] font-medium">Atendido {fmtRelative(n.resuelta_at)}: ya no quedan ítems pendientes de este aviso</p>
+                      )}
                       {n.body && (
                         <p className="text-muted-foreground mt-0.5 line-clamp-2 text-[11px] leading-snug">
                           {n.body}
                         </p>
                       )}
-                      <p className="text-muted-foreground/70 mt-1 text-[10px]">{fmtRelative(n.created_at)}</p>
+                      <p className="text-muted-foreground/70 mt-1 text-[10px]">{fmtRelative(n.actualizada_at ?? n.created_at)}{n.actualizada_at ? ' (cifra actualizada)' : ''}</p>
                     </div>
-                    {!n.read_at && <span className="bg-primary mt-1.5 size-1.5 shrink-0 rounded-full" />}
+                    {!n.read_at && !n.resuelta_at && <span className="bg-primary mt-1.5 size-1.5 shrink-0 rounded-full" />}
                   </div>
                 )
                 return (
                   <li key={n.id} className="hover:bg-secondary/40">
-                    {n.url ? <Link href={n.url}>{body}</Link> : body}
+                    {/* Resuelto: abre el PCI con todos sus estados, no el filtro que ya quedó vacío */}
+                    {n.url ? <Link href={n.resuelta_at ? String(n.url).split('?')[0] : n.url} onClick={() => !n.read_at && marcarLeido(n.id)}>{body}</Link> : body}
                   </li>
                 )
               })}

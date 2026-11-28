@@ -45,6 +45,11 @@ export function AuditoriaClient() {
   const [f, setF] = React.useState({ desde: toISODate(addDays(new Date(), -1)), hasta: toISODate(new Date()), q: '', usuario: '', modulo: '', accion: '', resultado: '' })
   const [pildora, setPildora] = React.useState<Pildora>('todos')
   const [abierto, setAbierto] = React.useState<string | null>(sp.get('evento'))
+  // ADM-02: en el celular el detalle queda debajo de la tabla; al abrirlo se lleva la vista a él
+  const detalleRef = React.useRef<HTMLDivElement>(null)
+  React.useEffect(() => {
+    if (abierto && window.innerWidth < 1280) setTimeout(() => detalleRef.current?.scrollIntoView({ behavior: 'smooth', block: 'start' }), 60)
+  }, [abierto])
   const [porPagina, setPorPagina] = React.useState(25)
   const [pagina, setPagina] = React.useState(0)
 
@@ -133,8 +138,10 @@ export function AuditoriaClient() {
                       {visibles.map((e) => {
                         const R = RES[e.resultado] ?? RES.correcto
                         return (
-                          <tr key={e.id} className={cn('hover:bg-secondary/30', abierto === e.id && 'bg-primary/5 outline outline-1 outline-primary/40')}>
-                            <td className="px-3 py-2"><R.i className={cn('size-4', R.tono)} /></td>
+                          <tr key={e.id} id={'evento-' + e.id} className={cn('scroll-mt-24 hover:bg-secondary/30', abierto === e.id && 'bg-primary/5 outline outline-1 outline-primary/40')}>
+                            <td className="px-3 py-2"><span className="flex items-center gap-1.5"><R.i className={cn('size-4', R.tono)} />
+                              {/* La acción visible sin desplazar la tabla en el celular */}
+                              <Button size="sm" variant={abierto === e.id ? 'default' : 'outline'} className="h-7 px-2 xl:hidden" aria-label="Ver detalle" onClick={() => setAbierto(abierto === e.id ? null : e.id)}><Eye className="size-3.5" /></Button></span></td>
                             <td className="px-3 py-2 whitespace-nowrap">{fmtDateTime(e.at)}</td>
                             <td className="px-3 py-2"><span className="flex items-center gap-1.5"><span className="bg-primary/10 text-primary grid size-6 place-items-center rounded-full text-[10px] font-bold">{iniciales(e.usuario)}</span>{e.usuario}</span></td>
                             <td className="px-3 py-2">{moduloDe(e)}</td>
@@ -161,7 +168,13 @@ export function AuditoriaClient() {
               </div>
             )}
           </Card>
-          <DetalleEvento e={elegido} cerrar={() => setAbierto(null)} />
+          <div ref={detalleRef} className="scroll-mt-24">
+            <DetalleEvento e={elegido} cerrar={() => {
+              const id = abierto
+              setAbierto(null)
+              if (window.innerWidth < 1280) setTimeout(() => document.getElementById('evento-' + id)?.scrollIntoView({ block: 'center' }), 60)
+            }} />
+          </div>
         </div>
       </PageBody>
     </>
@@ -238,6 +251,7 @@ function DetalleEvento({ e, cerrar }: { e: any | null; cerrar: () => void }) {
             <Dato t="Módulo" v={moduloDe(e)} /><Dato t="Acción" v={e.accion} />
             <Dato t="Registro" v={<span className="bg-info/10 text-info rounded px-1.5 font-semibold">{e.codigo}</span>} /><Dato t="Versión" v={e.version ?? '—'} />
             <Dato t="Actor" v={e.usuario} /><Dato t="Fecha y hora" v={fmtDateTime(e.at)} />
+            <Dato t="Origen del cambio" v={!e.usuario || /^sistema$/i.test(e.usuario) ? 'Automático (proceso del sistema, sin usuario)' : 'Manual (acción de un usuario)'} />
           </div>
           {e.referencia && <p className="mt-1.5"><span className="text-muted-foreground">Detalle:</span> <strong>{e.referencia}</strong></p>}
         </div>

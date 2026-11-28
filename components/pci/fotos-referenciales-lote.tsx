@@ -140,6 +140,16 @@ export function FotosReferencialesLote({
           </DialogDescription>
         </DialogHeader>
 
+        {(() => {
+          const conFoto = [...porNumero.values()].filter((i: any) => i.foto_referencia_path)
+          return (
+            <p className="bg-secondary/50 rounded-lg px-3 py-2 text-[12.5px]">
+              {conFoto.length
+                ? <>{conFoto.length} {conFoto.length === 1 ? 'ítem ya tiene' : 'ítems ya tienen'} foto referencial: {conFoto.slice(0, 30).map((i: any) => i.item_number).join(', ')}{conFoto.length > 30 ? '…' : ''}. Se ven en la ficha de cada ítem.</>
+                : 'Este PCI aún no tiene fotos referenciales. No confundir con las fotos de ejecución de la cuadrilla.'}
+            </p>
+          )
+        })()}
         <input ref={input} type="file" accept="image/*" multiple hidden onChange={(e) => agregar(e.target.files)} />
         <Button variant="outline" onClick={() => input.current?.click()} disabled={subiendo}>
           <ImagePlus className="size-4" />

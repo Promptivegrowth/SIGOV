@@ -26,7 +26,7 @@ import { mensajeAmigable } from '@/lib/errores'
  */
 export type ModoPlazos = 'oficiales' | 'calculo'
 export interface ValorPlazos { modo: ModoPlazos; fechas: Record<string, string>; fechaBase: string; contrastado: boolean; motivo: string }
-export interface PlazoItems { plazo: number; items: number; vencimiento?: string | null }
+export interface PlazoItems { plazo: number; items: number; vencimiento?: string | null; regla?: string | null; difiere?: boolean; vencidos?: number; fechas_distintas?: number }
 
 function masDias(iso: string, dias: number): string {
   if (!iso) return ''
@@ -195,7 +195,9 @@ export function PlazosDelPci({ pciId, editable, alGuardar }: { pciId: string; ed
             {plazos.map((p) => (
               <div key={p.plazo} className="rounded-lg border border-border px-3 py-2 text-[12.5px]">
                 <p className="font-semibold">{etiquetaPlazo(p.plazo)} · {fmtNumber(p.items)} ítems</p>
-                <p className="text-muted-foreground">Vence {fmtDate(p.vencimiento)}</p>
+                <p className="text-muted-foreground">Vence {fmtDate(p.vencimiento)}{(p.fechas_distintas ?? 1) > 1 ? ' (la más frecuente)' : ''}</p>
+                {!!p.vencidos && <p className="text-destructive text-[11.5px]">{fmtNumber(p.vencidos)} abiertos ya vencidos</p>}
+                {p.difiere && <p className="text-warning text-[11.5px]" title="La fecha guardada en los ítems es la que usan todos los roles y la app">La regla daría {fmtDate(p.regla)}; contrasta con el oficio</p>}
               </div>
             ))}
             {!plazos.length && <p className="text-muted-foreground text-[12.5px]">El PCI aún no tiene ítems.</p>}

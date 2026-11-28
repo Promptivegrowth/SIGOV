@@ -8,6 +8,7 @@ import { TriangleAlert, ClipboardList, CheckCircle2, CalendarX, Search, Filter, 
 import { toast } from 'sonner'
 import { createClient } from '@/lib/supabase/client'
 import { useSession } from '@/lib/hooks/use-session'
+import { useCuadrillasDelAlcance } from '@/lib/hooks/use-cuadrillas-alcance'
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
@@ -61,10 +62,8 @@ export function HallazgosSsoma() {
       return data as any
     },
   })
-  const cuadrillas = useQuery({
-    queryKey: ['ssoma-crews', service.id],
-    queryFn: async () => ((await sb.from('crews').select('id, code, name').eq('service_id', service.id).is('deleted_at', null).order('code')).data ?? []) as any[],
-  })
+  // Selector de cuadrillas con el alcance del rol (el Jefe, solo la suya)
+  const cuadrillas = useCuadrillasDelAlcance('id, code, name')
   const filas = (datos.data?.filas ?? []) as any[]
   const pag = usePagina(filas)
   const k = datos.data?.kpis ?? {}

@@ -263,6 +263,16 @@ function DocumentoRevisable({ fila, puedeRevisar }: { fila: Fila; puedeRevisar: 
         <span className="text-[13px] font-semibold">{nombreDe(fila)}</span>
         <Badge className={cn('ml-auto', e?.className)}>{e?.label ?? fila.estado}</Badge>
       </div>
+      <p className="text-muted-foreground mt-1 text-[11.5px]">Fecha {fmtDate(fila.fecha)} · {nombreDe(fila)} · {e?.label ?? fila.estado}</p>
+      {/* Lo que falta, dicho en el cuadro (ronda 5): sin documento o sin páginas fotografiadas */}
+      {!fila.documento_id && fila.tipo !== 'reporte_diario' && (
+        <p className="text-warning mt-1 text-[12px]">{fila.fecha <= toISODate(new Date()) ? 'Falta: la cuadrilla aún no registró este documento para el día.' : 'Aún no corresponde: es un día futuro.'}</p>
+      )}
+      {fila.documento_id && esFoto && paginas.isSuccess && paginas.data.length === 0 && (
+        <p className="text-warning mt-1 text-[12px]">Registrado sin páginas fotografiadas: falta el archivo o la foto del formato.</p>
+      )}
+      {paginas.isLoading && <p className="text-muted-foreground mt-1 text-[12px]">Cargando las páginas…</p>}
+      {paginas.isError && <p className="text-destructive mt-1 text-[12px]">No se pudieron cargar las páginas. <button className="underline" onClick={() => paginas.refetch()}>Reintentar</button></p>}
       {fila.digital && fila.tipo !== 'reporte_diario' && (
         <p className="text-muted-foreground mt-1 text-[11.5px]">También se registró en el formulario de la app.</p>
       )}

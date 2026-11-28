@@ -244,7 +244,7 @@ export function InicioUnico({
   return (
     <>
       <PageHeader
-        title={titulo}
+        title={rol === 'residente' ? (f.tab === 'pci' ? 'Inicio · Avance PCI' : 'Inicio · Avance de programación MR') : titulo}
         description={subtitulo ?? `${service.name} · ${nombreCliente((service as any).client_name)}`}
         actions={
           <div className="flex flex-wrap items-center gap-2">
@@ -324,7 +324,11 @@ export function InicioUnico({
             </DialogDescription>
           </DialogHeader>
           {detalle.isLoading && <p className="text-muted-foreground text-[13px]">Cargando…</p>}
-          {detalle.data?.length === 0 && <p className="text-muted-foreground text-[13px]">Sin registros.</p>}
+          {detalle.isError && (
+            <p className="text-destructive flex flex-wrap items-center gap-2 text-[13px]">No se pudo cargar el listado: {mensajeAmigable(detalle.error)}
+              <Button size="sm" variant="outline" onClick={() => detalle.refetch()}>Reintentar</Button></p>
+          )}
+          {detalle.data?.length === 0 && <p className="text-muted-foreground text-[13px]">Sin ítems para esta cifra con el corte y los filtros actuales.</p>}
           <div className="divide-y divide-border">
             {(detalle.data ?? []).slice(0, 300).map((i: any) => (
               <Link key={i.item_id} href={`/pci/${i.pci_id}/item/${i.item_id}`}

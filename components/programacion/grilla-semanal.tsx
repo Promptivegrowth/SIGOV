@@ -146,7 +146,8 @@ export function GrillaSemanal({ rows, monday, semana, plan, cuadrilla, canEdit, 
     <div className="space-y-4">
       <div className="grid gap-3 sm:grid-cols-3">
         {[
-          ['FILAS DE ACTIVIDAD', String(lineas.length), 'En la selección actual'],
+          // Programación: «N actividades» cuenta cada día programado; aquí cada fila agrupa la misma partida de lunes a sábado
+          ['FILAS DE ACTIVIDAD', String(lineas.length), `Una fila por partida (agrupa ${rows.filter((r) => r.status !== 'cancelado').length - domingo} actividades de lun. a sáb.)${domingo ? ` · ${domingo} del domingo fuera del formato` : ''}`],
           ['VINCULADAS', String(vinculadas), 'Desde el banco de observaciones'],
           ['ESTADO', estado, plan?.status === 'publicado' ? (plan.cambios_sin_publicar ? 'Hay cambios sin publicar a cuadrilla' : 'Publicado a cuadrilla') : 'No publicado a cuadrilla'],
         ].map(([e, v, d]) => (

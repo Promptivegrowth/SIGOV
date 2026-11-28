@@ -329,6 +329,9 @@ function Materiales({ d }: { d: any }) {
   const filas = (r.data ?? []).filter((x) => !actId || x.activity_id === actId)
   const act = (id: string) => d.acts.find((a: any) => a.id === id)
   const refrescar = () => { qc.invalidateQueries({ queryKey: ['rend-mat'] }); qc.invalidateQueries({ queryKey: ['cat-supplies'] }) }
+  // ADM-03: un material ya asociado a la actividad no vuelve a ofrecerse; su cantidad se cambia con «Editar»
+  const yaAsociados = (actividad: string) => new Set((r.data ?? []).filter((x) => x.activity_id === actividad).map((x) => x.supply_id))
+  const libres = (actividad: string) => (sup.data ?? []).filter((m: any) => !yaAsociados(actividad).has(m.id))
   const guardarNuevo = async () => {
     if (!nuevo) return
     const { error } = await sb.from('rendimientos').insert({ service_id: service.id, activity_id: nuevo.activity_id, supply_id: nuevo.supply_id, cantidad: Number(nuevo.cantidad) } as any)
@@ -358,15 +361,19 @@ function Materiales({ d }: { d: any }) {
       <Card className="min-w-0"><CardContent className="space-y-3 p-4 text-[12.5px]">
         <div className="flex flex-wrap items-end gap-2">
           <Elegir etiqueta="Actividad" valor={actId} cambiar={setActId} todos="Todas" opciones={d.acts.filter((a: any) => (r.data ?? []).some((x) => x.activity_id === a.id)).map((a: any) => [a.id, `${a.code} · ${a.name}`])} />
-          <Button size="sm" onClick={() => setNuevo({ activity_id: actId || d.acts[0]?.id, supply_id: (sup.data ?? [])[0]?.id ?? '', cantidad: '' })}><Plus className="size-4" />Asociar material</Button>
+          <Button size="sm" onClick={() => { const a = actId || d.acts[0]?.id; setNuevo({ activity_id: a, supply_id: libres(a)[0]?.id ?? '', cantidad: '' }) }}><Plus className="size-4" />Asociar material</Button>
         </div>
         {nuevo && (
           <div className="flex flex-wrap items-end gap-2 rounded-lg border border-border p-2">
-            <Elegir etiqueta="Actividad" valor={nuevo.activity_id} cambiar={(x) => setNuevo({ ...nuevo, activity_id: x })} opciones={d.acts.map((a: any) => [a.id, `${a.code} · ${a.name}`])} />
-            <Elegir etiqueta="Material" valor={nuevo.supply_id} cambiar={(x) => setNuevo({ ...nuevo, supply_id: x })} opciones={(sup.data ?? []).map((m: any) => [m.id, m.name])} />
+            <Elegir etiqueta="Actividad" valor={nuevo.activity_id} cambiar={(x) => setNuevo({ ...nuevo, activity_id: x, supply_id: libres(x)[0]?.id ?? '' })} opciones={d.acts.map((a: any) => [a.id, `${a.code} · ${a.name}`])} />
+            <Elegir etiqueta="Material" valor={nuevo.supply_id} cambiar={(x) => setNuevo({ ...nuevo, supply_id: x })} opciones={libres(nuevo.activity_id).map((m: any) => [m.id, m.name])} />
             <label><span className="text-muted-foreground block text-[12px]">Consumo por unidad</span><Input type="number" step="0.0001" min={0} value={nuevo.cantidad} onChange={(e) => setNuevo({ ...nuevo, cantidad: e.target.value })} className="h-9 w-32" /></label>
             <Button size="sm" onClick={guardarNuevo} disabled={!(Number(nuevo.cantidad) > 0) || !nuevo.supply_id || !nuevo.activity_id}><Save className="size-3.5" />Guardar</Button>
             <Button size="sm" variant="outline" onClick={() => setNuevo(null)}>Cancelar</Button>
+            {yaAsociados(nuevo.activity_id).size > 0 && (
+              <p className="text-muted-foreground w-full text-[12px]">Ya asociados a esta actividad (no se repiten; para cambiar su consumo usa «Editar» con motivo): {(r.data ?? []).filter((x) => x.activity_id === nuevo.activity_id).map((x) => `${x.supplies?.name} (${fmtNumber(Number(x.cantidad), 4)} ${x.supplies?.units?.symbol ?? ''})`).join(', ')}.</p>
+            )}
+            {!libres(nuevo.activity_id).length && <p className="text-warning w-full text-[12px]">Todos los materiales del catálogo ya están asociados a esta actividad.</p>}
           </div>
         )}
         <table className="w-full"><thead className="text-muted-foreground text-[11.5px]"><tr><th className="py-1 text-left font-medium">Material</th><th className="text-left font-medium">Asociado a la actividad</th><th className="text-left font-medium">Consumo referencial</th><th className="text-left font-medium">Acciones</th></tr></thead>

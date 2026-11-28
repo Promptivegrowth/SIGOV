@@ -27,7 +27,7 @@ import { mensajeAmigable } from '@/lib/errores'
 import { usePlazosPci, etiquetaPlazo } from '@/lib/hooks/use-plazos-pci'
 
 export function PciListClient() {
-  const { service, can, profile } = useSession()
+  const { service, can, profile, role } = useSession()
   const qc = useQueryClient()
   const sb = React.useMemo(() => createClient(), [])
   const [q, setQ] = React.useState('')
@@ -266,7 +266,7 @@ export function PciListClient() {
         ) : (
           <ul className="stagger space-y-3">
             {filtered.map((p: any) => (
-              <PciCard key={p.id} pci={p} semaforo={semaforos?.[p.id] ?? {}} />
+              <PciCard key={p.id} pci={p} semaforo={semaforos?.[p.id] ?? {}} visor={role === 'visor'} />
             ))}
           </ul>
         )}
@@ -286,8 +286,10 @@ export function PciListClient() {
   )
 }
 
-function PciCard({ pci, semaforo }: { pci: any; semaforo: Record<string, number> }) {
-  const total = Object.values(semaforo).reduce((a, b) => a + b, 0) || pci.items_total || 1
+function PciCard({ pci, semaforo, visor }: { pci: any; semaforo: Record<string, number>; visor?: boolean }) {
+  // El Visor solo ve lo publicado: la cifra es de esos ítems, no del total del PCI (ronda 5, PCI 41 «0/48»)
+  const visibles = Object.values(semaforo).reduce((a, b) => a + b, 0)
+  const total = visibles || (visor ? 0 : pci.items_total) || 1
   const done = semaforo.ok ?? pci.items_done ?? 0
   const pct = (done / total) * 100
   const prio = PCI_PRIORITY[pci.priority as keyof typeof PCI_PRIORITY]
@@ -337,9 +339,12 @@ function PciCard({ pci, semaforo }: { pci: any; semaforo: Record<string, number>
             <div className="mb-1.5 flex items-baseline justify-between">
               <span className="text-[11.5px] text-muted-foreground">Levantamiento</span>
               <span className="text-[13px] font-bold tabular-nums">
-                {fmtNumber(done)}<span className="text-muted-foreground">/{fmtNumber(total)}</span>
+                {fmtNumber(done)}<span className="text-muted-foreground">/{fmtNumber(visor ? visibles : total)}</span>
               </span>
             </div>
+            {visor && (pci.items_total ?? 0) > visibles && (
+              <p className="text-muted-foreground mb-1 text-[11px]">{fmtNumber(visibles)} publicados a COVINCA de {fmtNumber(pci.items_total)} ítems del PCI</p>
+            )}
             <ProgressBar value={pct} showValue={false} />
 
             {/* Barra de semáforo: el color ES el dato */}

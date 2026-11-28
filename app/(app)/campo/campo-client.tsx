@@ -18,8 +18,9 @@ import { Card, CardContent } from '@/components/ui/card'
 import { Input } from '@/components/ui/input'
 import { SkeletonList, SkeletonKpi } from '@/components/ui/skeleton'
 import { BandejaPartes } from '@/components/campo/bandeja-partes'
-import { EmptyState, DateRangeTabs, rangeFromPreset, type DatePresetKey } from '@/components/shared/misc'
+import { EmptyState, DateRangeTabs, rangeFromPreset, DATE_PRESETS, type DatePresetKey } from '@/components/shared/misc'
 import { StatCard } from '@/components/shared/stat-card'
+import { useEstadoDeSesion, usePosicionDeSesion } from '@/lib/hooks/use-estado-sesion'
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select'
 import { WORK_ORDER_STATUS } from '@/lib/constants'
 import { cn, fmtDate, fmtNumber, fmtRelative, toISODate } from '@/lib/utils'
@@ -30,10 +31,11 @@ export function CampoClient() {
   const { service, crew, role, can, profile, hasModule } = useSession()
   const qc = useQueryClient()
   const sb = React.useMemo(() => createClient(), [])
-  const [status, setStatus] = React.useState('todos')
-  const [q, setQ] = React.useState('')
-  const [crewFilter, setCrewFilter] = React.useState('todas')
-  const [preset, setPreset] = React.useState<DatePresetKey>('30d')
+  // Filtros conservados al abrir un parte y volver (ronda 5, VIS-01)
+  const [status, setStatus] = useEstadoDeSesion('campo:estado:' + service.id, 'todos')
+  const [q, setQ] = useEstadoDeSesion('campo:q:' + service.id, '')
+  const [crewFilter, setCrewFilter] = useEstadoDeSesion('campo:cuadrilla:' + service.id, 'todas')
+  const [preset, setPreset] = useEstadoDeSesion<DatePresetKey>('campo:rango:' + service.id, '30d')
   const range = React.useMemo(() => rangeFromPreset(preset), [preset])
 
   const isField = role === 'jefe_cuadrilla'
@@ -69,26 +71,35 @@ export function CampoClient() {
   })
 
   const stats = useQuery({
-    queryKey: ['campo-stats', service.id, crew?.id],
+    queryKey: ['campo-stats', service.id, crew?.id, range.from, range.to, crewFilter],
     queryFn: async () => {
       const from = toISODate(new Date(Date.now() - 30 * 86400000))
-      const [entries, evidences, pending] = await Promise.all([
+      // ADM-01: «por validar» con el mismo rango y cuadrilla que la bandeja, y aparte el total
+      let enFiltro = sb.from('work_orders').select('id', { count: 'exact', head: true })
+        .eq('service_id', service.id).eq('status', 'enviado').is('deleted_at', null)
+        .gte('work_date', range.from).lte('work_date', range.to)
+      if (!isField && crewFilter !== 'todas') enFiltro = enFiltro.eq('crew_id', crewFilter)
+      const [entries, evidences, pending, pendientesFiltro] = await Promise.all([
         sb.from('work_entries').select('quantity', { count: 'exact' })
           .eq('service_id', service.id).is('deleted_at', null).gte('created_at', from),
         sb.from('evidences').select('id', { count: 'exact', head: true })
           .eq('service_id', service.id).is('deleted_at', null).gte('taken_at', from),
         sb.from('work_orders').select('id', { count: 'exact', head: true })
           .eq('service_id', service.id).eq('status', 'enviado').is('deleted_at', null),
+        enFiltro,
       ])
       const metrado = (entries.data ?? []).reduce((s: number, r: any) => s + Number(r.quantity ?? 0), 0)
       return {
         registros: entries.count ?? 0,
         metrado,
         evidencias: evidences.count ?? 0,
-        porValidar: pending.count ?? 0,
+        porValidar: pendientesFiltro.count ?? 0,
+        porValidarTotal: pending.count ?? 0,
       }
     },
   })
+
+  usePosicionDeSesion('campo:' + service.id, !orders.isLoading)
 
   const todayOrder = (orders.data ?? []).find(
     (o: any) => o.work_date === today && (!isField || o.crew_id === crew?.id)
@@ -201,8 +212,15 @@ export function CampoClient() {
             <StatCard index={0} label="Registros (30 días)" value={stats.data?.registros ?? 0} icon={HardHat} tone="primary" />
             <StatCard index={1} label="Metrado ejecutado" value={stats.data?.metrado ?? 0} decimals={0} icon={CircleCheck} tone="success" />
             <StatCard index={2} label="Evidencias" value={stats.data?.evidencias ?? 0} icon={Camera} tone="info" />
-            <StatCard index={3} label="Partes por validar" value={stats.data?.porValidar ?? 0} icon={CloudUpload} tone={stats.data?.porValidar ? 'warning' : 'default'} />
+            <StatCard index={3} label="Partes por validar (en el filtro)" value={stats.data?.porValidar ?? 0} icon={CloudUpload} tone={stats.data?.porValidar ? 'warning' : 'default'}
+              hint={`${DATE_PRESETS.find((p) => p.key === preset)?.label ?? ''} · ${crewFilter === 'todas' ? 'todas las cuadrillas' : (crews.data ?? []).find((c: any) => c.id === crewFilter)?.name ?? 'cuadrilla'}`} />
           </div>
+        )}
+        {!!stats.data && stats.data.porValidarTotal > stats.data.porValidar && (
+          <p className="bg-warning/10 text-warning flex flex-wrap items-center gap-2 rounded-lg px-3 py-2 text-[12.5px]">
+            Hay {stats.data.porValidarTotal - stats.data.porValidar} {stats.data.porValidarTotal - stats.data.porValidar === 1 ? 'parte' : 'partes'} por validar fuera de este rango o cuadrilla ({stats.data.porValidarTotal} en total).
+            <button className="font-semibold underline" onClick={() => { setPreset('ytd'); setCrewFilter('todas') }}>Ver «Este año» y todas las cuadrillas</button>
+          </p>
         )}
 
         {/* Filtros */}

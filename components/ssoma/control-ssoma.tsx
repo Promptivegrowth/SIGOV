@@ -9,6 +9,7 @@ import { Users, ClipboardCheck, FileText, TriangleAlert, Filter, Search, Plus, D
 import { toast } from 'sonner'
 import { createClient } from '@/lib/supabase/client'
 import { useSession } from '@/lib/hooks/use-session'
+import { useCuadrillasDelAlcance } from '@/lib/hooks/use-cuadrillas-alcance'
 import { PageHeader, PageBody } from '@/components/shared/page-header'
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
 import { Button } from '@/components/ui/button'
@@ -62,10 +63,8 @@ export function ControlSsoma({ pestana, titulo, subtitulo, esInicio }: { pestana
       return data as any
     },
   })
-  const cuadrillas = useQuery({
-    queryKey: ['ssoma-crews', service.id],
-    queryFn: async () => ((await sb.from('crews').select('id, code, name').eq('service_id', service.id).is('deleted_at', null).order('code')).data ?? []) as any[],
-  })
+  // Selector de cuadrillas con el alcance del rol (el Jefe, solo la suya)
+  const cuadrillas = useCuadrillasDelAlcance('id, code, name')
   const d = panel.data
   const k = d?.kpis ?? {}
   const puedeRevisar = ['ing_seguridad', 'admin'].includes(role)

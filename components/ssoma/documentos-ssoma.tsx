@@ -7,6 +7,7 @@ import { ChevronDown, ChevronRight, Eye, Layers, Pencil, Search, Filter, Downloa
 import { toast } from 'sonner'
 import { createClient } from '@/lib/supabase/client'
 import { useSession } from '@/lib/hooks/use-session'
+import { useCuadrillasDelAlcance } from '@/lib/hooks/use-cuadrillas-alcance'
 import { Card, CardContent } from '@/components/ui/card'
 import { Button } from '@/components/ui/button'
 import { Input, Textarea } from '@/components/ui/input'
@@ -43,10 +44,8 @@ export function DocumentosSsoma({ filtroObjeto }: { filtroObjeto?: { vehicle_id?
       return data as any
     },
   })
-  const cuadrillas = useQuery({
-    queryKey: ['ssoma-crews', service.id],
-    queryFn: async () => ((await sb.from('crews').select('id, code, name').eq('service_id', service.id).is('deleted_at', null).order('code')).data ?? []) as any[],
-  })
+  // Selector de cuadrillas con el alcance del rol (el Jefe, solo la suya)
+  const cuadrillas = useCuadrillasDelAlcance('id, code, name')
   let filas = (datos.data?.filas ?? []) as any[]
   if (filtroObjeto) filas = filas.filter((x) => (filtroObjeto.vehicle_id && x.vehicle_id === filtroObjeto.vehicle_id) || (filtroObjeto.equipment_id && x.equipment_id === filtroObjeto.equipment_id))
   const pag = usePagina(filas)

@@ -3,7 +3,7 @@
 import * as React from 'react'
 import { useRouter, useSearchParams, usePathname } from 'next/navigation'
 import { useQuery, useQueryClient } from '@tanstack/react-query'
-import { ClipboardList, AlertCircle, CheckCircle2, Layers, Search, Eye, MapPin, Send, Users, HardHat, Calendar } from 'lucide-react'
+import { ClipboardList, AlertCircle, CheckCircle2, Layers, Search, Eye, MapPin, Send, Users, HardHat, Calendar, ArrowLeft } from 'lucide-react'
 import { toast } from 'sonner'
 import { createClient } from '@/lib/supabase/client'
 import { useSession } from '@/lib/hooks/use-session'
@@ -71,6 +71,19 @@ export function BandejaClient() {
   const [q, setQ] = React.useState(f.q)
   React.useEffect(() => { const t = setTimeout(() => q !== f.q && fijar({ q }), 400); return () => clearTimeout(t) }, [q]) // eslint-disable-line react-hooks/exhaustive-deps
   const [marcados, setMarcados] = React.useState<string[]>([])
+  // RES-01: en el celular la ficha va debajo de la lista; «Revisar» lleva hasta ella y «Volver a la lista» regresa a la fila
+  const fichaRef = React.useRef<HTMLDivElement>(null)
+  const ultimaFila = React.useRef<string>('')
+  React.useEffect(() => {
+    if (!f.item) return
+    ultimaFila.current = f.item
+    if (window.innerWidth < 1024) setTimeout(() => fichaRef.current?.scrollIntoView({ behavior: 'smooth', block: 'start' }), 60)
+  }, [f.item])
+  const volverALista = () => {
+    const id = ultimaFila.current
+    fijar({ item: '' })
+    setTimeout(() => document.getElementById('fila-' + id)?.scrollIntoView({ block: 'center' }), 80)
+  }
   const [publicando, setPublicando] = React.useState(false)
 
   const datos = useQuery({
@@ -201,7 +214,7 @@ export function BandejaClient() {
                     const sel = f.item === x.id
                     const chip = CHIP[x.grupo] ?? CHIP.por_validar
                     return (
-                      <li key={x.id} className={cn('flex items-center gap-3 px-4 py-2.5', sel && 'bg-primary/[0.07] ring-primary/40 ring-1 ring-inset')}>
+                      <li key={x.id} id={'fila-' + x.id} className={cn('flex scroll-mt-24 items-center gap-3 px-4 py-2.5', sel && 'bg-primary/[0.07] ring-primary/40 ring-1 ring-inset')}>
                         {puedePublicar && (
                           <input type="checkbox" className="size-4" aria-label={`Elegir ítem ${x.item}`}
                             checked={marcados.includes(x.id)} onChange={(e) => setMarcados(e.target.checked ? [...marcados, x.id] : marcados.filter((m) => m !== x.id))} />
@@ -231,7 +244,10 @@ export function BandejaClient() {
               )}
             </CardContent>
           </Card>
-          <div className="min-w-0">
+          <div ref={fichaRef} className="min-w-0 scroll-mt-24">
+            {f.item && (
+              <Button size="sm" variant="ghost" className="mb-2 lg:hidden" onClick={volverALista}><ArrowLeft className="size-4" />Volver a la lista</Button>
+            )}
             {f.item ? <RevisionRapida key={f.item} itemId={f.item} /> : (
               <Card><CardContent className="text-muted-foreground p-6 text-[13px]">Elige un reporte y pulsa «Revisar» para ver sus fases y decidir.</CardContent></Card>
             )}

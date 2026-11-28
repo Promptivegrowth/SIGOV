@@ -13,6 +13,7 @@ import {
 } from 'lucide-react'
 import { createClient } from '@/lib/supabase/client'
 import { useSession } from '@/lib/hooks/use-session'
+import { useCuadrillasDelAlcance } from '@/lib/hooks/use-cuadrillas-alcance'
 import { PageHeader, PageBody } from '@/components/shared/page-header'
 import { GrillaSemanal, metaSemana } from '@/components/programacion/grilla-semanal'
 import { InsumosSemana } from '@/components/programacion/insumos-semana'
@@ -102,18 +103,8 @@ export function ProgramacionClient() {
     },
   })
 
-  const crews = useQuery({
-    queryKey: ['crews', service.id],
-    queryFn: async () => {
-      const { data } = await sb
-        .from('crews')
-        .select('id, code, name, color')
-        .eq('service_id', service.id)
-        .is('deleted_at', null)
-        .order('code')
-      return data ?? []
-    },
-  })
+  // Solo las cuadrillas del alcance del rol (SUP-02): el Supervisor, las suyas
+  const crews = useCuadrillasDelAlcance('id, code, name, color')
 
   // El jefe de cuadrilla solo ve lo suyo
   const visibleCrews = React.useMemo(() => {
@@ -379,7 +370,7 @@ export function ProgramacionClient() {
         title="Programación MR + PCI"
         description={seccion === 'insumos' ? `Derivado de la programación semanal · Semana ${semanaVisible}`
           : seccion === 'seguimiento' ? `Seguimiento de materiales · Semana ${semanaVisible}`
-          : `Semana ${semanaVisible} · ${fmtDate(monday)} al ${fmtDate(addDays(monday, 5))}${crewFilter !== 'todas' ? ' · ' + ((crews.data ?? []).find((c: any) => c.id === crewFilter)?.name ?? '') : ''}`}
+          : `Semana ${semanaVisible} · operativa lun. ${fmtDate(monday)} al sáb. ${fmtDate(addDays(monday, 5))} (el calendario llega al dom. ${fmtDate(addDays(monday, 6))})${crewFilter !== 'todas' ? ' · ' + ((crews.data ?? []).find((c: any) => c.id === crewFilter)?.name ?? '') : ''}`}
         actions={
           can.manage && seccion === 'semana' && (
             <>
@@ -544,7 +535,7 @@ export function ProgramacionClient() {
             </SelectContent>
           </Select>
           <span className="text-muted-foreground ml-auto text-[12px] tabular-nums">
-            {fmtNumber(rows.length)} de {fmtNumber(items.data?.length ?? 0)} actividades
+            {fmtNumber(rows.length)} de {fmtNumber(items.data?.length ?? 0)} actividades programadas (cada día cuenta)
           </span>
         </div>
 

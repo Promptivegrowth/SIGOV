@@ -1,4 +1,5 @@
 'use client'
+import { toISODate } from '@/lib/utils'
 
 import * as React from 'react'
 import { useQuery, useQueryClient } from '@tanstack/react-query'
@@ -34,18 +35,22 @@ export function CuadrillasDelPci({ pciId, items }: { pciId: string; items: any[]
   })
 
   // Las cuadrillas con ítems de este PCI, con cuántos tienen pendientes
+  const hoy = toISODate(new Date())
   const cuadrillas = React.useMemo(() => {
-    const m = new Map<string, { id: string; nombre: string; color?: string; total: number; abiertos: number }>()
+    const m = new Map<string, { id: string; nombre: string; color?: string; total: number; abiertos: number; vencidos: number }>()
     for (const i of items) {
       if (!i.assigned_crew_id) continue
       const c = m.get(i.assigned_crew_id) ??
-        { id: i.assigned_crew_id, nombre: i.crew_name ?? 'Cuadrilla', color: i.crew_color, total: 0, abiertos: 0 }
+        { id: i.assigned_crew_id, nombre: i.crew_name ?? 'Cuadrilla', color: i.crew_color, total: 0, abiertos: 0, vencidos: 0 }
       c.total++
-      if (['pendiente', 'en_atencion', 'observado'].includes(i.status)) c.abiertos++
+      if (['pendiente', 'en_atencion', 'observado'].includes(i.status)) {
+        c.abiertos++
+        if (i.due_date && i.due_date < hoy) c.vencidos++
+      }
       m.set(c.id, c)
     }
     return [...m.values()].sort((a, b) => a.nombre.localeCompare(b.nombre))
-  }, [items])
+  }, [items, hoy])
 
   if (!cuadrillas.length) return null
 
@@ -85,7 +90,7 @@ export function CuadrillasDelPci({ pciId, items }: { pciId: string; items: any[]
                 <span className="min-w-0 flex-1">
                   <span className="block truncate text-[12.5px] font-medium">{c.nombre}</span>
                   <span className="text-muted-foreground block text-[11px]">
-                    {c.total} ítems · {c.abiertos} pendientes · {activo ? 'activo' : 'pausado'}
+                    {c.total} ítems · {c.abiertos} pendientes{c.vencidos ? ` (${c.vencidos} vencidos)` : ''} · {activo ? 'visible para la cuadrilla' : 'pausado'}
                   </span>
                 </span>
                 <Switch

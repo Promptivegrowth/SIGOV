@@ -60,10 +60,10 @@ export function NotificacionesClient() {
                 <div className="min-w-0 flex-1 text-[13px]">
                   <p className={cn(!n.read_at && 'font-semibold')}>{n.title}</p>
                   {n.body && <p className="text-muted-foreground text-[12.5px]">{n.body}</p>}
-                  <p className="text-muted-foreground text-[11.5px]">{fmtDateTime(n.actualizada_at ?? n.created_at)}{n.resuelta_at ? ' · Atendida' : ''}</p>
+                  <p className="text-muted-foreground text-[11.5px]">{fmtDateTime(n.actualizada_at ?? n.created_at)}{n.resuelta_at ? ' · Atendida: ya no quedan ítems pendientes de este aviso' : ''}</p>
                 </div>
                 {n.url && (
-                  <Link href={n.url} onClick={() => !n.read_at && leer([n.id])}>
+                  <Link href={n.resuelta_at ? String(n.url).split('?')[0] : n.url} onClick={() => !n.read_at && leer([n.id])}>
                     <Button size="sm" variant="outline">Abrir<ArrowRight className="size-3.5" /></Button>
                   </Link>
                 )}

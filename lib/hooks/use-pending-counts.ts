@@ -45,7 +45,8 @@ export function usePendingCounts() {
         sb
           .from('notifications')
           .select('id', { count: 'exact', head: true })
-          .is('read_at', null),
+          .is('read_at', null)
+          .is('resuelta_at', null),
         // El badge cuenta alertas abiertas, no ítems: «3» son tres frentes
         // que atender, no 324 papeles. La cifra grande vive dentro.
         sb.rpc('alertas_operativas', { p_service_id: service.id }),
