@@ -160,7 +160,12 @@ export function InspeccionDetalle({ id }: { id: string }) {
               </Card>
             )}
             {tab === 'evidencias' && <EvidenciasSsoma objetoTipo="inspeccion" objetoId={id} codigoObjeto={i.codigo} evidencias={d.evidencias} fotosOrigen={d.fotos_origen ?? []} alCambiar={refrescar} />}
-            {tab === 'historial' && <HistorialSsoma eventos={hist.data ?? []} titulo={i.codigo} />}
+            {tab === 'historial' && <HistorialSsoma titulo={i.codigo} alcance="Incluye el alta de la inspección y cada cambio posterior (revisiones, hallazgos y evidencias)."
+              eventos={(hist.data ?? []).some((e: any) => e.tipo === 'inspeccion_registrada') ? (hist.data ?? []) : [...(hist.data ?? []), {
+                // SSO-02: inspecciones anteriores al registro de eventos; el alta consta con la fecha y el inspector de la ficha
+                id: 'alta-' + i.id, tipo: 'inspeccion_registrada', cuando: i.fecha, codigo: i.codigo, titulo: 'Inspección registrada',
+                detalle: 'Alta de la inspección (dato de la ficha: registro anterior al historial de eventos)', actor: i.inspector_nombre ?? 'No consta', version: null, resultado: i.estado ?? '',
+              }]} />}
           </div>
 
           <div className="space-y-4">
@@ -170,7 +175,7 @@ export function InspeccionDetalle({ id }: { id: string }) {
                 <button onClick={() => irA('historial')} className="text-primary flex items-center gap-1 text-[12px] underline"><ExternalLink className="size-3" />Ver historial</button></CardHeader>
               <CardContent>
                 <ul className="space-y-2 border-l-2 border-info/30 pl-3 text-[12.5px]">
-                  {(hist.data ?? []).slice(0, 4).map((e: any, k: number) => (
+                  {(hist.data ?? []).filter((e: any) => e.tipo !== 'inspeccion_registrada').slice(0, 4).map((e: any, k: number) => (
                     <li key={e.id} className="relative"><span className={cn('absolute top-1.5 -left-[17px] size-2.5 rounded-full', k === 0 ? 'bg-info' : 'bg-info/40')} />
                       <strong>{fmtDate(e.cuando)}</strong><span className="block">{e.titulo}</span></li>
                   ))}

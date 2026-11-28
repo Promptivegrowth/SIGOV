@@ -23,7 +23,7 @@ const fechaHora = (iso: string) =>
  * El historial del reporte diario (CASO 14): cada envío, observación y
  * validación con su nota, quién y cuándo. Plegado, muestra lo último.
  */
-export function HistorialDelParte({ orderId }: { orderId: string }) {
+export function HistorialDelParte({ orderId, estado, revisadoEn }: { orderId: string; estado?: string; revisadoEn?: string | null }) {
   const sb = createClient()
   const [abierto, setAbierto] = React.useState(false)
   const q = useQuery({
@@ -34,7 +34,12 @@ export function HistorialDelParte({ orderId }: { orderId: string }) {
       return (data ?? []) as unknown as Version[]
     },
   })
-  const filas = q.data ?? []
+  const registrados = q.data ?? []
+  // JEF-01 / TR-07: un parte observado o validado sin ese evento (carga histórica) lo dice, sin inventar motivo ni autor
+  const sinEvento = (estado === 'observado' || estado === 'validado') && registrados.length > 0 && !registrados.some((f) => f.accion === estado)
+  const filas: (Version & { historico?: boolean })[] = sinEvento
+    ? [...registrados, { version: Math.max(...registrados.map((f) => f.version)), accion: estado as any, nota: null, at: revisadoEn ?? registrados[registrados.length - 1].at, por: null, actividades: null, metrado_total: null, historico: true }]
+    : registrados
   if (!filas.length) return null
   const visibles = abierto ? [...filas].reverse() : filas.slice(-1)
   const ultima = Math.max(...filas.map((f) => f.version))
@@ -64,6 +69,9 @@ export function HistorialDelParte({ orderId }: { orderId: string }) {
                   ].filter(Boolean).join(' · ')}
                 </p>
                 {v.nota && <p className="mt-0.5 text-[12px]">«{v.nota}»</p>}
+                {(v as any).historico && (
+                  <p className="text-warning mt-0.5 text-[12px]">{v.accion === 'observado' ? 'Motivo y autor no registrados en SIGOV:' : 'Autor no registrado en SIGOV:'} el estado llegó con la carga histórica.</p>
+                )}
               </div>
             </li>
           )

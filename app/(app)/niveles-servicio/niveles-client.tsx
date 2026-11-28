@@ -134,9 +134,17 @@ export function NivelesClient() {
                 <CardContent className="space-y-1 p-3 pt-0">
                   <Opcion activa={!f.sector} onClick={() => fijar({ sector: '' })} texto="Todos" n={null} />
                   {(d.sectores as any[]).map((s) => (
-                    <Opcion key={s.sector} activa={f.sector === s.sector} onClick={() => fijar({ sector: s.sector === 'Sin sector' ? '' : s.sector })}
+                    <Opcion key={s.sector} activa={f.sector === s.sector} onClick={() => fijar({ sector: s.sector })}
                       texto={s.sector === 'Sin sector' ? 'Sin sector' : `Sector ${s.sector}`} n={s.intervenciones} />
                   ))}
+                  {/* VIS-02: el sector sale del subtramo y la progresiva (catálogo aprobado); lo que no encaja se explica, no se asigna */}
+                  {((d as any).sin_sector ?? []).length > 0 && (
+                    <div className="text-muted-foreground border-t border-border pt-2 text-[11.5px]">
+                      <p className="font-medium">Por qué hay «Sin sector»:</p>
+                      {((d as any).sin_sector as any[]).map((z) => <p key={z.motivo}>· {z.motivo}: {fmtNumber(z.intervenciones)}</p>)}
+                      <p className="mt-1">No se asignan por suposición: corrige la progresiva o el subtramo en el parte de origen.</p>
+                    </div>
+                  )}
                 </CardContent>
               </Card>
               <Card>
@@ -172,7 +180,7 @@ export function NivelesClient() {
                         <tr key={x.id} className="border-t border-border">
                           <td className="pl-3"><input type="checkbox" aria-label="Seleccionar intervención" checked={sel.has(x.id)} onChange={(e) => setSel((s0) => { const n = new Set(s0); if (e.target.checked) n.add(x.id); else n.delete(x.id); return n })} /></td>
                           <td className="px-3 py-2 whitespace-nowrap">{fmtDate(x.fecha)}</td>
-                          <td>{x.sector ?? '—'}</td>
+                          <td>{x.sector ?? <span className="text-warning cursor-help" title={x.sector_motivo ?? 'Sin sector'}>Sin sector</span>}{!x.sector && x.sector_motivo && <span className="text-muted-foreground block max-w-48 text-[10.5px] leading-tight">{x.sector_motivo}</span>}</td>
                           <td><strong>{x.codigo}</strong> · {x.actividad}{x.pci_item_id && <Badge variant="info" className="ml-1">PCI</Badge>}</td>
                           <td className="whitespace-nowrap"><MapPin className="mr-1 inline size-3" />{fmtProgresiva(x.prog_inicio)}{x.prog_fin && x.prog_fin !== x.prog_inicio ? ` – ${fmtProgresiva(x.prog_fin)}` : ''}</td>
                           <td className="text-right tabular-nums">{fmtNumber(Number(x.metrado), 2)} {x.unidad}</td>

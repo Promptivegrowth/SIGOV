@@ -332,6 +332,19 @@ export function EvidenceGrid({
         onLinked={refresh}
       />
 
+      {/* Fases de la actividad PCI: faltantes y repetidas a la vista antes de validar (ronda 5, TR-06) */}
+      {pciItemId && fotos.length > 0 && (() => {
+        const n = (f: string) => fotos.filter((x) => x.phase === f).length
+        const partes = [['antes', 'Antes', 1], ['durante', 'Durante', 1], ['despues', 'Después', 3]] as const
+        const faltan = partes.filter(([k]) => !n(k)).map(([, t]) => t)
+        const sobran = partes.filter(([k, , m]) => n(k) > m).map(([k, t, m]) => `${n(k)} ${t} (estándar ${m === 3 ? '1 a 3' : '1'})`)
+        return (
+          <p className={cn('mt-2 text-[11.5px]', faltan.length || sobran.length ? 'text-warning' : 'text-success')}>
+            Antes {n('antes')} · Durante {n('durante')} · Después {n('despues')}{n('general') ? ` · General ${n('general')} (no completa fases)` : ''}
+            {faltan.length ? ` — Falta: ${faltan.join(', ')}` : ''}{sobran.length ? ` — Repetidas: ${sobran.join(', ')}` : ''}
+          </p>
+        )
+      })()}
       {total > 0 && (
         <button
           onClick={() => setZoomIdx(0)}

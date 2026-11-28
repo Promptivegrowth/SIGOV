@@ -44,6 +44,9 @@ import { DocumentosItem } from './documentos-item'
 const FASES = [
   { v: 'antes', t: 'Antes', n: 1 }, { v: 'durante', t: 'Durante', n: 2 }, { v: 'despues', t: 'Después', n: 3 },
 ] as const
+/** Estándar PCI (ronda 5, TR-06 y CP-07): 1 Antes, 1 Durante y 1 a 3 Después. */
+const MAX_FASE: Record<string, number> = { antes: 1, durante: 1, despues: 3 }
+const fueraDeEstandar = (fase: string, n: number) => n > (MAX_FASE[fase] ?? 99)
 const faseLegible = (f?: string | null) => ({ antes: 'Antes', durante: 'Durante', despues: 'Después', general: 'General', metrado: 'Metrado', otro: 'Otro' } as Record<string, string>)[f ?? ''] ?? '—'
 const ORIGEN: Record<string, string> = { camara_sigov: 'Cámara SIGOV', galeria: 'Galería', archivo_web: 'Archivo web' }
 
@@ -229,9 +232,9 @@ function TabEvidencia({ item, fotos, pendientes = [], cargando, historial }: { i
           return (
             <Card key={fa.v} className="overflow-hidden">
               <div className="bg-primary/[0.07] flex items-center justify-between px-3 py-2 text-[12.5px] font-semibold">
-                <span>{fa.t} ({fa.n})</span>
-                <span className={cn('text-[11.5px]', de.length ? 'text-success' : 'text-destructive')}>
-                  {de.length ? `${de.length} ${de.length === 1 ? 'foto' : 'fotos'}` : 'Sin archivo'}
+                <span>{fa.t} <span className="text-muted-foreground font-normal" title="Sufijo del archivo oficial: indica la fase, no la cantidad">· archivo ({fa.n})</span></span>
+                <span className={cn('text-[11.5px]', !de.length ? 'text-destructive' : fueraDeEstandar(fa.v, de.length) ? 'text-warning' : 'text-success')}>
+                  {de.length ? `${de.length} ${de.length === 1 ? 'foto' : 'fotos'}${fueraDeEstandar(fa.v, de.length) ? ` (estándar: ${fa.v === 'despues' ? '1 a 3' : '1'})` : ''}` : `Falta ${fa.t}`}
                 </span>
               </div>
               {primera ? (
@@ -329,7 +332,7 @@ function TabHistorial({ historial, item, titulo }: { historial: any[]; item: any
             {[...historial].reverse().map((h, k) => (
               <tr key={k} className="even:bg-secondary/40 border-b border-border/50">
                 <td className="py-1.5 whitespace-nowrap">{fmtDateTime(h.cuando)}</td>
-                <td>{h.quien ?? '—'}</td>
+                <td>{h.quien ?? (h.tipo === 'conformidad' ? 'No consta' : '—')}</td>
                 <td>{h.entidad ?? 'SERVICON'}</td>
                 <td className="max-w-md">{h.detalle}</td>
                 <td>{h.version ? `v${h.version}` : '—'}</td>
@@ -790,13 +793,15 @@ export function RevisionRapida({ itemId }: { itemId: string }) {
             {FASES.map((f) => {
               const ok = n(f.v) > 0
               return (
-                <div key={f.v} className={cn('flex items-center justify-center gap-1.5 rounded-md border px-2 py-2 text-[12.5px] font-semibold',
-                  ok ? 'border-success/40 bg-success/8 text-success' : 'border-destructive/40 bg-destructive/8 text-destructive')}>
-                  <ImageIcon className="size-3.5" />{f.t} ({f.n}){ok && <CheckCircle2 className="size-3.5" />}
+                <div key={f.v} title={`Archivo oficial ITEM_${i.item_number ?? ''}(${f.n}) · estándar ${f.v === 'despues' ? '1 a 3' : '1'}`} className={cn('flex items-center justify-center gap-1.5 rounded-md border px-2 py-2 text-[12.5px] font-semibold',
+                  !ok ? 'border-destructive/40 bg-destructive/8 text-destructive' : fueraDeEstandar(f.v, n(f.v)) ? 'border-warning/40 bg-warning/8 text-warning' : 'border-success/40 bg-success/8 text-success')}>
+                  <ImageIcon className="size-3.5" />{f.t}: {ok ? `${n(f.v)} ${n(f.v) === 1 ? 'foto' : 'fotos'}` : 'falta'}{ok && !fueraDeEstandar(f.v, n(f.v)) && <CheckCircle2 className="size-3.5" />}
                 </div>
               )
             })}
           </div>
+          {/* TR-06: de dónde salen las cifras y qué se usa para validar y exportar */}
+          <p className="text-muted-foreground text-[11.5px]">Fotos del ítem en todos sus partes (las mismas que se validan y exportan; las de autorización pendiente no cuentan). Estándar PCI: 1 Antes, 1 Durante y 1 a 3 Después; las fotos «General» no completan una fase.</p>
           {hitos.length > 0 && (
             <div>
               <div className="mb-1 flex items-center justify-between">

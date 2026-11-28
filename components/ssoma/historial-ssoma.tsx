@@ -27,7 +27,7 @@ const EVENTO: Record<string, string> = {
   hallazgo_cerrado: 'Hallazgo cerrado', hallazgo_reabierto: 'Hallazgo reabierto', evidencia: 'Evidencia',
 }
 
-export function HistorialSsoma({ eventos, titulo }: { eventos: any[]; titulo: string }) {
+export function HistorialSsoma({ eventos, titulo, alcance }: { eventos: any[]; titulo: string; alcance?: string }) {
   const { service, profile } = useSession()
   // Los filtros se editan en borrador y se aplican con «Aplicar»
   const vacio = { actor: '', evento: '', desde: '', hasta: '', q: '' }
@@ -65,6 +65,7 @@ export function HistorialSsoma({ eventos, titulo }: { eventos: any[]; titulo: st
           <Button size="sm" variant="outline" onClick={() => { setB(vacio); setF(vacio) }}>Limpiar</Button>
           <SiPuede modulo="ssoma" accion="exportar"><Button size="sm" variant="outline" onClick={exportar} disabled={!filas.length}><Download className="size-4" />Exportar historial</Button></SiPuede>
         </div>
+        {alcance && <p className="text-muted-foreground text-[12px]">{alcance}</p>}
         <div className="overflow-x-auto">
           <table className="w-full text-[12.5px]">
             <thead className="bg-secondary/60 text-muted-foreground text-[11.5px]"><tr>
@@ -72,7 +73,7 @@ export function HistorialSsoma({ eventos, titulo }: { eventos: any[]; titulo: st
               <th className="text-left font-medium">Evento</th><th className="text-left font-medium">Versión</th><th className="text-left font-medium">Resultado</th><th />
             </tr></thead>
             <tbody>
-              {filas.length === 0 && <tr><td colSpan={7} className="text-muted-foreground py-6 text-center">Sin eventos.</td></tr>}
+              {filas.length === 0 && <tr><td colSpan={7} className="text-muted-foreground py-6 text-center">{eventos.length ? 'Ningún evento coincide con los filtros. Pulsa «Limpiar».' : 'Sin eventos registrados.'}</td></tr>}
               {pag.visibles.map((e) => (
                 <React.Fragment key={e.id}>
                   <tr className={cn('border-t border-border', abierto === e.id && 'bg-primary/[0.05]')}>

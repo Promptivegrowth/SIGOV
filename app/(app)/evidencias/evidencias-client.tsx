@@ -47,7 +47,7 @@ const COLUMNAS = [
   'origen', 'crew_id', 'crew_numero', 'crew_sede', 'crew_code', 'crew_name', 'activity_id', 'activity_code',
   'activity_name', 'activity_carpeta_ns', 'sector_code', 'sector_folder', 'section_name', 'progresiva_m', 'side',
   'pci_id', 'pci_code', 'pci_item_id', 'pci_item_number', 'pci_term_days', 'revision', 'revision_nota', 'caption',
-  'lat', 'lng', 'created_at', 'cargada_at', 'origen_captura', 'sello_aplicado',
+  'lat', 'lng', 'created_at', 'cargada_at', 'fecha_original', 'origen_captura', 'sello_aplicado',
 ].join(', ')
 
 /** De dónde vino la foto (OBS 2 y 6). */
@@ -186,7 +186,14 @@ export function EvidenciasClient() {
   const grupos = React.useMemo(() => {
     const porPci = new Map<string, Map<number, Foto[]>>()
     const porActividad = new Map<string, Foto[]>()
+    // Ronda 5 (REV4-OBS-07): sin actividad es «Evidencia general», aparte de MR y de las fases
+    const generales = new Map<string, Foto[]>()
     for (const f of visibles) {
+      if (!esFotoPci(f) && !f.activity_id && !f.activity_name) {
+        const k = `${fechaDeFoto(f)}|${f.crew_id}`
+        generales.set(k, [...(generales.get(k) ?? []), f])
+        continue
+      }
       if (esFotoPci(f)) {
         const items = porPci.get(f.pci_code!) ?? new Map<number, Foto[]>()
         items.set(f.pci_item_number!, [...(items.get(f.pci_item_number!) ?? []), f])
@@ -203,7 +210,8 @@ export function EvidenciasClient() {
     }))
     const mrLista = [...porActividad.values()].sort((a, b) =>
       orden * fechaDeFoto(a[0]).localeCompare(fechaDeFoto(b[0])) || (a[0].activity_name ?? '').localeCompare(b[0].activity_name ?? ''))
-    return { pci: pciLista, mr: mrLista }
+    const generalLista = [...generales.values()].sort((a, b) => orden * fechaDeFoto(a[0]).localeCompare(fechaDeFoto(b[0])))
+    return { pci: pciLista, mr: mrLista, general: generalLista }
   }, [visibles, reciente])
 
   // Las miniaturas que se ven, firmadas en lote (no una petición por foto)
@@ -214,6 +222,7 @@ export function EvidenciasClient() {
     const tomar = (fs: Foto[]) => fs.slice(0, 4).forEach((f) => rutas.push(f.thumb_path ?? f.storage_path))
     for (const p of grupos.pci) if (abiertos[p.codigo] !== false) p.items.slice(0, mostrar).forEach((i) => tomar(i.fotos))
     if (abiertos.mr !== false) grupos.mr.slice(0, mostrar).forEach(tomar)
+    if (abiertos.general !== false) grupos.general.forEach(tomar)
     return [...new Set(rutas)]
   }, [grupos, abiertos, mostrar])
   const firmas = useQuery({
@@ -432,6 +441,45 @@ export function EvidenciasClient() {
                   {grupos.mr.length > mostrar && (
                     <Button variant="ghost" size="sm" onClick={() => setMostrar((m) => m + 30)}>Ver más actividades</Button>
                   )}
+                </Bloque>
+              )
+            })()}
+
+            {grupos.general.length > 0 && (() => {
+              const fs = grupos.general.flat()
+              const abierto = abiertos.general !== false
+              const dia = (x?: string | null) => (x ? fmtDate(x.slice(0, 10)) : '—')
+              return (
+                <Bloque
+                  icono={CalendarDays}
+                  titulo="Evidencia general"
+                  etiqueta={`${fmtNumber(fs.length)} ${fs.length === 1 ? 'foto' : 'fotos'} sin actividad · no completa Antes, Durante ni Después`}
+                  resumen={`${grupos.general.length} ${grupos.general.length === 1 ? 'día' : 'días'}`}
+                  etapas={etapas(fs)}
+                  abierto={abierto}
+                  alAlternar={() => setAbiertos((s) => ({ ...s, general: !abierto }))}
+                >
+                  {grupos.general.map((fa) => {
+                    const f0: any = fa[0]
+                    const captura = (f0.fecha_original ?? f0.taken_at ?? '').slice(0, 10)
+                    const registro = (f0.cargada_at ?? f0.created_at ?? '').slice(0, 10)
+                    return (
+                      <Fila
+                        key={f0.id}
+                        titulo={GENERAL}
+                        detalle={<>
+                          <span>Captura {dia(captura)}</span>
+                          {registro && registro !== captura && <span className="text-warning">Registro {dia(registro)}</span>}
+                          {!esJefe && f0.crew_name && <span>{f0.crew_name}</span>}
+                          {f0.section_name && <span className="flex items-center gap-1"><MapPin className="size-3" />{f0.section_name}</span>}
+                          <Progresiva from={f0.progresiva_m} className="text-[11px]" />
+                        </>}
+                        fotos={fa}
+                        url={urlMiniatura}
+                        alAbrir={(i) => setGaleria({ titulo: `${GENERAL} · ${dia(captura)}`, fotos: fa, i })}
+                      />
+                    )
+                  })}
                 </Bloque>
               )
             })()}

@@ -49,7 +49,9 @@ export function ExpedienteClient() {
   // Desde / Hasta (V04/V08): por fecha de vencimiento del ítem
   const [desde, setDesde] = React.useState('')
   const [hasta, setHasta] = React.useState('')
-  const [sel, setSel] = React.useState<Set<string>>(new Set())
+  // SUP-03: se guardan las exclusiones del usuario; buscar o filtrar no reactiva lo que desmarcó
+  const [excl, setExcl] = React.useState<Set<string>>(new Set())
+  const alternar = (id: string, incluir: boolean) => setExcl((x) => { const n = new Set(x); if (incluir) n.delete(id); else n.add(id); return n })
   const [formatos, setFormatos] = React.useState({ excel: true, pdf: true, panel: true, jpg: true, mapa: false })
   const [historial, setHistorial] = React.useState(true)
   const [previa, setPrevia] = React.useState(false)
@@ -94,9 +96,12 @@ export function ExpedienteClient() {
     // Los ítems sin fotos también van: salen como incompletos en el manifiesto de faltantes
     return true
   })
-  React.useEffect(() => { setSel(new Set(visibles.map((i) => i.id))) }, [items.data, plazo, crew, estado, q, desde, hasta]) // eslint-disable-line react-hooks/exhaustive-deps
+  React.useEffect(() => { setExcl(new Set()) }, [pci]) // otro PCI: selección nueva
+  const sel = new Set(visibles.filter((i) => !excl.has(i.id)).map((i) => i.id))
   const elegidos = visibles.filter((i) => sel.has(i.id))
   const totalFotos = elegidos.reduce((s, i) => s + i.fotos.length, 0)
+  const conFaltantes = elegidos.filter((i) => fotosOficiales(i.item_number, i.fotos).faltan.length > 0).length
+  const soloObservados = elegidos.filter((i) => i.observado).length
   const observados = elegidos.filter((i) => i.observado || fotosOficiales(i.item_number, i.fotos).faltan.length > 0).length
   const conCoordenadas = elegidos.some((i) => i.fotos.some((f) => f.lat != null && f.lng != null))
   const carpeta = (i: Fila) => `PCI_${corto(i.pci_code)}/PLAZO_${i.term_days}_DIAS/ITEM_${i.item_number}`
@@ -234,8 +239,9 @@ export function ExpedienteClient() {
     <>
       <PageHeader title="Exportar expediente" description={`${pcis.data?.find((p) => p.id === pci)?.code ?? 'PCI'}${plazo ? ` / Plazo ${plazo} días` : ''}`} />
       <PageBody className="space-y-4">
-        <div className="grid gap-3 sm:grid-cols-3">
-          {[[elegidos.length, 'Ítems seleccionados', Layers, 'text-primary'], [totalFotos, 'Fotos', ImageIcon, 'text-success'], [observados, 'Observados o incompletos', AlertCircle, 'text-violet-600']].map(([v, t, I, c]: any) => (
+        <div className="grid grid-cols-2 gap-3 lg:grid-cols-4">
+          {[[elegidos.length, `Ítems seleccionados de ${fmtNumber(visibles.length)} en el filtro`, Layers, 'text-primary'], [totalFotos, 'Fotos', ImageIcon, 'text-success'],
+            [conFaltantes, 'Con fases faltantes (no son observaciones)', AlertCircle, 'text-violet-600'], [soloObservados, 'Observados (SERVICON o COVINCA)', AlertCircle, 'text-destructive']].map(([v, t, I, c]: any) => (
             <div key={t} className="bg-card flex items-center gap-3 rounded-xl border border-border p-4"><I className={cn('size-6', c)} />
               <span><strong className="block text-[22px] tabular-nums">{fmtNumber(v)}</strong><span className="text-muted-foreground text-[12.5px]">{t}</span></span></div>
           ))}
@@ -264,18 +270,19 @@ export function ExpedienteClient() {
                 <strong>Selección de ítems</strong>
                 <span className="flex items-center gap-3"><span className="text-muted-foreground">Total: {fmtNumber(totalFotos)} archivos</span>
                   <label className="flex items-center gap-1.5"><input type="checkbox" checked={visibles.length > 0 && elegidos.length === visibles.length}
-                    onChange={(e) => setSel(e.target.checked ? new Set(visibles.map((i) => i.id)) : new Set())} />Seleccionar todos</label></span>
+                    onChange={(e) => setExcl((x) => { const n = new Set(x); visibles.forEach((i) => (e.target.checked ? n.delete(i.id) : n.add(i.id))); return n })} />Seleccionar todos los del filtro</label></span>
               </div>
-              {items.isLoading ? <SkeletonList rows={5} /> : visibles.length === 0 ? <p className="text-muted-foreground text-[13px]">Sin ítems con evidencia en este filtro.</p> : (
+              {items.isLoading ? <SkeletonList rows={5} /> : visibles.length === 0 ? <p className="text-muted-foreground text-[13px]">{items.isError ? 'No se pudo cargar la lista de ítems; vuelve a intentarlo.' : 'Ningún ítem cumple este filtro (no es un error de carga).'}</p> : (
                 <div className="max-h-[calc(var(--vh)_*_50)] divide-y divide-border overflow-y-auto rounded-lg border border-border">
                   {visibles.map((i) => {
                     const { faltan } = fotosOficiales(i.item_number, i.fotos)
                     return (
                       <label key={i.id} className="flex items-center gap-3 px-3 py-2 text-[13px]">
-                        <input type="checkbox" checked={sel.has(i.id)} onChange={(e) => setSel((s) => { const n = new Set(s); if (e.target.checked) n.add(i.id); else n.delete(i.id); return n })} />
+                        <input type="checkbox" checked={sel.has(i.id)} onChange={(e) => alternar(i.id, e.target.checked)} />
                         <strong className="w-12">{i.item_number}</strong>
                         <span className={cn('rounded-md px-2 py-0.5 text-[11.5px] font-semibold', faltan.length ? 'bg-violet-500/12 text-violet-700 dark:text-violet-300' : 'bg-success/12 text-success')}>
                           {faltan.length ? `Falta ${faltan.join(', ')}` : 'Completo'}</span>
+                        {i.observado && <span className="bg-destructive/10 text-destructive rounded-md px-2 py-0.5 text-[11.5px] font-semibold">Observado</span>}
                         <span className="text-muted-foreground ml-auto flex items-center gap-1"><ImageIcon className="size-3.5" />{i.fotos.length} fotos</span>
                         <Link href={`/pci/${i.pci_id}/item/${i.id}`} onClick={(e) => e.stopPropagation()}><Eye className="text-muted-foreground size-4" /></Link>
                         <span onClick={(e) => e.preventDefault()}><MenuFila opciones={[
@@ -283,7 +290,7 @@ export function ExpedienteClient() {
                           { t: 'Ver evidencia', href: `/pci/${i.pci_id}/item/${i.id}?tab=evidencia` },
                           { t: 'Ver documentos', href: `/pci/${i.pci_id}/item/${i.id}?tab=documentos` },
                           { t: 'Historial del ítem', href: `/pci/${i.pci_id}/item/${i.id}?tab=historial` },
-                          { t: sel.has(i.id) ? 'Quitar de la selección' : 'Agregar a la selección', onClick: () => setSel((s) => { const n = new Set(s); if (n.has(i.id)) n.delete(i.id); else n.add(i.id); return n }) },
+                          { t: sel.has(i.id) ? 'Quitar de la selección' : 'Agregar a la selección', onClick: () => alternar(i.id, !sel.has(i.id)) },
                         ]} /></span>
                       </label>
                     )
@@ -328,6 +335,23 @@ export function ExpedienteClient() {
             <DialogTitle>Vista previa del paquete</DialogTitle>
             <DialogDescription>{elegidos.length} ítems · {archivos().length} archivos</DialogDescription>
           </DialogHeader>
+          <div>
+            <p className="mb-1 text-[12.5px] font-semibold">Ítems incluidos ({elegidos.length})</p>
+            <div className="max-h-56 divide-y divide-border overflow-y-auto rounded-lg border border-border text-[12px]">
+              {elegidos.map((i) => {
+                const { faltan } = fotosOficiales(i.item_number, i.fotos)
+                return (
+                  <p key={i.id} className="flex items-center gap-2 px-2 py-1">
+                    <strong className="w-14">Ítem {i.item_number}</strong>
+                    <span className={faltan.length ? 'text-violet-700 dark:text-violet-300' : 'text-success'}>{faltan.length ? `Falta ${faltan.join(', ')} (va en el manifiesto)` : 'Completo'}</span>
+                    {i.observado && <span className="text-destructive">· Observado</span>}
+                    <span className="text-muted-foreground ml-auto">{i.fotos.length} fotos</span>
+                  </p>
+                )
+              })}
+            </div>
+          </div>
+          <p className="text-[12.5px] font-semibold">Archivos que se generarán</p>
           <div className="font-mono text-[11.5px]">{archivos().map((a) => <p key={a} className="flex items-center gap-1.5">{a.endsWith('.xlsx') ? <FileSpreadsheet className="size-3" /> : null}{a}</p>)}</div>
         </DialogContent>
       </Dialog>

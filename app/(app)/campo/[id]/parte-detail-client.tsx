@@ -135,7 +135,9 @@ export function ParteDetailClient({ orderId }: { orderId: string }) {
           .eq('service_id', service.id).is('deleted_at', null).order('code'),
         sb.from('units').select('id, code, symbol'),
       ])
-      return { activities: acts.data ?? [], sections: secs.data ?? [], units: units.data ?? [] }
+      // VIS-02: los sectores del catálogo aprobado, para mostrar el sector de cada actividad
+      const { data: sectores } = await sb.from('service_sectors').select('code, section_id, prog_start_m, prog_end_m, orden').eq('service_id', service.id).order('orden')
+      return { activities: acts.data ?? [], sections: secs.data ?? [], units: units.data ?? [], sectores: (sectores ?? []) as any[] }
     },
     staleTime: 10 * 60_000,
   })
@@ -312,7 +314,7 @@ export function ParteDetailClient({ orderId }: { orderId: string }) {
           )
         })()}
 
-        <HistorialDelParte orderId={orderId} />
+        <HistorialDelParte orderId={orderId} estado={o?.status} revisadoEn={o?.reviewed_at} />
 
         {editable && isOwner && (
           <Button variant="accent" size="field" className="w-full sm:w-auto" onClick={() => setEntryOpen(true)}>
@@ -363,6 +365,17 @@ export function ParteDetailClient({ orderId }: { orderId: string }) {
                             {e.section_name}
                           </span>
                           <Progresiva from={e.prog_start_m} to={e.prog_end_m} />
+                          {(() => {
+                            // Sector por subtramo y progresiva (misma regla que Niveles de servicio); si no encaja, se dice por qué
+                            const sec = (catalogs.data?.sections ?? []).find((x: any) => x.id === e.section_id)
+                            const delTramo = ((catalogs.data as any)?.sectores ?? []).filter((z: any) => z.section_id === e.section_id)
+                            const p = Number(e.prog_start_m)
+                            const z = delTramo.find((z: any) => p >= z.prog_start_m && p <= z.prog_end_m)
+                            if (!catalogs.data) return null
+                            if (z) return <span>Sector {z.code}</span>
+                            const motivo = !delTramo.length ? 'el subtramo no tiene sectores' : sec && (p < sec.prog_start_m || p > sec.prog_end_m) ? 'la progresiva está fuera del subtramo' : 'sin coincidencia'
+                            return <span className="text-warning" title="No se asigna por suposición">Sin sector ({motivo})</span>
+                          })()}
                           <span>{etiquetaDeLado(e.side)}</span>
                           {/* Con la cuenta compartida, quién usaba el celular (0124) */}
                           {e.ejecutado_por && <span>Ejecutó: {e.ejecutado_por}</span>}
