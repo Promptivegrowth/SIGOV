@@ -124,7 +124,13 @@ export const MapCanvas = React.forwardRef<MapCanvasHandle, MapCanvasProps>(funct
     })
 
     mapRef.current = map
+    // El contenedor puede tomar su ancho después de crear el mapa (rejilla,
+    // carga diferida, panel que se abre): sin esto el lienzo quedaba con el
+    // ancho inicial y el mapa se pintaba solo en la mitad (ronda 5, CP-04)
+    const obs = typeof ResizeObserver !== 'undefined' ? new ResizeObserver(() => { try { map.resize() } catch { /* ya retirado */ } }) : null
+    obs?.observe(containerRef.current)
     return () => {
+      obs?.disconnect()
       map.remove()
       mapRef.current = null
     }

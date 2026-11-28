@@ -85,7 +85,7 @@ export function useRevisionDatos(itemId: string) {
     queryKey: ['rev-fotos', itemId],
     queryFn: async () => {
       const { data } = await sb.from('v_evidences')
-        .select('id, phase, storage_path, thumb_path, master_path, taken_at, cargada_at, created_at, origen_captura, fecha_original, created_by_name, publicada_version, sello_aplicado, lat, lng, apoyo_id, autorizacion_pendiente')
+        .select('id, phase, storage_path, thumb_path, master_path, taken_at, cargada_at, created_at, origen_captura, fecha_original, created_by_name, publicada_version, sello_aplicado, lat, lng, apoyo_id, autorizacion_pendiente, archivo_original_path')
         .eq('pci_item_id', itemId).order('taken_at')
       const filas = (data ?? []) as any[]
       const rutas = [...new Set(filas.flatMap((f) => [f.thumb_path, f.storage_path, f.master_path]).filter(Boolean))] as string[]
@@ -247,7 +247,13 @@ function TabEvidencia({ item, fotos, pendientes = [], cargando, historial }: { i
               )}
               <div className="text-muted-foreground space-y-0.5 px-3 py-2 text-[11.5px]">
                 <p className="flex items-center gap-1.5"><Calendar className="size-3" />Captura: {primera ? (fechaDesconocida(primera) ? 'desconocida (foto de galería sin fecha original)' : fmtDateTime(primera.taken_at)) : '—'}</p>
-                <p className="flex items-center gap-1.5"><Upload className="size-3" />Origen: {primera ? ORIGEN[primera.origen_captura] ?? 'Cámara SIGOV' : '—'}</p>
+                <p className="flex items-center gap-1.5"><Upload className="size-3" />Origen: {primera ? ORIGEN[primera.origen_captura] ?? 'Cámara SIGOV' : '—'}{primera ? (primera.sello_aplicado === false ? ' · sin sello SIGOV' : ' · con sello SIGOV') : ''}</p>
+                {primera?.archivo_original_path && (
+                  <button type="button" className="text-primary flex items-center gap-1.5 underline" onClick={async () => {
+                    const { data } = await createClient().storage.from('evidencias').createSignedUrl(primera.archivo_original_path, 600)
+                    if (data?.signedUrl) window.open(data.signedUrl, '_blank', 'noopener')
+                  }}><Upload className="size-3" />Archivo original (tal como se cargó, sin sello)</button>
+                )}
                 <p className="flex items-center gap-1.5"><User className="size-3" />{primera?.created_by_name ?? '—'}{primera?.apoyo_id ? ' · apoyo temporal' : ''}{primera?.publicada_version ? ` · v${primera.publicada_version}` : ''}</p>
                 {de.length > 1 && (
                   <div className="flex gap-1 pt-1">

@@ -11,24 +11,26 @@ import { fmtNumber } from '@/lib/utils'
  * Mapa compacto del dashboard: tramos del servicio + registros de campo
  * del periodo, agrupados por densidad.
  */
-export function MiniMap({ serviceId, from, to }: { serviceId: string; from: string; to: string }) {
+export function MiniMap({ serviceId, from, to, crewId }: { serviceId: string; from: string; to: string; crewId?: string }) {
   const sb = React.useMemo(() => createClient(), [])
   const mapRef = React.useRef<MapCanvasHandle>(null)
   const [mapReady, setMapReady] = React.useState<MLMap | null>(null)
 
   const { data } = useQuery({
-    queryKey: ['minimap', serviceId, from, to],
+    queryKey: ['minimap', serviceId, from, to, crewId ?? ''],
     queryFn: async () => {
-      const [sections, entries] = await Promise.all([
-        sb.rpc('sections_geojson', { p_service_id: serviceId }),
-        sb
+      let q = sb
           .from('v_work_entries')
           .select('id, lat, lng, activity_name, activity_color, quantity, unit_symbol, crew_name, work_date')
           .eq('service_id', serviceId)
           .gte('work_date', from)
           .lte('work_date', to)
           .not('lat', 'is', null)
-          .limit(1200),
+          .limit(1200)
+      if (crewId) q = q.eq('crew_id', crewId)
+      const [sections, entries] = await Promise.all([
+        sb.rpc('sections_geojson', { p_service_id: serviceId }),
+        q,
       ])
       return { sections: sections.data as any, entries: entries.data ?? [] }
     },

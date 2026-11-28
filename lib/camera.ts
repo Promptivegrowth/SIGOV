@@ -143,6 +143,11 @@ export interface SealedPhoto {
    * Solo cuando la toma es lo bastante grande como para sostenerlo.
    */
   master?: { blob: Blob; width: number; height: number; sha256: string }
+  /**
+   * Ronda 5 (CP-11): el archivo tal como llegó de la galería o la PC,
+   * cuando se le aplicó el sello SIGOV: se conserva aparte, sin tocar.
+   */
+  archivo?: Blob
 }
 
 const MAX_EDGE = 1600
@@ -224,6 +229,8 @@ export async function sealPhoto(source: Blob | HTMLVideoElement, data: Watermark
     takenAt: data.fechaOriginal ?? data.takenAt,
     gps: data.gps,
     master,
+    // Un archivo traído de fuera y sellado: se guarda también el original sin tocar
+    archivo: source instanceof Blob && (data.origen ?? 'camara_sigov') !== 'camara_sigov' && !data.sinSello ? source : undefined,
     origen: data.origen ?? 'camara_sigov',
     selloAplicado: !data.sinSello,
     fechaOriginal: data.fechaOriginal ?? null,

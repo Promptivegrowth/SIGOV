@@ -10,7 +10,7 @@ import {
   ArrowLeft, TriangleAlert, Zap, Search, Camera, CircleCheck,
   Download, Users, RotateCcw, ChevronDown, Send, Image as ImageIcon, ArrowUpDown, Gauge, UserCheck, Handshake,
 } from 'lucide-react'
-import { createClient, fetchAll } from '@/lib/supabase/client'
+import { createClient } from '@/lib/supabase/client'
 import { useSession } from '@/lib/hooks/use-session'
 import { PageHeader, PageBody } from '@/components/shared/page-header'
 import { Button } from '@/components/ui/button'
@@ -93,15 +93,25 @@ export function PciDetailClient({ pciId }: { pciId: string }) {
   const items = useQuery({
     queryKey: ['pci-items', pciId],
     queryFn: async () => {
-      // Un PCI puede traer más de 1 000 ítems: se pagina para no perder ninguno
-      return await fetchAll((from, to) =>
-        sb.from('v_pci_items')
+      // Un PCI puede traer más de 1 000 ítems: se pagina para no perder
+      // ninguno. Por número de ítem (único en el PCI) y no por desplazamiento:
+      // con «offset» cada página volvía a calcular las anteriores (CP-20)
+      const filas: any[] = []
+      let desde = -1
+      for (let vuelta = 0; vuelta < 50; vuelta++) {
+        const { data, error } = await sb.from('v_pci_items')
           .select('*')
           .eq('pci_id', pciId)
+          .gt('item_number', desde)
           .order('item_number')
-          .order('id')
-          .range(from, to)
-      )
+          .limit(1000)
+        if (error) throw error
+        const lote = data ?? []
+        filas.push(...lote)
+        if (lote.length < 1000) break
+        desde = Number((lote[lote.length - 1] as any).item_number)
+      }
+      return filas
     },
   })
 

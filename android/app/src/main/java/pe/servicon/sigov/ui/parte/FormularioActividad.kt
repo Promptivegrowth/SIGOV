@@ -1125,6 +1125,8 @@ private fun validar(
     }
     val cantidad = metrado.replace(",", ".").toDoubleOrNull()
     if (cantidad == null || cantidad <= 0) return "Escribe el metrado ejecutado."
+    // Ronda 5 (CP-15): la base admite 2 decimales como máximo
+    if (Math.round(cantidad * 100) / 100.0 != cantidad) return "El metrado admite 2 decimales como máximo."
 
     val ini = Progresiva.aMetros(progIni)
     if (ini == null) return "Progresiva no válida. Usa el formato 1334+600."

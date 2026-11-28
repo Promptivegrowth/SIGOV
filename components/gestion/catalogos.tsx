@@ -11,10 +11,11 @@ import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
 import { Button } from '@/components/ui/button'
 import { Input, Textarea } from '@/components/ui/input'
 import { SkeletonList } from '@/components/ui/skeleton'
-import { cn, fmtDateTime, fmtNumber } from '@/lib/utils'
+import { cn, fmtDate, fmtDateTime, fmtNumber } from '@/lib/utils'
 import { mensajeAmigable } from '@/lib/errores'
 import { GestionNav } from './gestion-nav'
 import { Elegir } from '@/components/ssoma/control-ssoma'
+import { ReglasEvidenciaPorModulo } from './reglas-evidencia-modulos'
 
 /**
  * «Catálogos oficiales» (A05/A06, SUB_A01/A02): Actividades (código y
@@ -198,7 +199,23 @@ function Rendimientos({ d }: { d: any }) {
   const { service } = useSession()
   const [f, setF] = React.useState({ q: '', metodo: '', crew: '' })
   const [ed, setEd] = React.useState<any | null>(null)
-  const r = useQuery({ queryKey: ['rend-jornada', service.id], queryFn: async () => ((await sb.from('rendimientos_jornada').select('*').eq('service_id', service.id).is('deleted_at', null)).data ?? []) as any[] })
+  const [histDe, setHistDe] = React.useState<any | null>(null)
+  const r = useQuery({ queryKey: ['rend-jornada', service.id], queryFn: async () => {
+    const { data, error } = await sb.from('rendimientos_jornada').select('*').eq('service_id', service.id).is('deleted_at', null)
+    if (error) throw error
+    return (data ?? []) as any[]
+  } })
+  const hist = useQuery({ queryKey: ['rend-hist', histDe?.id], enabled: !!histDe?.id, queryFn: async () => ((await sb.rpc('registro_historial' as any, { p_tabla: 'rendimientos_jornada', p_id: histDe.id } as any)).data ?? []) as any[] })
+  // CP-15: «sin dato» no es cero; coma o punto decimal; 2 decimales como máximo
+  const leerCantidad = (t: any): { n: number | null; error: string | null } => {
+    const x = String(t ?? '').trim().replace(',', '.')
+    if (!x) return { n: null, error: 'Ingresa el rendimiento (sin dato no se guarda)' }
+    if (!/^-?\d+(\.\d+)?$/.test(x)) return { n: null, error: 'Escribe un número (coma o punto decimal)' }
+    const n = Number(x)
+    if (n <= 0) return { n, error: 'Debe ser mayor que cero' }
+    if (!/^\d+(\.\d{1,2})?$/.test(x)) return { n, error: 'Máximo 2 decimales' }
+    return { n, error: null }
+  }
   const act = (id: string) => d.acts.find((a: any) => a.id === id)
   // Lo configurado y, para cada actividad sin rendimiento general, una fila «Por configurar»
   const filas = [...(r.data ?? []), ...d.acts.filter((a: any) => a.is_active && !(r.data ?? []).some((x) => x.activity_id === a.id && !x.crew_id))
@@ -206,40 +223,57 @@ function Rendimientos({ d }: { d: any }) {
     .filter((x) => (!f.metodo || x.metodo === f.metodo) && (!f.crew || (f.crew === 'todas' ? !x.crew_id : x.crew_id === f.crew))
       && (!f.q || `${act(x.activity_id)?.code} ${act(x.activity_id)?.name}`.toLowerCase().includes(f.q.toLowerCase())))
   const guardar = async () => {
-    const fila = { service_id: service.id, activity_id: ed.activity_id, crew_id: ed.crew_id || null, metodo: ed.metodo, unit_id: ed.unit_id || null, cantidad: Number(ed.cantidad) }
-    const { error } = ed.id ? await sb.from('rendimientos_jornada').update(fila as any).eq('id', ed.id) : await sb.from('rendimientos_jornada').insert(fila as any)
-    if (error) return toast.error(mensajeAmigable(error))
-    toast.success('Rendimiento guardado'); setEd(null); qc.invalidateQueries({ queryKey: ['rend-jornada'] })
+    const c = leerCantidad(ed.cantidad)
+    if (c.error) return toast.error(c.error)
+    const { error } = await sb.rpc('rendimiento_guardar' as any, {
+      p_id: ed.id || null, p_service: service.id, p_activity: ed.activity_id, p_crew: ed.crew_id || null, p_metodo: ed.metodo,
+      p_equipo: ed.equipo ?? null, p_cantidad: c.n, p_desde: ed.vigente_desde || null, p_hasta: ed.vigente_hasta || null,
+      p_motivo: ed.motivo ?? '', p_version: ed.id ? ed.version ?? null : null,
+    } as any)
+    // CP-13: si otro lo cambió, se avisa y el borrador se conserva para reintentar tras recargar
+    if (error) { qc.invalidateQueries({ queryKey: ['rend-jornada'] }); return toast.error(mensajeAmigable(error)) }
+    toast.success('Rendimiento guardado', { description: 'Queda en el historial con tu usuario, la fecha y el motivo.' }); setEd(null); qc.invalidateQueries({ queryKey: ['rend-jornada'] })
   }
   const eliminar = async (x: any) => {
-    if (!x.id || !confirm('¿Eliminar este rendimiento? Queda en la auditoría.')) return
-    const { error } = await sb.from('rendimientos_jornada').update({ deleted_at: new Date().toISOString() } as any).eq('id', x.id)
+    if (!x.id) return
+    const motivo = window.prompt('Motivo para eliminar este rendimiento (queda en la auditoría):')
+    if (!motivo?.trim()) return
+    const { error } = await sb.rpc('rendimiento_eliminar' as any, { p_id: x.id, p_motivo: motivo } as any)
     if (error) return toast.error(mensajeAmigable(error))
     qc.invalidateQueries({ queryKey: ['rend-jornada'] })
   }
   return (
-    <div className={cn('grid gap-4', ed && 'xl:grid-cols-[1fr_380px]')}>
+    <div className={cn('grid gap-4', (ed || histDe) && 'xl:grid-cols-[1fr_380px]')}>
       <Card className="min-w-0"><CardContent className="space-y-3 p-4">
         <div className="flex flex-wrap items-end gap-3">
           <div className="relative min-w-56 flex-1"><Search className="text-muted-foreground absolute top-1/2 left-2.5 size-4 -translate-y-1/2" />
             <Input value={f.q} onChange={(e) => setF({ ...f, q: e.target.value })} placeholder="Buscar por actividad o código..." className="pl-8" /></div>
           <Elegir etiqueta="Método:" valor={f.metodo} cambiar={(x) => setF({ ...f, metodo: x })} todos="Todos" opciones={METODOS.map((m) => [m, m])} />
           <Elegir etiqueta="Cuadrilla:" valor={f.crew} cambiar={(x) => setF({ ...f, crew: x })} todos="Todas" opciones={[['todas', 'General (todas)'], ...d.crews.map((c: any) => [c.id, c.name] as [string, string])]} />
-          <Button onClick={() => setEd({ id: '', activity_id: d.acts[0]?.id, crew_id: '', metodo: 'Manual', unit_id: d.acts[0]?.unit_id, cantidad: '' })}><Plus className="size-4" />Nuevo rendimiento</Button>
+          <Button onClick={() => {
+            // CP-06: no precarga una actividad cualquiera; solo la que deja la búsqueda, si es una
+            const unica = f.q ? d.acts.filter((a: any) => `${a.code} ${a.name}`.toLowerCase().includes(f.q.toLowerCase())) : []
+            const a = unica.length === 1 ? unica[0] : null
+            setEd({ id: '', activity_id: a?.id ?? '', crew_id: f.crew && f.crew !== 'todas' ? f.crew : '', metodo: 'Manual', unit_id: a?.unit_id ?? '', cantidad: '', motivo: '' })
+          }}><Plus className="size-4" />Nuevo rendimiento</Button>
         </div>
         <div className="max-h-[calc(var(--vh)_*_60)] overflow-auto">
           <table className="w-full text-[12.5px]">
             <thead className="bg-secondary/60 text-muted-foreground sticky top-0 text-[11.5px]"><tr>{['Código', 'Actividad', 'Método - Equipo', 'Rendimiento', 'Unidad', 'Cuadrilla', 'Acciones'].map((t) => <th key={t} className="px-3 py-2 text-left font-medium">{t}</th>)}</tr></thead>
             <tbody>
-              {filas.slice(0, 300).map((x, i) => (
+              {r.isLoading && <tr><td colSpan={7} className="px-3 py-6"><SkeletonList rows={4} /></td></tr>}
+              {r.isError && <tr><td colSpan={7} className="text-muted-foreground px-3 py-6 text-center">No se pudieron cargar los rendimientos. <button className="text-primary underline" onClick={() => r.refetch()}>Reintentar</button></td></tr>}
+              {!r.isLoading && !r.isError && filas.length === 0 && <tr><td colSpan={7} className="text-muted-foreground px-3 py-6 text-center">Ningún rendimiento coincide con la búsqueda y los filtros.</td></tr>}
+              {!r.isLoading && !r.isError && filas.slice(0, 300).map((x, i) => (
                 <tr key={x.id || `p${i}`} className="border-t border-border">
-                  <td className="px-3 py-1.5 font-semibold whitespace-nowrap">{act(x.activity_id)?.code}</td><td className="px-3">{act(x.activity_id)?.name}</td><td className="px-3">{x.metodo}</td>
+                  <td className="px-3 py-1.5 font-semibold whitespace-nowrap">{act(x.activity_id)?.code}</td><td className="px-3">{act(x.activity_id)?.name}</td><td className="px-3">{x.metodo}{x.equipo ? ` · ${x.equipo}` : ''}{(x.vigente_desde || x.vigente_hasta) && <span className="text-muted-foreground block text-[11px]">Vigencia {x.vigente_desde ? fmtDate(x.vigente_desde) : 'inicio'} – {x.vigente_hasta ? fmtDate(x.vigente_hasta) : 'sin fin'}</span>}</td>
                   <td className="px-3">{x.cantidad == null ? <span className="bg-secondary text-muted-foreground rounded-full px-2 py-0.5 text-[11px]">Por configurar</span> : fmtNumber(Number(x.cantidad), 2)}</td>
                   <td className="px-3">{d.units.find((u: any) => u.id === x.unit_id)?.symbol ?? '—'}/jornada</td>
                   <td className="px-3">{x.crew_id ? d.crews.find((c: any) => c.id === x.crew_id)?.name : 'Todas'}</td>
                   <td className="px-3"><span className="flex gap-1">
-                    <Button size="icon-sm" variant="outline" aria-label="Editar" onClick={() => setEd({ ...x, crew_id: x.crew_id ?? '', cantidad: x.cantidad ?? '' })}><Pencil className="size-3.5" /></Button>
-                    <Button size="icon-sm" variant="outline" aria-label="Duplicar por cuadrilla" onClick={() => setEd({ ...x, id: '', crew_id: d.crews[0]?.id ?? '', cantidad: x.cantidad ?? '' })}><Copy className="size-3.5" /></Button>
+                    <Button size="icon-sm" variant="outline" aria-label="Editar" onClick={() => setEd({ ...x, crew_id: x.crew_id ?? '', cantidad: x.cantidad ?? '', motivo: '' })}><Pencil className="size-3.5" /></Button>
+                    <Button size="icon-sm" variant="outline" aria-label="Duplicar por cuadrilla" onClick={() => setEd({ ...x, id: '', crew_id: d.crews[0]?.id ?? '', cantidad: x.cantidad ?? '', motivo: '' })}><Copy className="size-3.5" /></Button>
+                    {x.id && <Button size="icon-sm" variant="outline" aria-label="Historial" onClick={() => setHistDe(x)}><Clock className="size-3.5" /></Button>}
                     {x.id && <Button size="icon-sm" variant="outline" aria-label="Eliminar" onClick={() => eliminar(x)}><Trash2 className="size-3.5" /></Button>}
                   </span></td>
                 </tr>
@@ -248,16 +282,37 @@ function Rendimientos({ d }: { d: any }) {
           </table>
         </div>
       </CardContent></Card>
+      {histDe && !ed && (
+        <Card className="h-fit xl:col-start-2"><CardHeader className="flex-row items-center justify-between pb-2"><CardTitle className="text-[14px]">Historial · {act(histDe.activity_id)?.code}</CardTitle><Button size="sm" variant="ghost" onClick={() => setHistDe(null)}>Cerrar</Button></CardHeader>
+          <CardContent className="space-y-2 text-[12.5px]">
+            {hist.isLoading ? <SkeletonList rows={3} /> : !(hist.data ?? []).length ? <p className="text-muted-foreground">Sin cambios registrados.</p> : (hist.data ?? []).map((h: any, i: number) => (
+              <div key={i} className="rounded-lg border border-border p-2">
+                <p><strong>{h.accion === 'INSERT' ? 'Creado' : h.accion === 'UPDATE' ? (h.despues?.deleted_at ? 'Eliminado' : 'Modificado') : h.accion}</strong> · {fmtDateTime(h.cuando)} · {h.actor}</p>
+                {h.antes && <p className="text-muted-foreground">Antes: {fmtNumber(Number(h.antes.cantidad), 2)} · {h.antes.metodo} · v{h.antes.version ?? 1}</p>}
+                {h.despues && <p>Después: {fmtNumber(Number(h.despues.cantidad), 2)} · {h.despues.metodo} · v{h.despues.version ?? 1}</p>}
+                <p className="text-muted-foreground">Motivo: {h.motivo ?? 'no registrado (cambio anterior a la regla de motivo)'}</p>
+              </div>
+            ))}
+          </CardContent></Card>
+      )}
       {ed && (
         <Card className="h-fit"><CardHeader className="pb-2"><CardTitle className="text-[14px]">{ed.id ? 'Editar rendimiento' : 'Nuevo rendimiento'}</CardTitle></CardHeader>
           <CardContent className="space-y-2.5 text-[12.5px]">
             {ed.id ? <label className="block"><span className="text-muted-foreground text-[12px]">Código</span><div className="relative"><Input value={act(ed.activity_id)?.code ?? ''} disabled readOnly className="h-9" /><Lock className="text-muted-foreground absolute top-2.5 right-2.5 size-4" /></div></label>
-              : <Elegir etiqueta="Actividad *" valor={ed.activity_id} cambiar={(x) => setEd({ ...ed, activity_id: x, unit_id: act(x)?.unit_id })} opciones={d.acts.map((a: any) => [a.id, `${a.code} · ${a.name}`])} />}
+              : <Elegir etiqueta="Actividad *" valor={ed.activity_id} cambiar={(x) => setEd({ ...ed, activity_id: x, unit_id: act(x)?.unit_id })} todos="Elige la actividad" opciones={d.acts.map((a: any) => [a.id, `${a.code} · ${a.name}`])} />}
             <Elegir etiqueta="Método - Equipo *" valor={ed.metodo} cambiar={(x) => setEd({ ...ed, metodo: x || ed.metodo })} opciones={METODOS.map((m) => [m, m])} />
-            <Elegir etiqueta="Unidad *" valor={ed.unit_id ?? ''} cambiar={(x) => setEd({ ...ed, unit_id: x })} opciones={d.units.map((u: any) => [u.id, `${u.symbol} (${u.name})`])} />
-            <label className="block"><span className="text-muted-foreground text-[12px]">Rendimiento por jornada *</span><Input type="number" min={0} step="0.01" value={ed.cantidad} onChange={(e) => setEd({ ...ed, cantidad: e.target.value })} placeholder="Ingrese el rendimiento" className="h-9" /></label>
+            {ed.metodo !== 'Manual' && <label className="block"><span className="text-muted-foreground text-[12px]">Equipo *</span><Input value={ed.equipo ?? ''} maxLength={80} onChange={(e) => setEd({ ...ed, equipo: e.target.value })} placeholder="Ej.: retroexcavadora, rodillo" className="h-9" /></label>}
+            <label className="block"><span className="text-muted-foreground text-[12px]">Unidad (de la actividad)</span><div className="relative"><Input value={ed.activity_id ? (() => { const u = d.units.find((u: any) => u.id === act(ed.activity_id)?.unit_id); return u ? `${u.symbol} (${u.name})/jornada` : 'La actividad no tiene unidad' })() : 'Elige la actividad'} disabled readOnly className="h-9" /><Lock className="text-muted-foreground absolute top-2.5 right-2.5 size-4" /></div></label>
+            <label className="block"><span className="text-muted-foreground text-[12px]">Rendimiento por jornada *</span><Input inputMode="decimal" value={ed.cantidad} onChange={(e) => setEd({ ...ed, cantidad: e.target.value })} placeholder="Ej.: 120,5" className="h-9" />
+              {String(ed.cantidad ?? '') !== '' && leerCantidad(ed.cantidad).error && <span className="text-destructive text-[11.5px]">{leerCantidad(ed.cantidad).error}</span>}</label>
+            <div className="grid grid-cols-2 gap-2">
+              <label className="block"><span className="text-muted-foreground text-[12px]">Vigente desde</span><Input type="date" value={ed.vigente_desde ?? ''} onChange={(e) => setEd({ ...ed, vigente_desde: e.target.value })} className="h-9" /></label>
+              <label className="block"><span className="text-muted-foreground text-[12px]">Vigente hasta</span><Input type="date" value={ed.vigente_hasta ?? ''} onChange={(e) => setEd({ ...ed, vigente_hasta: e.target.value })} className="h-9" /></label>
+            </div>
             <Elegir etiqueta="Cuadrilla *" valor={ed.crew_id} cambiar={(x) => setEd({ ...ed, crew_id: x })} todos="Todas (general)" opciones={d.crews.map((c: any) => [c.id, c.name])} />
-            <div className="flex justify-end gap-2"><Button variant="outline" onClick={() => setEd(null)}>Cancelar</Button><Button onClick={guardar} disabled={!(Number(ed.cantidad) > 0)}><Save className="size-4" />Guardar cambios</Button></div>
+            <p className="text-muted-foreground text-[11.5px]">Se aplica primero el rendimiento de la cuadrilla y, si no hay uno vigente, el general.</p>
+            <Textarea rows={2} maxLength={250} value={ed.motivo ?? ''} onChange={(e) => setEd({ ...ed, motivo: e.target.value })} placeholder="Motivo del cambio (obligatorio)" />
+            <div className="flex justify-end gap-2"><Button variant="outline" onClick={() => setEd(null)}>Cancelar</Button><Button onClick={guardar} disabled={!ed.activity_id || !!leerCantidad(ed.cantidad).error || !String(ed.motivo ?? '').trim() || (ed.metodo !== 'Manual' && !String(ed.equipo ?? '').trim())}><Save className="size-4" />Guardar cambios</Button></div>
           </CardContent></Card>
       )}
     </div>
@@ -423,6 +478,8 @@ function Evidencias() {
     toast.success('Reglas de evidencia guardadas'); setMotivo('')
   }
   return (
+    <div className="space-y-4">
+    <p className="text-[13px] font-semibold">Reglas globales del contrato</p>
     <Card className="max-w-xl"><CardContent className="space-y-2.5 p-4 text-[12.5px]">
       {[['fecha_hora', 'Fecha y hora'], ['gps', 'GPS'], ['sello', 'Sello'], ['ats', 'ATS'], ['charla', 'Charla'], ['checklist', 'Checklist']].map(([k, t]) => (
         <div key={k} className="flex items-center justify-between gap-3"><span className="font-semibold">{t}</span>
@@ -431,5 +488,9 @@ function Evidencias() {
       <Textarea rows={2} maxLength={250} value={motivo} onChange={(e) => setMotivo(e.target.value)} placeholder="Motivo del cambio (obligatorio)" />
       <div className="flex justify-end"><Button onClick={guardar} disabled={!motivo.trim()}><Save className="size-4" />Guardar reglas</Button></div>
     </CardContent></Card>
+    {/* CP-07: por módulo, general o específica de una cuadrilla */}
+    <p className="text-[13px] font-semibold">Reglas por módulo</p>
+    <ReglasEvidenciaPorModulo />
+    </div>
   )
 }

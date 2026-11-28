@@ -146,15 +146,18 @@ async function pushOutbox(): Promise<{ pushed: number; failed: number; blobs: nu
           blobsUp++
         }
       }
-      // Y su original JPG para COVINCA, si lo tiene (OBS-23)
-      const original = await db.blobs.get(item.client_id + '-original')
-      if (original && !original.uploaded) {
-        const { error: upErr } = await sb.storage
-          .from(original.bucket)
-          .upload(original.path, original.blob, { contentType: 'image/jpeg', upsert: true })
-        if (!upErr) {
-          await db.blobs.update(original.client_id, { uploaded: true })
-          blobsUp++
+      // Y su original JPG para COVINCA, si lo tiene (OBS-23), y el archivo de
+      // galería/PC tal como llegó, si se le aplicó el sello (ronda 5, CP-11)
+      for (const sufijo of ['-original', '-archivo']) {
+        const extra = await db.blobs.get(item.client_id + sufijo)
+        if (extra && !extra.uploaded) {
+          const { error: upErr } = await sb.storage
+            .from(extra.bucket)
+            .upload(extra.path, extra.blob, { contentType: sufijo === '-original' ? 'image/jpeg' : extra.content_type || extra.blob.type || 'image/jpeg', upsert: true })
+          if (!upErr) {
+            await db.blobs.update(extra.client_id, { uploaded: true })
+            blobsUp++
+          }
         }
       }
     } catch (e: any) {

@@ -17,6 +17,8 @@ import { SelectorDeSemana, useSemana } from '@/components/shared/semana'
 import { Anillo } from '@/components/dashboard/anillo'
 import { Card, CardHeader, CardTitle, CardDescription, CardContent, CardAction } from '@/components/ui/card'
 import { Button } from '@/components/ui/button'
+import { useEstadoDeSesion } from '@/lib/hooks/use-estado-sesion'
+import { FichaDeCuadrilla } from '@/components/dashboard/ficha-cuadrilla'
 import { Badge } from '@/components/ui/badge'
 import { SkeletonKpi, SkeletonChart, SkeletonList } from '@/components/ui/skeleton'
 import { fmtNumber, fmtRelative, cn } from '@/lib/utils'
@@ -78,15 +80,19 @@ export function SupervisorDashboard() {
   const { service, profile, hasModule } = useSession()
   const { semana, mover, volverAHoy } = useSemana()
   const sb = React.useMemo(() => createClient(), [])
+  // CP-04: del resumen global a una cuadrilla; la elección se conserva al
+  // volver de un detalle (la base acota dentro del alcance del supervisor)
+  const [crewSel, setCrewSel] = useEstadoDeSesion<string>('mis-cuadrillas:crew', '')
 
   const resumen = useQuery({
-    queryKey: ['panel-resumen', service.id, semana.from],
+    queryKey: ['panel-resumen', service.id, semana.from, crewSel],
     queryFn: async () => {
-      const { data, error } = await sb.rpc('panel_resumen', {
+      const { data, error } = await sb.rpc('panel_resumen' as any, {
         p_service_id: service.id,
         p_from: semana.from,
         p_to: semana.to,
-      })
+        p_crew: crewSel || null,
+      } as any)
       if (error) throw error
       return data as any
     },
@@ -106,12 +112,13 @@ export function SupervisorDashboard() {
   })
 
   const ultimas = useQuery({
-    queryKey: ['panel-ultimas', service.id],
+    queryKey: ['panel-ultimas', service.id, crewSel],
     queryFn: async () => {
-      const { data, error } = await sb.rpc('panel_ultimas', {
+      const { data, error } = await sb.rpc('panel_ultimas' as any, {
         p_service_id: service.id,
         p_limite: 10,
-      })
+        p_crew: crewSel || null,
+      } as any)
       if (error) throw error
       return (data ?? []) as unknown as FilaUltima[]
     },
@@ -120,6 +127,13 @@ export function SupervisorDashboard() {
 
   const r = resumen.data
   const materiales = r?.materiales ?? {}
+  const todas = cuadrillas.data ?? []
+  // Si la cuadrilla guardada ya no está a cargo, se vuelve a «Todas»
+  React.useEffect(() => {
+    if (crewSel && cuadrillas.data && !cuadrillas.data.some((c) => c.crew_id === crewSel)) setCrewSel('')
+  }, [crewSel, cuadrillas.data, setCrewSel])
+  const filasCuadrillas = crewSel ? todas.filter((c) => c.crew_id === crewSel) : todas
+  const elegida = todas.find((c) => c.crew_id === crewSel)
 
   const saludo = (() => {
     const h = new Date().getHours()
@@ -131,11 +145,32 @@ export function SupervisorDashboard() {
       <PageHeader
         icon={LayoutDashboard}
         title="Mis cuadrillas"
-        description={`${fmtNumber(r?.cuadrillas ?? 0)} cuadrillas a tu cargo en ${service.name}.`}
+        description={elegida ? `${elegida.name} (${elegida.code}) · una de tus ${fmtNumber(todas.length)} cuadrillas en ${service.name}.` : `${fmtNumber(r?.cuadrillas ?? 0)} cuadrillas a tu cargo en ${service.name}.`}
         actions={<SelectorDeSemana semana={semana} onMover={mover} onHoy={volverAHoy} />}
       />
 
       <PageBody className="space-y-6">
+        {/* ═══ Ámbito: todas o una cuadrilla (CP-04) ═══════════════════ */}
+        {todas.length > 1 && (
+          <div role="tablist" aria-label="Cuadrilla" className="flex flex-wrap items-center gap-2">
+            <span className="text-muted-foreground text-[12.5px]">Ver:</span>
+            {[{ crew_id: '', name: 'Todas mis cuadrillas', code: '', color: null as string | null }, ...todas].map((c) => (
+              <button
+                key={c.crew_id || 'todas'}
+                role="tab"
+                aria-selected={crewSel === c.crew_id}
+                onClick={() => setCrewSel(c.crew_id)}
+                className={cn('flex items-center gap-1.5 rounded-full border px-3 py-1.5 text-[12.5px] font-medium transition-colors',
+                  crewSel === c.crew_id ? 'border-primary bg-primary text-primary-foreground' : 'border-border bg-card hover:bg-secondary')}
+              >
+                {c.crew_id && <span className="size-2 rounded-full" style={{ background: c.color ?? 'var(--primary)' }} />}
+                {c.code || c.name}
+              </button>
+            ))}
+          </div>
+        )}
+        {elegida && <FichaDeCuadrilla crewId={elegida.crew_id} desde={semana.from} hasta={semana.to} />}
+
         {/* ═══ Los seis contadores de la semana ═════════════════════════ */}
         <section aria-label="Resumen de la semana">
           {resumen.isLoading ? (
@@ -144,7 +179,7 @@ export function SupervisorDashboard() {
             </div>
           ) : (
             <div className="grid grid-cols-1 gap-3 sm:grid-cols-2 xl:grid-cols-3 2xl:grid-cols-6">
-              <StatCard index={0} label="Cuadrillas" value={Number(r?.cuadrillas ?? 0)} icon={Users} tone="primary" hint="a tu cargo" />
+              <StatCard index={0} label="Cuadrillas" value={Number(r?.cuadrillas ?? 0)} icon={Users} tone="primary" hint={elegida ? `elegida: ${elegida.code}` : 'a tu cargo'} />
               <StatCard index={1} label="Actividades asignadas" value={Number(r?.asignadas ?? 0)} icon={CalendarRange} tone="info" hint="en la semana" href="/programacion" />
               <StatCard index={2} label="En ejecución" value={Number(r?.en_ejecucion ?? 0)} icon={Hammer} tone="info" hint="empezadas y sin cerrar" />
               <StatCard index={3} label="Culminadas" value={Number(r?.culminadas ?? 0)} icon={ClipboardCheck} tone="success" hint={`de ${fmtNumber(r?.asignadas ?? 0)} programadas`} />
@@ -264,7 +299,7 @@ export function SupervisorDashboard() {
 
         {/* ═══ Cuadrillas a cargo ═══════════════════════════════════════ */}
         <TablaCuadrillas
-          filas={cuadrillas.data ?? []}
+          filas={filasCuadrillas}
           cargando={cuadrillas.isLoading}
           semana={semana.etiqueta}
         />
@@ -292,7 +327,7 @@ export function SupervisorDashboard() {
                 </CardAction>
               </CardHeader>
               <CardContent className="p-0">
-                <MiniMap serviceId={service.id} from={semana.from} to={semana.to} />
+                <MiniMap serviceId={service.id} from={semana.from} to={semana.to} crewId={crewSel || undefined} />
               </CardContent>
             </Card>
           )}
@@ -355,7 +390,7 @@ export function SupervisorDashboard() {
         </div>
 
         {/* ═══ Alertas y notificaciones ═════════════════════════════════ */}
-        <AlertasDelSupervisor resumen={r} cuadrillas={cuadrillas.data ?? []} />
+        <AlertasDelSupervisor resumen={r} cuadrillas={filasCuadrillas} />
       </PageBody>
     </>
   )

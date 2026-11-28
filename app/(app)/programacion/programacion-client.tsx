@@ -2,6 +2,8 @@
 
 import { FormatoCovinca } from '@/components/programacion/formato-covinca'
 import * as React from 'react'
+import { DialogoConflicto, esConflictoDeVersion, type CampoEnConflicto } from '@/components/shared/dialogo-conflicto'
+import { useSearchParams } from 'next/navigation'
 import Link from 'next/link'
 import { useQuery, useQueryClient } from '@tanstack/react-query'
 import { motion } from 'motion/react'
@@ -58,9 +60,13 @@ export function ProgramacionClient() {
   const [duplicando, setDuplicando] = React.useState(false)
   const [formato, setFormato] = React.useState(false)
   const [itemForm, setItemForm] = React.useState<{ open: boolean; row?: any }>({ open: false })
+  // CP-13: otro guardó la misma partida mientras se editaba
+  const [conflicto, setConflicto] = React.useState<{ actual: any; borrador: any; campos: CampoEnConflicto[] } | null>(null)
   const [confirm, setConfirm] = React.useState<any>(null)
   const [q, setQ] = React.useState('')
-  const [crewFilter, setCrewFilter] = React.useState('todas')
+  // CP-04: desde la ficha de «Mis cuadrillas» llega ?crew= ya elegido
+  const crewDeEnlace = useSearchParams().get('crew')
+  const [crewFilter, setCrewFilter] = React.useState(crewDeEnlace || 'todas')
   // MRPCI_01: Subtramo, Sector y Origen
   const [subtramoF, setSubtramoF] = React.useState('todos')
   const [sectorF, setSectorF] = React.useState('todos')
@@ -206,11 +212,11 @@ export function ProgramacionClient() {
     return data.id
   }
 
-  const saveItem = async (v: any) => {
+  const saveItem = async (v: any, versionBase?: number): Promise<boolean> => {
     const start = parseProgresiva(String(v.prog_start))
     const end = parseProgresiva(String(v.prog_end))
-    if (start == null || end == null) { toast.error('Progresivas no válidas. Usa el formato 12+450'); return }
-    if (end <= start) { toast.error('La progresiva final debe ser mayor que la inicial'); return }
+    if (start == null || end == null) { toast.error('Progresivas no válidas. Usa el formato 12+450'); return false }
+    if (end <= start) { toast.error('La progresiva final debe ser mayor que la inicial'); return false }
 
     const act = catalogs.data?.activities.find((a: any) => a.id === v.activity_id)
     try {
@@ -231,13 +237,38 @@ export function ProgramacionClient() {
         lado: v.lado || null,
       }
       const { error } = itemForm.row
-        ? await sb.from('plan_items').update({ ...payload, version: itemForm.row.version } as any).eq('id', itemForm.row.id)
+        ? await sb.from('plan_items').update({ ...payload, version: versionBase ?? itemForm.row.version } as any).eq('id', itemForm.row.id)
         : await sb.from('plan_items').insert({ ...payload, created_by: profile.id })
-      if (error) { toast.error(mensajeAmigable(error)); return }
+      if (error) {
+        if (itemForm.row && esConflictoDeVersion(error)) {
+          // Se compara lo guardado por el otro con el borrador; el formulario sigue abierto
+          const { data: actual } = await sb.from('plan_items').select('*').eq('id', itemForm.row.id).maybeSingle()
+          if (actual) {
+            const acts = catalogs.data?.activities ?? [], secs = catalogs.data?.sections ?? [], cs = crews.data ?? []
+            const nom = (l: any[], id: any) => { const x = l.find((y: any) => y.id === id); return x ? `${x.code ?? ''} ${x.name ?? ''}`.trim() : '' }
+            const a: any = actual
+            setConflicto({ actual: a, borrador: v, campos: [
+              { etiqueta: 'Actividad', actual: nom(acts, a.activity_id), mio: nom(acts, payload.activity_id) },
+              { etiqueta: 'Tramo', actual: nom(secs, a.section_id), mio: nom(secs, payload.section_id) },
+              { etiqueta: 'Cuadrilla', actual: nom(cs, a.crew_id), mio: nom(cs, payload.crew_id) },
+              { etiqueta: 'Fecha', actual: a.scheduled_on ? fmtDate(a.scheduled_on) : '', mio: payload.scheduled_on ? fmtDate(payload.scheduled_on) : '' },
+              { etiqueta: 'Progresiva inicial', actual: fmtProgresiva(a.prog_start_m), mio: fmtProgresiva(payload.prog_start_m) },
+              { etiqueta: 'Progresiva final', actual: fmtProgresiva(a.prog_end_m), mio: fmtProgresiva(payload.prog_end_m) },
+              { etiqueta: 'Meta', actual: String(Number(a.target_qty ?? 0)), mio: String(payload.target_qty) },
+              { etiqueta: 'Lado', actual: a.lado ?? '', mio: payload.lado ?? '' },
+              { etiqueta: 'Notas', actual: a.notes ?? '', mio: payload.notes ?? '' },
+            ] })
+            return false
+          }
+        }
+        toast.error(mensajeAmigable(error)); return false
+      }
       toast.success(itemForm.row ? 'Actividad actualizada' : 'Actividad programada')
       qc.invalidateQueries()
+      return true
     } catch (e: any) {
       toast.error(mensajeAmigable(e, 'No se pudo guardar'))
+      return false
     }
   }
 
@@ -616,6 +647,19 @@ export function ProgramacionClient() {
         )}
       </PageBody>
 
+      <DialogoConflicto
+        abierto={!!conflicto}
+        campos={conflicto?.campos ?? []}
+        version={conflicto?.actual?.version}
+        alCerrar={() => setConflicto(null)}
+        alRecargar={() => { setConflicto(null); setItemForm({ open: false }); qc.invalidateQueries({ queryKey: ['plan-items'] }); toast.info('Se recargó la versión guardada; tu borrador se descartó.') }}
+        alSobrescribir={async () => {
+          if (!conflicto) return
+          const ok = await saveItem(conflicto.borrador, conflicto.actual.version)
+          setConflicto(null)
+          if (ok) setItemForm({ open: false })
+        }}
+      />
       <FormDialog
         open={itemForm.open}
         onOpenChange={(v) => setItemForm({ open: v, row: v ? itemForm.row : undefined })}
@@ -628,7 +672,7 @@ export function ProgramacionClient() {
           prog_end: fmtProgresiva(itemForm.row.prog_end_m),
         } : { scheduled_on: toISODate(monday) }}
         submitLabel={itemForm.row ? 'Guardar cambios' : 'Programar'}
-        onSubmit={saveItem}
+        onSubmit={(v) => saveItem(v)}
         footerNote={itemForm.row ? (
           <div className="space-y-3">
             <AvanceDiario itemId={itemForm.row.id} unidad={itemForm.row.unit_symbol} meta={Number(itemForm.row.target_qty) || 0} />

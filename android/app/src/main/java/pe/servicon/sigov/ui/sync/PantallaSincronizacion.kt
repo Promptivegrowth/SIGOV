@@ -385,11 +385,22 @@ private data class Etiqueta(val texto: String, val color: Color)
 
 @Composable
 private fun etiquetaDe(envio: EnvioPendiente): Etiqueta = when (envio.estado) {
-    EstadoEnvio.PENDIENTE -> Etiqueta("Pendiente", Marca.Azul)
+    // Ronda 5 (CP-12): Local / En cola / Enviando / Confirmado / Error / Conflicto
+    EstadoEnvio.PENDIENTE -> if (envio.intentos == 0) Etiqueta("Local · en cola", Marca.Azul)
+        else Etiqueta("En cola · reintento ${envio.intentos}", Marca.Azul)
     EstadoEnvio.ENVIANDO -> Etiqueta("Enviando…", Marca.Naranja)
-    EstadoEnvio.ENVIADO -> Etiqueta("Sincronizado", Marca.VerdeBandera)
-    EstadoEnvio.ERROR -> if (envio.intentos >= MAX_INTENTOS) Etiqueta("Error · no se pudo enviar", MaterialTheme.colorScheme.error)
-        else Etiqueta("Error · reintentando", Marca.Naranja)
+    EstadoEnvio.ENVIADO -> Etiqueta("Confirmado", Marca.VerdeBandera)
+    EstadoEnvio.ERROR -> when {
+        esConflicto(envio.ultimoError) -> Etiqueta("Conflicto · revisar", MaterialTheme.colorScheme.error)
+        envio.intentos >= MAX_INTENTOS -> Etiqueta("Error · no se pudo enviar", MaterialTheme.colorScheme.error)
+        else -> Etiqueta("Error · reintentando", Marca.Naranja)
+    }
+}
+
+/** Otro usuario cambió el registro, ya existe o ya no se puede cambiar: no se resuelve reintentando. */
+private fun esConflicto(error: String?): Boolean {
+    val e = error?.lowercase() ?: return false
+    return listOf("actualizado por otro usuario", "ya existe", "duplic", "ya fue validado", "ya está validado", "no se puede modificar").any { it in e }
 }
 
 @Composable

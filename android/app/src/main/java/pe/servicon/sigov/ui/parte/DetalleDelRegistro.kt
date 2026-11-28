@@ -92,7 +92,9 @@ fun DetalleDelRegistro(
     }
     var observacion by remember(registro.clientId) { mutableStateOf(registro.observacion.orEmpty()) }
     val cantidad = metrado.replace(',', '.').toDoubleOrNull()
-    val cambio = cantidad != null && (cantidad != registro.cantidad || observacion.trim() != registro.observacion.orEmpty())
+    // Ronda 5 (CP-15): no negativo y con 2 decimales como máximo
+    val cantidadValida = cantidad != null && cantidad >= 0 && Math.round(cantidad * 100) / 100.0 == cantidad
+    val cambio = cantidadValida && (cantidad != registro.cantidad || observacion.trim() != registro.observacion.orEmpty())
 
     ModalBottomSheet(onDismissRequest = alCerrar, sheetState = rememberModalBottomSheetState(skipPartiallyExpanded = true)) {
         Column(

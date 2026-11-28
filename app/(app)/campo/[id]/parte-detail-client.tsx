@@ -197,6 +197,32 @@ export function ParteDetailClient({ orderId }: { orderId: string }) {
   }
   const versionPublicada = Number((o as any)?.publicacion_version ?? 0)
 
+  // CP-03 / CP-18: un enlace directo a un parte fuera del alcance (otra
+  // cuadrilla, o no publicado para el Visor) no se lee (RLS); se dice
+  // «sin acceso» en vez de un parte vacío, y el intento queda registrado
+  const sinAcceso = !order.isLoading && !o
+  React.useEffect(() => {
+    if (!sinAcceso) return
+    void fetch('/api/accesos', { method: 'POST', headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ evento: 'denegado', ruta: `/campo/${orderId} (parte fuera de tu alcance o inexistente)` }) }).catch(() => {})
+  }, [sinAcceso, orderId])
+  if (sinAcceso) {
+    return (
+      <PageBody>
+        <Card>
+          <CardContent className="p-0">
+            <EmptyState
+              icon={TriangleAlert}
+              title="Sin acceso a este parte"
+              description="El parte no existe o no está dentro de tu alcance (otra cuadrilla, o aún no publicado). El intento quedó registrado en el historial de accesos."
+              action={<Button variant="outline" asChild><Link href="/campo"><ArrowLeft className="size-4" />Volver a Reportes diarios</Link></Button>}
+            />
+          </CardContent>
+        </Card>
+      </PageBody>
+    )
+  }
+
   return (
     <>
       <PageHeader
@@ -633,6 +659,11 @@ function EntryDialog({
     if (!activityId || !sectionId || !progIni || !qty) {
       return toast.error('Completa actividad, tramo, progresiva y metrado')
     }
+    // CP-15: coma o punto decimal, no negativo, 2 decimales como máximo
+    const qtyTxt = qty.trim().replace(',', '.')
+    if (!/^\d+(\.\d+)?$/.test(qtyTxt)) return toast.error('El metrado debe ser un número mayor o igual a cero (coma o punto decimal)')
+    if (!/^\d+(\.\d{1,2})?$/.test(qtyTxt)) return toast.error('El metrado admite 2 decimales como máximo')
+    const qtyNum = Number(qtyTxt)
     if (for001.hora_inicio && for001.hora_fin && for001.hora_fin <= for001.hora_inicio) {
       return toast.error('La hora de fin debe ser posterior a la de inicio')
     }
@@ -658,7 +689,7 @@ function EntryDialog({
         prog_start_m: parseProgresiva(progIni) ?? 0,
         prog_end_m: progFin ? (parseProgresiva(progFin) ?? undefined) : undefined,
         side: side as any,
-        quantity: Number(qty),
+        quantity: qtyNum,
         unit_id: activity?.unit_id ?? null,
         observation: obs || null,
         ...detalle,
@@ -683,7 +714,7 @@ function EntryDialog({
       prog_start_m: parseProgresiva(progIni),
       prog_end_m: progFin ? parseProgresiva(progFin) : null,
       side,
-      quantity: Number(qty),
+      quantity: qtyNum,
       unit_id: activity?.unit_id ?? null,
       observation: obs || null,
       ...detalle,
@@ -789,7 +820,6 @@ function EntryDialog({
             </Field>
             <Field label={`Metrado ejecutado${unit ? ` (${unit.symbol})` : ''}`} required>
               <Input
-                type="number"
                 inputMode="decimal"
                 value={qty}
                 onChange={(e) => setQty(e.target.value)}

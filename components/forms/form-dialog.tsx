@@ -47,7 +47,7 @@ export interface FormDialogProps {
   fields: FormField[]
   initial?: Record<string, any>
   submitLabel?: string
-  onSubmit: (values: Record<string, any>) => Promise<void> | void
+  onSubmit: (values: Record<string, any>) => Promise<void | boolean> | void | boolean
   size?: 'sm' | 'md' | 'lg'
   footerNote?: React.ReactNode
 }
@@ -107,8 +107,10 @@ export function FormDialog({
     }
     setSaving(true)
     try {
-      await onSubmit(values)
-      onOpenChange(false)
+      // `false` = no se guardó (error o conflicto): el formulario sigue
+      // abierto y conserva lo escrito (ronda 5, CP-13)
+      const r = await onSubmit(values)
+      if (r !== false) onOpenChange(false)
     } finally {
       setSaving(false)
     }

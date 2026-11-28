@@ -377,7 +377,8 @@ function HistorialCuadrilla({ crew, corto }: { crew: any; corto?: boolean }) {
         <Button size="sm" variant="outline" onClick={() => { setBorrador(vacio); setF(vacio) }}>Limpiar</Button>
         <Button size="sm" variant="outline" onClick={exportar} disabled={!ev.length}>Exportar</Button>
       </div>
-      <div className="grid gap-3 xl:grid-cols-[minmax(0,1fr)_320px]">
+      {/* CP-02: el panel lateral es angosto; la tabla va completa y el detalle debajo */}
+      <div className="grid gap-3">
         <div className="overflow-x-auto rounded-lg border border-border">
           <table className="w-full">
             <thead className="bg-secondary/50 text-left"><tr>{['Fecha y hora', 'Actor', 'Acción', 'Entidad', 'Motivo'].map((t) => <th key={t} className="px-2.5 py-2 font-semibold">{t}</th>)}</tr></thead>

@@ -2,6 +2,7 @@
 
 import * as React from 'react'
 import Link from 'next/link'
+import { useSearchParams } from 'next/navigation'
 import { useQuery, useQueryClient } from '@tanstack/react-query'
 import { motion } from 'motion/react'
 import {
@@ -36,6 +37,9 @@ export function CampoClient() {
   const [status, setStatus] = useEstadoDeSesion('campo:estado:' + service.id, 'todos')
   const [q, setQ] = useEstadoDeSesion('campo:q:' + service.id, '')
   const [crewFilter, setCrewFilter] = useEstadoDeSesion('campo:cuadrilla:' + service.id, 'todas')
+  // CP-04: desde la ficha de «Mis cuadrillas» llega ?crew= ya elegido
+  const crewDeEnlace = useSearchParams().get('crew')
+  React.useEffect(() => { if (crewDeEnlace) setCrewFilter(crewDeEnlace) }, [crewDeEnlace, setCrewFilter])
   const [preset, setPreset] = useEstadoDeSesion<DatePresetKey>('campo:rango:' + service.id, '30d')
   const range = React.useMemo(() => rangeFromPreset(preset), [preset])
 
