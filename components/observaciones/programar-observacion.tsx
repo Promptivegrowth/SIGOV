@@ -94,6 +94,12 @@ export function ProgramarObservacion({ o, fecha, onClose, onDone }: {
             </span>
           </DialogDescription>
         </DialogHeader>
+        {/* Ronda 5: el punto GPS lejos de la progresiva se advierte antes de programar */}
+        {Number(o.gps_distancia_m) > 500 && (
+          <p className="bg-warning/10 text-warning rounded-lg px-3 py-2 text-[12.5px]">
+            Atención: el GPS de esta observación quedó a {Number(o.gps_distancia_m) >= 1000 ? `${(Number(o.gps_distancia_m) / 1000).toFixed(1)} km` : `${Math.round(Number(o.gps_distancia_m))} m`} de la progresiva registrada. Confirma la progresiva antes de programarla.
+          </p>
+        )}
         <div className="grid gap-3 sm:grid-cols-2">
           <label className="space-y-1">
             <span className="text-muted-foreground text-[11.5px] font-medium">Categoría</span>

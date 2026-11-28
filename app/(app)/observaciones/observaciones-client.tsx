@@ -8,8 +8,7 @@ import Image from 'next/image'
 import { useQuery, useQueryClient } from '@tanstack/react-query'
 import type { Map as MLMap } from 'maplibre-gl'
 import {
-  MessageSquareWarning, Download, Search, X, CalendarPlus, CircleCheck, Undo2, FileSpreadsheet, ImageDown, Trash2, ClipboardCheck,
-} from 'lucide-react'
+  MessageSquareWarning, Download, Search, X, CalendarPlus, CircleCheck, Undo2, FileSpreadsheet, ImageDown, Trash2, ClipboardCheck, Plus } from 'lucide-react'
 import { createClient } from '@/lib/supabase/client'
 import { useSession } from '@/lib/hooks/use-session'
 import { PageHeader, PageBody } from '@/components/shared/page-header'
@@ -24,6 +23,7 @@ import { Dialog, SheetContent } from '@/components/ui/dialog'
 import { SkeletonTable } from '@/components/ui/skeleton'
 import { ConfirmDialog } from '@/components/forms/form-dialog'
 import { ProgramarObservacion } from '@/components/observaciones/programar-observacion'
+import { RegistrarObservacion } from '@/components/observaciones/registrar-observacion'
 import { codigoDeLado, etiquetaDeLado } from '@/lib/lados'
 import { descargarExcel, descargarPdf, type ReportMeta } from '@/lib/reports'
 import { cn, fmtDate, fmtNumber, toISODate } from '@/lib/utils'
@@ -190,6 +190,7 @@ export function ObservacionesClient() {
   }
 
   const refrescar = () => qc.invalidateQueries({ queryKey: ['observaciones-campo'] })
+  const [registrando, setRegistrando] = React.useState(false)
 
   const cambiarEstado = async (o: any, nuevo: Estado, nota?: string) => {
     const { error } = await sb.from('observaciones_campo')
@@ -404,6 +405,8 @@ export function ObservacionesClient() {
         description="Lo que la cuadrilla o el supervisor encuentran en la vía y no está en el inventario: con su tipo de actividad, progresiva, metrado y fotos, para programarlo."
         actions={
           <>
+            {/* TR-08: el Supervisor y el Residente registran en campo como el Jefe */}
+            {role !== 'visor' && <SiPuede modulo="observaciones" accion="crear"><Button onClick={() => setRegistrando(true)}><Plus className="size-4" /> Registrar observación</Button></SiPuede>}
             {['supervisor', 'residente', 'admin', 'jefe_cuadrilla'].includes(role) && (
               <Link href="/revision"><Button variant="outline"><MessageSquareWarning className="size-4" /> Observaciones de revisión</Button></Link>
             )}
@@ -425,6 +428,7 @@ export function ObservacionesClient() {
           </>
         }
       />
+      <RegistrarObservacion open={registrando} onClose={() => setRegistrando(false)} onDone={refrescar} />
       <PageBody className="space-y-4">
         <div className="flex flex-wrap items-center gap-2">
           {(['pendiente', 'programada', 'atendida', 'todas'] as const).map((e) => (
