@@ -21,6 +21,10 @@ export interface ImportField {
    * avisa (el encargado del PCI 55 que no es de ninguna cuadrilla).
    */
   siNoExiste?: 'error' | 'aviso'
+  /** Número que debe ser mayor que cero (CP-15: metrado, cantidad y plazo). */
+  positivo?: boolean
+  /** Si la columna existe pero la celda está vacía, es un error con este texto (CP-08). */
+  vacioError?: string
 }
 
 export interface ImportKind {
@@ -89,12 +93,13 @@ export const IMPORT_KINDS: Record<ImportKind['key'], ImportKind> = {
         aliases: ['progresivafin', 'progfin', 'kmfin', 'hasta'] },
       { key: 'side', label: 'Lado', required: false, type: 'lookup', lookup: 'side',
         aliases: ['lado'], hint: 'LD, LI, LD-LI, EJE, CD o CI; si no hay columna, se lee de la observación' },
-      { key: 'term_days', label: 'Plazo (días)', required: false, type: 'number',
+      { key: 'term_days', label: 'Plazo (días)', required: false, type: 'number', positivo: true,
+        vacioError: 'Plazo (días) vacío: escríbelo en el Excel (solo si toda la columna falta se usa el plazo base del PCI)',
         aliases: ['plazo', 'plazodias', 'dias', 'diasplazo'],
         hint: 'Uno de los plazos del contrato; si falta, el plazo base del PCI' },
       { key: 'activity_code', label: 'Actividad', required: false, type: 'lookup', lookup: 'activity',
         aliases: ['actividad', 'partida', 'solucion', 'codigo'] },
-      { key: 'quantity', label: 'Cantidad', required: false, type: 'number',
+      { key: 'quantity', label: 'Cantidad', required: false, type: 'number', positivo: true,
         aliases: ['cantidad', 'metrado'] },
       { key: 'notes', label: 'Observaciones', required: false, type: 'text',
         aliases: ['observaciones', 'observacion', 'notas', 'nota', 'comentario'] },
@@ -201,6 +206,7 @@ export function coerce(
   lookups: Record<string, Map<string, string>>
 ): { value: any; error?: string; aviso?: string } {
   if (value == null || value === '') {
+    if (field.vacioError) return { value: null, error: field.vacioError }
     return field.required ? { value: null, error: `${field.label} es obligatorio` } : { value: null }
   }
 
@@ -208,6 +214,7 @@ export function coerce(
     case 'number': {
       const n = Number(String(value).replace(/,/g, '.').replace(/[^\d.\-]/g, ''))
       if (!Number.isFinite(n)) return { value: null, error: `${field.label}: "${value}" no es un número` }
+      if (field.positivo && n <= 0) return { value: null, error: `${field.label}: debe ser mayor que cero (vino "${value}")` }
       return { value: n }
     }
     case 'progresiva': {

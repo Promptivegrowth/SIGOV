@@ -189,7 +189,8 @@ export function ImportarClient() {
       for (const f of schema.fields) {
         const col = mapping[f.key]
         const cell = col ? raw[col] : null
-        const { value, error, aviso } = coerce(cell, f, lookups.data as any)
+        // «Vacío es error» solo cuando la columna existe en el Excel (CP-08)
+        const { value, error, aviso } = coerce(cell, col ? f : { ...f, vacioError: undefined }, lookups.data as any)
         if (error) {
           problems.push({ row: filaExcel(i), field: f.label, message: error })
           rowOk = false
