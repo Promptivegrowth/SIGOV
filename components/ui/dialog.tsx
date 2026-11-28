@@ -46,7 +46,8 @@ function DialogContent({
       <DialogOverlay />
       <DialogPrimitive.Content
         className={cn(
-          'bg-card fixed top-1/2 left-1/2 z-50 grid w-[calc(100vw-2rem)] -translate-x-1/2 -translate-y-1/2',
+          // [&>*]:min-w-0: las filas largas (truncate) no ensanchan el cuadro en el celular
+          'bg-card fixed top-1/2 left-1/2 z-50 grid w-[calc(100vw-2rem)] -translate-x-1/2 -translate-y-1/2 [&>*]:min-w-0',
           'gap-4 rounded-2xl border border-border p-6 shadow-2xl duration-200',
           'data-[state=open]:animate-in data-[state=closed]:animate-out',
           'data-[state=closed]:fade-out-0 data-[state=open]:fade-in-0',

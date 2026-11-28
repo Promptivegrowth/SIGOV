@@ -580,11 +580,14 @@ export function PciDetailClient({ pciId }: { pciId: string }) {
                   return (
                     <div
                       key={r.id}
+                      // Alto medido: en el celular la descripción ocupa varias líneas y se encimaba (ronda 5)
+                      data-index={v.index}
+                      ref={virtualizer.measureElement}
                       className={cn(
-                        'absolute inset-x-0 flex cursor-pointer items-center gap-3 border-b border-border px-4 text-[12.5px] transition-colors',
+                        'absolute inset-x-0 top-0 flex min-h-[62px] cursor-pointer items-center gap-3 border-b border-border px-4 py-2 text-[12.5px] transition-colors',
                         isSel ? 'bg-primary/6' : 'hover:bg-secondary/50'
                       )}
-                      style={{ height: v.size, transform: `translateY(${v.start}px)` }}
+                      style={{ transform: `translateY(${v.start}px)` }}
                     >
                       {can.manage && (
                         <span className="relative z-10">
