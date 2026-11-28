@@ -206,8 +206,8 @@ export function CampoClient() {
         ) : (
           <div className="grid grid-cols-1 gap-3 sm:grid-cols-2 xl:grid-cols-4">
             <StatCard index={0} label="Registros (30 días)" value={stats.data?.registros ?? 0} icon={HardHat} tone="primary" />
-            <StatCard index={1} label="Metrado ejecutado" value={stats.data?.metrado ?? 0} decimals={0} icon={CircleCheck} tone="success" />
-            <StatCard index={2} label="Evidencias" value={stats.data?.evidencias ?? 0} icon={Camera} tone="info" />
+            <StatCard index={1} label="Metrado ejecutado (30 días)" value={stats.data?.metrado ?? 0} decimals={0} icon={CircleCheck} tone="success" />
+            <StatCard index={2} label="Evidencias (30 días)" value={stats.data?.evidencias ?? 0} icon={Camera} tone="info" />
             <StatCard index={3} label="Partes por validar (en el filtro)" value={stats.data?.porValidar ?? 0} icon={CloudUpload} tone={stats.data?.porValidar ? 'warning' : 'default'}
               hint={`${DATE_PRESETS.find((p) => p.key === preset)?.label ?? ''} · ${crewFilter === 'todas' ? 'todas las cuadrillas' : (crews.data ?? []).find((c: any) => c.id === crewFilter)?.name ?? 'cuadrilla'}`} />
           </div>
