@@ -1,7 +1,7 @@
 'use client'
 
 import * as React from 'react'
-import { ZoomIn, ZoomOut, Maximize, Download, X } from 'lucide-react'
+import { ZoomIn, ZoomOut, Maximize, Download, Loader2, RotateCw, ImageOff } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import { Tip } from '@/components/ui/primitives'
 import { cn } from '@/lib/utils'
@@ -37,8 +37,11 @@ export function ImageViewer({
   const punteros = React.useRef<Map<number, { x: number; y: number }>>(new Map())
   const pellizco = React.useRef<{ dist: number; escala: number } | null>(null)
 
+  // Carga, error y reintento visibles (ronda 5, TR-03): antes un fallo dejaba el fondo negro sin aviso
+  const [carga, setCarga] = React.useState<'cargando' | 'lista' | 'error'>('cargando')
+  const [intento, setIntento] = React.useState(0)
   // Al cambiar de foto se vuelve al tamaño original
-  React.useEffect(() => { setEscala(1); setPos({ x: 0, y: 0 }) }, [src])
+  React.useEffect(() => { setEscala(1); setPos({ x: 0, y: 0 }); setCarga('cargando'); setIntento(0) }, [src])
 
   const limitar = React.useCallback((e: number) => Math.min(MAX, Math.max(MIN, e)), [])
 
@@ -140,12 +143,28 @@ export function ImageViewer({
     >
       {/* eslint-disable-next-line @next/next/no-img-element */}
       <img
-        src={src}
+        key={intento}
+        src={intento ? src + (src.includes('?') ? '&' : '?') + 'r=' + intento : src}
         alt={alt}
         draggable={false}
+        onLoad={() => setCarga('lista')}
+        onError={() => setCarga('error')}
         className="size-full object-contain transition-transform duration-100"
         style={{ transform: `translate(${pos.x}px, ${pos.y}px) scale(${escala})` }}
       />
+
+      {carga === 'cargando' && (
+        <div className="pointer-events-none absolute inset-0 flex items-center justify-center gap-2 text-[12px] text-white/85">
+          <Loader2 className="size-5 animate-spin" />Cargando la foto…
+        </div>
+      )}
+      {carga === 'error' && (
+        <div className="absolute inset-0 flex flex-col items-center justify-center gap-2 p-4 text-center text-[12.5px] text-white/90">
+          <ImageOff className="size-7 opacity-80" />
+          <p>No se pudo cargar la foto. Revisa la conexión; el enlace puede haber caducado.</p>
+          <Button size="sm" variant="secondary" onClick={() => { setCarga('cargando'); setIntento((n) => n + 1) }}><RotateCw className="size-3.5" />Reintentar</Button>
+        </div>
+      )}
 
       {/* Controles */}
       {/* Arriba: abajo a la derecha va el sello de la foto, que no se tapa */}
@@ -184,7 +203,7 @@ export function ImageViewer({
       </div>
 
       {escala === 1 && (
-        <span className="pointer-events-none absolute bottom-3 left-3 rounded-full bg-black/45 px-2.5 py-1 text-[10.5px] text-white/90 backdrop-blur-sm">
+        <span className="pointer-events-none absolute bottom-3 left-3 hidden rounded-full sm:inline bg-black/45 px-2.5 py-1 text-[10.5px] text-white/90 backdrop-blur-sm">
           Doble clic o rueda para acercar · en el celular, pellizca
         </span>
       )}

@@ -119,7 +119,7 @@ export function EvidencePicker({
   return (
     <>
     <Dialog open={open} onOpenChange={onOpenChange}>
-      <DialogContent size="xl" className="max-h-[92vh]">
+      <DialogContent size="xl" className="max-h-[calc(var(--vh)_*_92)]">
         <DialogHeader>
           <DialogTitle className="flex items-center gap-2.5">
             <span className="bg-primary/10 text-primary flex size-9 items-center justify-center rounded-lg">
@@ -160,7 +160,7 @@ export function EvidencePicker({
         </div>
 
         {/* Rejilla */}
-        <div className="min-h-[320px] max-h-[52vh] overflow-y-auto">
+        <div className="min-h-[320px] max-h-[calc(var(--vh)_*_52)] overflow-y-auto">
           {gallery.isLoading ? (
             <div className="grid grid-cols-2 gap-2.5 sm:grid-cols-4 lg:grid-cols-5">
               {Array.from({ length: 10 }).map((_, i) => (
@@ -281,7 +281,7 @@ export function EvidencePicker({
               src={zoom.url}
               alt={zoom.activity_name ?? 'Evidencia'}
               descargar={`SIGOV_evidencia_${zoom.id}.webp`}
-              className="h-[62vh] w-full rounded-t-2xl"
+              className="h-[calc(var(--vh)_*_62)] w-full rounded-t-2xl"
             />
             <div className="space-y-1 p-4 text-[12px]">
               <p className="font-semibold">{zoom.activity_name ?? 'Evidencia'}</p>

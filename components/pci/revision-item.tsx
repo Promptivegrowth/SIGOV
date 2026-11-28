@@ -301,7 +301,7 @@ function TabEvidencia({ item, fotos, pendientes = [], cargando, historial }: { i
               {grande?.lat == null ? ' · GPS no disponible' : ''}
             </DialogDescription>
           </DialogHeader>
-          {grande?.url && <ImageViewer src={grande.original ?? grande.url} alt="Foto" descargar={`ITEM_${item.item_number}(${FASES.find((x) => x.v === grande.phase)?.n ?? 'G'}).${grande.master_path ? 'jpg' : 'webp'}`} className="h-[65vh] w-full" />}
+          {grande?.url && <ImageViewer src={grande.original ?? grande.url} alt="Foto" descargar={`ITEM_${item.item_number}(${FASES.find((x) => x.v === grande.phase)?.n ?? 'G'}).${grande.master_path ? 'jpg' : 'webp'}`} className="h-[calc(var(--vh)_*_65)] w-full" />}
         </DialogContent>
       </Dialog>
     </div>

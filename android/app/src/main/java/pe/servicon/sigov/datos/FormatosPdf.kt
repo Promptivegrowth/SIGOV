@@ -157,8 +157,37 @@ class FormatosPdf @Inject constructor(
         archivo
     }
 
+    /**
+     * Copia el archivo a Descargas/SIGOV y avisa la ruta (ronda 5, TR-05:
+     * diferenciar «generado» de «guardado»). Si Android no lo permite, avisa
+     * el motivo y el archivo sigue disponible para abrir o compartir.
+     */
+    suspend fun guardarEnDescargas(archivo: File): Descargas.Guardado? {
+        val g = withContext(Dispatchers.IO) { runCatching { Descargas.guardar(contexto, archivo, archivo.name) } }
+        withContext(Dispatchers.Main) {
+            android.widget.Toast.makeText(
+                contexto,
+                g.fold({ "Guardado en ${it.ruta}" }, { "No se pudo guardar en Descargas: ${it.message ?: "sin permiso"}. Puedes compartirlo." }),
+                android.widget.Toast.LENGTH_LONG,
+            ).show()
+        }
+        return g.getOrNull()
+    }
+
+    /** Guarda en Descargas/SIGOV y lo abre con la app del teléfono (sin pasar por compartir). */
+    suspend fun entregar(archivo: File, titulo: String) {
+        val g = guardarEnDescargas(archivo)
+        if (g != null) Descargas.abrir(contexto, g.uri, g.mime, titulo) else compartirSolo(archivo, titulo)
+    }
+
+    /** Guarda en Descargas/SIGOV y además lanza el selector para enviarlo. */
+    suspend fun compartir(archivo: File, titulo: String) {
+        guardarEnDescargas(archivo)
+        compartirSolo(archivo, titulo)
+    }
+
     /** Lanza el selector para mandar el archivo por donde el usuario quiera. */
-    fun compartir(archivo: File, titulo: String) {
+    fun compartirSolo(archivo: File, titulo: String) {
         val uri = FileProvider.getUriForFile(
             contexto, "${contexto.packageName}.fileprovider", archivo
         )
@@ -300,8 +329,9 @@ class FormatosPdf @Inject constructor(
         }
     }
 
-    /** Abre el PDF con el visor que tenga el equipo. */
-    fun abrir(archivo: File) {
+    /** Abre el PDF con el visor que tenga el equipo (y deja la copia en Descargas/SIGOV). */
+    suspend fun abrir(archivo: File) {
+        guardarEnDescargas(archivo)
         val uri = FileProvider.getUriForFile(
             contexto, "${contexto.packageName}.fileprovider", archivo
         )
@@ -310,7 +340,7 @@ class FormatosPdf @Inject constructor(
             addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION or Intent.FLAG_ACTIVITY_NEW_TASK)
         }
         runCatching { contexto.startActivity(ver) }
-            .onFailure { compartir(archivo, archivo.name) }
+            .onFailure { compartirSolo(archivo, archivo.name) }
     }
 
     // ═══ El dibujo ════════════════════════════════════════════════════

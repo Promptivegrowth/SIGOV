@@ -30,7 +30,7 @@ export default function Error({
   }, [error])
 
   return (
-    <div className="flex min-h-dvh flex-col items-center justify-center gap-5 p-8 text-center">
+    <div className="flex min-h-[calc(var(--vh)_*_100)] flex-col items-center justify-center gap-5 p-8 text-center">
       <div className="bg-destructive/10 text-destructive flex size-12 items-center justify-center rounded-full">
         <AlertTriangle className="size-6" aria-hidden />
       </div>

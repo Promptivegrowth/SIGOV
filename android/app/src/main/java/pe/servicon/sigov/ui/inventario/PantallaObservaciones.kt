@@ -474,7 +474,7 @@ class ObservacionesViewModel @Inject constructor(
                         nombreArchivo = nombre,
                     )
                 }
-                formatos.compartir(archivo, "Observaciones de campo")
+                formatos.entregar(archivo, "Observaciones de campo")
             }.onFailure { f -> _estado.update { it.copy(error = f.enCristiano()) } }
             _estado.update { it.copy(exportando = false) }
         }
@@ -517,7 +517,7 @@ class ObservacionesViewModel @Inject constructor(
         viewModelScope.launch {
             runCatching {
                 val archivo = formatos.guardarImagen(conLeyenda(imagen, _estado.value), "MAPA_OBSERVACIONES_${Peru.hoy()}")
-                formatos.compartir(archivo, "Mapa de observaciones")
+                formatos.entregar(archivo, "Mapa de observaciones")
             }.onFailure { f -> _estado.update { it.copy(error = f.enCristiano()) } }
         }
     }

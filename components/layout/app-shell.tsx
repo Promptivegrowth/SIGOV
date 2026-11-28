@@ -53,7 +53,7 @@ export function AppShell({ children }: { children: React.ReactNode }) {
   }, [bloqueada, router])
 
   return (
-    <div className={cn('bg-background min-h-dvh', can.field && 'field-mode')}>
+    <div className={cn('bg-background min-h-[calc(var(--vh)_*_100)]', can.field && 'field-mode')}>
       <Sidebar
         collapsed={collapsed}
         onToggle={toggleCollapsed}
@@ -63,7 +63,7 @@ export function AppShell({ children }: { children: React.ReactNode }) {
 
       <div
         className={cn(
-          'flex min-h-dvh flex-col transition-[padding] duration-300 ease-out',
+          'flex min-h-[calc(var(--vh)_*_100)] flex-col transition-[padding] duration-300 ease-out',
           collapsed ? 'lg:pl-[72px]' : 'lg:pl-[264px]'
         )}
       >

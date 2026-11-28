@@ -298,11 +298,11 @@ private fun ListaDeItems(estado: EstadoPci, vm: PciViewModel, alRegistrarFotos: 
                     onClick = { vm.filtrarPlazo(null) },
                     label = { Text("Cualquier plazo") },
                 )
-                Plazo.entries.forEach { p ->
+                estado.plazosEnVista.forEach { p ->
                     FilterChip(
                         selected = estado.plazo == p,
                         onClick = { vm.filtrarPlazo(p) },
-                        label = { Text("${p.etiqueta} · ${estado.cuantos(p)}") },
+                        label = { Text("${etiquetaPlazo(p)} · ${estado.cuantos(p)}") },
                         colors = FilterChipDefaults.filterChipColors(
                             selectedContainerColor = colorDe(p).copy(alpha = 0.16f),
                             selectedLabelColor = colorDe(p),
@@ -946,11 +946,11 @@ private fun textoDelPlazo(item: ItemPci): String {
     }
 }
 
-private fun colorDe(p: Plazo): Color = when (p) {
-    Plazo.VENCIDO -> Semaforo.Vencido
-    Plazo.UN_DIA -> Semaforo.Urgente
-    Plazo.DOS_DIAS, Plazo.TRES_DIAS -> Semaforo.PorVencer
-    Plazo.SIETE_DIAS, Plazo.CATORCE_DIAS -> Semaforo.EnPlazo
+private fun colorDe(p: Int): Color = when (p) {
+    PLAZO_VENCIDOS -> Semaforo.Vencido
+    1 -> Semaforo.Urgente
+    2, 3 -> Semaforo.PorVencer
+    else -> Semaforo.EnPlazo
 }
 
 private fun colorDelPlazo(item: ItemPci): Color {

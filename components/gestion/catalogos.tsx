@@ -111,7 +111,7 @@ function Actividades({ d, ir }: { d: any; ir: (t: Tab) => void }) {
             <Elegir etiqueta="Estado:" valor={f.estado} cambiar={(x) => setF({ ...f, estado: x })} todos="Todos" opciones={[['activo', 'Activo'], ['inactivo', 'Inactivo']]} />
             <Elegir etiqueta="Unidad:" valor={f.unidad} cambiar={(x) => setF({ ...f, unidad: x })} todos="Todas" opciones={d.units.map((u: any) => [u.id, u.symbol])} />
           </div>
-          <div className="max-h-[60vh] overflow-auto">
+          <div className="max-h-[calc(var(--vh)_*_60)] overflow-auto">
             <table className="w-full text-[12.5px]">
               <thead className="bg-secondary/60 text-muted-foreground sticky top-0 text-[11.5px]"><tr>{['', 'Código', 'Actividad', 'Unidad', 'Estado', 'Acciones'].map((t, i) => <th key={i} className="px-3 py-2 text-left font-medium">{t}</th>)}</tr></thead>
               <tbody>
@@ -227,7 +227,7 @@ function Rendimientos({ d }: { d: any }) {
           <Elegir etiqueta="Cuadrilla:" valor={f.crew} cambiar={(x) => setF({ ...f, crew: x })} todos="Todas" opciones={[['todas', 'General (todas)'], ...d.crews.map((c: any) => [c.id, c.name] as [string, string])]} />
           <Button onClick={() => setEd({ id: '', activity_id: d.acts[0]?.id, crew_id: '', metodo: 'Manual', unit_id: d.acts[0]?.unit_id, cantidad: '' })}><Plus className="size-4" />Nuevo rendimiento</Button>
         </div>
-        <div className="max-h-[60vh] overflow-auto">
+        <div className="max-h-[calc(var(--vh)_*_60)] overflow-auto">
           <table className="w-full text-[12.5px]">
             <thead className="bg-secondary/60 text-muted-foreground sticky top-0 text-[11.5px]"><tr>{['Código', 'Actividad', 'Método - Equipo', 'Rendimiento', 'Unidad', 'Cuadrilla', 'Acciones'].map((t) => <th key={t} className="px-3 py-2 text-left font-medium">{t}</th>)}</tr></thead>
             <tbody>
@@ -383,7 +383,7 @@ function Materiales({ d }: { d: any }) {
       <Card className="h-fit"><CardHeader className="pb-2"><CardTitle className="text-[14px]">Presentación de despacho</CardTitle></CardHeader>
         <CardContent className="space-y-2 text-[12.5px]">
           <p className="text-muted-foreground">El pedido práctico se redondea al múltiplo de la presentación (p. ej. 55 gal por cilindro de emulsión).</p>
-          <div className="max-h-[50vh] space-y-1 overflow-y-auto">
+          <div className="max-h-[calc(var(--vh)_*_50)] space-y-1 overflow-y-auto">
             {(sup.data ?? []).map((m: any) => pres?.id === m.id ? (
               <div key={m.id} className="space-y-1 rounded-md border border-border p-2">
                 <p className="font-semibold">{m.name}</p>

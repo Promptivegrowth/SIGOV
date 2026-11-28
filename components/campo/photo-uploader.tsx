@@ -237,7 +237,7 @@ export function PhotoUploader({
 
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
-      <DialogContent size="xl" className="max-h-[92vh]">
+      <DialogContent size="xl" className="max-h-[calc(var(--vh)_*_92)]">
         <DialogHeader>
           <DialogTitle className="flex items-center gap-2.5">
             <span className="bg-accent/15 text-accent-foreground flex size-9 items-center justify-center rounded-lg">
@@ -329,7 +329,7 @@ export function PhotoUploader({
         ) : (
           <>
             {/* Rejilla de fotos */}
-            <div className="max-h-[46vh] overflow-y-auto">
+            <div className="max-h-[calc(var(--vh)_*_46)] overflow-y-auto">
               <div className="grid grid-cols-2 gap-3 sm:grid-cols-3 lg:grid-cols-4">
                 <AnimatePresence initial={false}>
                   {items.map((it) => (

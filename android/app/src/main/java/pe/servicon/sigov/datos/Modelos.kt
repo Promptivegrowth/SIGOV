@@ -153,6 +153,8 @@ data class ItemPci(
     @SerialName("unit_symbol") val unidad: String? = null,
     @SerialName("due_date") val vence: String? = null,
     @SerialName("days_left") val diasRestantes: Int? = null,
+    /** El plazo oficial del ítem en días (1, 2, 3, 7, 14…), el mismo que filtra la web. */
+    @SerialName("term_days") val plazoDias: Int? = null,
     val semaforo: String? = null,
     val status: String = "pendiente",
     @SerialName("assigned_crew_id") val cuadrillaId: String? = null,

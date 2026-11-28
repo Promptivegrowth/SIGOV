@@ -90,7 +90,7 @@ export function ServiceForm({
 
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
-      <DialogContent size="lg" className="max-h-[92vh]">
+      <DialogContent size="lg" className="max-h-[calc(var(--vh)_*_92)]">
         <DialogHeader>
           <DialogTitle className="flex items-center gap-2.5">
             <span className="bg-primary/10 text-primary flex size-9 items-center justify-center rounded-lg">

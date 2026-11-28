@@ -41,7 +41,7 @@ export function CommandPalette({
     if (!open) setQuery('')
   }, [open])
 
-  const { data, isFetching } = useQuery({
+  const { data, isFetching, isError, refetch } = useQuery({
     queryKey: ['buscar', service.id, debounced],
     enabled: open && debounced.length >= 2,
     staleTime: 30_000,
@@ -166,14 +166,18 @@ export function CommandPalette({
               autoFocus
             />
             {isFetching && <Loader2 className="text-muted-foreground size-3.5 animate-spin" />}
-            <kbd className="bg-muted text-muted-foreground rounded px-1.5 py-0.5 font-mono text-[10px]">ESC</kbd>
+            {/* Salida clara también en el celular, donde no hay tecla Esc (ronda 5, VIS-04) */}
+            <button type="button" onClick={() => onOpenChange(false)} className="bg-muted text-muted-foreground hover:text-foreground shrink-0 rounded px-2 py-1 text-[11px] font-medium">
+              <span className="hidden sm:inline">ESC</span><span className="sm:hidden">Cerrar</span></button>
           </div>
 
-          <Command.List className="max-h-[62vh] overflow-y-auto p-2">
+          <Command.List className="max-h-[calc(var(--vh)_*_62)] overflow-y-auto p-2">
             {!hasResults && (
               <Command.Empty className="text-muted-foreground py-10 text-center text-sm">
-                {debounced.length >= 2
-                  ? `Sin resultados para "${debounced}".`
+                {isError ? (
+                  <span>No se pudo buscar. <button type="button" className="text-primary underline" onClick={() => refetch()}>Reintentar</button></span>
+                ) : debounced.length >= 2
+                  ? `Sin resultados para "${debounced}" en lo que tu rol puede consultar.`
                   : 'Escribe al menos 2 caracteres para buscar en todo el servicio.'}
               </Command.Empty>
             )}

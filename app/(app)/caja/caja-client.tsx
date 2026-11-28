@@ -419,7 +419,7 @@ export function CajaClient() {
               src={comprobante}
               alt="Comprobante del gasto"
               descargar="comprobante.jpg"
-              className="h-[70vh] w-full"
+              className="h-[calc(var(--vh)_*_70)] w-full"
             />
           )}
         </DialogContent>

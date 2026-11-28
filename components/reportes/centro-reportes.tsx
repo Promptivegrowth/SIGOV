@@ -564,11 +564,11 @@ export function CentroReportes() {
             <DialogTitle>Vista previa · {fam.titulo}</DialogTitle>
             <DialogDescription>{fmtNumber(elegidas.length)} registros · corte {fmtDateTime(corte)} · {aplicados.join(' · ')}</DialogDescription>
           </DialogHeader>
-          {previa?.cargando ? <div className="grid h-[60vh] place-items-center"><Loader2 className="text-primary size-6 animate-spin" /></div>
+          {previa?.cargando ? <div className="grid h-[calc(var(--vh)_*_60)] place-items-center"><Loader2 className="text-primary size-6 animate-spin" /></div>
             : !previa?.url ? <div className="text-muted-foreground grid h-40 place-items-center text-[13px]">Sin registros: no hay nada que previsualizar.</div>
             : (
               <>
-                <iframe src={previa.url} className="h-[65vh] w-full rounded-lg border border-border" title="Vista previa del PDF" />
+                <iframe src={previa.url} className="h-[calc(var(--vh)_*_65)] w-full rounded-lg border border-border" title="Vista previa del PDF" />
                 {elegidas.length > 300 && <p className="text-muted-foreground text-[12px]">La vista previa muestra los primeros 300 registros; la exportación los incluye todos ({fmtNumber(elegidas.length)}).</p>}
                 <div className="flex flex-wrap justify-end gap-2">
                   <Button variant="outline" onClick={() => { cerrarPrevia(); exportar('excel') }}><FileSpreadsheet className="text-success size-4" />Exportar Excel</Button>

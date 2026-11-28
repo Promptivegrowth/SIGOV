@@ -352,7 +352,7 @@ export function EvidenceGrid({
                   src={zoom.url}
                   alt={`Evidencia ${zoom.phase}`}
                   descargar={`SIGOV_evidencia_${zoom.id}.webp`}
-                  className="h-[58vh] w-full rounded-t-2xl"
+                  className="h-[calc(var(--vh)_*_58)] w-full rounded-t-2xl"
                 />
 
                 {/* Pasar de una foto a otra sin cerrar y volver a abrir */}

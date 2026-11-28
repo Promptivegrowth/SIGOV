@@ -280,7 +280,7 @@ export function MapaDeInventario() {
   const visibles = datos?.features?.length ?? 0
 
   return (
-    <div className="relative h-[calc(100dvh-13rem)] min-h-[520px] overflow-hidden rounded-xl border border-border">
+    <div className="relative h-[calc(var(--vh)_*_100_-_13rem)] min-h-[520px] overflow-hidden rounded-xl border border-border">
       <MapCanvas
         ref={mapaRef}
         onReady={setMapa}
@@ -302,7 +302,7 @@ export function MapaDeInventario() {
           </button>
 
           {panel && (
-            <CardContent className="max-h-[calc(100dvh-20rem)] space-y-3.5 overflow-y-auto px-3.5 pt-0 pb-3.5">
+            <CardContent className="max-h-[calc(var(--vh)_*_100_-_20rem)] space-y-3.5 overflow-y-auto px-3.5 pt-0 pb-3.5">
               {/* El tramo: «mi tramo» es la pregunta del supervisor */}
               <div className="space-y-1.5">
                 <p className="text-muted-foreground text-[10.5px] font-semibold tracking-wide uppercase">

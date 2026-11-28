@@ -96,12 +96,38 @@ fun cumple(item: ItemPci, estado: Estado): Boolean = when (estado) {
     else -> estadoDe(item) == estado
 }
 
-/** Lo conforme ya no corre plazo. */
-fun cumple(item: ItemPci, plazo: Plazo?): Boolean {
-    if (plazo == null) return true
-    if (yaAtendido(item)) return false
-    val d = diasQueLeQuedan(item) ?: return false
-    return if (plazo == Plazo.VENCIDO) d < 0 else d in 0..plazo.dias
+/** Chip «Vencidos» (lo abierto cuya fecha ya pasó) y «Sin plazo». */
+const val PLAZO_VENCIDOS = -1
+const val PLAZO_SIN = 0
+
+/**
+ * El filtro de plazo es el plazo OFICIAL del ítem (term_days), el mismo de
+ * Supervisor y Residente (ronda 5, TR-02): antes «7 días» era «vence de hoy
+ * a 7 días» y el Jefe veía 0 donde la web mostraba 62 ya vencidos. Un ítem
+ * de 7 días se encuentra en «7 días» aunque su fecha ya haya pasado.
+ */
+fun cumple(item: ItemPci, plazo: Int?): Boolean = when (plazo) {
+    null -> true
+    PLAZO_VENCIDOS -> !yaAtendido(item) && (diasQueLeQuedan(item)?.let { it < 0 } ?: false)
+    PLAZO_SIN -> item.plazoDias == null
+    else -> item.plazoDias == plazo
+}
+
+/** Los plazos que existen en los ítems, para los chips: «1 día · 3», «7 días · 62»… */
+fun plazosDe(items: List<ItemPci>): List<Int> =
+    items.mapNotNull { it.plazoDias }.distinct().sorted() + (if (items.any { it.plazoDias == null }) listOf(PLAZO_SIN) else emptyList())
+
+fun etiquetaPlazo(p: Int): String = when (p) {
+    PLAZO_VENCIDOS -> "Vencidos"
+    PLAZO_SIN -> "Sin plazo"
+    1 -> "1 día"
+    else -> "$p días"
+}
+
+/** Lo que llega por la ruta: el número de días, o los nombres de antes («VENCIDO», «UN_DIA»…). */
+fun plazoDeRuta(v: String): Int? = v.toIntOrNull() ?: when (v) {
+    "VENCIDO" -> PLAZO_VENCIDOS
+    else -> Plazo.entries.firstOrNull { it.name == v }?.dias
 }
 
 private fun coincide(item: ItemPci, busqueda: String): Boolean {
@@ -134,7 +160,7 @@ data class EstadoPci(
     val estado: Estado = Estado.PENDIENTES,
     /** El filtro de dentro de un PCI, aparte del de la vista general. */
     val estadoDelPci: Estado = Estado.PENDIENTES,
-    val plazo: Plazo? = null,
+    val plazo: Int? = null,
     val orden: OrdenPci = OrdenPci.VENCIMIENTO,
     val busqueda: String = "",
     /** La ficha del ítem abierta. */
@@ -187,7 +213,9 @@ data class EstadoPci(
         }
 
     fun cuantos(e: Estado): Int = itemsEnVista.count { cumple(it, e) }
-    fun cuantos(p: Plazo): Int = itemsEnVista.count { cumple(it, p) && cumple(it, estadoEnVista) }
+    fun cuantos(p: Int): Int = itemsEnVista.count { cumple(it, p) && cumple(it, estadoEnVista) }
+    /** Los chips de plazo de la vista: los plazos que existen y, si hay, los vencidos. */
+    val plazosEnVista: List<Int> get() = plazosDe(itemsEnVista) + PLAZO_VENCIDOS
 
     val itemEnFicha: ItemPci? get() = items.firstOrNull { it.id == ficha }
 
@@ -233,7 +261,7 @@ class PciViewModel @Inject constructor(
         // del PCI abierto (que filtra con su propio estado)
         ruta.get<String>("estado")?.let { e -> Estado.entries.firstOrNull { it.name == e } }
             ?.let { e -> _estado.update { it.copy(estado = e, estadoDelPci = e) } }
-        ruta.get<String>("plazo")?.let { p -> Plazo.entries.firstOrNull { it.name == p } }
+        ruta.get<String>("plazo")?.let { plazoDeRuta(it) }
             ?.let { p -> _estado.update { it.copy(plazo = p) } }
         ruta.get<String>("pci")?.let { id -> _estado.update { it.copy(abierto = id) } }
         // Desde PCI en mapa: la ficha de ese ítem, ya abierta (Elvis, 26/10)
@@ -266,7 +294,7 @@ class PciViewModel @Inject constructor(
         it.copy(estado = if (it.estado == e) Estado.PENDIENTES else e)
     }
     fun filtrarEstadoDelPci(e: Estado) = _estado.update { it.copy(estadoDelPci = e) }
-    fun filtrarPlazo(p: Plazo?) = _estado.update { it.copy(plazo = if (it.plazo == p) null else p) }
+    fun filtrarPlazo(p: Int?) = _estado.update { it.copy(plazo = if (it.plazo == p) null else p) }
     fun buscar(texto: String) = _estado.update { it.copy(busqueda = texto) }
 
     fun abrirFicha(item: ItemPci) {

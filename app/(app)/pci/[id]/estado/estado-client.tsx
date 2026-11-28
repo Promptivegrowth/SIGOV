@@ -792,7 +792,7 @@ function Detalle({ filas }: { filas: FilaEstado[] }) {
           </SelectContent>
         </Select>
       </div>
-      <div className="max-h-[60vh] overflow-auto">
+      <div className="max-h-[calc(var(--vh)_*_60)] overflow-auto">
         <table className="w-full min-w-[52rem] text-[12.5px]">
           <thead className="bg-muted/60 text-muted-foreground sticky top-0 z-10 text-left text-[11px] tracking-wide uppercase backdrop-blur">
             <tr>

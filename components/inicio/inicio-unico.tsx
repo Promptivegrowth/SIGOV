@@ -316,7 +316,7 @@ export function InicioUnico({
       </PageBody>
 
       <Dialog open={!!cifra} onOpenChange={(v) => !v && setCifra(null)}>
-        <DialogContent className="max-h-[85vh] overflow-y-auto sm:max-w-3xl">
+        <DialogContent className="max-h-[calc(var(--vh)_*_85)] overflow-y-auto sm:max-w-3xl">
           <DialogHeader>
             <DialogTitle>{cifra?.titulo}</DialogTitle>
             <DialogDescription>

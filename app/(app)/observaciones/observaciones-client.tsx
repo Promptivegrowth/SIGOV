@@ -481,11 +481,11 @@ export function ObservacionesClient() {
         </div>
 
         <div className="grid gap-4 xl:grid-cols-[1fr_480px]">
-          <div className="relative h-[calc(100dvh-17rem)] min-h-[440px] overflow-hidden rounded-xl border border-border">
+          <div className="relative h-[calc(var(--vh)_*_100_-_17rem)] min-h-[440px] overflow-hidden rounded-xl border border-border">
             <MapCanvas ref={mapaRef} onReady={setMapa} className="absolute inset-0" initialZoom={6} showFullscreen />
           </div>
           <Card className="overflow-hidden">
-            <CardContent className="max-h-[calc(100dvh-17rem)] overflow-y-auto p-0">
+            <CardContent className="max-h-[calc(var(--vh)_*_100_-_17rem)] overflow-y-auto p-0">
               {datos.isLoading ? <SkeletonTable rows={6} cols={2} /> : !visibles.length ? (
                 <EmptyState icon={MessageSquareWarning} title="Sin observaciones en este filtro"
                   description="Las registran el jefe de cuadrilla o el supervisor desde el celular." className="py-14" />
@@ -679,7 +679,7 @@ function Ficha({ o, delPunto = [], alAbrirOtra, puedeGestionar, puedeEditar, alC
       {grande && (
         <Dialog open onOpenChange={(v) => !v && setGrande(null)}>
           <SheetContent side="right" className="w-full max-w-4xl p-2">
-            <ImageViewer src={grande} alt="Foto de la observación" descargar="SIGOV_observacion.webp" className="h-[90vh]" />
+            <ImageViewer src={grande} alt="Foto de la observación" descargar="SIGOV_observacion.webp" className="h-[calc(var(--vh)_*_90)]" />
           </SheetContent>
         </Dialog>
       )}

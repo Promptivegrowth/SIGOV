@@ -801,16 +801,17 @@ private fun TarjetaDePartida(p: ItemProgramado, registrada: Boolean, alSeleccion
 /** Los ítems PCI de la cuadrilla, con el filtro de plazo (Elvis: «solo los de un día»). */
 @Composable
 private fun ListaDeItemsPci(pcis: List<ItemPci>, registrados: Set<String>, alSeleccionar: (ItemPci) -> Unit) {
-    var plazo by remember { mutableStateOf<Plazo?>(null) }
+    var plazo by remember { mutableStateOf<Int?>(null) }
     Text("Ítems PCI disponibles", style = MaterialTheme.typography.titleSmall, fontWeight = FontWeight.SemiBold)
     Row(
         Modifier.fillMaxWidth().horizontalScroll(rememberScrollState()),
         horizontalArrangement = Arrangement.spacedBy(8.dp),
     ) {
         FilterChip(selected = plazo == null, onClick = { plazo = null }, label = { Text("Cualquier plazo") })
-        Plazo.entries.forEach { p ->
+        // El plazo oficial de cada ítem, como en la web (ronda 5, TR-02)
+        (pe.servicon.sigov.ui.pci.plazosDe(pcis) + pe.servicon.sigov.ui.pci.PLAZO_VENCIDOS).forEach { p ->
             val n = pcis.count { cumple(it, p) }
-            FilterChip(selected = plazo == p, onClick = { plazo = if (plazo == p) null else p }, label = { Text("${p.etiqueta} · $n") })
+            FilterChip(selected = plazo == p, onClick = { plazo = if (plazo == p) null else p }, label = { Text("${pe.servicon.sigov.ui.pci.etiquetaPlazo(p)} · $n") })
         }
     }
     val visibles = pcis.filter { cumple(it, plazo) }

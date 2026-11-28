@@ -334,7 +334,7 @@ export function AtsForm({
   return (
     <>
       <Dialog open={open} onOpenChange={onOpenChange}>
-        <DialogContent size="xl" className="max-h-[94vh]">
+        <DialogContent size="xl" className="max-h-[calc(var(--vh)_*_94)]">
           <DialogHeader>
             <DialogTitle className="flex items-center gap-2.5">
               <span className="bg-primary/10 text-primary flex size-9 items-center justify-center rounded-lg">

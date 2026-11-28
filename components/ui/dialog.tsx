@@ -39,7 +39,7 @@ function DialogContent({
     md: 'max-w-lg',
     lg: 'max-w-2xl',
     xl: 'max-w-5xl',
-    full: 'max-w-[96vw] h-[92vh]',
+    full: 'max-w-[96vw] h-[calc(var(--vh)_*_92)]',
   }
   return (
     <DialogPortal>
@@ -51,7 +51,7 @@ function DialogContent({
           'data-[state=open]:animate-in data-[state=closed]:animate-out',
           'data-[state=closed]:fade-out-0 data-[state=open]:fade-in-0',
           'data-[state=closed]:zoom-out-95 data-[state=open]:zoom-in-95',
-          'max-h-[92vh] overflow-y-auto',
+          'max-h-[calc(var(--vh)_*_92)] overflow-y-auto',
           sizes[size],
           className
         )}
@@ -84,7 +84,7 @@ function SheetContent({
     left:
       'inset-y-0 left-0 h-full w-full max-w-md border-r data-[state=closed]:slide-out-to-left data-[state=open]:slide-in-from-left',
     bottom:
-      'inset-x-0 bottom-0 h-auto max-h-[88vh] rounded-t-2xl border-t data-[state=closed]:slide-out-to-bottom data-[state=open]:slide-in-from-bottom',
+      'inset-x-0 bottom-0 h-auto max-h-[calc(var(--vh)_*_88)] rounded-t-2xl border-t data-[state=closed]:slide-out-to-bottom data-[state=open]:slide-in-from-bottom',
   }
   return (
     <DialogPortal>

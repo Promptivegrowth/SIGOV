@@ -644,7 +644,7 @@ export function ConciliacionCaja({ cajas }: { cajas: any[] }) {
           </>)}
           {dlg === 'historial' && (<>
             <DialogHeader><DialogTitle>Historial de conciliaciones</DialogTitle><DialogDescription>Cada conciliación queda registrada con su diferencia y motivo.</DialogDescription></DialogHeader>
-            <ul className="max-h-[60vh] space-y-1.5 overflow-y-auto text-[12.5px]">
+            <ul className="max-h-[calc(var(--vh)_*_60)] space-y-1.5 overflow-y-auto text-[12.5px]">
               {(hist.data ?? []).map((h) => <li key={h.id} className="rounded-lg border border-border p-2"><strong>{h.codigo}</strong> · {fmtDate(h.desde)} – {fmtDate(h.hasta)} · esperado {soles(h.saldo_esperado ?? 0)} · diferencia <span className={Math.abs(h.diferencia) > 0.004 ? 'text-destructive' : 'text-success'}>{soles(h.diferencia)}</span>{h.motivo ? ` · ${h.motivo}` : ''}</li>)}
               {!(hist.data ?? []).length && <li className="text-muted-foreground">Ninguna todavía.</li>}
             </ul>

@@ -82,6 +82,13 @@ export default function RootLayout({
         <link rel="preconnect" href={process.env.NEXT_PUBLIC_SUPABASE_URL} />
         <link rel="dns-prefetch" href="https://tile.openstreetmap.org" />
         <BootScreen />
+        {/* Alto visible real para las alturas relativas (var(--vh)): en el WebView de la app
+            las unidades vh/dvh valen 0 y los cuadros, tablas y mapas quedaban vacíos (ronda 5). */}
+        <script
+          dangerouslySetInnerHTML={{
+            __html: "(function(){function f(){var h=window.innerHeight||document.documentElement.clientHeight;if(h>0)document.documentElement.style.setProperty('--vh',h/100+'px')}f();window.addEventListener('resize',f);window.addEventListener('orientationchange',f)})()",
+          }}
+        />
       </head>
       <body className={`${inter.variable} ${saira.variable} ${geistMono.variable} font-sans`}>
         <Providers>{children}</Providers>

@@ -4,4 +4,6 @@
     <files-path name="comprobantes" path="comprobantes/" />
     <files-path name="formatos" path="formatos/" />
     <cache-path name="temporal" path="capturas/" />
+    <!-- Android 8–9: copias en Descargas/SIGOV para abrirlas con otra app -->
+    <external-path name="descargas" path="Download/SIGOV/" />
 </paths>

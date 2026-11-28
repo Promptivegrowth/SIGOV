@@ -288,7 +288,7 @@ export function InsumosSemana({ plan, crewId, crewNombre, semana, rows, canEdit 
         <DialogContent className="max-w-3xl">
           <DialogHeader><DialogTitle>{vista === 'resumen' ? 'Resumen de metrado' : 'Planilla de metrado'}</DialogTitle>
             <DialogDescription>{crewNombre} · Semana {semana}. Sale de la misma programación; es lo que alimenta el metrado del requerimiento.</DialogDescription></DialogHeader>
-          <div className="max-h-[60vh] overflow-auto">
+          <div className="max-h-[calc(var(--vh)_*_60)] overflow-auto">
             <TablaSimple t={vista === 'resumen' ? tablaResumen() : tablaPlanilla()} />
           </div>
         </DialogContent>

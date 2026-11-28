@@ -11,6 +11,9 @@
 
 :root {
   --radius: 0.75rem;
+  /* 1 % del alto visible. La web lo recalcula con innerHeight (app/layout.tsx):
+     en el WebView de la app 100vh y 100dvh medían 0 y los cuadros quedaban sin contenido. */
+  --vh: 1vh;
 
   /* Superficies */
   --background: oklch(0.990 0.003 229);

@@ -285,7 +285,7 @@ export function GrillaSemanal({ rows, monday, semana, plan, cuadrilla, canEdit, 
         <DialogContent className="max-w-2xl">
           <DialogHeader><DialogTitle>Historial de la semana {semana}</DialogTitle>
             <DialogDescription>Borradores guardados y versiones publicadas, con lo que cambió entre una y otra.</DialogDescription></DialogHeader>
-          <ul className="max-h-[60vh] space-y-2 overflow-y-auto">
+          <ul className="max-h-[calc(var(--vh)_*_60)] space-y-2 overflow-y-auto">
             {(hist.data ?? []).length === 0 && <p className="text-muted-foreground text-[13px]">Aún no hay versiones guardadas.</p>}
             {(hist.data ?? []).map((h: any, k: number) => (
               <li key={k} className="rounded-lg border border-border px-3 py-2 text-[12.5px]">

@@ -68,7 +68,7 @@ function GuardarVersion({ seccion, datos, antes, cambios, alGuardar }: { seccion
       <Dialog open={hist} onOpenChange={setHist}>
         <DialogContent className="max-w-lg">
           <DialogHeader><DialogTitle>Historial de versiones</DialogTitle><DialogDescription>Inalterable: cada guardado es una versión nueva.</DialogDescription></DialogHeader>
-          <ul className="max-h-[60vh] space-y-1.5 overflow-y-auto text-[12.5px]">
+          <ul className="max-h-[calc(var(--vh)_*_60)] space-y-1.5 overflow-y-auto text-[12.5px]">
             {(versiones.data ?? []).map((v) => <li key={v.id} className="rounded-lg border border-border p-2"><strong>v{v.version}</strong> · {fmtDateTime(v.cuando)} · {v.profiles?.full_name ?? ''}<p className="text-muted-foreground">{v.motivo}</p></li>)}
             {!(versiones.data ?? []).length && <li className="text-muted-foreground">Aún no hay versiones: rige la configuración de fábrica.</li>}
           </ul>

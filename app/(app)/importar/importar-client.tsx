@@ -653,6 +653,9 @@ export function ImportarClient() {
                   Formatos .xlsx, .xls y .csv · se lee la primera hoja
                 </span>
               </label>
+              {kind === 'pci' && !pciId && (
+                <p className="text-warning -mt-2 text-center text-[12.5px]">Primero elige arriba a qué PCI pertenecen los ítems; luego podrás seleccionar el Excel.</p>
+              )}
 
               {history.data && history.data.length > 0 && (
                 <Card>
@@ -819,7 +822,7 @@ export function ImportarClient() {
               <Dialog open={verErrores} onOpenChange={setVerErrores}>
                 <DialogContent className="max-w-2xl">
                   <DialogHeader><DialogTitle>Errores y datos por revisar</DialogTitle><DialogDescription>Las filas con error se omiten; corrígelas en el Excel y vuelve a subirlo si las necesitas.</DialogDescription></DialogHeader>
-                  <ul className="max-h-[60vh] divide-y divide-border overflow-y-auto text-[12px]">
+                  <ul className="max-h-[calc(var(--vh)_*_60)] divide-y divide-border overflow-y-auto text-[12px]">
                     {[...issues.map((i) => ({ ...i, t: 'error' })), ...avisos.map((i) => ({ ...i, t: 'aviso' }))].slice(0, 300).map((i, k) => (
                       <li key={k} className="flex items-center gap-3 py-1.5"><span className="text-muted-foreground w-16 shrink-0 font-mono">fila {i.row}</span>
                         <span className="w-32 shrink-0 truncate font-medium">{i.field}</span><span className={cn('min-w-0 flex-1', i.t === 'error' ? 'text-destructive' : 'text-warning')}>{i.message}</span></li>

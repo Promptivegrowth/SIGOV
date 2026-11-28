@@ -144,7 +144,7 @@ export function SessionProvider({
 
   if (!value) {
     return (
-      <div className="flex min-h-dvh items-center justify-center p-8 text-center">
+      <div className="flex min-h-[calc(var(--vh)_*_100)] items-center justify-center p-8 text-center">
         <div>
           <h2 className="text-lg font-semibold">Sin servicios asignados</h2>
           <p className="text-muted-foreground mt-1 max-w-sm text-sm">

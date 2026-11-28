@@ -1276,7 +1276,7 @@ Contenido tratado: ${t.content}` : ''),
             src={foto}
             alt="Foto del checklist"
             descargar="SIGOV_checklist.webp"
-            className="h-[75vh] w-full rounded-2xl"
+            className="h-[calc(var(--vh)_*_75)] w-full rounded-2xl"
           />
         )}
       </DialogContent>

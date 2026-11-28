@@ -357,7 +357,7 @@ export function ArchivoClient() {
 
       {/* Previsualización */}
       <Dialog open={!!preview} onOpenChange={() => setPreview(null)}>
-        <DialogContent size="xl" className="max-h-[92vh] p-0">
+        <DialogContent size="xl" className="max-h-[calc(var(--vh)_*_92)] p-0">
           {preview && (
             <>
               <DialogHeader className="border-b border-border p-5">
@@ -367,18 +367,18 @@ export function ArchivoClient() {
                   {preview.doc_date ? ` · ${fmtDate(preview.doc_date)}` : ''}
                 </DialogDescription>
               </DialogHeader>
-              <div className="min-h-[60vh] bg-muted/30">
+              <div className="min-h-[calc(var(--vh)_*_60)] bg-muted/30">
                 {preview.mime_type?.includes('pdf') ? (
-                  <iframe src={preview.url} className="h-[70vh] w-full" title={preview.title} />
+                  <iframe src={preview.url} className="h-[calc(var(--vh)_*_70)] w-full" title={preview.title} />
                 ) : preview.mime_type?.startsWith('image/') ? (
                   <ImageViewer
                     src={preview.url}
                     alt={preview.title}
                     descargar={preview.file_name}
-                    className="h-[70vh] w-full"
+                    className="h-[calc(var(--vh)_*_70)] w-full"
                   />
                 ) : (
-                  <div className="flex h-[60vh] flex-col items-center justify-center gap-3 text-center">
+                  <div className="flex h-[calc(var(--vh)_*_60)] flex-col items-center justify-center gap-3 text-center">
                     <FileSpreadsheet className="text-muted-foreground size-10" />
                     <p className="text-muted-foreground text-[13px]">
                       Este tipo de archivo no se previsualiza en el navegador.

@@ -56,7 +56,9 @@ export function MapaClient() {
   const sb = React.useMemo(() => createClient(), [])
   const [map, setMap] = React.useState<MLMap | null>(null)
   const [preset, setPreset] = React.useState<DatePresetKey>('30d')
+  // En el celular el panel de capas empieza cerrado: tapaba el mapa (ronda 5, SUP-04)
   const [panelOpen, setPanelOpen] = React.useState(true)
+  React.useEffect(() => { if (window.innerWidth < 768) setPanelOpen(false) }, [])
   const range = React.useMemo(() => rangeFromPreset(preset), [preset])
 
   const available = LAYERS.filter((l) => !l.module || hasModule(l.module))
@@ -292,7 +294,7 @@ export function MapaClient() {
           const lngs = coords.map((c: any) => c[0])
           const lats = coords.map((c: any) => c[1])
           m.fitBounds([Math.min(...lngs), Math.min(...lats), Math.max(...lngs), Math.max(...lats)] as any, {
-            padding: { top: 60, bottom: 60, left: panelOpen ? 340 : 60, right: 60 },
+            padding: { top: 60, bottom: 60, left: panelOpen && m.getContainer().clientWidth >= 768 ? 340 : 40, right: 40 },
             duration: 800,
             maxZoom: 12,
           })
@@ -360,7 +362,7 @@ export function MapaClient() {
   }
 
   return (
-    <div className="relative h-[calc(100dvh-4rem)] lg:h-[calc(100dvh-4rem)]">
+    <div className="relative h-[calc(var(--vh)_*_100_-_4rem)] lg:h-[calc(var(--vh)_*_100_-_4rem)]">
       <MapCanvas className="size-full" onReady={setMap} onStyleChange={() => map && paint(map)} initialZoom={7} />
 
       {/* Panel de capas */}

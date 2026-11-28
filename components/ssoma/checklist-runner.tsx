@@ -263,7 +263,7 @@ export function ChecklistRunner({
   return (
     <>
       <Dialog open={open} onOpenChange={onOpenChange}>
-        <DialogContent size="lg" className="max-h-[94vh]">
+        <DialogContent size="lg" className="max-h-[calc(var(--vh)_*_94)]">
           <DialogHeader>
             <DialogTitle>Responder checklist</DialogTitle>
             <DialogDescription>
@@ -340,7 +340,7 @@ export function ChecklistRunner({
               />
             </div>
           ) : (
-            <div className="-mx-1 max-h-[42vh] space-y-2 overflow-y-auto px-1">
+            <div className="-mx-1 max-h-[calc(var(--vh)_*_42)] space-y-2 overflow-y-auto px-1">
               {preguntas.map((q: any, i: number) => (
                 <div
                   key={q.id}
@@ -542,7 +542,7 @@ export function ChecklistTemplates({
             </Button>
           )}
 
-          <ul className="max-h-[55vh] space-y-2 overflow-y-auto">
+          <ul className="max-h-[calc(var(--vh)_*_55)] space-y-2 overflow-y-auto">
             {(tpls.data ?? []).map((t: any) => (
               <li key={t.id} className="border-border flex items-center gap-3 rounded-xl border p-3">
                 <span className="bg-primary/10 text-primary flex size-9 shrink-0 items-center justify-center rounded-lg">
@@ -666,7 +666,7 @@ function TemplateEditor({
 
   return (
     <Dialog open={!!tpl} onOpenChange={(v) => !v && onClose()}>
-      <DialogContent size="lg" className="max-h-[92vh]">
+      <DialogContent size="lg" className="max-h-[calc(var(--vh)_*_92)]">
         <DialogHeader>
           <DialogTitle>{tpl?.id ? 'Editar plantilla' : 'Nueva plantilla de checklist'}</DialogTitle>
           <DialogDescription>

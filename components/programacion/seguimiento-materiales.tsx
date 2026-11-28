@@ -248,7 +248,7 @@ export function SeguimientoMateriales({ serviceId, crewId, crewNombre, desde, ha
         <DialogContent className="max-w-3xl">
           <DialogHeader><DialogTitle>Movimientos del periodo</DialogTitle>
             <DialogDescription>{crewNombre} · {fmtDate(desde)} – {fmtDate(hasta)}. Los consumos de partes sin validar no cuentan todavía.</DialogDescription></DialogHeader>
-          <div className="max-h-[60vh] overflow-auto">
+          <div className="max-h-[calc(var(--vh)_*_60)] overflow-auto">
             <table className="w-full text-[12px]">
               <thead className="text-muted-foreground"><tr><th className="py-1 text-left">Fecha</th><th className="text-left">Insumo</th><th className="text-left">Tipo</th><th className="text-right">Entrada</th><th className="text-right">Salida</th><th className="text-left pl-2">Documento</th><th className="text-left">Estado</th></tr></thead>
               <tbody>

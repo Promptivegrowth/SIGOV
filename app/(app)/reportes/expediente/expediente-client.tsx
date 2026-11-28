@@ -267,7 +267,7 @@ export function ExpedienteClient() {
                     onChange={(e) => setSel(e.target.checked ? new Set(visibles.map((i) => i.id)) : new Set())} />Seleccionar todos</label></span>
               </div>
               {items.isLoading ? <SkeletonList rows={5} /> : visibles.length === 0 ? <p className="text-muted-foreground text-[13px]">Sin ítems con evidencia en este filtro.</p> : (
-                <div className="max-h-[50vh] divide-y divide-border overflow-y-auto rounded-lg border border-border">
+                <div className="max-h-[calc(var(--vh)_*_50)] divide-y divide-border overflow-y-auto rounded-lg border border-border">
                   {visibles.map((i) => {
                     const { faltan } = fotosOficiales(i.item_number, i.fotos)
                     return (
@@ -323,7 +323,7 @@ export function ExpedienteClient() {
         </div>
       </PageBody>
       <Dialog open={previa} onOpenChange={setPrevia}>
-        <DialogContent className="max-h-[80vh] overflow-y-auto sm:max-w-2xl">
+        <DialogContent className="max-h-[calc(var(--vh)_*_80)] overflow-y-auto sm:max-w-2xl">
           <DialogHeader>
             <DialogTitle>Vista previa del paquete</DialogTitle>
             <DialogDescription>{elegidos.length} ítems · {archivos().length} archivos</DialogDescription>

@@ -5,6 +5,7 @@ import { QueryClient, QueryClientProvider } from '@tanstack/react-query'
 import { ThemeProvider } from 'next-themes'
 import { Toaster } from 'sonner'
 import { TooltipProvider } from '@/components/ui/primitives'
+import { instalarPuenteArchivos } from '@/lib/app-nativa'
 
 function makeQueryClient() {
   return new QueryClient({
@@ -38,6 +39,8 @@ export function Providers({ children }: { children: React.ReactNode }) {
   React.useEffect(() => {
     // Avisa al preloader que la app ya está viva
     window.dispatchEvent(new Event('sigov:ready'))
+    // Dentro de la app Android, las descargas van a Descargas/SIGOV por el puente nativo
+    instalarPuenteArchivos()
   }, [])
 
   return (

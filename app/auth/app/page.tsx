@@ -28,7 +28,7 @@ export default function EntradaDesdeApp() {
     })
   }, [])
   return (
-    <main className="flex min-h-dvh items-center justify-center p-6 text-center text-[14px]">
+    <main className="flex min-h-[calc(var(--vh)_*_100)] items-center justify-center p-6 text-center text-[14px]">
       {error ? <p className="text-destructive">{error}</p> : <p className="text-muted-foreground">Abriendo SIGOV…</p>}
     </main>
   )

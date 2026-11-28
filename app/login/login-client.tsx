@@ -70,7 +70,7 @@ export function LoginClient() {
   )
 
   return (
-    <div className="relative flex min-h-dvh flex-col items-center justify-center overflow-hidden px-4 py-8">
+    <div className="relative flex min-h-[calc(var(--vh)_*_100)] flex-col items-center justify-center overflow-hidden px-4 py-8">
       {/* ═══ El fondo ═════════════════════════════════════════════════ */}
       <div className="absolute inset-0 -z-10 bg-[oklch(0.245_0.080_256)]" />
       <div

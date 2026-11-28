@@ -295,7 +295,7 @@ export function InventarioClient() {
               <span className="hidden w-24 xl:block">Inspección</span>
               <span className="w-6" />
             </div>
-            <div ref={scrollRef} className="max-h-[58vh] overflow-auto">
+            <div ref={scrollRef} className="max-h-[calc(var(--vh)_*_58)] overflow-auto">
               <div style={{ height: virtualizer.getTotalSize(), position: 'relative' }}>
                 {virtualizer.getVirtualItems().map((v) => {
                   const r: any = filtered[v.index]

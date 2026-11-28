@@ -152,7 +152,7 @@ export function ParteInforme({
   return (
     <>
       <Dialog open={open} onOpenChange={onOpenChange}>
-        <DialogContent size="xl" className="max-h-[94vh]">
+        <DialogContent size="xl" className="max-h-[calc(var(--vh)_*_94)]">
           <DialogHeader>
             <DialogTitle className="flex items-center gap-2.5">
               <span className="bg-primary/10 text-primary flex size-9 items-center justify-center rounded-lg">
@@ -320,7 +320,7 @@ export function ParteInforme({
                 src={zoom.url}
                 alt={zoom.caption ?? 'Evidencia'}
                 descargar={`SIGOV_evidencia_${zoom.id}.webp`}
-                className="h-[58vh] w-full rounded-t-2xl"
+                className="h-[calc(var(--vh)_*_58)] w-full rounded-t-2xl"
               />
               <div className="space-y-2 p-5">
                 <div className="flex flex-wrap items-center gap-2">

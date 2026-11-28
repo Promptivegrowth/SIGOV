@@ -572,7 +572,7 @@ export function PciDetailClient({ pciId }: { pciId: string }) {
               <span className="w-16 text-center">Fotos</span>
             </div>
 
-            <div ref={scrollRef} className="max-h-[62vh] overflow-auto">
+            <div ref={scrollRef} className="max-h-[calc(var(--vh)_*_62)] overflow-auto">
               <div style={{ height: virtualizer.getTotalSize(), position: 'relative' }}>
                 {virtualizer.getVirtualItems().map((v) => {
                   const r: any = filtered[v.index]

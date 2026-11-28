@@ -97,7 +97,7 @@ export function SuspensionDialog({
 
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
-      <DialogContent size="xl" className="max-h-[90vh]">
+      <DialogContent size="xl" className="max-h-[calc(var(--vh)_*_90)]">
         <DialogHeader>
           <DialogTitle className="flex items-center gap-2.5">
             <span className="bg-destructive/12 text-destructive flex size-9 items-center justify-center rounded-lg">

@@ -635,7 +635,7 @@ class ParteViewModel @Inject constructor(
                         filas = d.filas.map { f -> f.celdas() },
                     )
                 }
-                formatos.compartir(archivo, "Reporte diario ${parte.fecha}")
+                formatos.entregar(archivo, "Reporte diario ${parte.fecha}")
             }.onFailure { fallo ->
                 _estado.update { it.copy(error = fallo.enCristiano()) }
             }

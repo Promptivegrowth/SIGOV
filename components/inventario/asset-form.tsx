@@ -234,7 +234,7 @@ export function AssetForm({
 
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
-      <DialogContent size="lg" className="max-h-[92vh]">
+      <DialogContent size="lg" className="max-h-[calc(var(--vh)_*_92)]">
         <DialogHeader>
           <DialogTitle>{editing ? 'Editar elemento vial' : 'Nuevo elemento vial'}</DialogTitle>
           <DialogDescription>

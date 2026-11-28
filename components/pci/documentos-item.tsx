@@ -220,7 +220,7 @@ export function DocumentosItem({ item, fotos, historial, publicaciones, esVisor,
       <Dialog open={!!visor} onOpenChange={(o) => { if (!o && visor) { URL.revokeObjectURL(visor.url); setVisor(null) } }}>
         <DialogContent className="max-w-5xl">
           <DialogHeader><DialogTitle>{visor?.nombre}</DialogTitle><DialogDescription>Consulta por versión; no se edita.</DialogDescription></DialogHeader>
-          {visor && <iframe src={visor.url} title={visor.nombre} className="h-[70vh] w-full rounded-lg border border-border bg-white" />}
+          {visor && <iframe src={visor.url} title={visor.nombre} className="h-[calc(var(--vh)_*_70)] w-full rounded-lg border border-border bg-white" />}
           <div className="flex justify-end"><Button variant="outline" onClick={() => { if (visor) { URL.revokeObjectURL(visor.url); setVisor(null) } }}><X className="size-4" />Cerrar</Button></div>
         </DialogContent>
       </Dialog>

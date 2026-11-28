@@ -143,7 +143,7 @@ export function EquipoDialog({
 
   return (
     <Dialog open onOpenChange={(o) => !o && onClose()}>
-      <DialogContent className="max-h-[92vh] overflow-y-auto sm:max-w-xl">
+      <DialogContent className="max-h-[calc(var(--vh)_*_92)] overflow-y-auto sm:max-w-xl">
         <DialogHeader>
           <DialogTitle>{nuevo ? 'Nuevo equipo de seguridad' : `Editar ${equipo.code}`}</DialogTitle>
           <DialogDescription>
@@ -276,7 +276,7 @@ export function HistorialEquipoDialog({ equipo, onClose }: { equipo: any | null;
   if (!equipo) return null
   return (
     <Dialog open onOpenChange={(o) => !o && onClose()}>
-      <DialogContent className="max-h-[85vh] overflow-y-auto sm:max-w-lg">
+      <DialogContent className="max-h-[calc(var(--vh)_*_85)] overflow-y-auto sm:max-w-lg">
         <DialogHeader>
           <DialogTitle>Historial de {equipo.code}</DialogTitle>
           <DialogDescription>
@@ -330,7 +330,7 @@ export function HistorialEquipoDialog({ equipo, onClose }: { equipo: any | null;
           <Dialog open onOpenChange={(o) => !o && setGrande(null)}>
             <DialogContent className="sm:max-w-3xl">
               {/* eslint-disable-next-line @next/next/no-img-element */}
-              <img src={grande} alt="Formato de inspección" className="max-h-[80vh] w-full object-contain" />
+              <img src={grande} alt="Formato de inspección" className="max-h-[calc(var(--vh)_*_80)] w-full object-contain" />
             </DialogContent>
           </Dialog>
         )}

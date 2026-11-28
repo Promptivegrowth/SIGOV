@@ -720,7 +720,7 @@ function DialogoDeExportacion({ fotos, desde, hasta, origen, pcis, cuadrilla, se
   const ocupado = avance != null
   return (
     <Dialog open onOpenChange={(v) => !v && !ocupado && alCerrar()}>
-      <DialogContent className="max-h-[92dvh] max-w-2xl overflow-y-auto">
+      <DialogContent className="max-h-[calc(var(--vh)_*_92)] max-w-2xl overflow-y-auto">
         <DialogTitle>Exportar evidencias</DialogTitle>
         <DialogDescription>Un ZIP con las fotos filtradas, en la estructura de carpetas para COVINCA.</DialogDescription>
 

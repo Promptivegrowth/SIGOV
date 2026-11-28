@@ -198,7 +198,7 @@ function DocumentosDeLaCelda({ filas, puedeRevisar, onClose }: { filas: Fila[]; 
   const primera = filas[0]
   return (
     <Dialog open onOpenChange={onClose}>
-      <DialogContent className="max-h-[90vh] max-w-2xl overflow-y-auto">
+      <DialogContent className="max-h-[calc(var(--vh)_*_90)] max-w-2xl overflow-y-auto">
         <DialogHeader>
           <DialogTitle>{primera?.crew_code} · {primera?.crew_name}</DialogTitle>
           <DialogDescription>Documentos del {primera ? fmtDate(primera.fecha, 'long') : ''}</DialogDescription>
