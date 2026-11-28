@@ -423,7 +423,12 @@ export async function for001Pdf(datos: Datos, logo?: ArrayBuffer | null) {
   })
 
   // Observaciones generales
-  y = Math.max(finMat, (doc as any).lastAutoTable.finalY) + 4
+  y = Math.max(finMat, (doc as any).lastAutoTable.finalY) + 3
+  // Ronda 5: qué es el «N°» que se repite entre filas
+  doc.setFontSize(6.5); doc.setTextColor(60)
+  doc.text('N°: número de partida del catálogo COVINCA (se repite cuando dos ítems son de la misma partida).', M, y + 1.5)
+  doc.setTextColor(0)
+  y += 4
   seccion('OBSERVACIONES GENERALES', M, y, W - 2 * M)
   const observaciones = [
     parte.notes,

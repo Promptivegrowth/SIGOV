@@ -193,6 +193,7 @@ fun PantallaProgramacion(
                             fases = estado.fases[item.id].orEmpty(),
                             alTomarFotos = { vm.tomarFotos(item) },
                             cierreEnCola = item.id in estado.cierresEnCola,
+                            ladoEjecutado = estado.ladosEjecutados[item.id],
                         )
                     }
                 }
@@ -321,6 +322,7 @@ private fun Partida(
     fases: Map<String, Int> = emptyMap(),
     alTomarFotos: () -> Unit = {},
     cierreEnCola: Boolean = false,
+    ladoEjecutado: String? = null,
 ) {
     val avance = ((item.avance ?: 0.0) / 100.0).coerceIn(0.0, 1.0).toFloat()
 
@@ -357,9 +359,16 @@ private fun Partida(
                         listOfNotNull(
                             Progresiva.rango(item.progresivaInicio, item.progresivaFin) ?: "Sin progresiva indicada",
                             // El lado siempre a la vista (Elvis: «no indica si es lado izquierdo o derecho»)
-                            item.lado?.takeIf { it.isNotBlank() }
-                                ?.let { "lado " + (pe.servicon.sigov.datos.Lados.codigo(it) ?: it) }
-                                ?: "lado sin indicar",
+                            run {
+                                val prog = item.lado?.takeIf { it.isNotBlank() }?.let { pe.servicon.sigov.datos.Lados.codigo(it) ?: it }
+                                val ejec = ladoEjecutado?.let { pe.servicon.sigov.datos.Lados.codigo(it) ?: it }
+                                when {
+                                    prog == null && ejec == null -> "lado programado: sin indicar"
+                                    prog == null -> "lado programado: sin indicar · ejecutado: $ejec"
+                                    ejec != null && ejec != prog -> "lado programado: $prog · ejecutado: $ejec"
+                                    else -> "lado $prog"
+                                }
+                            },
                         ).joinToString(" · "),
                         style = MaterialTheme.typography.bodySmall,
                         fontWeight = FontWeight.Medium,

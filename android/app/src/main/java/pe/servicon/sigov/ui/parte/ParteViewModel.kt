@@ -68,6 +68,10 @@ data class EstadoParte(
     val fotosPorRegistro: Map<String, Int> = emptyMap(),
     /** Las fotos de cada actividad por etapa (antes, durante, después…). */
     val fotosPorFase: Map<String, Map<String, Int>> = emptyMap(),
+    /** Las fotos por fase de las actividades que ya están en la nube (JEF-01). */
+    val fotosNube: Map<String, Map<String, Int>> = emptyMap(),
+    /** El estado ya se cotejó con la nube: mientras no, no se muestra «En borrador». */
+    val estadoConfirmado: Boolean = false,
     /** Los ítems PCI del reporte, en cualquier estado: su n.º y su partida para el PDF. */
     val itemsPciDelDia: Map<String, ItemPci> = emptyMap(),
     /** Material usado en el día (Formato 8) y lo que la cuadrilla tiene. */
@@ -118,6 +122,9 @@ data class EstadoParte(
  * Abre —o crea— el parte de hoy para la cuadrilla y va acumulando lo que se
  * ejecuta. Todo se guarda en el equipo primero; la cola se encarga del resto.
  */
+/** Parte observado sin motivo guardado (estado de la carga histórica): se dice, no se inventa. */
+const val MOTIVO_NO_REGISTRADO = "El motivo de la observación no quedó registrado en SIGOV (estado de la carga histórica). Consulta a tu supervisor qué corregir."
+
 @HiltViewModel
 class ParteViewModel @Inject constructor(
     private val ruta: SavedStateHandle,
@@ -179,7 +186,7 @@ class ParteViewModel @Inject constructor(
     private var vigilancia: kotlinx.coroutines.Job? = null
 
     private fun abrir(fecha: LocalDate) {
-        _estado.update { it.copy(cargando = true, fecha = fecha, registros = emptyList(), programadas = emptyList()) }
+        _estado.update { it.copy(cargando = true, fecha = fecha, registros = emptyList(), programadas = emptyList(), estadoConfirmado = false, fotosNube = emptyMap(), observacion = null, historial = emptyList()) }
         viewModelScope.launch {
             runCatching {
                 val cuadrilla = sesion.cuadrilla()
@@ -256,6 +263,22 @@ class ParteViewModel @Inject constructor(
                     }
                 }
                 vigilarRegistros(parte.clientId)
+                // JEF-01: el parte como está en la nube (estado, motivo y actividades), aunque no se registró en este teléfono
+                launch {
+                    val nube = runCatching { campo.traerParteDeLaNube(parte) }.getOrNull()
+                    val local = partes.parteDe(parte.clientId) ?: parte
+                    val porFase = nube?.entradas?.associate { e ->
+                        e.clientId to mapOf("antes" to e.antes, "durante" to e.durante, "despues" to e.despues, "general" to e.general).filterValues { n -> n > 0 }
+                    } ?: emptyMap()
+                    _estado.update {
+                        it.copy(
+                            parte = local, estadoConfirmado = true, fotosNube = porFase,
+                            fotosPorFase = porFase + it.fotosPorFase,
+                            fotosPorRegistro = porFase.mapValues { (_, f) -> f.values.sum() } + it.fotosPorRegistro,
+                            observacion = if (nube?.status == "observado") (nube.observacion?.takeIf { n -> n.isNotBlank() } ?: MOTIVO_NO_REGISTRADO) else it.observacion,
+                        )
+                    }
+                }
                 cargarMateriales()
                 cargarRecursos()
                 refrescarEstado()
@@ -283,7 +306,7 @@ class ParteViewModel @Inject constructor(
                 partes.conteoPorFase(parteId).collectLatest { conteos ->
                     _estado.update { estado ->
                         estado.copy(
-                            fotosPorFase = conteos.groupBy { it.registroClientId }
+                            fotosPorFase = estado.fotosNube + conteos.groupBy { it.registroClientId }
                                 .mapValues { (_, cs) -> cs.associate { c -> c.fase to c.cuantas } },
                         )
                     }
@@ -294,7 +317,7 @@ class ParteViewModel @Inject constructor(
             launch {
                 partes.conteoEvidencias(parteId).collectLatest { conteos ->
                     _estado.update { estado ->
-                        estado.copy(fotosPorRegistro = conteos.associate { it.registroClientId to it.cuantas })
+                        estado.copy(fotosPorRegistro = estado.fotosNube.mapValues { (_, f) -> f.values.sum() } + conteos.associate { it.registroClientId to it.cuantas })
                     }
                 }
             }
@@ -522,7 +545,8 @@ class ParteViewModel @Inject constructor(
             supervisor = e.supervisor ?: "",
             cuadrilla = e.cuadrilla,
             capataz = sesion.perfil()?.nombre ?: "",
-            sector = e.registros.mapNotNull { sectorDe(it) }.distinct().joinToString(", "),
+            // Sin sector cuando la progresiva no cae en los sectores del subtramo (como en Niveles de servicio): se dice
+            sector = e.registros.mapNotNull { sectorDe(it) }.distinct().joinToString(", ").ifBlank { if (e.registros.isEmpty()) "" else "Sin sector (progresiva fuera de los sectores del subtramo)" },
             filas = filas,
             materiales = materiales,
             equipos = equipos,
@@ -664,7 +688,8 @@ class ParteViewModel @Inject constructor(
             val local = partes.parteDe(parte.clientId) ?: parte
             val historial = campo.historialDelParte(remoto.id)
             _estado.update {
-                it.copy(parte = local, observacion = remoto.observacion?.takeIf { remoto.status == "observado" }, historial = historial)
+                it.copy(parte = local, estadoConfirmado = true, historial = historial,
+                    observacion = if (remoto.status == "observado") remoto.observacion?.takeIf { n -> n.isNotBlank() } ?: MOTIVO_NO_REGISTRADO else null)
             }
         }
     }

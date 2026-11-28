@@ -263,6 +263,47 @@ data class ParteRemoto(
     @SerialName("review_notes") val observacion: String? = null,
 )
 
+/** El parte del día como está en la nube, para el Jefe (JEF-01). */
+@Serializable
+data class ParteDelJefe(
+    val id: String,
+    @SerialName("client_id") val clientId: String? = null,
+    val status: String = "borrador",
+    @SerialName("review_notes") val observacion: String? = null,
+    @SerialName("reviewed_at") val revisadoEn: String? = null,
+    val revisor: String? = null,
+    @SerialName("publicacion_version") val versionPublicada: Int? = null,
+    @SerialName("entries") val entradas: List<EntradaDelJefe> = emptyList(),
+)
+
+@Serializable
+data class EntradaDelJefe(
+    val id: String,
+    @SerialName("client_id") val clientId: String,
+    @SerialName("activity_id") val actividadId: String,
+    @SerialName("activity_name") val actividad: String? = null,
+    @SerialName("section_id") val tramoId: String? = null,
+    @SerialName("section_name") val tramo: String? = null,
+    @SerialName("prog_start_m") val progresivaInicio: Double? = null,
+    @SerialName("prog_end_m") val progresivaFin: Double? = null,
+    val side: String? = null,
+    val quantity: Double? = null,
+    @SerialName("unit") val unidad: String? = null,
+    val observation: String? = null,
+    val origen: String? = null,
+    @SerialName("plan_item_id") val planItemId: String? = null,
+    @SerialName("pci_item_id") val pciItemId: String? = null,
+    @SerialName("pci_code") val pciCodigo: String? = null,
+    val antes: Int = 0,
+    val durante: Int = 0,
+    val despues: Int = 0,
+    val general: Int = 0,
+) {
+    val lado: String? get() = side
+    val cantidad: Double? get() = quantity
+    val observacion: String? get() = observation
+}
+
 /** Un PCI visto por la cuadrilla: cuántos ítems suyos tiene y cómo van. */
 @Serializable
 data class ResumenPci(

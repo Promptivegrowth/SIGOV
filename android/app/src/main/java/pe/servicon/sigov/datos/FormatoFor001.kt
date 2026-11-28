@@ -261,7 +261,10 @@ class FormatoFor001 @Inject constructor(
             listOf("CÓDIGO", "N°", "DESCRIPCIÓN EQUIPO", "UND", "CANT"), equiposPdf, 16, 5 * mm, setOf(1, 3, 4))
         val finOtros = tabla(c2, xOtros, y, listOf(anchoOtros * 0.36f, 10 * mm, 10 * mm, anchoOtros * 0.64f - 20 * mm),
             listOf("DESCRIPCIÓN", "UND", "CANT", "OBSERVACIONES"), d.otros, 16, 5 * mm, setOf(1, 2))
-        y = maxOf(finMat, finEq, finOtros) + 4 * mm
+        y = maxOf(finMat, finEq, finOtros) + 3 * mm
+        // Ronda 5: qué es el «N°» que se repite entre filas
+        c2.drawText("N°: número de partida del catálogo COVINCA (se repite cuando dos ítems son de la misma partida).", m, y + 2 * mm, p(6.5f))
+        y += 4 * mm
         seccion(c2, "OBSERVACIONES GENERALES", m, y, an - 2 * m)
         c2.drawRect(m, y + 5.5f * mm, an - m, y + 21.5f * mm, borde)
         envolver(d.observaciones.ifBlank { " " }, p(7.5f), an - 2 * m - 4 * mm).take(4).forEachIndexed { k, l ->

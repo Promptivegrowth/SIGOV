@@ -90,7 +90,51 @@ class ColaRepositorio @Inject constructor(
     private val archivos: ArchivoDao,
     @ApplicationContext private val contexto: Context,
     private val configuracion: Configuracion,
+    private val partesLocales: pe.servicon.sigov.datos.local.ParteDao,
+    private val supabaseCliente: SupabaseClient,
 ) {
+    /**
+     * Lo que ya existe en la nube (un parte o una actividad bajados para
+     * consultarlos): queda como enviado, para que lo que se registre debajo
+     * se amarre a su id real sin volver a crearlo. No se muestra en la
+     * bandeja de Sincronización (enviadoEn = 0).
+     */
+    suspend fun registrarEnNube(tabla: String, clientId: String, idServidor: String, etiqueta: String) {
+        if (cola.porId(clientId) != null) return
+        cola.encolar(
+            EnvioPendiente(
+                clientId = clientId, tabla = tabla, cuerpo = "{}", etiqueta = etiqueta,
+                estado = EstadoEnvio.ENVIADO, idEnServidor = idServidor, creadoEn = 0, enviadoEn = 0,
+            )
+        )
+    }
+
+    /**
+     * El parte del día se manda a la nube recién cuando se registra algo
+     * en él (ronda 5): abrir una fecha para mirarla ya no deja un borrador
+     * vacío en el servidor ni cambia Mi Jornada a «En borrador».
+     */
+    suspend fun asegurarParte(parteClientId: String) {
+        if (cola.porId(parteClientId) != null) return
+        val parte = partesLocales.parteDe(parteClientId) ?: return
+        if (parte.idEnServidor != null) {
+            registrarEnNube("work_orders", parte.clientId, parte.idEnServidor, "Parte del ${parte.fecha}")
+            return
+        }
+        val quien = runCatching { supabaseCliente.auth.currentUserOrNull()?.id }.getOrNull()
+        encolar(
+            tabla = "work_orders",
+            clientId = parte.clientId,
+            etiqueta = "Parte del ${parte.fecha}",
+            cuerpo = kotlinx.serialization.json.buildJsonObject {
+                put("service_id", kotlinx.serialization.json.JsonPrimitive(parte.servicioId))
+                parte.cuadrillaId?.let { put("crew_id", kotlinx.serialization.json.JsonPrimitive(it)) }
+                put("work_date", kotlinx.serialization.json.JsonPrimitive(parte.fecha))
+                put("status", kotlinx.serialization.json.JsonPrimitive("borrador"))
+                quien?.let { put("created_by", kotlinx.serialization.json.JsonPrimitive(it)) }
+            },
+        )
+    }
     val pendientes: Flow<Int> =
         combine(cola.cuantosPendientes(), archivos.cuantosSinSubir()) { registros, fotos ->
             registros + fotos
@@ -154,6 +198,8 @@ class ColaRepositorio @Inject constructor(
         clientId: String = UUID.randomUUID().toString(),
         dependeDe: String? = null,
     ): String {
+        // Lo de un parte que aún no está en la cola: primero el parte
+        if (dependeDe != null && tabla != "work_orders") asegurarParte(dependeDe)
         // Con la cuenta compartida, el avance dice quién usaba el celular
         // al registrarlo: el jefe o el subjefe (0124)
         val quien = configuracion.quienUsa.value

@@ -415,7 +415,9 @@ private fun Resumen(estado: EstadoParte) {
         ) {
             Dato("Actividades", estado.registros.size.toString())
             Dato("Por completar", estado.porCompletar.toString(), if (estado.porCompletar > 0) Semaforo.Vencido else Marca.Azul)
-            Dato("Estado", estadoDelParte(estado.parte?.estado, ("envio:" + estado.parte?.clientId) in estado.porEnviar))
+            Dato("Estado", if (!estado.estadoConfirmado && estado.parte?.idEnServidor == null && estado.registros.isEmpty()) "Consultando…"
+                else if (estado.parte?.idEnServidor == null && estado.registros.isEmpty() && estado.parte?.estado == "borrador") "Sin registrar"
+                else estadoDelParte(estado.parte?.estado, ("envio:" + estado.parte?.clientId) in estado.porEnviar))
         }
     }
 }

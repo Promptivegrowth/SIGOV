@@ -737,20 +737,47 @@ class CampoRepositorio @Inject constructor(
             fecha = fecha.toString(),
         )
         partes.guardar(parte)
-
-        cola.encolar(
-            tabla = "work_orders",
-            clientId = clientId,
-            etiqueta = "Parte del $fecha",
-            cuerpo = buildJsonObject {
-                put("service_id", servicioId)
-                cuadrillaId?.let { put("crew_id", it) }
-                put("work_date", fecha.toString())
-                put("status", "borrador")
-                supabase.usuarioActual()?.let { put("created_by", it) }
-            },
-        )
+        // Ronda 5: el parte sube recién con lo primero que se registre en él
+        // (ColaRepositorio.asegurarParte). Abrir una fecha para mirarla ya no
+        // crea un borrador vacío en la nube.
         parte
+    }
+
+    /**
+     * El parte de la fecha tal como está en la nube (JEF-01): su estado, lo
+     * observado y sus actividades, aunque se hayan registrado desde otro
+     * equipo o en la carga del sistema. Las actividades bajan al teléfono
+     * con su client_id (una corrección actualiza la misma fila) y quedan
+     * marcadas como ya enviadas. Devuelve las fotos por fase de la nube.
+     * Sin señal o sin parte en la nube, null.
+     */
+    suspend fun traerParteDeLaNube(parte: ParteLocal): ParteDelJefe? = withContext(Dispatchers.IO) {
+        val cuadrilla = parte.cuadrillaId ?: return@withContext null
+        val remoto = runCatching {
+            supabase.postgrest.rpc("parte_del_jefe", buildJsonObject {
+                put("p_crew", cuadrilla); put("p_fecha", parte.fecha)
+            }).data.takeIf { d -> d.isNotBlank() && d.trim() != "null" }?.let { d -> json.decodeFromString<ParteDelJefe>(d) }
+        }.getOrNull() ?: return@withContext null
+        // El parte local queda amarrado al de la nube
+        cola.registrarEnNube("work_orders", parte.clientId, remoto.id, "Parte del ${parte.fecha}")
+        val actual = partes.parteDe(parte.clientId) ?: parte
+        partes.guardar(actual.copy(idEnServidor = remoto.id, estado = remoto.status))
+        val locales = partes.registrosDelParte(parte.clientId).map { it.clientId }.toSet()
+        for (e in remoto.entradas) {
+            if (e.clientId in locales) continue
+            partes.guardarRegistro(
+                pe.servicon.sigov.datos.local.RegistroLocal(
+                    clientId = e.clientId, idEnServidor = e.id, parteClientId = parte.clientId, servicioId = parte.servicioId,
+                    actividadId = e.actividadId, actividadNombre = e.actividad ?: "Actividad", tramoId = e.tramoId, tramoNombre = e.tramo,
+                    progresivaInicio = e.progresivaInicio, progresivaFin = e.progresivaFin, lado = e.lado ?: "sin_indicar",
+                    cantidad = e.cantidad ?: 0.0, unidad = e.unidad, observacion = e.observacion,
+                    origen = e.origen ?: if (e.pciItemId != null) "pci" else if (e.planItemId != null) "programacion" else "emergencia",
+                    planItemId = e.planItemId, pciItemId = e.pciItemId, pciCodigo = e.pciCodigo,
+                )
+            )
+            cola.registrarEnNube("work_entries", e.clientId, e.id, e.actividad ?: "Actividad")
+        }
+        remoto
     }
 
     fun registrosDe(parteClientId: String) = partes.registrosDe(parteClientId)
@@ -809,7 +836,7 @@ class CampoRepositorio @Inject constructor(
         partes.guardar(nuevo)
         cola.encolar(
             tabla = "rpc:actualizar_parte",
-            dependeDe = parte.clientId.takeIf { cola.envio(it) != null },
+            dependeDe = parte.clientId,
             etiqueta = "Datos del parte ${parte.fecha}",
             cuerpo = buildJsonObject {
                 put("p_id", parte.clientId)
@@ -834,7 +861,7 @@ class CampoRepositorio @Inject constructor(
         partes.guardar(nuevo)
         cola.encolar(
             tabla = "rpc:enviar_parte",
-            dependeDe = parte.clientId.takeIf { cola.envio(it) != null },
+            dependeDe = parte.clientId,
             etiqueta = "Enviar parte ${parte.fecha}",
             cuerpo = buildJsonObject {
                 put("p_id", parte.clientId)

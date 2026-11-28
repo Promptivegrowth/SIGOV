@@ -35,6 +35,8 @@ data class EstadoProgramacion(
     val sinAvance: ItemProgramado? = null,
     /** Las partidas cuyo cierre espera señal (REV3-OBS-13). */
     val cierresEnCola: Set<String> = emptySet(),
+    /** El lado con que se ejecutó cada partida (del parte), para rotularlo aparte del programado. */
+    val ladosEjecutados: Map<String, String> = emptyMap(),
 ) {
     val esHoy: Boolean get() = fecha == Peru.hoy()
     val metaTotal: Double get() = items.sumOf { it.meta ?: 0.0 }
@@ -201,6 +203,10 @@ class ProgramacionViewModel @Inject constructor(
                 val locales = runCatching { partes.fasesDePartidas(items.map { i -> i.id }) }.getOrDefault(emptyList())
                     .groupBy { c -> c.registroClientId }
                     .mapValues { (_, cs) -> cs.associate { c -> c.fase to c.cuantas } }
+                // Lado programado y lado ejecutado, cada uno con su rótulo (ronda 5)
+                val ladosEjecutados = items.mapNotNull { i ->
+                    runCatching { partes.ultimoRegistroDePartida(i.id) }.getOrNull()?.lado?.takeIf { l -> l.isNotBlank() }?.let { l -> i.id to l }
+                }.toMap()
                 // Lo de la nube (de cualquier teléfono) y lo que sigue en este:
                 // el mayor de los dos, para no contar dos veces lo ya subido
                 val fases = items.associate { i ->
@@ -221,7 +227,7 @@ class ProgramacionViewModel @Inject constructor(
                     }
                     .toSet()
                 _estado.update {
-                    it.copy(cargando = false, items = items, fases = fases, cuadrilla = cuadrilla.name, cierresEnCola = cierres)
+                    it.copy(cargando = false, items = items, fases = fases, cuadrilla = cuadrilla.name, cierresEnCola = cierres, ladosEjecutados = ladosEjecutados)
                 }
             }.onFailure { fallo ->
                 _estado.update { it.copy(cargando = false, error = fallo.enCristiano()) }
