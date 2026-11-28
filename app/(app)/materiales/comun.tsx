@@ -1,4 +1,5 @@
 'use client'
+import { useCuadrillasDelAlcance } from '@/lib/hooks/use-cuadrillas-alcance'
 
 import * as React from 'react'
 import { useQuery } from '@tanstack/react-query'
@@ -98,21 +99,10 @@ export function useInsumos(serviceId: string) {
 }
 
 export function useCuadrillas(serviceId: string) {
-  const sb = React.useMemo(() => createClient(), [])
-  return useQuery({
-    queryKey: ['cuadrillas', serviceId],
-    queryFn: async () => {
-      const { data, error } = await sb
-        .from('crews')
-        .select('id, code, name')
-        .eq('service_id', serviceId)
-        .is('deleted_at', null)
-        .eq('is_active', true)
-        .order('name')
-      if (error) throw error
-      return data ?? []
-    },
-  })
+  // CP-03: las cuadrillas del alcance del rol (el Supervisor, las suyas)
+  void serviceId
+  const q = useCuadrillasDelAlcance('id, code, name, is_active')
+  return { ...q, data: q.data?.filter((c: any) => c.is_active).sort((a: any, b: any) => String(a.name).localeCompare(String(b.name))) } as typeof q
 }
 
 export function useUnidades() {

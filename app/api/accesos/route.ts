@@ -55,6 +55,16 @@ export async function POST(req: NextRequest) {
     return NextResponse.json({ ok: true })
   }
 
+  // CP-01: intento de abrir una ruta sin permiso (la web ya redirigió; queda la traza)
+  if (evento === 'denegado') {
+    const token = req.headers.get('authorization')?.replace(/^Bearer\s+/i, '')
+    const { data: { user } } = token ? await admin.auth.getUser(token) : await (await createClient()).auth.getUser()
+    if (!user) return NextResponse.json({ error: 'No autenticado' }, { status: 401 })
+    const ruta = String(body?.ruta ?? '').slice(0, 200)
+    await anotar({ profile_id: user.id, usuario: usuarioDeCorreo(user.email ?? ''), evento: 'denegado', resultado: 'denegado', detalle: `Ruta sin permiso: ${ruta}` })
+    return NextResponse.json({ ok: true })
+  }
+
   if (evento === 'fallido') {
     const usuario = String(body?.usuario ?? '').trim().toLowerCase()
     const password = String(body?.password ?? '')

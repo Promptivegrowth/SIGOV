@@ -5,6 +5,7 @@ import { useQuery, useQueryClient } from '@tanstack/react-query'
 import { CalendarPlus } from 'lucide-react'
 import { createClient } from '@/lib/supabase/client'
 import { useSession } from '@/lib/hooks/use-session'
+import { useCuadrillasDelAlcance } from '@/lib/hooks/use-cuadrillas-alcance'
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription, DialogFooter } from '@/components/ui/dialog'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
@@ -38,14 +39,7 @@ export function ProgramarObservacion({ o, fecha, onClose, onDone }: {
   const [metrado, setMetrado] = React.useState<string>(o.metrado != null ? String(o.metrado) : '')
   const [guardando, setGuardando] = React.useState(false)
 
-  const crews = useQuery({
-    queryKey: ['crews', service.id],
-    queryFn: async () => {
-      const { data } = await sb.from('crews').select('id, code, name, color')
-        .eq('service_id', service.id).is('deleted_at', null).order('code')
-      return data ?? []
-    },
-  })
+  const crews = useCuadrillasDelAlcance('id, code, name, color')
   // Las partidas COVINCA, por categoría y en el orden del listado
   const actividades = useQuery({
     queryKey: ['actividades-cov', service.id],

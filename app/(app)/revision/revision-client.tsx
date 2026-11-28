@@ -8,6 +8,7 @@ import { useQuery } from '@tanstack/react-query'
 import { MessageSquareWarning, MessagesSquare, CheckCircle2, Search, Eye, Info, Calendar, User, Layers } from 'lucide-react'
 import { createClient } from '@/lib/supabase/client'
 import { useSession } from '@/lib/hooks/use-session'
+import { useCuadrillasDelAlcance } from '@/lib/hooks/use-cuadrillas-alcance'
 import { PageHeader, PageBody } from '@/components/shared/page-header'
 import { Card, CardContent } from '@/components/ui/card'
 import { Button } from '@/components/ui/button'
@@ -56,10 +57,7 @@ export function RevisionClient() {
     queryKey: ['rev-pcis', service.id],
     queryFn: async () => ((await sb.from('pcis').select('id, code').eq('service_id', service.id).is('deleted_at', null).order('code', { ascending: false })).data ?? []) as any[],
   })
-  const cuadrillas = useQuery({
-    queryKey: ['rev-crews', service.id],
-    queryFn: async () => ((await sb.from('crews').select('id, code, name').eq('service_id', service.id).is('deleted_at', null).order('code')).data ?? []) as any[],
-  })
+  const cuadrillas = useCuadrillasDelAlcance('id, code, name')
   const datos = useQuery({
     queryKey: ['bandeja-obs', service.id, f, limite],
     queryFn: async () => {

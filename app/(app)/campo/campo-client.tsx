@@ -11,6 +11,7 @@ import {
 } from 'lucide-react'
 import { createClient } from '@/lib/supabase/client'
 import { useSession } from '@/lib/hooks/use-session'
+import { useCuadrillasDelAlcance } from '@/lib/hooks/use-cuadrillas-alcance'
 import { PageHeader, PageBody } from '@/components/shared/page-header'
 import { Button } from '@/components/ui/button'
 import { Badge } from '@/components/ui/badge'
@@ -43,13 +44,8 @@ export function CampoClient() {
   const esBandeja = ['supervisor', 'residente', 'admin'].includes(role)
   const today = toISODate(new Date())
 
-  const crews = useQuery({
-    queryKey: ['crews', service.id],
-    enabled: !isField,
-    queryFn: async () => (await sb.from('crews').select('id, code, name, color, supervisor_id, sectores, profiles:supervisor_id(full_name)')
-      .eq('service_id', service.id).is('deleted_at', null).order('code')).data ?? [],
-    staleTime: 5 * 60_000,
-  })
+  // CP-03: el selector solo ofrece las cuadrillas del alcance del rol
+  const crews = useCuadrillasDelAlcance('id, code, name, color, supervisor_id, sectores, profiles:supervisor_id(full_name)')
 
   const orders = useQuery({
     queryKey: ['work-orders', service.id, crew?.id, isField, range.from, range.to, crewFilter],

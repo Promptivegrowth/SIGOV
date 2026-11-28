@@ -10,6 +10,7 @@ import {
 } from 'lucide-react'
 import { createClient } from '@/lib/supabase/client'
 import { useSession } from '@/lib/hooks/use-session'
+import { useCuadrillasDelAlcance } from '@/lib/hooks/use-cuadrillas-alcance'
 import { PageHeader, PageBody } from '@/components/shared/page-header'
 import { StatCard } from '@/components/shared/stat-card'
 import { EmptyState, SemaforoBadge, ProgressBar } from '@/components/shared/misc'
@@ -91,17 +92,12 @@ export function PciTableroClient() {
     staleTime: 10 * 60_000,
   })
 
+  const cuadrillasTodas = useCuadrillasDelAlcance('id, code, name, is_active')
   const cuadrillas = useQuery({
-    queryKey: ['cuadrillas', service.id],
+    queryKey: ['cuadrillas-activas-alcance', service.id, (cuadrillasTodas.data ?? []).length],
+    enabled: !!cuadrillasTodas.data,
     queryFn: async () => {
-      const { data } = await sb
-        .from('crews')
-        .select('id, code, name')
-        .eq('service_id', service.id)
-        .is('deleted_at', null)
-        .eq('is_active', true)
-        .order('code')
-      return data ?? []
+      return (cuadrillasTodas.data ?? []).filter((c: any) => c.is_active)
     },
     staleTime: 10 * 60_000,
   })

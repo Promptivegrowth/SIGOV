@@ -27,6 +27,7 @@ const EVENTO: Record<string, { t: string; i: any; c: string }> = {
   fallido: { t: 'Intento fallido', i: XCircle, c: 'text-destructive bg-destructive/10' }, bloqueado: { t: 'Bloqueo', i: ShieldAlert, c: 'text-warning bg-warning/12' },
   desbloqueo: { t: 'Desbloqueo', i: Unlock, c: 'text-info bg-info/10' }, restablecimiento: { t: 'Restablecimiento de contraseña', i: KeyRound, c: 'text-violet-600 bg-violet-500/10' },
   cambio_dispositivo: { t: 'Cambio de dispositivo', i: Smartphone, c: 'text-info bg-info/10' },
+  denegado: { t: 'Acceso denegado (ruta sin permiso)', i: ShieldAlert, c: 'text-destructive bg-destructive/10' },
 }
 const RES: Record<string, string> = { exitoso: 'bg-success/12 text-success', fallido: 'bg-destructive/12 text-destructive', bloqueado: 'bg-warning/15 text-warning' }
 

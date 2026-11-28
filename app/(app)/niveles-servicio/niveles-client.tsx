@@ -10,6 +10,7 @@ import { Button } from '@/components/ui/button'
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription } from '@/components/ui/dialog'
 import { createClient } from '@/lib/supabase/client'
 import { useSession } from '@/lib/hooks/use-session'
+import { useCuadrillasDelAlcance } from '@/lib/hooks/use-cuadrillas-alcance'
 import { PageHeader, PageBody } from '@/components/shared/page-header'
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '@/components/ui/card'
 import { Badge } from '@/components/ui/badge'
@@ -44,10 +45,7 @@ export function NivelesClient() {
   const [q, setQ] = React.useState(f.q)
   React.useEffect(() => { const t = setTimeout(() => q !== f.q && fijar({ q }), 400); return () => clearTimeout(t) }, [q]) // eslint-disable-line react-hooks/exhaustive-deps
 
-  const cuadrillas = useQuery({
-    queryKey: ['ns-crews', service.id],
-    queryFn: async () => ((await sb.from('crews').select('id, code, name').eq('service_id', service.id).is('deleted_at', null).order('code')).data ?? []) as any[],
-  })
+  const cuadrillas = useCuadrillasDelAlcance('id, code, name')
   const datos = useQuery({
     queryKey: ['ns', service.id, f],
     queryFn: async () => {

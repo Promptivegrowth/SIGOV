@@ -49,8 +49,11 @@ export function AppShell({ children }: { children: React.ReactNode }) {
     return Boolean((item.module && !hasModule(item.module)) || !item.roles.includes(role))
   }, [pathname, hasModule, role, ocultas])
   React.useEffect(() => {
-    if (bloqueada) router.replace('/dashboard')
-  }, [bloqueada, router])
+    if (!bloqueada) return
+    // CP-01: el intento queda en el historial de accesos (quién, qué ruta, cuándo)
+    void fetch('/api/accesos', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ evento: 'denegado', ruta: pathname }) }).catch(() => {})
+    router.replace('/dashboard')
+  }, [bloqueada, router]) // eslint-disable-line react-hooks/exhaustive-deps
 
   return (
     <div className={cn('bg-background min-h-[calc(var(--vh)_*_100)]', can.field && 'field-mode')}>

@@ -11,6 +11,7 @@ import {
 } from 'lucide-react'
 import { createClient } from '@/lib/supabase/client'
 import { useSession } from '@/lib/hooks/use-session'
+import { useCuadrillasDelAlcance } from '@/lib/hooks/use-cuadrillas-alcance'
 import { PageHeader, PageBody } from '@/components/shared/page-header'
 import { StatCard } from '@/components/shared/stat-card'
 import { Button } from '@/components/ui/button'
@@ -71,12 +72,7 @@ export function SsomaClient() {
   const range = React.useMemo(() => rangeFromPreset(preset), [preset])
   const from = range.from
 
-  const crews = useQuery({
-    queryKey: ['crews', service.id],
-    queryFn: async () => (await sb.from('crews').select('id, code, name, color')
-      .eq('service_id', service.id).is('deleted_at', null).order('code')).data ?? [],
-    staleTime: 5 * 60_000,
-  })
+  const crews = useCuadrillasDelAlcance('id, code, name, color')
 
   const talkFields: FormField[] = [
     { name: 'topic', label: 'Tema de la charla', type: 'text', required: true, span: 2,
